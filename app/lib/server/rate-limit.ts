@@ -133,9 +133,7 @@ export const TIER_POLICIES: Record<RouteTier, TierPolicy> = {
  * while the bare `/api/balance` read is only expensive).
  */
 const TIER_RULES: ReadonlyArray<{ prefix: string; tier: RouteTier }> = [
-  // Money: payouts, withdrawals, on-ramp signing, verdict writes, and the
-  // routes that mint an Unlink capability token for a shielded address.
-  { prefix: "/api/unlink/", tier: "money" },
+  // Money: payouts, withdrawals, on-ramp signing, and verdict writes.
   { prefix: "/api/balance/", tier: "money" },
   { prefix: "/api/blink/", tier: "money" },
   { prefix: "/api/evidence/submit", tier: "money" },

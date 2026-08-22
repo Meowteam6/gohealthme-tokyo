@@ -170,23 +170,20 @@ contract HealthVerdictTest is Test {
         reg.setAttester(address(0));
     }
 
-    function test_overrideVerdict_ownerCorrectsBadAttestation() public {
+    /// A recorded verdict is final: there is no owner override path, so even the
+    /// owner cannot rewrite an existing verdict. Re-recording reverts.
+    function test_recordVerdict_isFinal_noOwnerOverride() public {
         vm.prank(attester);
         reg.recordVerdict(goalId, true, HIGH, digest, 0);
         assertTrue(reg.canSettle(goalId));
 
-        // owner flips a bad attestation
-        bytes32 newDigest = keccak256("corrected");
-        reg.overrideVerdict(goalId, false, LOW, newDigest, 0);
-        assertFalse(reg.canSettle(goalId));
-        assertEq(reg.getVerdict(goalId).digest, newDigest);
-        assertEq(reg.getVerdict(goalId).attester, owner);
-    }
+        vm.prank(attester);
+        vm.expectRevert(bytes("ALREADY_RECORDED"));
+        reg.recordVerdict(goalId, false, LOW, keccak256("corrected"), 0);
 
-    function test_overrideVerdict_onlyOwner() public {
-        vm.prank(rando);
-        vm.expectRevert(bytes("NOT_OWNER"));
-        reg.overrideVerdict(goalId, true, HIGH, digest, 0);
+        // The original DON-attested verdict stands.
+        assertTrue(reg.canSettle(goalId));
+        assertEq(reg.getVerdict(goalId).attester, attester);
     }
 
     function test_transferOwnership() public {
@@ -329,16 +326,17 @@ contract HealthVerdictTest is Test {
         fwd.forward(address(reg), bytes(""), _encodeReport(goalId, true, HIGH, digest, unknownBit));
     }
 
-    /// The override escape hatch still works on a CRE-delivered verdict.
-    function test_onReport_thenOwnerOverride() public {
+    /// A CRE-delivered verdict is also final: re-forwarding the same goalId
+    /// reverts, so there is no path to rewrite an on-chain verdict.
+    function test_onReport_isFinal() public {
         MockKeystoneForwarder fwd = new MockKeystoneForwarder();
         reg.setForwarder(address(fwd));
         fwd.forward(address(reg), bytes(""), _encodeReport(goalId, true, HIGH, digest, 0));
         assertTrue(reg.canSettle(goalId));
 
-        reg.overrideVerdict(goalId, false, LOW, keccak256("corrected"), 0);
-        assertFalse(reg.canSettle(goalId));
-        assertEq(reg.getVerdict(goalId).attester, owner);
+        vm.expectRevert(bytes("ALREADY_RECORDED"));
+        fwd.forward(address(reg), bytes(""), _encodeReport(goalId, false, LOW, keccak256("corrected"), 0));
+        assertTrue(reg.canSettle(goalId));
     }
 
     /// Cross-check: the exact report body the wf-goal-verification workflow

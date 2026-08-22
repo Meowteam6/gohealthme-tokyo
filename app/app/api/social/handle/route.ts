@@ -3,7 +3,7 @@
 // A handle is public identity, and a wallet address is public, so the address
 // in the body proves nothing on its own. The write is gated by an EIP-191
 // signature that proves the caller controls THAT address (requireAddressSignature
-// in lib/server/wallet-auth.ts, the same proof the Junction and Unlink routes
+// in lib/server/wallet-auth.ts, the same proof the Junction routes
 // use). Only after the signature verifies does the service-role client write -
 // every anon/publishable-key path is SELECT-only by RLS, so this route is the
 // single writer and the signature is its lock.

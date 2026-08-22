@@ -16,10 +16,7 @@ import {
 } from "@/lib/server/rate-limit";
 
 describe("classifyPath", () => {
-  it("puts payout, capability, withdrawal, and on-ramp routes on the money tier", () => {
-    expect(classifyPath("/api/unlink/payout")).toBe("money");
-    expect(classifyPath("/api/unlink/authorization-token")).toBe("money");
-    expect(classifyPath("/api/unlink/register")).toBe("money");
+  it("puts payout, withdrawal, and on-ramp routes on the money tier", () => {
     expect(classifyPath("/api/balance/withdraw")).toBe("money");
     expect(classifyPath("/api/balance/confirm")).toBe("money");
     expect(classifyPath("/api/blink/topup")).toBe("money");
@@ -146,7 +143,7 @@ describe("verifiedAddressBucket", () => {
 
   it("charges a wallet that proved control of itself", async () => {
     const timestamp = new Date(NOW).toISOString();
-    const request = new Request("https://x/api/unlink/payout", {
+    const request = new Request("https://x/api/balance/withdraw", {
       headers: await signedHeaders(timestamp),
     });
 
@@ -158,7 +155,7 @@ describe("verifiedAddressBucket", () => {
   it("refuses to charge an address named without a signature", async () => {
     // The denial attack: knowing a public wallet address must not let anyone
     // spend that wallet's quota and lock its owner out of their own payout.
-    const request = new Request("https://x/api/unlink/register", {
+    const request = new Request("https://x/api/balance/withdraw", {
       headers: { "x-gohealthme-address": VICTIM.address },
     });
 
@@ -166,7 +163,7 @@ describe("verifiedAddressBucket", () => {
   });
 
   it("refuses an address named with a forged signature", async () => {
-    const request = new Request("https://x/api/unlink/register", {
+    const request = new Request("https://x/api/balance/withdraw", {
       headers: {
         "x-gohealthme-address": VICTIM.address,
         "x-gohealthme-timestamp": new Date(NOW).toISOString(),
@@ -179,7 +176,7 @@ describe("verifiedAddressBucket", () => {
 
   it("refuses an expired signature, so a captured header set cannot be reused forever", async () => {
     const stale = new Date(NOW - 11 * 60 * 1000).toISOString();
-    const request = new Request("https://x/api/unlink/payout", {
+    const request = new Request("https://x/api/balance/withdraw", {
       headers: await signedHeaders(stale),
     });
 

@@ -10,7 +10,7 @@
 // TWO PROOFS GATE THE WRITE, because a wallet address and a pool id are both
 // public and neither proves authorship on its own:
 //   1. An EIP-191 signature proving the caller controls `address`
-//      (requireAddressSignature, the same proof the handle/junction/unlink
+//      (requireAddressSignature, the same proof the handle and junction
 //      routes use). Only after it verifies does the service-role client write.
 //   2. An on-chain read proving that same address is the pool's creator. Without
 //      it, anyone could mint a challenge link pointing at somebody else's pool.

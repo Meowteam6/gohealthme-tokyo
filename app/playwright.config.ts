@@ -141,7 +141,6 @@ export default defineConfig({
         UPSTASH_REDIS_REST_URL: "",
         UPSTASH_REDIS_REST_TOKEN: "",
         NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID: "",
-        UNLINK_API_KEY: "",
 
         // Reserved in .gitignore for exactly this, and distinct from vitest's
         // .data so a unit run and an e2e run cannot corrupt each other.

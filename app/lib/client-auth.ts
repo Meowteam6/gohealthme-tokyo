@@ -302,10 +302,10 @@ export async function fetchWithWalletAuth(
 
 // ------------------------------------------------- third-party fetch wrapping
 //
-// The Unlink browser SDK takes ONE customFetch and uses it for both our
-// /api/unlink/* capability routes and the Unlink Engine's own host. The
-// credential proves control of a wallet, so it goes to our origin and nowhere
-// else - handing it to a third party would be handing over a bearer token.
+// A third-party SDK may take ONE customFetch and use it for both our own API
+// routes and its own host. The credential proves control of a wallet, so it
+// goes to our origin and nowhere else - handing it to a third party would be
+// handing over a bearer token.
 
 /** True only for a request back to this app: a relative path, or an absolute
  *  URL whose origin matches. Anything unparseable is treated as foreign. */
@@ -327,13 +327,13 @@ export function fetchInputUrl(input: RequestInfo | URL): string {
 
 /**
  * A fetch that attaches the wallet headers to same-origin requests only.
- * Handed to createUnlinkClient({ customFetch }) so the SDK's own calls to the
- * capability routes carry the proof, while Engine traffic stays clean.
+ * Handed to a third-party SDK as its customFetch so the SDK's own calls to our
+ * routes carry the proof, while its external traffic stays clean.
  *
- * The credential is resolved per request, not captured once: the Unlink client
- * outlives a ten minute window and rotates its capability token on its own
- * schedule, so a frozen credential would work at derive time and 401 an hour
- * later. `requestAuth` is cached, so this costs nothing until it expires.
+ * The credential is resolved per request, not captured once: a long-lived SDK
+ * client outlives a ten minute window, so a frozen credential would work at
+ * derive time and 401 later. `requestAuth` is cached, so this costs nothing
+ * until it expires.
  */
 export function walletAuthFetch(
   requestAuth: WalletAuthRequester,

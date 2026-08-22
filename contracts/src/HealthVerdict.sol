@@ -12,10 +12,10 @@ pragma solidity ^0.8.24;
 /// boolean outcome, a confidence tier, a facet bitmap, and the keccak digest of
 /// the signed inference — never the inputs.
 ///
-/// One verdict per goalId. A verdict is one-shot by default (re-recording by the
-/// attester reverts). The owner can force an override via overrideVerdict() to
-/// recover from a bad attestation; overrides emit a distinct event so the audit
-/// trail shows the correction explicitly.
+/// One verdict per goalId. A verdict is one-shot: re-recording the same goalId
+/// reverts. There is no owner override path — a recorded verdict cannot be
+/// rewritten by any role, which keeps the DON-signed attestation the sole
+/// authority over settlement.
 ///
 /// Two ingestion paths, both landing in the same verdict storage:
 ///   1. recordVerdict(...) — the attester-EOA path. A relayer that holds the
@@ -90,14 +90,6 @@ contract HealthVerdict is IReceiver {
         address indexed attester,
         uint16 bitmap
     );
-    event VerdictOverridden(
-        bytes32 indexed goalId,
-        bool verified,
-        uint8 confidence,
-        bytes32 digest,
-        address indexed overrider,
-        uint16 bitmap
-    );
 
     // ---------------------------------------------------------- modifiers
 
@@ -155,7 +147,7 @@ contract HealthVerdict is IReceiver {
     // ------------------------------------------------------------ actions
 
     /// @notice Record the verdict for a goal. One-shot: reverts if the goalId
-    ///         already has a verdict (use overrideVerdict to correct one).
+    ///         already has a verdict. A recorded verdict is final.
     /// @param goalId     deterministic id, see computeGoalId.
     /// @param verified   whether the goal passed verification.
     /// @param confidence 0 = low, 1 = medium, 2 = high.
@@ -195,9 +187,9 @@ contract HealthVerdict is IReceiver {
     ///        abi.encode(bytes32 goalId, bool verified, uint8 confidence,
     ///                   bytes32 digest, uint16 bitmap)
     ///      One-shot, same as recordVerdict: a goalId that already has a verdict
-    ///      reverts (use overrideVerdict to correct one). The recorded verdict's
-    ///      `attester` field is set to the forwarder for an explicit audit trail
-    ///      of the CRE-delivered record.
+    ///      reverts and cannot be rewritten. The recorded verdict's `attester`
+    ///      field is set to the forwarder for an explicit audit trail of the
+    ///      CRE-delivered record.
     function onReport(bytes calldata, bytes calldata report) external onlyForwarder {
         (bytes32 goalId, bool verified, uint8 confidence, bytes32 digest, uint16 bitmap) =
             abi.decode(report, (bytes32, bool, uint8, bytes32, uint16));
@@ -217,32 +209,6 @@ contract HealthVerdict is IReceiver {
         });
 
         emit VerdictRecorded(goalId, verified, confidence, digest, msg.sender, bitmap);
-    }
-
-    /// @notice Owner escape hatch to correct a bad attestation. Works whether or
-    ///         not a verdict already exists, and is logged distinctly so the
-    ///         audit trail shows the correction.
-    function overrideVerdict(
-        bytes32 goalId,
-        bool verified,
-        uint8 confidence,
-        bytes32 digest,
-        uint16 bitmap
-    ) external onlyOwner {
-        require(confidence <= CONFIDENCE_HIGH, "BAD_CONFIDENCE");
-        require(bitmap & ~FACET_MASK == 0, "BAD_BITMAP");
-
-        recorded[goalId] = true;
-        verdicts[goalId] = Verdict({
-            verified: verified,
-            confidence: confidence,
-            digest: digest,
-            attester: msg.sender,
-            timestamp: uint64(block.timestamp),
-            bitmap: bitmap
-        });
-
-        emit VerdictOverridden(goalId, verified, confidence, digest, msg.sender, bitmap);
     }
 
     // ---------------------------------------------------------------- views

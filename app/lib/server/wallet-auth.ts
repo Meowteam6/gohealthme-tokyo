@@ -36,8 +36,8 @@
 // (ERC-1271) would need an RPC round trip per request; adding that is a
 // deliberate future change, not an accident of this one.
 //
-// USED BY: lib/server/unlink-admin.ts (capability token issuance), the two
-// /api/junction/* routes, and /api/agent/run/[goalId] — where it decides who
+// USED BY: the two /api/junction/* routes, /api/social/handle, and
+// /api/agent/run/[goalId] — where it decides who
 // may READ a claim's ledger, not who may run one. The run loop itself stays
 // unauthenticated on purpose: it is idempotent, spend-capped, and gated on the
 // attester verdict rather than on the caller, so a missing signature costs
@@ -167,8 +167,8 @@ export async function verifyWalletSignature(params: {
 
 /**
  * Authenticate a request from its headers alone. The address is whatever the
- * caller claims and proves, which is what the Unlink auth routes need: the
- * request body there is the SDK's, not ours.
+ * caller claims and proves, which is what a header-authenticated route needs
+ * when the request body is a third-party SDK's, not ours.
  */
 export async function authenticateWallet(
   request: Request,
