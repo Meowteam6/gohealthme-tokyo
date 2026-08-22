@@ -1,0 +1,8 @@
+{
+  "name": "wf-goal-verification",
+  "type": "module",
+  "dependencies": {
+    "@chainlink/cre-sdk": "^1.11.0",
+    "viem": "^2.21.0"
+  }
+}

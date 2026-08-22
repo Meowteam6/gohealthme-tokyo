@@ -1,0 +1,27 @@
+# =========================================================================
+# CRE PROJECT SETTINGS
+# =========================================================================
+# Per-target project settings for the cre CLI. Schema matches the official
+# Chainlink minimal-cre-examples template:
+#   <target>:
+#     cre-cli: { don-family }
+#     account: { workflow-owner-address }
+#     rpcs:    [ { chain-name, url } ]
+#
+# Arc testnet (chain id / selector 5042002) is GoHealthMe's settlement chain
+# and the HealthVerdict receiver chain. For a LIVE DON write the Chainlink booth
+# must confirm the chain-name registered for Arc in the chain-selectors registry
+# and the Forwarder address (see cre/README.md "Booth dependencies").
+# =========================================================================
+
+local-simulation:
+  rpcs:
+    - chain-name: arc-testnet
+      url: https://rpc.testnet.arc.network
+
+staging-settings:
+  account:
+    workflow-owner-address: "0xA56eAD3A32b6261bDE6C2A45495C9250084F7F2D"
+  rpcs:
+    - chain-name: arc-testnet
+      url: https://rpc.testnet.arc.network

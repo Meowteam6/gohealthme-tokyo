@@ -1,0 +1,48 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# node
+node_modules/
+.next/
+out/
+
+# foundry
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+
+# misc
+.DS_Store
+*.log
+__pycache__/
+.vercel
+.env*
+
+# agent tooling + state (never commit AI instructions or agent memory)
+.claude/
+
+# cre build artifact
+cre/wf-goal-verification/.cre_build_tmp.js
+
+# key material and Circle entity-secret recovery files
+*.pem
+*-recovery-file.json
+.gstack/
+
+# local agent-ledger scratch used by e2e runs
+app/.data/
+app/.data-e2e/
+
+# playwright output (reports, traces, screenshots, demo recordings) and its
+# browser cache
+app/playwright-report/
+app/test-results/
+app/blob-report/
+app/.playwright/
+app/e2e-artifacts/
+
+# Higgsfield CLI skills (installed locally, third-party, not shipped)
+.agents/
+skills-lock.json

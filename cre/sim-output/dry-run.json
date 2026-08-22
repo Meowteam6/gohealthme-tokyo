@@ -1,0 +1,25 @@
+{
+  "workflow": "wf-goal-verification",
+  "mode": "dry-run (deterministic callback core, no DON signature / no on-chain write)",
+  "callbackId": "019ea31f-0563-74ca-8ffe-4452b34385c9",
+  "status": "completed",
+  "goalId": "0x7611f4f43bd80cbc242bf4a6e62d546adbb8eaff465c8fdb0cdeb486648b720a",
+  "verdict": {
+    "verified": true,
+    "confidence": "high",
+    "reason": "The participant averaged 8,450 steps/day across the 7-day window with a 6-day on-target streak, clearing the 8,000-step threshold.",
+    "metricValue": 8450,
+    "threshold": 8000
+  },
+  "confidenceU8": 2,
+  "digest": "0x0a0124911560a2236e432d30c3e2a90b0666f4c84b40bf10ba01960595c6ecea",
+  "bitmap": 5,
+  "bitmapBits": {
+    "wearable": true,
+    "aiAttested": true
+  },
+  "receiverCall": "HealthVerdict.onReport(bytes metadata, bytes report)",
+  "reportBodyAbi": "(bytes32 goalId, bool verified, uint8 confidence, bytes32 digest, uint16 bitmap)",
+  "encodedReport": "0x7611f4f43bd80cbc242bf4a6e62d546adbb8eaff465c8fdb0cdeb486648b720a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020a0124911560a2236e432d30c3e2a90b0666f4c84b40bf10ba01960595c6ecea0000000000000000000000000000000000000000000000000000000000000005",
+  "note": "In the CRE host this encodedReport is wrapped by runtime.report(...) into a DON-signed report, then EVMClient.writeReport forwards it through the KeystoneForwarder to HealthVerdict.onReport on Arc."
+}

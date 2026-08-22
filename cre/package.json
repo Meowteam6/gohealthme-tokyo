@@ -1,0 +1,21 @@
+{
+  "name": "gohealthme-cre",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "GoHealthMe Chainlink CRE workflow: wf-goal-verification. Receives a Confidential AI Attester callback for a health goal and writes a DON-signed verdict to HealthVerdict.onReport via the KeystoneForwarder.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "dry-run": "bun src/dry-run.ts",
+    "call-attester": "node scripts/call-attester.mjs",
+    "simulate": "cre workflow simulate ./wf-goal-verification --target local-simulation --non-interactive --trigger-index 0 --http-payload ./simulation/callback-payload.json"
+  },
+  "dependencies": {
+    "@chainlink/cre-sdk": "^1.11.0",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

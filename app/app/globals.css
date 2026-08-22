@@ -1,0 +1,219 @@
+@import "tailwindcss";
+
+/* Warm-light theme. Cream canvas, emerald trust, coral human warmth, gold for
+   money in motion. Replaces the original dark green-black. Semantics are held
+   constant so components read the same roles - only the values flip. */
+:root {
+  color-scheme: light;
+  --background: #faf6ee;       /* warm cream canvas */
+  --surface: #ffffff;          /* cards sit above the cream */
+  --surface-raised: #fffdf8;   /* alt sections / raised surfaces */
+  --border: #ece3d2;           /* warm hairline border */
+  --foreground: #16211b;       /* warm near-black text */
+  --muted: #5f6f64;            /* muted secondary text */
+  --accent: #10b981;           /* primary emerald - trust, buttons, marks */
+  --accent-strong: #059669;    /* deeper emerald - hover, emphasis text */
+  --accent-deep: #064e3b;      /* deep emerald - dark accents on light */
+  /* Warm human accent, for celebratory/human touches only (badges, avatar
+     rings). Never on a number, never a verdict - coral is people, not money. */
+  --coral: #ff8a5c;
+  --coral-strong: #f06d3a;
+  --danger: #ef4444;
+  /* Caution / self-reported tone. A muted amber, deliberately NOT gold: a
+     self-reported (unverified) claim must never borrow the money color, and a
+     payout must never read as an alert. */
+  --warning: #b45309;
+  /* Gold, reserved STRICTLY for money in motion: a payout landing or the
+     agent's live spend. Never a static balance, never a verdict, never a
+     generic highlight - emerald owns trust, gold owns movement. */
+  --gold: #f3b13c;
+  --gold-strong: #eaa11f;
+  --gold-deep: #a9760c;        /* rich legible gold: money text on cream, and a soft gold tint at low opacity */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-edge: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-deep: var(--accent-deep);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-gold: var(--gold);
+  --color-gold-strong: var(--gold-strong);
+  --color-gold-deep: var(--gold-deep);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  /* Warm cream base with a whisper of nature: a soft emerald light from the top
+     and a faint warm ground tone lower right, kept low-opacity and fixed so the
+     atmosphere reads as outdoors without ever fighting the text on top. */
+  background:
+    /* sky-light overhead */
+    radial-gradient(1200px 520px at 50% -10%, rgba(16, 185, 129, 0.09), transparent 70%),
+    /* warm morning sun, upper right */
+    radial-gradient(900px 520px at 90% 6%, rgba(255, 138, 92, 0.06), transparent 70%),
+    /* scenic foliage tone bleeding in from the left gutter */
+    linear-gradient(to right, rgba(16, 185, 129, 0.11), transparent 20%),
+    /* and the right gutter */
+    linear-gradient(to left, rgba(16, 185, 129, 0.1), transparent 20%),
+    /* soft earthy ground rising from the bottom */
+    linear-gradient(to top, rgba(122, 85, 17, 0.05), transparent 24%),
+    var(--background);
+  background-attachment: fixed;
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Motion is decoration here, never information: every animated element reads
+   identically with animation off, which is what the reduced-motion block
+   guarantees. */
+@keyframes stamp-in {
+  0% {
+    transform: scale(1.6) rotate(-8deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.94) rotate(-3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-3deg);
+    opacity: 1;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Staggered entrance for payout/win rows. Decoration only: with animation off
+   the row is at rest, in place, and fully legible. */
+@keyframes ghm-rise-in {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-stamp-in {
+  animation: stamp-in 240ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+
+.animate-rise-in {
+  animation: rise-in 200ms ease-out both;
+}
+
+.ghm-rise-in {
+  animation: ghm-rise-in 260ms ease-out both;
+}
+
+/* Mr Otter idles with a slow, gentle float - alive, never distracting. */
+@keyframes otter-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.otter-float {
+  animation: otter-float 4.5s ease-in-out infinite;
+}
+
+/* The run-across-the-screen Easter egg: SPOTTER dashes left to right along the
+   very bottom, then gets out of the way. Fires occasionally, not constantly. */
+@keyframes otter-dash {
+  0%,
+  80% {
+    transform: translateX(-24vw) translateY(0);
+    opacity: 0;
+  }
+  82% {
+    opacity: 1;
+  }
+  88% {
+    transform: translateX(40vw) translateY(-12px);
+  }
+  90% {
+    transform: translateX(48vw) translateY(0);
+  }
+  98% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(124vw) translateY(0);
+    opacity: 0;
+  }
+}
+
+.otter-dash {
+  animation: otter-dash 24s ease-in-out infinite;
+}
+
+/* THE DROP: the payout takeover pops in, and a one-shot confetti burst rains
+   coral + gold from the coin. The gold amount itself never animates - the
+   number is real and stays still (honest-core). */
+@keyframes payout-pop {
+  0% {
+    transform: scale(0.92) translateY(10px);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-payout-pop {
+  animation: payout-pop 340ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)))
+      rotate(var(--rot));
+    opacity: 0;
+  }
+}
+
+.confetti-piece {
+  position: absolute;
+  border-radius: 2px;
+  animation: confetti-fall 1100ms cubic-bezier(0.15, 0.6, 0.4, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-stamp-in,
+  .animate-rise-in,
+  .ghm-rise-in,
+  .otter-float,
+  .otter-dash,
+  .animate-payout-pop,
+  .confetti-piece {
+    animation: none;
+  }
+}

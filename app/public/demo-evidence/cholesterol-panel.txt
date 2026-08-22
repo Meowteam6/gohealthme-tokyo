@@ -1,0 +1,37 @@
+============================================================
+        SAMPLE — SYNTHETIC DEMO DOCUMENT — NOT REAL PHI
+============================================================
+This is a fabricated lab report generated for the GoHealthMe
+demo. No real patient, lab, or specimen exists. Do not treat
+as a medical document.
+============================================================
+
+QUEST DEMO DIAGNOSTICS (SAMPLE LAB)
+500 Demo Parkway, New York, NY 10018
+CLIA #: 00D-SAMPLE-0000
+
+                 LIPID PANEL (FASTING)
+
+Patient name .............. Demo User
+Record ID ................. GHM-DEMO-LIPID-0002
+Specimen collected ........ 2026-06-08
+Reported .................. 2026-06-09
+Ordering provider ......... Dr. A. Sample, MD (SYNTHETIC)
+Fasting ................... Yes (12 hours)
+
+------------------------------------------------------------
+ANALYTE              RESULT      UNITS     REFERENCE
+------------------------------------------------------------
+Total Cholesterol     185       mg/dL     < 200   (Desirable)
+LDL Cholesterol        95       mg/dL     < 100   (Optimal)
+HDL Cholesterol        60       mg/dL     > 40    (Good)
+Triglycerides         120       mg/dL     < 150   (Normal)
+Non-HDL Cholesterol   125       mg/dL     < 130
+Chol/HDL Ratio        3.1                 < 5.0
+------------------------------------------------------------
+
+Interpretation: All lipid values within recommended ranges
+for cardiovascular risk. (SAMPLE narrative.)
+
+------------------------------------------------------------
+SAMPLE — SYNTHETIC DEMO DOCUMENT — NOT REAL PHI

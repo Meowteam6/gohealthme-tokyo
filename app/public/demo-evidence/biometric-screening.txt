@@ -1,0 +1,34 @@
+============================================================
+        SAMPLE — SYNTHETIC DEMO DOCUMENT — NOT REAL PHI
+============================================================
+This is a fabricated biometric screening summary generated
+for the GoHealthMe demo. No real patient or clinic exists.
+Do not treat as a medical document.
+============================================================
+
+WELLNESS DEMO CLINIC (SAMPLE)
+On-site Biometric Screening Program
+77 Demo Plaza, New York, NY 10010
+
+              BIOMETRIC SCREENING RESULTS
+
+Participant name .......... Demo User
+Record ID ................. GHM-DEMO-BIO-0003
+Screening date ............ 2026-06-11
+Screened by ............... K. Nguyen, RN (SAMPLE)
+
+------------------------------------------------------------
+MEASURE                  RESULT        REFERENCE
+------------------------------------------------------------
+Blood pressure           118/76 mmHg   < 120/80  (Normal)
+Heart rate               64 bpm        60-100    (Normal)
+Body Mass Index (BMI)    23.1 kg/m^2   18.5-24.9 (Normal)
+Waist circumference      33 in         < 40 in   (Low risk)
+Fasting glucose          88 mg/dL      70-99     (Normal)
+------------------------------------------------------------
+
+Summary: All screened biometrics fall within normal ranges.
+No elevated cardiometabolic risk flags. (SAMPLE narrative.)
+
+------------------------------------------------------------
+SAMPLE — SYNTHETIC DEMO DOCUMENT — NOT REAL PHI

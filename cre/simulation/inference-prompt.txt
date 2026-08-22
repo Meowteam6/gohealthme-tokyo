@@ -1,0 +1,25 @@
+Prompt used when calling the Chainlink Confidential AI Attester (POST /v1/inference)
+for GoHealthMe health-goal verification.
+
+This is the exact `prompt` field carried in simulation/callback-payload.json and
+sent by cre/scripts/call-attester.mjs.
+----------------------------------------------------------------------------
+
+A GoHealthMe participant committed to a health goal. Based on the attached weekly
+health summary, decide whether the goal was met.
+
+Goal: Average >= 8000 steps/day, sustained across the current 7-day window.
+
+Analyze only what is visible in the summary:
+- Compute the average daily steps over the 7-day window
+- Note the current consecutive on-target streak
+- Do not decline due to missing data — assess on available evidence
+
+Respond with ONLY a valid JSON object:
+{
+  "verified": true,
+  "confidence": "high",
+  "reason": "one sentence citing specific figures from the summary",
+  "metric_value": 8450,
+  "threshold": 8000
+}

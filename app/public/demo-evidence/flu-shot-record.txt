@@ -1,0 +1,38 @@
+============================================================
+        SAMPLE — SYNTHETIC DEMO DOCUMENT — NOT REAL PHI
+============================================================
+This is a fabricated immunization record generated for the
+GoHealthMe demo. No real patient, provider, or lot exists.
+Do not treat as a medical document.
+============================================================
+
+WALGREENS PHARMACY #04417
+1212 Demo Avenue, New York, NY 10001
+(212) 555-0142
+
+           IMMUNIZATION ADMINISTRATION RECORD
+
+Patient name .............. Demo User
+Date of birth ............. 1990-01-01  (SAMPLE)
+Record ID ................. GHM-DEMO-FLU-0001
+
+------------------------------------------------------------
+VACCINE ADMINISTERED
+------------------------------------------------------------
+Vaccine ................... Influenza, quadrivalent (IIV4)
+                            preservative-free
+Manufacturer .............. Sample Bio Labs (SYNTHETIC)
+Lot number ................ FLU2026-SAMPLE-7741
+Expiration ................ 2027-03-31
+Dose ...................... 0.5 mL, intramuscular
+Site ...................... Left deltoid
+
+Date administered ......... 2026-06-10
+Administered by ........... J. Rivera, RPh (SAMPLE)
+
+------------------------------------------------------------
+This record confirms the patient received the 2026-2026
+seasonal influenza vaccine on the date shown above.
+------------------------------------------------------------
+
+SAMPLE — SYNTHETIC DEMO DOCUMENT — NOT REAL PHI

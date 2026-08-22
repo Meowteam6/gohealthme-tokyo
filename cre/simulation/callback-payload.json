@@ -1,0 +1,37 @@
+{
+  "id": "019ea31f-0563-74ca-8ffe-4452b34385c9",
+  "status": "completed",
+  "model": "gemma4",
+  "system_prompt": "You are a clinical health-goal reviewer. Analyze the provided health summary and answer based strictly on its content. Always respond with a valid JSON object and nothing else.",
+  "prompt": "A GoHealthMe participant committed to a health goal. Based on the attached weekly health summary, decide whether the goal was met.\n\nGoal: Average >= 8000 steps/day, sustained across the current 7-day window.\n\nAnalyze only what is visible in the summary:\n- Compute the average daily steps over the 7-day window\n- Note the current consecutive on-target streak\n- Do not decline due to missing data — assess on available evidence\n\nRespond with ONLY a valid JSON object:\n{\n  \"verified\": true,\n  \"confidence\": \"high\",\n  \"reason\": \"one sentence citing specific figures from the summary\",\n  \"metric_value\": 8450,\n  \"threshold\": 8000\n}",
+  "resource_summaries": [
+    {
+      "filename": "Weekly Health Summary — GoHealthMe.txt",
+      "digest": "32949a93625bf993f9dfce501544e0f1996c744a24fd9b923103a2e081c9157d",
+      "content_type": "text/plain",
+      "size": 612,
+      "preprocessed": true
+    }
+  ],
+  "output": "```json\n{\n  \"verified\": true,\n  \"confidence\": \"high\",\n  \"reason\": \"The participant averaged 8,450 steps/day across the 7-day window with a 6-day on-target streak, clearing the 8,000-step threshold.\",\n  \"metric_value\": 8450,\n  \"threshold\": 8000\n}\n```",
+  "usage": {
+    "prompt_tokens": 742,
+    "completion_tokens": 96
+  },
+  "resources": [
+    {
+      "url": "upload://Weekly%20Health%20Summary%20%E2%80%94%20GoHealthMe.txt",
+      "digest": "32949a93625bf993f9dfce501544e0f1996c744a24fd9b923103a2e081c9157d",
+      "request_digest": "bff9b4dac33040a996222aa06bb85f240482ec662a87da98590aa70553258e54",
+      "response_digest": "0a0124911560a2236e432d30c3e2a90b0666f4c84b40bf10ba01960595c6ecea",
+      "content_type": "text/plain",
+      "preprocessed": true,
+      "filename_digest": "c4d832cdc8b2d7d278a27ba07ea33cb63befe493357887ba17660f7f912722d4",
+      "filename_blinding": "76bd8252ac7d1701ec93262d8c99140a"
+    }
+  ],
+  "created_at": "2026-06-13T05:00:00.000000000Z",
+  "started_at": "2026-06-13T05:00:00.100000000Z",
+  "status_at": "2026-06-13T05:00:42.000000000Z",
+  "completed_at": "2026-06-13T05:00:41.500000000Z"
+}
