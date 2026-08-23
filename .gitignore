@@ -19,6 +19,7 @@ contracts/broadcast/
 __pycache__/
 .vercel
 .env*
+!.env.example
 
 # agent tooling + state (never commit AI instructions or agent memory)
 .claude/

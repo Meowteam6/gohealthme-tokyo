@@ -1,18 +1,18 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { arcTestnet } from "@/lib/chains";
+import { baseSepolia } from "@/lib/chains";
 import {
-  arcPublicClient,
-  arcRpcUrls,
-  resetArcClients,
+  basePublicClient,
+  baseRpcUrls,
+  resetBaseClients,
   ttlCache,
-} from "@/lib/server/arc-client";
+} from "@/lib/server/base-client";
 
-// The defect these tests pin: every server module used a SINGLE Arc endpoint
-// with no fallback, and rebuilt its client per call, so one agent run fired six
-// to nine separate HTTP requests at one public RPC. Five concurrent users hit
-// "request limit reached" and the app answered 500.
+// The defect these tests pin: every server module used a SINGLE Base Sepolia
+// endpoint with no fallback, and rebuilt its client per call, so one agent run
+// fired six to nine separate HTTP requests at one public RPC. Five concurrent
+// users hit "request limit reached" and the app answered 500.
 //
 // What is asserted here: the fallback list is real and ordered, the client is
 // shared rather than rebuilt, and concurrent reads leave as ONE batched
@@ -26,7 +26,7 @@ interface FakeRpc {
 }
 
 function answer(method: string): string {
-  if (method === "eth_chainId") return "0x4cef52"; // 5042002
+  if (method === "eth_chainId") return "0x14a34"; // 84532
   if (method === "eth_blockNumber") return "0x1";
   if (method === "eth_gasPrice") return "0x2";
   return "0x0";
@@ -65,86 +65,86 @@ async function startFakeRpc(): Promise<FakeRpc> {
 }
 
 beforeEach(() => {
-  resetArcClients();
+  resetBaseClients();
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  resetArcClients();
+  resetBaseClients();
 });
 
-describe("arcRpcUrls", () => {
-  it("defaults to the public Arc RPCs the browser client already uses", () => {
-    vi.stubEnv("ARC_RPC_URL", "");
-    expect(arcRpcUrls()).toEqual([...arcTestnet.rpcUrls.default.http]);
+describe("baseRpcUrls", () => {
+  it("defaults to the public Base Sepolia RPCs the browser client already uses", () => {
+    vi.stubEnv("BASE_SEPOLIA_RPC_URL", "");
+    expect(baseRpcUrls()).toEqual([...baseSepolia.rpcUrls.default.http]);
     // More than one, so a single endpoint degrading cannot take reads down.
     // The exact count is not the contract - which endpoints are healthy
     // changes - so this asserts redundancy rather than a magic number.
-    expect(arcRpcUrls().length).toBeGreaterThan(1);
+    expect(baseRpcUrls().length).toBeGreaterThan(1);
   });
 
-  it("leads with an endpoint a browser can actually reach", () => {
-    vi.stubEnv("ARC_RPC_URL", "");
+  it("leads with the public base.org endpoint a browser can reach", () => {
+    vi.stubEnv("BASE_SEPOLIA_RPC_URL", "");
     // viem's fallback tries these in order, so entry zero is what a browser
-    // talks to on a healthy request. rpc.testnet.arc.network serves no
-    // Access-Control-Allow-Origin and fails CORS preflight from the app's
-    // origin, which flooded every pool page's console; it may stay in the
-    // list as a server-side fallback but must never lead.
-    expect(arcRpcUrls()[0]).not.toContain("//rpc.testnet.arc.network");
+    // talks to on a healthy request. chains.ts documents sepolia.base.org as
+    // the CORS-clean primary; publicnode is the redundant fallback behind it.
+    // This fork carries none of the Arc-era RPC ordering workarounds - the
+    // invariant is simply that the canonical public endpoint leads.
+    expect(baseRpcUrls()[0]).toBe("https://sepolia.base.org");
   });
 
-  it("serves ONLY an ARC_RPC_URL override when one is set", () => {
-    vi.stubEnv("ARC_RPC_URL", "https://private.example/rpc");
+  it("serves ONLY a BASE_SEPOLIA_RPC_URL override when one is set", () => {
+    vi.stubEnv("BASE_SEPOLIA_RPC_URL", "https://private.example/rpc");
     // An operator who pins an endpoint means it: a private RPC is pinned for
     // policy reasons and a test RPC for hermeticity, and in both cases quietly
     // falling through to a public endpoint defeats the pin. The multi-URL
     // resilience list is for the no-override case only.
-    expect(arcRpcUrls()).toEqual(["https://private.example/rpc"]);
+    expect(baseRpcUrls()).toEqual(["https://private.example/rpc"]);
   });
 
   it("treats a public RPC set as the override the same way", () => {
-    const first = arcTestnet.rpcUrls.default.http[0];
-    vi.stubEnv("ARC_RPC_URL", first);
-    expect(arcRpcUrls()).toEqual([first]);
+    const first = baseSepolia.rpcUrls.default.http[0];
+    vi.stubEnv("BASE_SEPOLIA_RPC_URL", first);
+    expect(baseRpcUrls()).toEqual([first]);
   });
 });
 
-describe("arcPublicClient", () => {
+describe("basePublicClient", () => {
   it("is module-scoped, not rebuilt per call", () => {
-    vi.stubEnv("ARC_RPC_URL", "");
-    expect(arcPublicClient()).toBe(arcPublicClient());
+    vi.stubEnv("BASE_SEPOLIA_RPC_URL", "");
+    expect(basePublicClient()).toBe(basePublicClient());
   });
 
   it("runs a fallback transport over every RPC in order", () => {
-    vi.stubEnv("ARC_RPC_URL", "https://private.example/rpc");
-    const transport = arcPublicClient().transport as unknown as {
+    vi.stubEnv("BASE_SEPOLIA_RPC_URL", "https://private.example/rpc");
+    const transport = basePublicClient().transport as unknown as {
       type: string;
       transports: { value?: { url?: string } }[];
     };
     expect(transport.type).toBe("fallback");
     expect(transport.transports.map((t) => t.value?.url)).toEqual(
-      arcRpcUrls(),
+      baseRpcUrls(),
     );
   });
 
-  it("rebuilds when ARC_RPC_URL changes so a redeploy is not served a stale endpoint", () => {
-    vi.stubEnv("ARC_RPC_URL", "");
-    const before = arcPublicClient();
-    vi.stubEnv("ARC_RPC_URL", "https://private.example/rpc");
-    expect(arcPublicClient()).not.toBe(before);
+  it("rebuilds when BASE_SEPOLIA_RPC_URL changes so a redeploy is not served a stale endpoint", () => {
+    vi.stubEnv("BASE_SEPOLIA_RPC_URL", "");
+    const before = basePublicClient();
+    vi.stubEnv("BASE_SEPOLIA_RPC_URL", "https://private.example/rpc");
+    expect(basePublicClient()).not.toBe(before);
   });
 
   it("collapses concurrent reads into ONE batched JSON-RPC request", async () => {
     const rpc = await startFakeRpc();
     try {
-      vi.stubEnv("ARC_RPC_URL", rpc.url);
-      const client = arcPublicClient();
+      vi.stubEnv("BASE_SEPOLIA_RPC_URL", rpc.url);
+      const client = basePublicClient();
       const [chainId, gasPrice, blockNumber] = await Promise.all([
         client.getChainId(),
         client.getGasPrice(),
         client.getBlockNumber({ cacheTime: 0 }),
       ]);
-      expect(chainId).toBe(5042002);
+      expect(chainId).toBe(84532);
       expect(gasPrice).toBe(2n);
       expect(blockNumber).toBe(1n);
 

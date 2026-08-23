@@ -53,10 +53,10 @@ const REVERT_FIXTURE = (reason: string) =>
 // viem's ChainMismatchError, and the EIP-1193 code a wallet returns when the
 // network was never added.
 const CHAIN_MISMATCH_FIXTURE = [
-  "The current chain of the wallet (id: 1 – Ethereum) does not match the target chain for the transaction (id: 5042002 – Arc Testnet).",
+  "The current chain of the wallet (id: 1 – Ethereum) does not match the target chain for the transaction (id: 84532 – Base Sepolia).",
   "",
   "Current Chain ID:  1",
-  "Expected Chain ID: 5042002 – Arc Testnet",
+  "Expected Chain ID: 84532 – Base Sepolia",
   "Version: viem@2.52.0",
 ].join("\n");
 
@@ -67,7 +67,7 @@ const GENERIC_WITH_CHAIN_ARGS_FIXTURE = [
   "An unknown RPC error occurred.",
   "",
   "Request Arguments:",
-  "  chain:  Arc Testnet (id: 5042002)",
+  "  chain:  Base Sepolia (id: 84532)",
   "  from:   0x8ba1f109551bD432803012645Ac136ddd64DBA72",
   "  to:     0xc4274eF2cBe28f77Af31b980055Cc1171818390C",
   "Version: viem@2.52.0",
@@ -128,15 +128,15 @@ describe("humanizeTxError", () => {
   it("maps a chain mismatch to the wrong-network message", () => {
     const result = humanizeTxError(viemError(CHAIN_MISMATCH_FIXTURE));
     expect(result.title).toBe("Wallet is on the wrong network");
-    expect(result.detail).toContain("Arc Testnet");
-    expect(result.detail).toContain("5042002");
+    expect(result.detail).toContain("Base Sepolia");
+    expect(result.detail).toContain("84532");
     expect(result.detail).not.toContain("viem");
   });
 
   it("maps the 4902 unrecognized-chain code to the wrong-network message", () => {
     const result = humanizeTxError({
       code: 4902,
-      message: "Unrecognized chain ID 0x4CF4D2. Try adding the chain first.",
+      message: "Unrecognized chain ID 0x14A34. Try adding the chain first.",
     });
     expect(result.title).toBe("Wallet is on the wrong network");
   });
@@ -160,7 +160,7 @@ describe("humanizeTxError", () => {
   it("keeps a revert reason ahead of the wrong-network rule", () => {
     const result = humanizeTxError(
       viemError(
-        [REVERT_FIXTURE("ALREADY_JOINED"), "  chain: Arc Testnet"].join("\n"),
+        [REVERT_FIXTURE("ALREADY_JOINED"), "  chain: Base Sepolia"].join("\n"),
       ),
     );
     expect(result.title).toBe("Already in");
