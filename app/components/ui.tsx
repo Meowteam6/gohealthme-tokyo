@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { arcTxUrl } from "@/lib/chains";
+import { baseTxUrl } from "@/lib/chains";
 import type { ProofPolicy } from "@/lib/contract";
 
 /**
@@ -14,14 +14,14 @@ export const TAP_TARGET =
 
 export function ArcTxLink({
   txHash,
-  label = "View transaction on Arcscan",
+  label = "View transaction on Basescan",
 }: {
   txHash: string;
   label?: string;
 }) {
   return (
     <a
-      href={arcTxUrl(txHash)}
+      href={baseTxUrl(txHash)}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-block break-all text-sm text-accent underline"

@@ -475,4 +475,281 @@ contract HealthPoolsV3Test is Test {
         pools.setOracle(newOracle);
         assertEq(pools.oracle(), newOracle, "distinct oracle rotation allowed");
     }
+
+    // ==================================================================
+    // Model 2 — commitment / DietBet settlement. Equal split, multipliers
+    // ignored, fee on forfeitures only, nobody-hit refunds all. All money
+    // asserted on real owed[]/USDC deltas and on fund conservation.
+    // ==================================================================
+
+    /// @dev Model-2 commitment pool: everyone stakes toward their own goal, no
+    ///      sponsor funding. Same shape as the pilot.
+    function _newCommitmentPool() internal returns (uint256 poolId) {
+        vm.prank(creator);
+        poolId = pools.createPool("Commit", "8h sleep x7", FEE, uint64(block.timestamp), periodEnd, 2, 0);
+    }
+
+    function test_CreatePool_allowsModel2RejectsAbove() public {
+        vm.prank(creator);
+        uint256 poolId = pools.createPool("Commit", "goal", FEE, uint64(block.timestamp), periodEnd, 2, 0);
+        assertEq(pools.getPool(poolId).bountyModel, 2, "model 2 accepted");
+
+        vm.prank(creator);
+        vm.expectRevert(bytes("BAD_BOUNTY_MODEL"));
+        pools.createPool("Bad", "goal", FEE, uint64(block.timestamp), periodEnd, 3, 0);
+    }
+
+    /// @notice One achiever among missers takes the whole pot: own stake back plus
+    ///         every forfeiture. This is the core DietBet mechanic.
+    function test_Commitment_singleAchieverTakesAllForfeitures() public {
+        uint256 poolId = _newCommitmentPool();
+        _join(poolId, alice);
+        _join(poolId, bob);
+        _join(poolId, carol);
+        _record(poolId, alice, true, uint16(pools.BPS())); // hit
+        _record(poolId, bob, false, uint16(pools.BPS())); // miss
+        _record(poolId, carol, false, uint16(pools.BPS())); // miss
+
+        vm.warp(periodEnd + 1);
+        vm.prank(settler);
+        pools.settle(poolId);
+
+        assertEq(pools.owed(alice), 3 * FEE, "achiever takes own stake + both forfeitures");
+        assertEq(pools.owed(bob), 0, "misser forfeits");
+        assertEq(pools.owed(carol), 0, "misser forfeits");
+        assertEq(pools.getPool(poolId).balance, 0, "pot fully distributed");
+
+        uint256 before = usdc.balanceOf(alice);
+        vm.prank(alice);
+        pools.withdraw();
+        assertEq(usdc.balanceOf(alice) - before, 3 * FEE, "achiever withdraws 3x her stake");
+    }
+
+    /// @notice N=2 both-hit: each just gets their own stake back, nobody loses.
+    ///         This is what keeps the commitment model off the wager line.
+    function test_Commitment_bothHitEachKeepsStake() public {
+        uint256 poolId = _newCommitmentPool();
+        _join(poolId, alice);
+        _join(poolId, bob);
+        _record(poolId, alice, true, uint16(pools.BPS()));
+        _record(poolId, bob, true, uint16(pools.BPS()));
+
+        vm.warp(periodEnd + 1);
+        vm.prank(settler);
+        pools.settle(poolId);
+
+        assertEq(pools.owed(alice), FEE, "alice keeps her stake");
+        assertEq(pools.owed(bob), FEE, "bob keeps his stake");
+        assertEq(pools.getPool(poolId).balance, 0, "pot fully returned, nobody loses");
+    }
+
+    /// @notice Nobody hits -> every adjudicated staker is refunded, nothing forfeited.
+    function test_Commitment_nobodyHitsAllRefunded() public {
+        uint256 poolId = _newCommitmentPool();
+        _join(poolId, alice);
+        _join(poolId, bob);
+        _record(poolId, alice, false, uint16(pools.BPS()));
+        _record(poolId, bob, false, uint16(pools.BPS()));
+
+        vm.warp(periodEnd + 1);
+        vm.prank(settler);
+        pools.settle(poolId);
+
+        assertEq(pools.owed(alice), FEE, "alice refunded");
+        assertEq(pools.owed(bob), FEE, "bob refunded");
+        assertEq(pools.getPool(poolId).balance, 0, "nothing stranded");
+    }
+
+    /// @notice The fee is taken from forfeited stakes only, never a returned stake.
+    function test_Commitment_feeTakenFromForfeituresOnly() public {
+        pools.setCommitmentFeeBps(uint16(1_000)); // 10%
+        uint256 poolId = _newCommitmentPool();
+        _join(poolId, alice);
+        _join(poolId, bob);
+        _record(poolId, alice, true, uint16(pools.BPS())); // hit
+        _record(poolId, bob, false, uint16(pools.BPS())); // miss -> forfeits FEE
+
+        vm.warp(periodEnd + 1);
+        vm.prank(settler);
+        pools.settle(poolId);
+
+        uint256 fee = FEE / 10; // 10% of the single forfeited stake
+        assertEq(pools.owed(address(this)), fee, "owner earns fee on the forfeiture");
+        assertEq(pools.owed(alice), 2 * FEE - fee, "achiever: own stake + net forfeiture");
+        assertGe(pools.owed(alice), FEE, "achiever never taxed below her own stake");
+        assertEq(pools.owed(bob), 0, "misser forfeits");
+        assertEq(pools.owed(address(this)) + pools.owed(alice), 2 * FEE, "fee + payout == pot, conserved");
+    }
+
+    /// @notice Regression (adversarial panel, medium): the commitment fee must tax
+    ///         forfeited STAKES only, never sponsor surplus. A model-2 pool with a
+    ///         100 USDC top-up and a 20% fee must credit the owner 20% of the single
+    ///         forfeited stake (2 USDC), not 20% of surplus+stake (22 USDC), and the
+    ///         achiever receives the whole untaxed surplus.
+    function test_Commitment_feeDoesNotTaxSponsorSurplus() public {
+        pools.setCommitmentFeeBps(uint16(2_000)); // 20%
+        uint256 surplus = 100e6;
+        vm.prank(creator);
+        uint256 poolId = pools.createPool("Commit", "goal", FEE, uint64(block.timestamp), periodEnd, 2, surplus);
+        _join(poolId, alice);
+        _join(poolId, bob);
+        _record(poolId, alice, true, uint16(pools.BPS())); // hit
+        _record(poolId, bob, false, uint16(pools.BPS())); // miss -> forfeits FEE
+
+        vm.warp(periodEnd + 1);
+        vm.prank(settler);
+        pools.settle(poolId);
+
+        uint256 fee = (FEE * 2_000) / 10_000; // 20% of bob's forfeited stake = 2 USDC
+        uint256 pot = surplus + 2 * FEE; // 120 USDC
+        assertEq(pools.owed(address(this)), fee, "fee taxes only the forfeited stake, not the surplus");
+        assertEq(pools.owed(alice), pot - fee, "achiever gets pot minus the forfeiture fee (surplus untaxed)");
+        assertGe(pools.owed(alice), FEE, "achiever recovers at least her stake");
+        assertEq(
+            pools.owed(alice) + pools.owed(address(this)) + pools.getPool(poolId).balance,
+            pot,
+            "funds conserved exactly"
+        );
+    }
+
+    /// @notice Model 2 ignores multipliers entirely: it is an equal split.
+    function test_Commitment_ignoresMultipliers() public {
+        uint256 poolId = _newCommitmentPool();
+        _join(poolId, alice);
+        _join(poolId, bob);
+        _record(poolId, alice, true, uint16(pools.BPS())); // 1x
+        _record(poolId, bob, true, uint16(3 * pools.BPS())); // 3x -- must be ignored
+
+        vm.warp(periodEnd + 1);
+        vm.prank(settler);
+        pools.settle(poolId);
+
+        assertEq(pools.owed(alice), FEE, "equal split ignores multiplier");
+        assertEq(pools.owed(bob), FEE, "equal split ignores multiplier");
+    }
+
+    /// @notice B-2 interaction: an unadjudicated staker is refunded (not forfeited),
+    ///         and only the explicit misser's stake is split among achievers.
+    function test_Commitment_unadjudicatedRefundedThenForfeituresSplit() public {
+        uint256 poolId = _newCommitmentPool();
+        _join(poolId, alice); // hit
+        _join(poolId, bob); // miss
+        _join(poolId, carol); // oracle never adjudicates
+        _record(poolId, alice, true, uint16(pools.BPS()));
+        _record(poolId, bob, false, uint16(pools.BPS()));
+        // carol: no record -> downtime
+
+        vm.warp(uint256(periodEnd) + pools.SETTLE_GRACE() + 1);
+        vm.prank(carol);
+        pools.settle(poolId);
+
+        assertEq(pools.owed(carol), FEE, "unadjudicated refunded (B-2)");
+        assertEq(pools.owed(alice), 2 * FEE, "achiever gets own stake + bob's forfeiture, not carol's refund");
+        assertEq(pools.owed(bob), 0, "explicit misser forfeits");
+        assertEq(pools.getPool(poolId).balance, 0, "pot fully accounted");
+    }
+
+    /// @notice Integer-division dust stays in the pool; total credited never
+    ///         exceeds the pot. 4 stakes, 3 achievers -> 40/3 each, 1 unit dust.
+    function test_Commitment_dustStaysInPoolAndStaysSolvent() public {
+        uint256 poolId = _newCommitmentPool();
+        _join(poolId, alice);
+        _join(poolId, bob);
+        _join(poolId, carol);
+        address dave = makeAddr("dave");
+        usdc.mint(dave, 1_000e6);
+        vm.prank(dave);
+        usdc.approve(address(pools), type(uint256).max);
+        _join(poolId, dave);
+
+        _record(poolId, alice, true, uint16(pools.BPS()));
+        _record(poolId, bob, true, uint16(pools.BPS()));
+        _record(poolId, carol, true, uint16(pools.BPS()));
+        _record(poolId, dave, false, uint16(pools.BPS())); // misser
+
+        vm.warp(periodEnd + 1);
+        vm.prank(settler);
+        pools.settle(poolId);
+
+        uint256 pot = 4 * FEE;
+        uint256 share = pot / 3;
+        assertEq(pools.owed(alice), share, "equal floor share");
+        assertEq(pools.owed(bob), share, "equal floor share");
+        assertEq(pools.owed(carol), share, "equal floor share");
+        uint256 credited = pools.owed(alice) + pools.owed(bob) + pools.owed(carol);
+        assertLe(credited, pot, "never over-credits the pot");
+        assertEq(pools.getPool(poolId).balance, pot - credited, "dust remains in pool, nothing stranded");
+        assertGe(share, FEE, "each achiever recovers at least her own stake");
+    }
+
+    function test_SetCommitmentFee_capsAndOwnerOnly() public {
+        // Hoist the getter calls: an external call inside the args after
+        // vm.expectRevert would consume the expectation instead of the setter.
+        uint16 cap = pools.MAX_COMMITMENT_FEE_BPS();
+        uint16 overCap = cap + 1;
+
+        vm.expectRevert(bytes("FEE_TOO_HIGH"));
+        pools.setCommitmentFeeBps(overCap);
+
+        vm.prank(alice);
+        vm.expectRevert(bytes("NOT_OWNER"));
+        pools.setCommitmentFeeBps(uint16(500));
+
+        pools.setCommitmentFeeBps(cap);
+        assertEq(pools.commitmentFeeBps(), cap, "fee set to cap by owner");
+    }
+
+    /// @notice Property: for any staker count, hit pattern, and fee, model-2
+    ///         settlement conserves funds exactly (users + owner fee + pool dust ==
+    ///         pot) and never taxes an achiever below her own stake.
+    function testFuzz_Commitment_conservesFundsAndReturnsStakes(uint8 rawCount, uint16 hitMask, uint16 rawFee)
+        public
+    {
+        uint256 count = bound(rawCount, 2, 8);
+        pools.setCommitmentFeeBps(uint16(bound(rawFee, 0, pools.MAX_COMMITMENT_FEE_BPS())));
+
+        uint256 poolId = _newCommitmentPool();
+
+        address[] memory users = new address[](count);
+        for (uint256 i; i < count; ++i) {
+            users[i] = address(uint160(0xBEEF0000 + i + 1));
+            usdc.mint(users[i], 1_000e6);
+            vm.prank(users[i]);
+            usdc.approve(address(pools), type(uint256).max);
+            _join(poolId, users[i]);
+        }
+
+        uint256 achievers;
+        for (uint256 i; i < count; ++i) {
+            bool hit = ((hitMask >> i) & 1) == 1;
+            if (hit) achievers++;
+            _record(poolId, users[i], hit, uint16(pools.BPS()));
+        }
+
+        uint256 pot = count * FEE;
+        vm.warp(periodEnd + 1);
+        vm.prank(settler);
+        pools.settle(poolId);
+
+        uint256 creditedToUsers;
+        for (uint256 i; i < count; ++i) creditedToUsers += pools.owed(users[i]);
+        uint256 feeCredited = pools.owed(address(this)); // owner == deployer == this
+        uint256 remaining = pools.getPool(poolId).balance;
+        assertEq(creditedToUsers + feeCredited + remaining, pot, "funds conserved exactly");
+
+        if (achievers == 0) {
+            for (uint256 i; i < count; ++i) {
+                assertEq(pools.owed(users[i]), FEE, "nobody-hit refunds every stake in full");
+            }
+            assertEq(feeCredited, 0, "no fee is taken when nobody hit");
+        } else {
+            for (uint256 i; i < count; ++i) {
+                if (((hitMask >> i) & 1) == 1) {
+                    assertGe(pools.owed(users[i]), FEE, "achiever recovers at least her own stake");
+                } else {
+                    assertEq(pools.owed(users[i]), 0, "misser forfeits");
+                }
+            }
+        }
+    }
 }

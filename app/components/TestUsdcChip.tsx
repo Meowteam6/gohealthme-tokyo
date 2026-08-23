@@ -65,7 +65,7 @@ export default function TestUsdcChip() {
   return (
     <div className="flex flex-wrap items-center gap-2 py-1">
       <span
-        title="Spendable test USDC in your Arc wallet. Testnet only, no real value."
+        title="Spendable test USDC in your Base wallet. Testnet only, no real value."
         className="inline-flex min-h-11 items-center rounded-lg border border-edge bg-surface-raised px-2 font-mono text-[11px] text-muted sm:px-3 sm:text-xs"
       >
         <span className="font-sans font-semibold uppercase tracking-wide">

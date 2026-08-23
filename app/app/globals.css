@@ -71,6 +71,21 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
+/* Horizontal-overflow guard. SPOTTER's run-across easter egg is position:fixed
+   and animates to translateX(124vw), which pushes past the right viewport edge
+   and would raise a horizontal scrollbar on a narrow phone. Clip the horizontal
+   axis at the root so that overflow is hidden without ever affecting vertical
+   scroll. `clip` is preferred because — unlike `hidden` — it does not create a
+   scroll container, so the sticky header keeps working and vertical page scroll
+   is untouched; `hidden` is the fallback for browsers without `clip`. Only the
+   decorative, off-screen otter is affected: all real content lives inside the
+   centered max-w-5xl column and never intends to sit past the edge. */
+html,
+body {
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
 /* Motion is decoration here, never information: every animated element reads
    identically with animation off, which is what the reduced-motion block
    guarantees. */

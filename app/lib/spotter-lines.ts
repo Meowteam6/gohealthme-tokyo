@@ -27,7 +27,8 @@ export type Surface =
   | "agent-empty"
   | "feed-empty"
   | "evidence"
-  | "payout";
+  | "payout"
+  | "join";
 
 export type SpotterState =
   | "idle"
@@ -37,7 +38,8 @@ export type SpotterState =
   | "paid-self-reported"
   | "broke"
   | "error"
-  | "streak-nudge";
+  | "streak-nudge"
+  | "joined";
 
 /** "loud" is the ONLY tone allowed on a verified win (test c). */
 export type Tone = "deadpan" | "dry" | "warn" | "loud";
@@ -92,6 +94,16 @@ export const SPOTTER_LINES: SpotterLine[] = [
   { id: "pay-v1", surface: "payout", state: "won-verified", tone: "loud", text: { en: "Absolute unit. Run it back." } },
   { id: "pay-v2", surface: "payout", state: "won-verified", tone: "loud", text: { en: "That happened. I saw it, I paid it." } },
   { id: "pay-v3", surface: "payout", state: "won-verified", tone: "loud", text: { en: "Clean proof. Money's already moving." } },
+
+  // ── Join: you're in (DRY/deadpan — never loud, joining moves no money) ────
+  // Honest-core: a join pays nothing and proves nothing, so these never claim a
+  // win, never borrow trust vocabulary, and never reach the "loud" tone that is
+  // reserved for a verified payout. The point is landed dry: you showed up, the
+  // work is still ahead.
+  { id: "join-1", surface: "join", state: "joined", tone: "deadpan", text: { en: "You're in. Now go do the thing." } },
+  { id: "join-2", surface: "join", state: "joined", tone: "deadpan", text: { en: "Name's on the pool. The hard part is still yours." } },
+  { id: "join-3", surface: "join", state: "joined", tone: "dry", text: { en: "One wallet, one entry. That's you now. I don't pay for showing up, though." } },
+  { id: "join-4", surface: "join", state: "joined", tone: "dry", text: { en: "Locked in. Come back when there's something for me to settle." } },
 
   // ── Payout: self-reported (WARN — never loud, never "verified") ───────────
   { id: "pay-s1", surface: "payout", state: "paid-self-reported", tone: "warn", text: { en: "Paid on your word. Still not stamped." } },

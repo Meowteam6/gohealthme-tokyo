@@ -21,6 +21,7 @@ import { useState } from "react";
 import { useConnectWithOtp } from "@dynamic-labs/sdk-react-core";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
+import { useBaseAccountConnect } from "@/lib/useBaseAccountConnect";
 import { markExternalConnectIntent } from "@/lib/wallet-connect-intent";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -34,6 +35,7 @@ function SignInPanelInner() {
   const { login } = useEmbeddedWallet();
   const { connectWithEmail, verifyOneTimePassword, retryOneTimePassword } =
     useConnectWithOtp();
+  const { connectBase, baseBusy } = useBaseAccountConnect();
 
   const [step, setStep] = useState<Step>({ kind: "email" });
   const [email, setEmail] = useState("");
@@ -104,7 +106,7 @@ function SignInPanelInner() {
 
   return (
     <div className="rounded-2xl border border-edge bg-surface p-5">
-      <h2 className="text-lg font-semibold">Sign in</h2>
+      <h2 className="text-lg font-semibold">Get started</h2>
 
       {step.kind === "otp" || step.kind === "verifying" ? (
         <div className="mt-4 space-y-3">
@@ -174,9 +176,50 @@ function SignInPanelInner() {
       ) : (
         <div className="mt-4 space-y-3">
           <p className="text-sm text-muted">
-            We create your wallet from your email. No seed phrase, no extension,
-            nothing to install.
+            The quickest way in is a Base Account. It is created on your device
+            with a passkey - no seed phrase, no extension, nothing to install.
           </p>
+
+          {/* Preferred placement (gas-credit Req 3): the Base Account button
+              leads. Brand-correct light treatment per Base's own guidelines - a
+              white surface, near-black label, and the #0000FF Base Square with
+              8px of separation from the text (gap-2). The white button carries a
+              hairline border and a soft shadow only so it reads against the
+              white card; the Base colors and mark are untouched. The SAME button
+              creates the account for a first-time visitor and signs in a
+              returning one - the connect handler below is unchanged. */}
+          <button
+            type="button"
+            disabled={baseBusy}
+            aria-busy={baseBusy}
+            onClick={() => {
+              // Clear any stale email/OTP error before the Base flow opens; the
+              // shared hook owns the connect itself.
+              setError(null);
+              void connectBase();
+            }}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-foreground/15 bg-surface px-4 py-3 text-base font-semibold text-foreground shadow-sm hover:border-foreground/25 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span
+              aria-hidden="true"
+              className="h-4 w-4 shrink-0 rounded-[2px] bg-[#0000FF]"
+            />
+            {baseBusy ? "Opening Base..." : "Sign in with Base"}
+          </button>
+          <p className="text-xs text-muted">
+            New here? This creates your Base Account with a passkey. Already have
+            one? The same button signs you in. On Base, transactions here can be
+            gas-free.
+          </p>
+
+          <div className="flex items-center gap-3 py-1">
+            <span className="h-px flex-1 bg-edge" />
+            <span className="text-xs font-medium uppercase tracking-wide text-muted">
+              or use email
+            </span>
+            <span className="h-px flex-1 bg-edge" />
+          </div>
+
           <label htmlFor="signin-email" className="sr-only">
             Email address
           </label>
@@ -199,10 +242,13 @@ function SignInPanelInner() {
             onClick={() => {
               void sendCode();
             }}
-            className="min-h-11 w-full rounded-xl bg-accent-strong px-5 py-3 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 w-full rounded-xl border border-edge bg-surface px-5 py-3 text-base font-semibold text-foreground hover:border-accent/50 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? "Sending the code..." : "Email me a code"}
           </button>
+          <p className="text-xs text-muted">
+            We create the wallet from your email - no seed phrase, no extension.
+          </p>
         </div>
       )}
 

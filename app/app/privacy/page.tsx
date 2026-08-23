@@ -43,7 +43,7 @@ export default function PrivacyPage() {
             This is a testnet demo
           </h2>
           <p>
-            GoHealthMe runs on the Arc testnet. All USDC here is test USDC with
+            GoHealthMe runs on Base Sepolia. All USDC here is test USDC with
             no real monetary value. Nothing on this site can pay you real money
             or cost you real money.
           </p>
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
           </h2>
           <p>
             When you sign in with your email, Dynamic (a Fireblocks company)
-            creates an embedded wallet for you on Arc. From that step we hold
+            creates an embedded wallet for you on Base. From that step we hold
             your email address and your wallet address.
           </p>
         </section>
@@ -143,7 +143,7 @@ export default function PrivacyPage() {
             Some things are public and permanent by design
           </h2>
           <p>
-            GoHealthMe settles on the Arc testnet blockchain. Wallet addresses,
+            GoHealthMe settles on the Base Sepolia blockchain. Wallet addresses,
             pool activity, payouts, and the goal text you write when you create
             a pool are recorded on-chain. Blockchain records are public and, by
             their nature, permanent. We cannot edit or delete them. Do not put
@@ -166,7 +166,7 @@ export default function PrivacyPage() {
             <li>Supabase - our database (handles, challenge metadata, feedback)</li>
             <li>Google Cloud / Vertex AI - the Gemini model that answers helper questions</li>
             <li>Vercel - hosting for the app and its server</li>
-            <li>Arc testnet - the public blockchain where pools settle</li>
+            <li>Base Sepolia - the public blockchain where pools settle</li>
             <li>Junction - wearable summaries, only if you connect a device</li>
           </ul>
         </section>

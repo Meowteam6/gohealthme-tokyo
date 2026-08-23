@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { maxUint256, type Address, type Hash } from "viem";
+import { useAccount } from "wagmi";
 import {
   erc20Abi,
   formatUsdc,
@@ -18,6 +19,11 @@ import {
 } from "@/lib/tx-errors";
 import { isEconomicallyDeadConfig } from "@/lib/pool-lifecycle";
 import { useEmbeddedWallet } from "@/lib/wallet";
+import {
+  useGasSponsorship,
+  type GaslessStatus,
+  type SponsoredCall,
+} from "@/lib/useGasSponsorship";
 
 /**
  * SWAP POINT: Blink + Gateway deposit replaces this approve+write step
@@ -90,10 +96,18 @@ export interface UseUsdcDepositResult {
    * useful instead of dumping a raw wallet error.
    */
   needsFunds: DepositFundingGap | null;
+  /**
+   * Additive. Whether the next deposit will be gaslessly sponsored by the CDP
+   * paymaster (Base Account + paymaster URL), and an honest reason otherwise.
+   * Render <GaslessBadge> from it so the money path always says who pays gas.
+   */
+  gasless: GaslessStatus;
 }
 
 export function useUsdcDeposit(): UseUsdcDepositResult {
   const { getArcWalletClient } = useEmbeddedWallet();
+  const { address: connectedAddress } = useAccount();
+  const { status: gasless, sendSponsored } = useGasSponsorship();
   const [status, setStatus] = useState<DepositStatus>({ kind: "idle" });
   const [needsFunds, setNeedsFunds] = useState<DepositFundingGap | null>(null);
 
@@ -140,6 +154,85 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
       let fundingGap: DepositFundingGap | null = null;
 
       try {
+        // ---- Sponsored (gasless) path ------------------------------------
+        // Only a Base Account (Coinbase Smart Wallet) with a configured CDP
+        // paymaster reaches here; every other wallet (email embedded EOA,
+        // external EOA) falls through to the unchanged normal path below.
+        // Approve + the USDC-pulling write go out as ONE atomic EIP-5792
+        // bundle with the paymaster covering gas, so the user needs USDC only
+        // for the deposit itself, never for gas.
+        if (gasless.willSponsor) {
+          if (connectedAddress === undefined) {
+            throw new Error(
+              "No Base Account connected. Sign in with Base first.",
+            );
+          }
+          const owner = connectedAddress;
+          const publicClient = getArcPublicClient();
+
+          // Balance preflight: gas is sponsored, so only the deposit amount is
+          // required (no USDC gas margin). Best-effort; a failed read falls
+          // through and the bundle surfaces its own revert.
+          let balance: bigint | null = null;
+          try {
+            balance = (await publicClient.readContract({
+              address: USDC_ADDRESS,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [owner],
+            })) as bigint;
+          } catch {
+            balance = null;
+          }
+          if (balance !== null && balance < amount) {
+            fundingGap = { address: owner, balance, needed: amount };
+            setNeedsFunds(fundingGap);
+            setStatus({
+              kind: "error",
+              message: fundingShortfallDetail(
+                formatUsdc(balance),
+                formatUsdc(amount),
+              ),
+              raw: "",
+            });
+            throw new Error("Wallet balance cannot cover this deposit.");
+          }
+
+          // Include an approval in the bundle only when the current allowance
+          // cannot cover this deposit; approve max once so later deposits skip
+          // it. Both calls ride one signature.
+          const allowance = (await publicClient.readContract({
+            address: USDC_ADDRESS,
+            abi: erc20Abi,
+            functionName: "allowance",
+            args: [owner, poolsAddress],
+          })) as bigint;
+
+          const calls: SponsoredCall[] = [];
+          if (allowance < amount) {
+            calls.push({
+              to: USDC_ADDRESS,
+              abi: erc20Abi,
+              functionName: "approve",
+              args: [poolsAddress, maxUint256],
+            });
+          }
+          calls.push({
+            to: poolsAddress,
+            abi: healthPoolsAbi,
+            functionName: call.functionName,
+            args: call.args,
+          });
+
+          setStatus({ kind: "depositing" });
+          const { hash } = await sendSponsored(calls);
+          // approveHash is null: an EIP-5792 bundle settles as one atomic op,
+          // so there is no separate approval tx hash to link.
+          setStatus({ kind: "done", approveHash: null, depositHash: hash });
+          return hash;
+        }
+
+        // ---- Normal (user-paid) path -------------------------------------
         const walletClient = await getArcWalletClient();
         const publicClient = getArcPublicClient();
         const owner = walletClient.account.address;
@@ -211,7 +304,7 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
           });
           if (approveReceipt.status !== "success") {
             throw new Error(
-              `The USDC approval ${approveHash} reverted on Arc testnet.`,
+              `The USDC approval ${approveHash} reverted on Base Sepolia.`,
             );
           }
         }
@@ -231,7 +324,7 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
         });
         if (depositReceipt.status !== "success") {
           throw new Error(
-            `The ${call.functionName} transaction ${depositHash} reverted on Arc testnet.`,
+            `The ${call.functionName} transaction ${depositHash} reverted on Base Sepolia.`,
           );
         }
 
@@ -253,10 +346,10 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
         throw err instanceof Error ? err : new Error(human.detail);
       }
     },
-    [getArcWalletClient],
+    [getArcWalletClient, gasless.willSponsor, sendSponsored, connectedAddress],
   );
 
   const busy = status.kind === "approving" || status.kind === "depositing";
 
-  return { status, busy, reset, runUsdcDeposit, needsFunds };
+  return { status, busy, reset, runUsdcDeposit, needsFunds, gasless };
 }

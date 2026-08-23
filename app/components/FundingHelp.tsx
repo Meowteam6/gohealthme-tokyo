@@ -196,6 +196,12 @@ export default function FundingHelp({
   return (
     <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
       <p className="text-base font-semibold text-warning">{headline}</p>
+      {/* TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
+          "Arc testnet pays gas in USDC, so a zero balance cannot send any transaction"
+          is false on Base: gas is ETH and the CDP paymaster sponsors smart-wallet
+          users, so those users need no gas at all. This whole first-run funding
+          wall (and "your Base wallet" delivery copy below) is left verbatim on
+          purpose — a human rewrites it with the real Base gas/paymaster story. */}
       <p className="mt-1 text-sm text-foreground/80">
         Arc testnet pays gas in USDC, so a wallet with a zero balance cannot
         send any transaction - even a free pool needs a little to cover the
@@ -221,7 +227,7 @@ export default function FundingHelp({
           </button>
           <p className="mt-2 text-xs text-muted">
             One tap grants you {formatUsdc(FAUCET_GRANT_UUSDC)} test USDC and
-            delivers it to your Arc wallet. Testnet only, no real value.
+            delivers it to your Base wallet. Testnet only, no real value.
           </p>
           {outcome !== null && outcome.kind === "funded" ? (
             <p

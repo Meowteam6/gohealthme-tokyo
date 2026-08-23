@@ -498,7 +498,7 @@ function CreateChallengeInner() {
               Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
               {status.kind === "approving"
                 ? "approving USDC for the reward"
-                : "putting the reward into the pool on Arc"}
+                : "putting the reward into the pool on Base"}
             </p>
           </div>
         ) : null}

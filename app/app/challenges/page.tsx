@@ -485,7 +485,7 @@ function MyChallengesContent() {
         detail={
           query.error instanceof Error
             ? query.error.message
-            : "Unknown error reading from Arc testnet."
+            : "Unknown error reading from Base Sepolia."
         }
         onRetry={() => {
           void query.refetch();

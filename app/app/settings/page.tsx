@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui";
 export const metadata: Metadata = {
   title: "Wallet - GoHealthMe",
   description:
-    "Your GoHealthMe wallet: address, Arc testnet balance, whether it is the wallet we made for you or one you connected, and how to back it up.",
+    "Your GoHealthMe wallet: address, Base Sepolia balance, whether it is the wallet we made for you or one you connected, and how to back it up.",
 };
 
 export default function SettingsPage() {

@@ -3,11 +3,12 @@
 import { useState, type ReactNode } from "react";
 import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
 import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
+import { ZeroDevSmartWalletConnectors } from "@dynamic-labs/ethereum-aa";
 import { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider, createConfig, fallback, http } from "wagmi";
 import { arcTestnet } from "@/lib/chains";
-import { DEMO_CHROME, GUARD_INJECTED_WALLET } from "@/lib/config";
+import { DEMO_CHROME, EMAIL_AA_ENABLED, GUARD_INJECTED_WALLET } from "@/lib/config";
 import { arcEvmNetwork } from "@/lib/dynamic";
 import { externalConnectIntended } from "@/lib/wallet-connect-intent";
 
@@ -33,6 +34,19 @@ const injectedWalletGuard = GUARD_INJECTED_WALLET
       },
     }
   : {};
+
+// Wallet connectors, built once. EthereumWalletConnectors is always present
+// (email OTP + external wallets). ZeroDevSmartWalletConnectors is appended ONLY
+// when EMAIL_AA_ENABLED, which upgrades the email embedded wallet to an ERC-4337
+// smart account (ZeroDev Kernel) whose EIP-5792 paymasterService capability lets
+// the CDP paymaster sponsor its gas — the same sponsored path Base Account uses.
+// Off by default, so the default build's connector set is unchanged and the
+// email login UX (still just email + code) cannot regress from this. Enabling it
+// also requires ZeroDev/AA to be turned on for this environment in the Dynamic
+// dashboard; without that the connector is inert and email stays a plain EOA.
+const walletConnectors = EMAIL_AA_ENABLED
+  ? [EthereumWalletConnectors, ZeroDevSmartWalletConnectors]
+  : [EthereumWalletConnectors];
 
 // Base Sepolia only. The transports use the Base public RPCs from
 // lib/chains.ts; the fork deliberately does not carry the Arc-RPC ordering
@@ -109,7 +123,19 @@ export default function Providers({ children }: { children: ReactNode }) {
         // external wallet, and the app read primaryWallet alone. Keep
         // connect-only; it keeps the flow signature-free.
         initialAuthenticationMode: "connect-only",
-        walletConnectors: [EthereumWalletConnectors],
+        // Surface Base Account (Coinbase Smart Wallet) as a first-class option.
+        // The Coinbase connector ships inside EthereumWalletConnectors;
+        // "smartWalletOnly" makes it present the passkey-backed ERC-4337 Base
+        // Account flow rather than the Coinbase EOA extension. This is the
+        // wallet that can be gaslessly sponsored by the CDP paymaster
+        // (see lib/useGasSponsorship.ts). Email OTP is untouched and remains
+        // the default path; this only adds a wallet flavor. (Coinbase must also
+        // be enabled for this environment in the Dynamic dashboard for it to
+        // appear in the modal.)
+        coinbaseWalletPreference: "smartWalletOnly",
+        // EthereumWalletConnectors always; ZeroDevSmartWalletConnectors added
+        // only when EMAIL_AA_ENABLED (see the walletConnectors const above).
+        walletConnectors,
         // Drop MetaMask from the login modal. It is the one connector that
         // reliably fails sign-in here, and it is the only one we special-case
         // (see useMetamaskSdk below). Email and the other external wallets

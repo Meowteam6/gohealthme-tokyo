@@ -289,7 +289,7 @@ function WinRow({ win, index }: { win: Win; index: number }) {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-accent underline underline-offset-2 hover:text-accent-strong"
           >
-            Arcscan
+            Basescan
             <ExternalLinkIcon className="h-3 w-3" />
           </a>
         </span>

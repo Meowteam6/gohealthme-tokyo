@@ -92,7 +92,7 @@ function PayoutRow({ payout, index }: { payout: NamedPayout; index: number }) {
             rel="noopener noreferrer"
             className="text-accent underline underline-offset-2 hover:text-accent-strong"
           >
-            Arcscan
+            Basescan
           </a>
         </span>
       </div>

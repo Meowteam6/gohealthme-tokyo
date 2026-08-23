@@ -7,6 +7,7 @@ import { getHealthPoolsAddress, parseUsdc } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import { ArcTxLink, ErrorNote } from "@/components/ui";
+import GaslessBadge from "@/components/GaslessBadge";
 import SignInGate from "@/components/SignInGate";
 
 interface FundPoolCopy {
@@ -26,7 +27,7 @@ function FundPoolInner({
 }: { poolId: bigint } & FundPoolCopy) {
   const queryClient = useQueryClient();
   const { ready, authenticated } = useEmbeddedWallet();
-  const { status, busy, reset, runUsdcDeposit } = useUsdcDeposit();
+  const { status, busy, reset, runUsdcDeposit, gasless } = useUsdcDeposit();
   const [amount, setAmount] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -112,12 +113,14 @@ function FundPoolInner({
         )}
       </SignInGate>
 
+      {authenticated ? <GaslessBadge status={gasless} /> : null}
+
       {status.kind === "approving" || status.kind === "depositing" ? (
         <p className="text-xs text-muted">
           Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
           {status.kind === "approving"
             ? "approving USDC"
-            : "funding the pool on Arc"}
+            : "funding the pool on Base"}
           ...
         </p>
       ) : null}

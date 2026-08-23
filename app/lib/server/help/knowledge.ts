@@ -33,8 +33,13 @@ export const ASK_GLOBAL_CAP = 400;
  * honest than a sprawling one.
  */
 export const HELP_KB = [
-  "WHAT GOHEALTHME IS: sponsors fund USDC pools tied to a health goal. You hit the goal, prove it, and get paid in USDC the moment it verifies. Everything here is on Arc testnet with play-money USDC that has no real value.",
+  "WHAT GOHEALTHME IS: sponsors fund USDC pools tied to a health goal. You hit the goal, prove it, and get paid in USDC the moment it verifies. Everything here is on Base Sepolia with play-money USDC that has no real value.",
   "SIGN IN: tap Sign in and use an email address. We create an embedded wallet for you - no seed phrase, no browser extension, nothing to install.",
+  // TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
+  // "Arc pays gas in USDC, so your wallet needs a little before it can do anything" is
+  // false on Base (gas is ETH / paymaster-sponsored). This KB entry feeds the help
+  // assistant verbatim; left as-is on purpose so a human rewrites it with the real
+  // Base gas story rather than the assistant inventing one.
   "GET TEST USDC: after signing in, tap Get test USDC (the chip near the top, or the Coach's button). Arc pays gas in USDC, so your wallet needs a little before it can do anything. It is a one-tap faucet, testnet only.",
   "CLAIM A HANDLE: pick a public handle on the handle page so you show up as a name, not a wallet address. Your handle appears in the header, on your challenges, and on the payout feed. Optional for earning, but it is how friends recognize you.",
   "DO THE THING: create a challenge (dare a friend, or a parent paying a kid) from the new-challenge page, or join a sponsor pool from the pools page. Creating a challenge creates a pool, and you the challenger fund the reward.",

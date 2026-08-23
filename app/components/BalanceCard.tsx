@@ -182,7 +182,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
       setMove({
         kind: "error",
         message:
-          err instanceof Error ? err.message : "Move to Arc wallet failed.",
+          err instanceof Error ? err.message : "Move to Base wallet failed.",
       });
     }
   };
@@ -198,7 +198,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
         <span className="ml-1 text-lg font-semibold text-foreground">USDC</span>
       </p>
       <p className="mt-1 text-sm text-muted">
-        Test balance you can move to your Arc wallet to back goals and fund
+        Test balance you can move to your Base wallet to back goals and fund
         pools.
       </p>
 
@@ -244,18 +244,18 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
         className="mt-3 w-full rounded-xl bg-accent-strong px-5 py-3 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
       >
         {moving
-          ? "Moving to Arc wallet..."
-          : `Move ${formatUsdc(moveAmount)} USDC to Arc wallet`}
+          ? "Moving to Base wallet..."
+          : `Move ${formatUsdc(moveAmount)} USDC to Base wallet`}
       </button>
       <p className="mt-2 text-xs text-muted">
-        This one is a real transfer: the treasury sends Arc USDC to your wallet.
+        This one is a real transfer: the treasury sends Base USDC to your wallet.
         Up to {formatUsdc(WITHDRAW_DAILY_CAP_UUSDC)} USDC per address per day.
       </p>
 
       {move.kind === "done" ? (
         <div className="mt-2 rounded-xl border border-accent/40 bg-accent-deep/40 p-3">
           <p className="text-sm font-semibold text-accent">
-            Moved to your Arc wallet. It is now spendable on goals and pools.
+            Moved to your Base wallet. It is now spendable on goals and pools.
           </p>
           <a
             href={arcTxUrl(move.txHash)}
@@ -263,7 +263,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
             rel="noopener noreferrer"
             className="mt-1 inline-block break-all text-sm text-accent underline"
           >
-            View transfer on Arcscan
+            View transfer on Basescan
           </a>
         </div>
       ) : null}

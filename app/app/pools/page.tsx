@@ -147,13 +147,13 @@ export default function PoolsPage() {
     <div className="space-y-6">
       <SceneHeader
         title="Bounty pools"
-        subtitle="Live sponsor-funded pools on Arc testnet. Join with your wallet, hit the goal, get paid in USDC. Testnet USDC only, no real value."
+        subtitle="Live sponsor-funded pools on Base Sepolia. Join with your wallet, hit the goal, get paid in USDC. Testnet USDC only, no real value."
         pose="spotter-standing.png"
         poseAlt="SPOTTER the otter, standing, ready to point you at a pool"
         spotterLine="Somebody put money up. It's just sitting there. Rude not to."
       >
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Badge tone="muted">Arc Testnet</Badge>
+          <Badge tone="muted">Base Sepolia</Badge>
           <Link
             href="/challenge/new"
             className={`rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-strong hover:bg-accent/15 ${TAP_TARGET}`}
@@ -181,7 +181,7 @@ export default function PoolsPage() {
           detail={
             poolsQuery.error instanceof Error
               ? poolsQuery.error.message
-              : "Unknown error reading from Arc testnet."
+              : "Unknown error reading from Base Sepolia."
           }
           onRetry={() => {
             void poolsQuery.refetch();
@@ -192,7 +192,7 @@ export default function PoolsPage() {
           0 ? (
         <EmptyState
           title="No pools yet"
-          detail="Pools appear here the moment a sponsor creates one on Arc. Be the first to fund a bounty."
+          detail="Pools appear here the moment a sponsor creates one on Base. Be the first to fund a bounty."
           action={
             <Link
               href="/pools/create"

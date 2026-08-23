@@ -42,7 +42,7 @@ export default function TermsPage() {
             Play money, no real value
           </h2>
           <p>
-            GoHealthMe runs on the Arc testnet. Every USDC amount you see is
+            GoHealthMe runs on Base Sepolia. Every USDC amount you see is
             test USDC with no real monetary value. Nothing here pays real money
             or costs real money, and no test token can be redeemed for anything.
           </p>

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { DynamicConnectButton } from "@dynamic-labs/sdk-react-core";
 import { DEMO_CHROME, DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
+import { useBaseAccountConnect } from "@/lib/useBaseAccountConnect";
 import { useDisplayNames } from "@/lib/use-display-names";
 import AgentStrip from "@/components/AgentStrip";
 import TestUsdcChip from "@/components/TestUsdcChip";
@@ -65,6 +66,7 @@ function NavLinks({
 
 function AuthControls() {
   const { ready, authenticated, logout } = useEmbeddedWallet();
+  const { connectBase, baseBusy } = useBaseAccountConnect();
 
   if (!ready) {
     return (
@@ -79,10 +81,36 @@ function AuthControls() {
     // button flipped a flag nothing was listening to. No modal, no network
     // call, no thrown error: sign-in was silently dead in every build.
     // DynamicConnectButton owns the flow and still takes our own styling.
+    //
+    // The Base Account button is the PREFERRED option and leads. Brand-correct
+    // light treatment per Base's guidelines - white surface, near-black label,
+    // the #0000FF Base Square, and the "Base" label (Base's guidance: use "Base"
+    // when a "Sign in" control is already present, which it is). The email
+    // "Sign in" beside it drops to a secondary outline so Base reads as the one
+    // to reach for. Base stays hidden below sm so the 375px header keeps room
+    // for the nav toggle; the SignInPanel carries the primary Base button on
+    // every screen size.
     return (
-      <DynamicConnectButton buttonClassName="min-h-11 rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent">
-        Sign in
-      </DynamicConnectButton>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={baseBusy}
+          aria-busy={baseBusy}
+          onClick={() => {
+            void connectBase();
+          }}
+          className="hidden min-h-11 items-center gap-2 rounded-lg border border-foreground/15 bg-surface px-3 py-2 text-sm font-semibold text-foreground shadow-sm hover:border-foreground/25 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60 sm:inline-flex"
+        >
+          <span
+            aria-hidden="true"
+            className="h-3.5 w-3.5 shrink-0 rounded-[2px] bg-[#0000FF]"
+          />
+          {baseBusy ? "Opening..." : "Base"}
+        </button>
+        <DynamicConnectButton buttonClassName="min-h-11 rounded-lg border border-edge px-4 py-2 text-sm font-semibold text-foreground hover:border-accent/50 hover:bg-surface-raised">
+          Sign in
+        </DynamicConnectButton>
+      </div>
     );
   }
 

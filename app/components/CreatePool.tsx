@@ -15,6 +15,7 @@ import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import { isEconomicallyDeadConfig } from "@/lib/pool-lifecycle";
 import { resolveNewPoolId } from "@/lib/resolve-pool-id";
 import { ArcTxLink, ErrorNote } from "@/components/ui";
+import GaslessBadge from "@/components/GaslessBadge";
 import SignInGate from "@/components/SignInGate";
 
 const DURATION_OPTIONS: { label: string; days: number }[] = [
@@ -73,7 +74,7 @@ function CreatePoolInner() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { ready, authenticated } = useEmbeddedWallet();
-  const { status, busy, reset, runUsdcDeposit } = useUsdcDeposit();
+  const { status, busy, reset, runUsdcDeposit, gasless } = useUsdcDeposit();
 
   // The proof floor (highest-trust modality required) and whether the pool ALSO
   // opts into accepting self-reported photos. Default floor is wearable with no
@@ -227,7 +228,7 @@ function CreatePoolInner() {
           Create a bounty pool
         </h1>
         <p className="mt-1 text-sm text-muted">
-          Fund a USDC bounty on Arc testnet. Participants join, hit your goal,
+          Fund a USDC bounty on Base Sepolia. Participants join, hit your goal,
           and get paid the moment their result is verified.
         </p>
       </div>
@@ -486,13 +487,15 @@ function CreatePoolInner() {
           )}
         </SignInGate>
 
+        {authenticated ? <GaslessBadge status={gasless} /> : null}
+
         {status.kind === "approving" || status.kind === "depositing" ? (
           <div className="rounded-xl border border-edge bg-surface-raised p-4 text-sm">
             <p className="font-medium">
               Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
               {status.kind === "approving"
                 ? "approving USDC for the pool"
-                : "creating the pool on Arc"}
+                : "creating the pool on Base"}
             </p>
           </div>
         ) : null}
@@ -500,7 +503,7 @@ function CreatePoolInner() {
         {status.kind === "done" ? (
           <div className="space-y-1 rounded-xl border border-accent/40 bg-accent-deep/40 p-4">
             <p className="text-sm font-semibold text-accent">
-              Pool created on Arc.
+              Pool created on Base.
             </p>
             {status.approveHash ? (
               <>

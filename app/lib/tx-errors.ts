@@ -17,6 +17,13 @@ export interface HumanTxError {
 
 // ------------------------------------------------------------ funding preflight
 
+// TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
+// The funding-preflight block below (JOIN_GAS_MARGIN, FUNDING_STEPS,
+// FUNDING_HELP_DETAIL) encodes "gas is paid in USDC, so a zero-USDC wallet is
+// blocked". Base gas is ETH and the CDP paymaster sponsors smart-wallet users,
+// so that premise is false on Base. Copy left verbatim on purpose — a human
+// rewrites this with the real Base gas/paymaster story.
+
 /**
  * Gas headroom for a two-transaction flow (approve + write) on Arc testnet,
  * in 6-decimal USDC base units (0.05 USDC). Arc pays gas in native USDC and
@@ -88,6 +95,9 @@ export function fundingShortfallDetail(
 
 // ------------------------------------------------------------- error mapping
 
+// TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
+// "Arc testnet pays gas in USDC" is false on Base (gas is ETH / paymaster-sponsored).
+// Copy left verbatim on purpose; a human rewrites this with the real Base gas story.
 const INSUFFICIENT_FUNDS_DETAIL =
   "This wallet does not have enough USDC to cover the transaction. " +
   "Arc testnet pays gas in USDC - get test USDC at faucet.circle.com " +
@@ -182,8 +192,12 @@ const RULES: readonly ErrorRule[] = [
     // nothing moved and the same call will usually revert again.
     pattern: /\breverted\b/i,
     title: "Transaction reverted",
+    // TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
+    // "No USDC changed hands beyond the gas the wallet already spent" assumes gas
+    // is denominated in USDC (Arc). On Base gas is ETH (or paymaster-sponsored),
+    // so no USDC moves for gas at all. Chain name migrated; gas clause left verbatim.
     detail:
-      "The transaction was mined on Arc testnet and then reverted, so nothing " +
+      "The transaction was mined on Base Sepolia and then reverted, so nothing " +
       "moved. No USDC changed hands beyond the gas the wallet already spent.",
   },
 ];

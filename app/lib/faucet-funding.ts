@@ -186,14 +186,14 @@ export async function runTestUsdcFunding(
     if (!res.ok || typeof body.txHash !== "string") {
       return {
         kind: "error",
-        message: body.error ?? `The move to Arc failed with status ${res.status}.`,
+        message: body.error ?? `The move to Base failed with status ${res.status}.`,
       };
     }
     // The withdraw route only returns a tx hash after the transfer landed, so
     // the wallet genuinely holds this much more spendable USDC now.
     return { kind: "funded", movedUusdc: amount };
   } catch {
-    return { kind: "error", message: "Could not move your balance onto Arc." };
+    return { kind: "error", message: "Could not move your balance onto Base." };
   }
 }
 

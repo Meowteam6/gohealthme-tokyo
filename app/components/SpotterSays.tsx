@@ -23,6 +23,7 @@ const POSE_BY_STATE: Record<SpotterState, string> = {
   broke: "broke",
   error: "standing",
   "streak-nudge": "standing",
+  joined: "cheer",
 };
 
 // Tone -> a subtle bubble accent. GOLD is never used here: gold is money in

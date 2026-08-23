@@ -45,7 +45,7 @@ export default function RootLayout({
           </main>
           <footer className="border-t border-edge px-4 py-6 text-center text-xs text-muted">
             <p>
-              GoHealthMe — settled by SPOTTER on Arc testnet. Your health data
+              GoHealthMe — settled by SPOTTER on Base Sepolia. Your health data
               never touches the chain.
             </p>
             <nav className="mt-2 flex items-center justify-center gap-4">

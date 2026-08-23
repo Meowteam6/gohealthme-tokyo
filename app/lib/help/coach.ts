@@ -124,6 +124,9 @@ export function coachCopy(id: CoachAction): CoachCopy {
     case "getUsdc":
       return {
         headline: "Grab some test USDC",
+        // TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
+        // "Arc pays gas in USDC" is false on Base (gas is ETH / paymaster-sponsored).
+        // User-facing coach copy; left verbatim so a human writes the real Base gas story.
         body: "Arc pays gas in USDC, so your wallet needs a little to move. One tap gets you test funds. Play-money, no real value.",
         primary: "Get test USDC",
       };

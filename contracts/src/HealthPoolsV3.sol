@@ -58,7 +58,7 @@ contract HealthPoolsV3 is ReentrancyGuard {
 
     struct Pool {
         address creator;
-        uint8 bountyModel; // 0 = fixed bounty per achiever, 1 = pro-rata pot split
+        uint8 bountyModel; // 0 = fixed bounty, 1 = pro-rata pot split, 2 = commitment (equal split)
         bool settled; // locked once settlement runs (or the pool is cancelled)
         bool cancelled; // locked for refunds instead of payouts
         uint64 periodStart;
@@ -83,6 +83,7 @@ contract HealthPoolsV3 is ReentrancyGuard {
     uint16 public constant MAX_MULTIPLIER_BPS = 30_000;
     uint256 public constant MAX_PARTICIPANTS = 200; // bounds the settle loop
     uint256 public constant SETTLE_GRACE = 24 hours; // settler-only window (H-2)
+    uint16 public constant MAX_COMMITMENT_FEE_BPS = 2_000; // 20% cap on the model-2 forfeiture fee
 
     // ----------------------------------------------------------------- storage
 
@@ -91,6 +92,7 @@ contract HealthPoolsV3 is ReentrancyGuard {
     address public oracle; // records verdicts (C-2, distinct key)
     address public authorizedSettler; // privileged settler in grace window (C-2/H-2)
     address public healthVerdict; // optional verdict registry; write-once-on latch
+    uint16 public commitmentFeeBps; // model-2 fee on forfeitures only; 0 = waived (pilot default)
 
     uint256 public poolCount; // pool ids run 1..poolCount
     mapping(uint256 => Pool) internal pools;
@@ -139,6 +141,7 @@ contract HealthPoolsV3 is ReentrancyGuard {
     event OracleUpdated(address indexed previousOracle, address indexed newOracle);
     event SettlerUpdated(address indexed previousSettler, address indexed newSettler);
     event HealthVerdictUpdated(address indexed previousRegistry, address indexed newRegistry);
+    event CommitmentFeeUpdated(uint16 previousBps, uint16 newBps);
 
     // --------------------------------------------------------------- modifiers
 
@@ -213,6 +216,16 @@ contract HealthPoolsV3 is ReentrancyGuard {
         healthVerdict = newRegistry;
     }
 
+    /// @notice Set the model-2 commitment fee, in bps of the forfeited stakes.
+    ///         0 waives it (the pilot default). Capped at MAX_COMMITMENT_FEE_BPS.
+    ///         The fee is only ever taken from forfeited stakes, never from a
+    ///         returned one, so an achiever always recovers at least their stake.
+    function setCommitmentFeeBps(uint16 newBps) external onlyOwner {
+        require(newBps <= MAX_COMMITMENT_FEE_BPS, "FEE_TOO_HIGH");
+        emit CommitmentFeeUpdated(commitmentFeeBps, newBps);
+        commitmentFeeBps = newBps;
+    }
+
     // ---------------------------------------------------------------- actions
 
     /// @notice Permissionless pool creation. Pulls initialFunding from the caller.
@@ -227,7 +240,7 @@ contract HealthPoolsV3 is ReentrancyGuard {
     ) external nonReentrant returns (uint256 poolId) {
         require(periodEnd > periodStart, "BAD_PERIOD");
         require(periodEnd > block.timestamp, "PERIOD_IN_PAST");
-        require(bountyModel <= 1, "BAD_BOUNTY_MODEL");
+        require(bountyModel <= 2, "BAD_BOUNTY_MODEL");
         // H-1: a fee-free pool cannot pay a fixed bounty and lets winners join
         // without staking. Require a real stake so every winner is a staker.
         require(entryFee > 0, "DEAD_CONFIG");
@@ -355,7 +368,12 @@ contract HealthPoolsV3 is ReentrancyGuard {
         // external calls; a stuck recipient can never block this loop (C-1).
         uint256 pot = p.balance;
         uint256 totalPaid;
-        if (achieverCount > 0 && pot > 0) {
+        if (p.bountyModel == 2) {
+            // Commitment / DietBet: equal split of the frozen pot among achievers
+            // (own stake back + an equal share of forfeitures), or a full refund to
+            // every adjudicated staker when nobody hit. Multipliers are ignored.
+            totalPaid = _settleCommitment(poolId, p, plist, n, pot, achieverCount);
+        } else if (achieverCount > 0 && pot > 0) {
             for (uint256 i; i < n; ++i) {
                 address user = plist[i];
                 if (!achieverFlag[poolId][user]) continue;
@@ -481,6 +499,65 @@ contract HealthPoolsV3 is ReentrancyGuard {
         }
         if (sumMult == 0) return 0;
         return (pot * mult) / sumMult;
+    }
+
+    /// @dev Model 2 (commitment / DietBet). Multipliers are ignored; every
+    ///      achiever is treated equally. With one or more achievers the frozen pot
+    ///      is split equally (pot / achieverCount each). Because the post-refund
+    ///      pot holds exactly the adjudicated stakes (achievers' own + forfeiters')
+    ///      plus any surplus, an equal split returns each achiever their own stake
+    ///      plus an equal share of the forfeitures. The fee is taken from the
+    ///      forfeited stakes only (never a returned stake, never sponsor surplus),
+    ///      so surplus flows to achievers untaxed; integer dust stays in the pool.
+    ///      With NO achievers ("nobody hit") every
+    ///      adjudicated staker is refunded and nothing is forfeited or taxed.
+    ///      Solvency is structural: total credited <= pot under checked math.
+    function _settleCommitment(
+        uint256 poolId,
+        Pool storage p,
+        address[] storage plist,
+        uint256 n,
+        uint256 pot,
+        uint256 achieverCount
+    ) internal returns (uint256 totalPaid) {
+        uint256 entryFee = p.entryFee;
+
+        // Nobody hit: refund every adjudicated staker; forfeit and tax nothing.
+        if (achieverCount == 0) {
+            for (uint256 i; i < n; ++i) {
+                address user = plist[i];
+                Participant storage part = participants[poolId][user];
+                if (!part.resultRecorded) continue; // unadjudicated already refunded (B-2)
+                p.balance -= entryFee; // checked: every recorded stake is in the pot
+                owed[user] += entryFee;
+                emit RefundCredited(poolId, user, entryFee);
+            }
+            return 0;
+        }
+
+        // Fee base is the forfeited STAKES only: adjudicated non-achievers
+        // (recordedCount - achieverCount) each staked entryFee. This never taxes an
+        // achiever's returned stake, and never taxes sponsor surplus (surplus flows
+        // to achievers untaxed via the equal split below). Credited to owner owed[].
+        uint256 forfeited = (recordedCount[poolId] - achieverCount) * entryFee;
+        uint256 fee = (forfeited * commitmentFeeBps) / BPS;
+        if (fee > 0) {
+            p.balance -= fee; // checked
+            owed[owner] += fee;
+        }
+
+        uint256 share = (pot - fee) / achieverCount; // equal split; dust stays in pool
+        if (share == 0) return 0;
+
+        for (uint256 i; i < n; ++i) {
+            address user = plist[i];
+            if (!achieverFlag[poolId][user]) continue;
+            require(share <= p.balance, "INSOLVENT"); // structural solvency guard
+            p.balance -= share;
+            owed[user] += share;
+            totalPaid += share;
+            emit AchieverPaid(poolId, user, share);
+        }
     }
 
     /// @dev SafeERC20 transferFrom, crediting the ACTUAL balance delta so a

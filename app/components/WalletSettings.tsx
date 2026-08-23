@@ -191,7 +191,7 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
               rel="noopener noreferrer"
               className="text-accent underline underline-offset-2"
             >
-              View on Arcscan
+              View on Basescan
             </a>
           </Row>
         </div>

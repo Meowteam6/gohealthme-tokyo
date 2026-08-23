@@ -13,7 +13,7 @@ const steps = [
   },
   {
     title: "Paid the second it is proven",
-    body: "The verdict comes out of a confidential enclave - nobody ever sees your health data - and SPOTTER settles the pool on Arc. The bounty leaves the sponsor's pool and lands in your wallet. SPOTTER covers the gas and the proof-check, not the bounty. No human in the loop.",
+    body: "The verdict comes out of a confidential enclave - nobody ever sees your health data - and SPOTTER settles the pool on Base. The bounty leaves the sponsor's pool and lands in your wallet. SPOTTER covers the gas and the proof-check, not the bounty. No human in the loop.",
   },
 ];
 
@@ -40,7 +40,7 @@ export default function Home() {
               only testnet disclosure in the app used to be on /pools - a
               stranger deserves to know the stakes before they type anything. */}
           <div className="mt-6 flex flex-col items-center gap-2 sm:flex-row sm:justify-center lg:justify-start">
-            <Badge tone="muted">Arc Testnet</Badge>
+            <Badge tone="muted">Base Sepolia</Badge>
             <p className="text-sm leading-relaxed text-muted">
               The USDC is test USDC. You put in nothing and nothing here can cost
               you real money.
@@ -183,7 +183,7 @@ export default function Home() {
           </div>
         </div>
         <p className="mt-8 text-xs leading-relaxed text-muted">
-          Today it runs on Arc testnet with play-money USDC while we build. Real
+          Today it runs on Base Sepolia with play-money USDC while we build. Real
           cross-border payouts are the road ahead, not a claim that they are live.
         </p>
       </section>

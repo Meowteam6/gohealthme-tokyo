@@ -13,12 +13,13 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import { useDisplayNames } from "@/lib/use-display-names";
 import { ArcTxLink, ErrorNote } from "@/components/ui";
+import GaslessBadge from "@/components/GaslessBadge";
 import SignInGate from "@/components/SignInGate";
 
 function BackGoalInner({ poolId }: { poolId: bigint }) {
   const { ready, authenticated, address } = useEmbeddedWallet();
   const queryClient = useQueryClient();
-  const { status, busy, reset, runUsdcDeposit } = useUsdcDeposit();
+  const { status, busy, reset, runUsdcDeposit, gasless } = useUsdcDeposit();
   const [participant, setParticipant] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -160,6 +161,7 @@ function BackGoalInner({ poolId }: { poolId: bigint }) {
               </button>
             )}
           </SignInGate>
+          {authenticated ? <GaslessBadge status={gasless} /> : null}
         </>
       )}
 
@@ -168,7 +170,7 @@ function BackGoalInner({ poolId }: { poolId: bigint }) {
           Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
           {status.kind === "approving"
             ? "approving USDC"
-            : "placing the stake on Arc"}
+            : "placing the stake on Base"}
           ...
         </p>
       ) : null}

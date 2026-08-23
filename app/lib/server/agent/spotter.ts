@@ -660,7 +660,7 @@ export function arcReader(
       // mined where canSettle/participantRecorded will be answered next.
       const receipt = await client.waitForTransactionReceipt({ hash: txHash });
       if (receipt.status !== "success") {
-        throw new Error(`tx ${txHash} reverted on Arc testnet`);
+        throw new Error(`tx ${txHash} reverted on Base Sepolia`);
       }
     },
     async settledPayout(poolId, participant) {
@@ -747,7 +747,7 @@ export function arcReader(
     async achieverPayouts(txHash) {
       const receipt = await client.waitForTransactionReceipt({ hash: txHash });
       if (receipt.status !== "success") {
-        throw new Error(`tx ${txHash} reverted on Arc testnet`);
+        throw new Error(`tx ${txHash} reverted on Base Sepolia`);
       }
       const events = parseEventLogs({
         abi: ACHIEVER_PAID_ABI,

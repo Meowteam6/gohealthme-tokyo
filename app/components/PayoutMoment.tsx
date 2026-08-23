@@ -75,7 +75,7 @@ export default function PayoutMoment({
         <p className="text-sm text-muted">Absolute unit. Run it back.</p>
         {txHash !== null ? (
           <p className="mt-2">
-            <ArcTxLink txHash={txHash} label="View on Arcscan" />
+            <ArcTxLink txHash={txHash} label="View on Basescan" />
           </p>
         ) : null}
       </div>
@@ -159,7 +159,7 @@ export default function PayoutMoment({
             <p className="mt-1 text-sm text-muted">Absolute unit. Run it back.</p>
             {txHash !== null ? (
               <p className="mt-4">
-                <ArcTxLink txHash={txHash} label="View the payout on Arcscan" />
+                <ArcTxLink txHash={txHash} label="View the payout on Basescan" />
               </p>
             ) : null}
             <button

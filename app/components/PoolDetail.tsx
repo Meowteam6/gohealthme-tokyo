@@ -291,7 +291,7 @@ export default function PoolDetail({ id }: { id: string }) {
         detail={
           poolQuery.error instanceof Error
             ? poolQuery.error.message
-            : "Unknown error reading from Arc testnet."
+            : "Unknown error reading from Base Sepolia."
         }
         onRetry={() => {
           void poolQuery.refetch();

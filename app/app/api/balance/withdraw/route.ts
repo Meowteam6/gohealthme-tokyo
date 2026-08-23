@@ -184,7 +184,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error:
-            `Daily limit reached. An address can move ${formatUsdc(WITHDRAW_DAILY_CAP_UUSDC)} USDC to Arc per day and ` +
+            `Daily limit reached. An address can move ${formatUsdc(WITHDRAW_DAILY_CAP_UUSDC)} USDC to Base per day and ` +
             `${formatUsdc(capped.remainingUusdc)} USDC of that is left. Try again in about ${hours} hour${hours === 1 ? "" : "s"}.`,
           remainingUusdc: capped.remainingUusdc.toString(),
           retryAfterSeconds: capped.retryAfterSeconds,
@@ -244,7 +244,7 @@ export async function POST(request: Request) {
       return serverFailure(SCOPE, err, {
         status: 502,
         message: failedMoveMessage(
-          "The treasury transfer did not go through, so nothing moved on Arc.",
+          "The treasury transfer did not go through, so nothing moved on Base.",
           refunded,
         ),
       });

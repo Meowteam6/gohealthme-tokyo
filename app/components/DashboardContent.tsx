@@ -508,7 +508,7 @@ export default function DashboardContent() {
             detail={
               joinedQuery.error instanceof Error
                 ? joinedQuery.error.message
-                : "Unknown error reading from Arc testnet."
+                : "Unknown error reading from Base Sepolia."
             }
             onRetry={() => {
               void joinedQuery.refetch();

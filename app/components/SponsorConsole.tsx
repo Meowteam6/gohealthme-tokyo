@@ -199,7 +199,7 @@ export default function SponsorConsole() {
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
           Sponsor console
         </h1>
-        <Badge tone="warning">Arc Testnet</Badge>
+        <Badge tone="warning">Base Sepolia</Badge>
       </div>
       <p className="text-sm text-muted">
         Put USDC on a health goal, top it up as it fills, and watch what it
@@ -271,7 +271,7 @@ export default function SponsorConsole() {
           detail={
             consoleQuery.error instanceof Error
               ? consoleQuery.error.message
-              : "Unknown error reading from Arc testnet."
+              : "Unknown error reading from Base Sepolia."
           }
           onRetry={() => {
             void consoleQuery.refetch();
