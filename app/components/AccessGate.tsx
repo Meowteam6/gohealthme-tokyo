@@ -64,7 +64,11 @@ function OtterCard({
 
 export default function AccessGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const gated = !isPublicPath(pathname);
+  // Demo/pilot switch: NEXT_PUBLIC_ACCESS_GATE_DISABLED=1 turns the closed-beta
+  // gate off entirely (open demo — every path renders). Unset it to re-enable
+  // the family-and-friends gate for the real-money pilot.
+  const gateDisabled = process.env.NEXT_PUBLIC_ACCESS_GATE_DISABLED === "1";
+  const gated = !gateDisabled && !isPublicPath(pathname);
   const { ready, authenticated, login } = useEmbeddedWallet();
   const access = useAccess(gated);
 
