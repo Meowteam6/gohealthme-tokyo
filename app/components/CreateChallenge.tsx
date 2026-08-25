@@ -35,8 +35,17 @@
 // the participant's own pages - it is NEVER copied into the challenges row and
 // NEVER reaches the public feed. The row stores only the challenger's framing
 // message and an optional target label.
+//
+// PRESENTATION: this is the ported v0 "golden" design — a two-column composer
+// with a centered SPOTTER header, a candy type-picker, an amount picker whose
+// SPOTTER mood ladders with the number, and a live, screenshot-styled preview
+// card in the right column. The money logic below is untouched; only the layout,
+// copy, and mascot moments are the golden port. Honest-core is preserved: money
+// figures render through the mono Money primitive, the testnet sticker is tan
+// (never gold - gold is money in motion only), and self-reported evidence never
+// reads "verified".
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { parseUsdc, withDocMarker, withProofPolicy } from "@/lib/contract";
@@ -57,7 +66,6 @@ import {
   TARGET_HANDLE_MAX,
 } from "@/lib/challenges";
 import { ArcTxLink, Button, Card, Chip, ErrorNote, Money } from "@/components/ui";
-import SpotterSays from "@/components/SpotterSays";
 
 const DURATION_OPTIONS: { label: string; days: number }[] = [
   { label: "1 week", days: 7 },
@@ -65,14 +73,47 @@ const DURATION_OPTIONS: { label: string; days: number }[] = [
   { label: "30 days", days: 30 },
 ];
 
-// Quick-pick amounts, so the common stakes are one tap. Match the placeholders
-// below (a small friend lock-in, a heavier self-stake, a mid-size reward). The
-// text input stays for any custom amount - the chips are shortcuts, not a cap.
-const SELF_STAKE_PRESETS = ["10", "25", "50"];
-const DARE_LOCKIN_PRESETS = ["3", "5", "10"];
-const REWARD_PRESETS = ["25", "50", "100"];
+// Quick-pick amounts for the headline number (a self-stake or a dare reward).
+// Ported from the golden design: three warm chips plus Custom. The text input
+// stays for any custom amount - the chips are shortcuts, not a cap.
+const AMOUNT_CHIPS = [5, 10, 25] as const;
+// The friend's lock-in to accept a dare: real money, deliberately small.
+const DARE_LOCKIN_CHIPS = [3, 5, 10] as const;
+
+// Goal / dare ideas, one tap to fill. Ported verbatim from the golden design.
+const NAME_SUGGESTIONS = [
+  "8k steps a day, 7 days straight",
+  "no sugar for 2 weeks",
+  "gym 4x this week, no excuses",
+  "the thing you've been putting off",
+];
+
+// Trash-talk one-liners for the dare message. Ported from the golden design.
+const TRASH_TALK_SUGGESTIONS = [
+  "bet you can't. proving me wrong pays.",
+  "put your steps where your mouth is.",
+  "easy money for me. we'll see.",
+  "i've seen you flake before. don't.",
+];
 
 const SECONDS_PER_DAY = 86_400;
+
+// Longer copy lives as constants so the JSX stays clean and the apostrophes /
+// quotes / dashes render exactly, without escaping.
+const SPOTTER_INTRO =
+  "I'm SPOTTER. I hold the money, I check your proof, I pay you the second you hit it. No vibes, no chasing anyone for cash. Let's set one up.";
+const HONESTY_NOTE =
+  'Play-money testnet USDC, not a real-money bet. A selfie proves it to your friends - only wearable or enclave data counts as "verified" here.';
+const FOOTER_NOTE =
+  "Testnet play-money USDC - a commitment device, not a bet. No house, no odds, just your money and your word.";
+
+const CHALLENGE_INITIATIVE = "challenge";
+// Both variants are commitment pools (bountyModel 2). See the compliance-lane
+// note in the header: forfeited stakes only ever reach peer achievers, so the
+// creator never profits from a participant missing, and the contract's H-1 rule
+// (every pool carries an entry fee above zero) is satisfied because every player
+// stakes on join.
+const CHALLENGE_BOUNTY_MODEL = 2;
 
 // A Next Link dressed as the shared candy Button. Button is a <button> and
 // cannot be a Link, so the post-create navigation matches its look here rather
@@ -82,14 +123,6 @@ const CANDY_LINK_PRIMARY =
   "inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-3 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const CANDY_LINK_SECONDARY =
   "inline-flex min-h-11 items-center justify-center rounded-full border-2 border-edge bg-secondary px-5 py-2.5 font-display text-sm font-bold text-secondary-foreground transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-
-const CHALLENGE_INITIATIVE = "challenge";
-// Both variants are commitment pools (bountyModel 2). See the compliance-lane
-// note in the header: forfeited stakes only ever reach peer achievers, so the
-// creator never profits from a participant missing, and the contract's H-1 rule
-// (every pool carries an entry fee above zero) is satisfied because every player
-// stakes on join.
-const CHALLENGE_BOUNTY_MODEL = 2;
 
 /** Which of the two honest variants the creator is building. */
 type Variant = "self" | "dare";
@@ -103,6 +136,476 @@ type Phase =
   // A dare is funded and its person-aimed link is minted.
   | { kind: "dareDone"; url: string; poolId: string }
   | { kind: "error"; message: string };
+
+// ------------------------------------------------------------------ SPOTTER mood
+// The amount picker's live reaction. Ported from the golden design's
+// getSpotterMoodForAmount, but mapped to the REAL transparent poses in
+// public/spotter/ (the golden filenames were invented). SPOTTER never states a
+// number in its own speech - only the pose and the deadpan line react; the
+// amount lives in the input and the Money slot.
+type SpotterMood = { pose: string; alt: string; line: string };
+
+function getSpotterMoodForAmount(
+  amount: number,
+  kind: Variant,
+): SpotterMood {
+  if (amount < 10) {
+    return {
+      pose: "peek",
+      alt: "SPOTTER peeking out, unimpressed",
+      line:
+        kind === "self"
+          ? "That's it? I've seen bigger commitment in a gas station burrito."
+          : "That reward wouldn't get me off this rock. Just saying.",
+    };
+  }
+  if (amount < 25) {
+    return {
+      pose: "standing",
+      alt: "SPOTTER standing tall, nodding it over",
+      line:
+        kind === "self"
+          ? "Respectable. Enough to sting if you flake, not enough to cry about."
+          : "Solid dare energy. They'll feel this one.",
+    };
+  }
+  if (amount < 50) {
+    return {
+      pose: "cheer",
+      alt: "SPOTTER cheering you on",
+      line:
+        kind === "self"
+          ? "Now we're talking. I love a person with something to lose."
+          : "Okay big spender. They better not flake on this.",
+    };
+  }
+  return {
+    pose: "payday",
+    alt: "SPOTTER holding a payday of coins",
+    line:
+      kind === "self"
+        ? "I'm holding THAT much? Fine by me. I'm an excellent banker."
+        : "That's a real dare. I'm getting the vault ready.",
+  };
+}
+
+// ------------------------------------------------------------------------- icons
+// Inline SVGs (lucide is not a dependency here). Decoration only: aria-hidden,
+// currentColor, sized by the caller.
+function Icon({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      {children}
+    </svg>
+  );
+}
+
+const IconPaw = ({ className }: { className?: string }) => (
+  <Icon className={className}>
+    <circle cx="6.5" cy="9.5" r="1.6" fill="currentColor" stroke="none" />
+    <circle cx="10" cy="6.5" r="1.6" fill="currentColor" stroke="none" />
+    <circle cx="14" cy="6.5" r="1.6" fill="currentColor" stroke="none" />
+    <circle cx="17.5" cy="9.5" r="1.6" fill="currentColor" stroke="none" />
+    <path
+      d="M12 12c2.5 0 4.5 1.8 4.5 4 0 1.7-1.5 2.5-3 2.5-.8 0-1-.4-1.5-.4s-.7.4-1.5.4c-1.5 0-3-.8-3-2.5 0-2.2 2-4 4.5-4Z"
+      fill="currentColor"
+      stroke="none"
+    />
+  </Icon>
+);
+
+const IconCoins = ({ className }: { className?: string }) => (
+  <Icon className={className}>
+    <ellipse cx="9" cy="7" rx="6" ry="3" />
+    <path d="M3 7v4c0 1.7 2.7 3 6 3s6-1.3 6-3V7" />
+    <path d="M15 12.5c2.8-.3 6-1.5 6-3.5" />
+    <path d="M9 14v3c0 1.7 2.7 3 6 3s6-1.3 6-3v-4" />
+  </Icon>
+);
+
+const IconSwords = ({ className }: { className?: string }) => (
+  <Icon className={className}>
+    <path d="M14.5 17.5 4 6V3h3l11.5 11.5" />
+    <path d="m13 19 6-6" />
+    <path d="m16 16 4 4" />
+    <path d="m19 21 2-2" />
+    <path d="M9.5 17.5 20 6V3h-3L5.5 14.5" />
+    <path d="m5 19-2-2" />
+    <path d="m8 16-4 4" />
+    <path d="m3 21 2-2" />
+  </Icon>
+);
+
+const IconShield = ({ className }: { className?: string }) => (
+  <Icon className={className}>
+    <path d="M12 3 5 6v5c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z" />
+    <path d="m9 12 2 2 4-4" />
+  </Icon>
+);
+
+const IconSparkle = ({ className }: { className?: string }) => (
+  <Icon className={className}>
+    <path d="M12 3.5 13.6 9l5.5 1.6L13.6 12 12 17.5 10.4 12 4.9 10.6 10.4 9 12 3.5Z" />
+  </Icon>
+);
+
+const IconArrow = ({ className }: { className?: string }) => (
+  <Icon className={className}>
+    <path d="M5 12h14" />
+    <path d="m13 6 6 6-6 6" />
+  </Icon>
+);
+
+const IconLink = ({ className }: { className?: string }) => (
+  <Icon className={className}>
+    <path d="M9 15 15 9" />
+    <path d="M11 6.5 13 4.5a4 4 0 0 1 5.5 5.5l-2 2" />
+    <path d="M13 17.5 11 19.5a4 4 0 0 1-5.5-5.5l2-2" />
+  </Icon>
+);
+
+// ----------------------------------------------------------------- SPOTTER bubble
+// The mood reaction: a framed SPOTTER pose plus an anchored speech bubble. Ported
+// from the golden spotter-bubble, using the real transparent PNGs (object-contain
+// so the cutout is never cropped) on a warm tan frame.
+function SpotterBubble({ mood }: { mood: SpotterMood }) {
+  return (
+    <div className="flex items-end gap-3">
+      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-secondary p-1 sm:h-20 sm:w-20">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/spotter/spotter-${mood.pose}.png`}
+          alt={mood.alt}
+          className="h-full w-full object-contain"
+        />
+      </div>
+      <div className="relative flex-1 rounded-2xl rounded-bl-sm border border-edge bg-surface px-4 py-3 shadow-sm">
+        <p className="text-sm leading-snug text-foreground sm:text-[15px]">
+          {mood.line}
+        </p>
+        <span className="mt-1 block text-[11px] font-bold uppercase tracking-wide text-accent-strong">
+          SPOTTER
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------------- amount chips
+// A tactile chip row plus a Custom escape hatch. Values stay STRINGS so the
+// existing parseUsdc path is untouched (it throws on a half-typed amount, which
+// is why the number is only ever read loosely for the mood/preview).
+function AmountChips({
+  chips,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  chips: readonly number[];
+  value: string;
+  onChange: (next: string) => void;
+  ariaLabel: string;
+}) {
+  const presets = chips.map(String);
+  const [customOpen, setCustomOpen] = useState(
+    value.trim() !== "" && !presets.includes(value.trim()),
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {chips.map((chip) => (
+          <Chip
+            key={chip}
+            selected={!customOpen && value.trim() === String(chip)}
+            onClick={() => {
+              setCustomOpen(false);
+              onChange(String(chip));
+            }}
+          >
+            ${chip}
+          </Chip>
+        ))}
+        <Chip
+          selected={customOpen}
+          onClick={() => {
+            setCustomOpen(true);
+            onChange("");
+          }}
+        >
+          Custom
+        </Chip>
+      </div>
+      {customOpen ? (
+        <div className="flex items-center gap-2">
+          <span className="font-display text-lg font-semibold text-muted">$</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            aria-label={ariaLabel}
+            placeholder="Your call"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="min-h-11 max-w-[160px] rounded-xl border-2 border-edge bg-surface-raised px-3 py-2 font-display text-lg font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          />
+          <span className="text-sm text-muted">USDC</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------- suggestion chip row
+function SuggestionRow({
+  items,
+  onPick,
+  tone = "accent",
+}: {
+  items: string[];
+  onPick: (value: string) => void;
+  tone?: "accent" | "coral";
+}) {
+  const hover =
+    tone === "coral"
+      ? "hover:border-[color:var(--coral-strong)] hover:text-[color:var(--coral-strong)]"
+      : "hover:border-accent/50 hover:text-accent-strong";
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item) => (
+        <button
+          key={item}
+          type="button"
+          onClick={() => onPick(item)}
+          className={`min-h-11 rounded-full border border-edge bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground transition-colors ${hover}`}
+        >
+          {item}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------- the type picker
+// The one clear choice, as two candy tiles. Emerald pop for staking on yourself
+// (the HERO MOVE, selected by default), coral pop for the human act of a dare.
+function TypePicker({
+  value,
+  onChange,
+}: {
+  value: Variant;
+  onChange: (v: Variant) => void;
+}) {
+  const isSelf = value === "self";
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Challenge type"
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+    >
+      <button
+        type="button"
+        role="radio"
+        aria-checked={isSelf}
+        onClick={() => onChange("self")}
+        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+          isSelf
+            ? "border-accent bg-accent-deep/10 shadow-[var(--shadow-pop)]"
+            : "border-edge bg-surface shadow-[var(--shadow-pop-edge)] hover:border-accent/40"
+        }`}
+      >
+        <span
+          className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+            isSelf ? "bg-accent text-white" : "bg-secondary text-accent-strong"
+          }`}
+        >
+          <IconCoins className="h-5 w-5" />
+        </span>
+        <span className="font-display text-lg font-bold">Stake on yourself</span>
+        <span className="text-sm leading-snug text-muted">
+          Your own USDC on your own goal. Hit it, get it back plus a cut of what
+          everyone who flaked forfeited.
+        </span>
+        {isSelf ? (
+          <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+            Hero move
+          </span>
+        ) : null}
+      </button>
+
+      <button
+        type="button"
+        role="radio"
+        aria-checked={!isSelf}
+        onClick={() => onChange("dare")}
+        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+          !isSelf
+            ? "border-[color:var(--coral-strong)] bg-secondary shadow-[var(--shadow-pop-coral)]"
+            : "border-edge bg-surface shadow-[var(--shadow-pop-edge)] hover:border-[color:var(--coral-strong)]/40"
+        }`}
+      >
+        <span
+          className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+            !isSelf
+              ? "bg-coral-strong text-white"
+              : "bg-secondary text-[color:var(--coral-strong)]"
+          }`}
+        >
+          <IconSwords className="h-5 w-5" />
+        </span>
+        <span className="font-display text-lg font-bold">Dare a friend</span>
+        <span className="text-sm leading-snug text-muted">
+          You put up the reward, they lock in a small stake. They hit it, they
+          keep both. They flake, everyone gets their money back.
+        </span>
+      </button>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------- the live preview card
+// The emotional centerpiece: the screenshot-styled artifact the recipient will
+// see, updating live as the form changes. Honest-core: the amount renders through
+// the mono Money primitive (never a display-font dollar sign), the sticker is tan
+// (never gold), and the note keeps "verified" in scare-quotes for self-reports.
+function PreviewCard({
+  variant,
+  title,
+  amount,
+  lockIn,
+  recipient,
+  trashTalk,
+}: {
+  variant: Variant;
+  title: string;
+  amount: string;
+  lockIn: string;
+  recipient: string;
+  trashTalk: string;
+}) {
+  const isSelf = variant === "self";
+  const displayTitle =
+    title.trim() !== "" ? title.trim() : "the thing you've been putting off";
+  const displayAmount = amount.trim() !== "" ? amount.trim() : "0";
+  const displayLockIn = lockIn.trim() !== "" ? lockIn.trim() : "0";
+  const cleanRecipient = recipient.trim().replace(/^@/, "");
+  const displayTrash =
+    trashTalk.trim() !== ""
+      ? trashTalk.trim()
+      : "bet you can't. proving me wrong pays.";
+
+  return (
+    <div className="relative overflow-visible">
+      {/* Tan testnet sticker, deliberately NOT gold (gold is money in motion
+          only). The tilt gives it the "made this to post" feel. */}
+      <div className="absolute -left-2 -top-3 z-10 -rotate-6 rounded-full border-2 border-edge bg-secondary px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-secondary-foreground shadow-sm">
+        Testnet USDC
+      </div>
+
+      <div className="relative rounded-3xl border-2 border-edge bg-surface p-6 shadow-[var(--shadow-pop-edge)]">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1">
+            {isSelf ? (
+              <IconCoins className="h-3.5 w-3.5 text-accent-strong" />
+            ) : (
+              <IconSwords className="h-3.5 w-3.5 text-[color:var(--coral-strong)]" />
+            )}
+            <span className="text-xs font-semibold uppercase tracking-wide text-secondary-foreground">
+              {isSelf ? "Self-stake" : "Friend dare"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-accent/10">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/spotter/spotter-watching.png"
+                alt=""
+                aria-hidden="true"
+                className="h-full w-full object-contain"
+              />
+            </span>
+            <span className="text-xs font-medium text-muted">held by SPOTTER</span>
+          </div>
+        </div>
+
+        <h3 className="mt-4 font-display text-2xl font-bold leading-tight text-balance sm:text-[26px]">
+          {displayTitle}
+        </h3>
+
+        <p className="mt-3 text-sm leading-snug text-muted">
+          {isSelf ? (
+            <>
+              <span className="font-semibold text-foreground">You</span> vs.
+              yourself. Hit it, get your stake back plus a cut of the flakers&apos;
+              pot.
+            </>
+          ) : (
+            <>
+              For{" "}
+              <span className="font-semibold text-foreground">
+                {cleanRecipient !== ""
+                  ? `@${cleanRecipient}`
+                  : "whoever opens the link"}
+              </span>
+              . Hit it, keep the stake and the reward. Flake, and the money just
+              goes back home.
+            </>
+          )}
+        </p>
+
+        <div className="mt-4 flex items-end justify-between gap-3 rounded-2xl bg-secondary/70 px-4 py-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+              {isSelf ? "On the line" : "Reward if they hit it"}
+            </p>
+            <div className="mt-0.5">
+              <Money usd={displayAmount} size="xl" />
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+              {isSelf ? "If you flake" : "Their lock-in"}
+            </p>
+            {isSelf ? (
+              <p className="font-display text-lg font-bold text-[color:var(--coral-strong)]">
+                you forfeit it
+              </p>
+            ) : (
+              <div className="mt-0.5">
+                <Money usd={displayLockIn} size="md" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-dashed border-edge bg-background/60 px-4 py-3">
+          <p className="text-sm italic leading-snug text-foreground">
+            &ldquo;{displayTrash}&rdquo;
+          </p>
+        </div>
+
+        <div className="mt-4 flex items-start gap-1.5 text-[11px] leading-snug text-muted">
+          <IconShield className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{HONESTY_NOTE}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Tap-to-copy for the finished challenge link. A share link is not a wallet
  *  address, so it wears its own control rather than borrowing CopyAddressButton's
@@ -156,6 +659,11 @@ function CopyLink({ url }: { url: string }) {
   );
 }
 
+// A framed SPOTTER cheer for the done screens. Reuses the mood-bubble language.
+function DoneSpotter({ pose, alt, line }: SpotterMood) {
+  return <SpotterBubble mood={{ pose, alt, line }} />;
+}
+
 function CreateChallengeInner() {
   const { ready, authenticated, address } = useEmbeddedWallet();
   const requestAuth = useWalletAuth();
@@ -163,12 +671,16 @@ function CreateChallengeInner() {
   // The challenger's own name, for the "from @you" line on the done screen.
   const { displayName } = useDisplayNames(address !== null ? [address] : []);
 
-  const [variant, setVariant] = useState<Variant>("dare");
+  // Default to the HERO MOVE (stake on yourself), matching the golden design.
+  // The ?v= preselect below still overrides it for a "Dare a friend" entry.
+  const [variant, setVariant] = useState<Variant>("self");
   const [goal, setGoal] = useState("");
   // The stake every player puts up on their OWN goal, pulled on join. For SELF
-  // this is the creator's own stake; for DARE it is the friend's lock-in.
-  const [stake, setStake] = useState("");
-  // DARE only: the reward the challenger seeds at creation.
+  // this is the creator's own stake (the headline amount); for DARE it is the
+  // friend's lock-in. Pre-filled so the preview and SPOTTER's mood have a number
+  // to react to from the first paint.
+  const [stake, setStake] = useState("10");
+  // DARE only: the reward the challenger seeds at creation (the headline amount).
   const [reward, setReward] = useState("");
   const [message, setMessage] = useState("");
   const [target, setTarget] = useState("");
@@ -177,36 +689,60 @@ function CreateChallengeInner() {
   // photo, which loosens the floor to also allow the low-trust tier.
   const [acceptSelf, setAcceptSelf] = useState(false);
   const [durationDays, setDurationDays] = useState(30);
+  // Golden "who's it for" toggle. In "link" mode the target is left blank and the
+  // dare is shared by link alone - which is exactly the on-chain behaviour of a
+  // blank target, so the toggle stays honest.
+  const [recipientMode, setRecipientMode] = useState<"handle" | "link">("handle");
   const [formError, setFormError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
 
+  const isDare = variant === "dare";
+
+  // Switch variants and keep a sensible headline number so the preview never
+  // reads $0 the instant you toggle. Seeds a dare reward and a dare lock-in the
+  // first time you land on it; leaves anything you already typed alone.
+  const selectVariant = (next: Variant) => {
+    setFormError(null);
+    setVariant(next);
+    if (next === "dare") {
+      if (reward.trim() === "") setReward("10");
+      if (stake.trim() === "") setStake("5");
+    } else if (next === "self" && stake.trim() === "") {
+      setStake("10");
+    }
+  };
+
   // Preselect the variant from ?v=self|dare so the challenges landing can send a
-  // "Stake on yourself" tap straight to that mode. Read in an effect (not the
-  // initial state) so the first client render matches the server and never
-  // mismatches on hydration; the default stays "dare".
+  // "Dare a friend" tap straight to that mode. Read in an effect (not the initial
+  // state) so the first client render matches the server and never mismatches on
+  // hydration; the default stays "self".
   useEffect(() => {
     if (typeof window === "undefined") return;
     const v = new URLSearchParams(window.location.search).get("v");
-    if (v === "self" || v === "dare") setVariant(v);
+    if (v === "self" || v === "dare") selectVariant(v);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isDare = variant === "dare";
-
-  // SPOTTER perks up the moment there is real money on the line. A lightweight
-  // numeric read (never parseUsdc, which throws on a half-typed amount) so a
-  // bad keystroke just leaves him lounging. He never says the number - only his
-  // pose reacts; the amount lives in the input and the Money slot.
-  const stakeEntered = stake.trim() !== "" && Number(stake) > 0;
+  // The headline amount is a self-stake (self) or the reward you fund (dare).
+  const headlineAmount = isDare ? reward : stake;
+  const setHeadlineAmount = isDare ? setReward : setStake;
+  // A lightweight numeric read for the mood/preview only (never parseUsdc, which
+  // throws on a half-typed amount), so a bad keystroke just leaves SPOTTER at
+  // rest rather than erroring.
+  const headlineAmountNum = Number(headlineAmount.trim()) || 0;
+  const mood = getSpotterMoodForAmount(headlineAmountNum, variant);
 
   const clearForm = () => {
     reset();
     setPhase({ kind: "idle" });
     setGoal("");
-    setStake("");
+    setStake("10");
     setReward("");
     setMessage("");
     setTarget("");
     setAcceptSelf(false);
+    setDurationDays(30);
+    setRecipientMode("handle");
   };
 
   const submit = async () => {
@@ -432,19 +968,24 @@ function CreateChallengeInner() {
 
   if (phase.kind === "selfDone") {
     return (
-      <div className="space-y-5">
+      <div className="mx-auto max-w-xl space-y-5">
         <Card pop className="space-y-2 border-accent/40">
           <p className="font-display text-lg font-bold text-accent-strong">
             Your commitment is live. One tap to lock it in.
           </p>
           <p className="text-sm text-foreground/80">
             Nothing left your wallet yet - you stake by joining your own pool.
-            Put up your <Money usd={stake.trim()} /> and you are in: hit the goal
-            and it comes back with a cut of what everyone who flaked forfeited.
+            Put up your <Money usd={stake.trim() === "" ? "0" : stake.trim()} />{" "}
+            and you are in: hit the goal and it comes back with a cut of what
+            everyone who flaked forfeited.
           </p>
         </Card>
 
-        <SpotterSays surface="join" state="joined" pose="cheer" size="md" />
+        <DoneSpotter
+          pose="cheer"
+          alt="SPOTTER cheering that your commitment is live"
+          line="Locked and loaded. Go stake in and I'll hold it - no funny business."
+        />
 
         <div className="flex flex-wrap gap-3">
           <Link href={`/pools/${phase.poolId}`} className={CANDY_LINK_PRIMARY}>
@@ -468,7 +1009,7 @@ function CreateChallengeInner() {
 
   if (phase.kind === "dareDone") {
     return (
-      <div className="space-y-5">
+      <div className="mx-auto max-w-xl space-y-5">
         <Card pop className="space-y-2 border-accent/40">
           <p className="font-display text-lg font-bold text-accent-strong">
             Dare sent. The reward is on the line.
@@ -485,6 +1026,12 @@ function CreateChallengeInner() {
             verified.
           </p>
         </Card>
+
+        <DoneSpotter
+          pose="payday"
+          alt="SPOTTER guarding the reward you just put up"
+          line="Reward's in the vault. Send them the link - I'll pay the second they prove it."
+        />
 
         <div className="space-y-3">
           <p className="font-display text-xs font-bold uppercase tracking-wide text-muted">
@@ -536,347 +1083,373 @@ function CreateChallengeInner() {
           : !authenticated
             ? "Sign in to start"
             : isDare
-              ? "Put up the reward and send the dare"
-              : "Create my commitment";
+              ? "Send the dare"
+              : "Stake on it";
 
   return (
-    <div className="space-y-6">
-      <Card pop className="bg-dot-grid">
-        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-          Start a challenge
+    <div className="mx-auto max-w-5xl">
+      {/* Centered header: the play-money pill, the SPOTTER hero, the two-tone
+          headline, and SPOTTER's intro line. */}
+      <header className="mb-10 flex flex-col items-center text-center">
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-edge bg-surface px-3 py-1.5 shadow-sm">
+          <IconPaw className="h-3.5 w-3.5 text-accent-strong" />
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+            GoHealthMe · testnet play money
+          </span>
+        </div>
+
+        <div className="otter-float mb-2 h-28 w-28 sm:h-32 sm:w-32">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/spotter/spotter-lounging.png"
+            alt="SPOTTER, GoHealthMe's otter, floating on its back holding a coin"
+            className="h-full w-full object-contain drop-shadow-md"
+          />
+        </div>
+
+        <h1 className="font-display text-4xl font-extrabold leading-[1.05] text-balance sm:text-5xl">
+          Send a challenge.
+          <br />
+          <span className="text-accent">Put money where your mouth is.</span>
         </h1>
-        <p className="mt-2 max-w-md text-sm text-muted">
-          Put real USDC behind a goal - yours or a friend&apos;s. Nobody ever
-          sees the health data, only the verdict.
+        <p className="mt-3 max-w-md text-pretty text-base leading-relaxed text-muted">
+          {SPOTTER_INTRO}
         </p>
-        {/* Honest, always visible: this is testnet play-money. Tan sticker, not
-            gold - gold is reserved for money actually in motion. */}
-        <span className="mt-3 inline-flex items-center rounded-full border-2 border-edge bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground">
-          Testnet demo · play-money USDC, no real value
-        </span>
-      </Card>
+      </header>
 
-      {/* The one clear choice. Both build a commitment pool; the difference is
-          whose goal it is and whether you seed a reward. Candy tiles: emerald
-          pop for staking on yourself, coral pop for a human dare. */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => {
-            setVariant("self");
-            setFormError(null);
-          }}
-          aria-pressed={!isDare}
-          className={`rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-            !isDare
-              ? "border-accent bg-accent-deep/10 shadow-[var(--shadow-pop)]"
-              : "border-edge bg-surface shadow-[var(--shadow-pop-edge)] hover:border-accent/40"
-          }`}
-        >
-          <p className="font-display text-base font-bold">Stake on yourself</p>
-          <p className="mt-1 text-xs text-muted">
-            Your USDC on your own goal. Hit it, get it back plus a cut of the
-            forfeits.
-          </p>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setVariant("dare");
-            setFormError(null);
-          }}
-          aria-pressed={isDare}
-          className={`rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-            isDare
-              ? "border-[color:var(--coral-strong)] bg-secondary shadow-[var(--shadow-pop-coral)]"
-              : "border-edge bg-surface shadow-[var(--shadow-pop-edge)] hover:border-accent/40"
-          }`}
-        >
-          <p className="font-display text-base font-bold">Dare a friend</p>
-          <p className="mt-1 text-xs text-muted">
-            You put up a reward. They stake a small lock-in, hit it, and collect
-            both.
-          </p>
-        </button>
-      </div>
+      {/* Two-column composer: the form on the left, the live preview on the
+          right. Stacks on mobile with the preview card still prominent. */}
+      <div className="grid gap-8 lg:grid-cols-[1fr_400px] lg:items-start lg:gap-10">
+        {/* form column */}
+        <div className="space-y-8">
+          <section className="space-y-3">
+            <h2 className="font-display text-xl font-bold">Pick your poison</h2>
+            <TypePicker value={variant} onChange={selectVariant} />
+          </section>
 
-      <Card className="space-y-4">
-        <p className="text-sm leading-relaxed text-muted">
+          <section className="space-y-3">
+            <label
+              htmlFor="dare-title"
+              className="font-display text-base font-semibold"
+            >
+              {isDare ? "Name the dare" : "Name your goal"}
+            </label>
+            <textarea
+              id="dare-title"
+              placeholder={
+                isDare
+                  ? "lose 10 lbs this month"
+                  : "sleep 8h a night for 2 weeks"
+              }
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              rows={2}
+              className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            />
+            <SuggestionRow items={NAME_SUGGESTIONS} onPick={setGoal} />
+            <p className="text-xs text-muted">
+              {isDare
+                ? "What they have to do. Proven by an uploaded record - the reward pays the moment it is verified in a confidential enclave."
+                : "What you are going to do. Proven by an uploaded record - verified in a confidential enclave, so nobody ever sees your health data."}
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <label className="font-display text-base font-semibold">
+              {isDare
+                ? "The reward you're putting up"
+                : "Stake it. How much do you actually mean this?"}
+            </label>
+            <AmountChips
+              chips={AMOUNT_CHIPS}
+              value={headlineAmount}
+              onChange={setHeadlineAmount}
+              ariaLabel={
+                isDare
+                  ? "The reward you put up in USDC"
+                  : "Your stake in USDC"
+              }
+            />
+            <SpotterBubble mood={mood} />
+            <p className="text-xs text-muted">
+              {isDare
+                ? "Pulled from your wallet now and held in the pool. If the pool ends with no winner, you reclaim it."
+                : "Pulled from your wallet when you lock in. Hit the goal and it comes back with a cut of the forfeits; miss and it goes to whoever did."}
+            </p>
+          </section>
+
           {isDare ? (
             <>
-              You fund the reward. They put up a small lock-in to accept, so
-              every player has skin in the game - hit the goal and they get the
-              lock-in back plus your reward, the moment it is verified. If the
-              pool ends with no winner, everyone is refunded and your reward
-              comes back to you. You never keep their stake.
-            </>
-          ) : (
-            <>
-              You put your own USDC on your own goal. Hit it during the window
-              and your stake comes back plus an equal cut of what everyone who
-              flaked forfeited. If nobody in the pool hits it, everyone is
-              refunded. You are only ever up against your own goal.
-            </>
-          )}
-        </p>
+              <section className="space-y-3">
+                <label className="font-display text-base font-semibold">
+                  Their lock-in to accept
+                </label>
+                <AmountChips
+                  chips={DARE_LOCKIN_CHIPS}
+                  value={stake}
+                  onChange={setStake}
+                  ariaLabel="Their lock-in in USDC"
+                />
+                <p className="text-xs text-muted">
+                  The small amount they put up to lock in - real money keeps the
+                  goal honest. They get it back when they hit it, and you never
+                  pocket it.
+                </p>
+              </section>
 
-        <label className="block text-sm font-medium">
-          {isDare ? "The dare" : "Your goal"}
-          <textarea
-            placeholder={isDare ? "lose 10 lbs this month" : "sleep 8h a night for 2 weeks"}
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            rows={2}
-            className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
-          />
-          <span className="mt-1 block text-xs text-muted">
-            {isDare
-              ? "What they have to do. Proven by an uploaded record - the reward pays the moment it is verified in a confidential enclave."
-              : "What you are going to do. Proven by an uploaded record - verified in a confidential enclave, so nobody ever sees your health data."}
-          </span>
-        </label>
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-display text-base font-semibold">
+                    Who&apos;s it for
+                  </span>
+                  <div className="flex rounded-full border border-edge bg-secondary p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setRecipientMode("handle")}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                        recipientMode === "handle"
+                          ? "bg-surface text-foreground shadow-sm"
+                          : "text-muted"
+                      }`}
+                    >
+                      @handle
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecipientMode("link");
+                        setTarget("");
+                      }}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                        recipientMode === "link"
+                          ? "bg-surface text-foreground shadow-sm"
+                          : "text-muted"
+                      }`}
+                    >
+                      Link
+                    </button>
+                  </div>
+                </div>
+                {recipientMode === "handle" ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="font-display text-lg font-semibold text-muted">
+                        @
+                      </span>
+                      <input
+                        type="text"
+                        aria-label="Their handle"
+                        placeholder="theirhandle"
+                        value={target}
+                        maxLength={TARGET_HANDLE_MAX}
+                        onChange={(e) => setTarget(e.target.value)}
+                        className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-2.5 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      />
+                    </div>
+                    <p className="text-xs text-muted">
+                      They see this under Invited to you in the app. Never made
+                      public.
+                    </p>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2 rounded-xl border-2 border-dashed border-edge bg-secondary/50 px-4 py-3">
+                    <IconLink className="h-4 w-4 shrink-0 text-muted" />
+                    <span className="truncate text-sm text-muted">
+                      A private link is minted when you hit send.
+                    </span>
+                  </div>
+                )}
+              </section>
 
-        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3">
-          <input
-            type="checkbox"
-            checked={acceptSelf}
-            onChange={(e) => setAcceptSelf(e.target.checked)}
-            className="mt-1"
-          />
-          <span className="text-xs font-normal text-muted">
-            Also accept a self-reported photo (low-trust). We cannot confirm a
-            photo is real, recent, or {isDare ? "theirs" : "yours"}, so it is
-            never marked verified and pays at 1x. Leave off to require a real
-            record.
-          </span>
-        </label>
-
-        {isDare ? (
-          <div className="text-sm font-medium">
-            <span className="block">The reward you put up (USDC)</span>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {REWARD_PRESETS.map((amt) => (
-                <Chip
-                  key={amt}
-                  selected={reward.trim() === amt}
-                  onClick={() => setReward(amt)}
+              <section className="space-y-3">
+                <label
+                  htmlFor="trash-talk"
+                  className="font-display text-base font-semibold"
                 >
-                  {amt}
+                  Trash talk (optional, but come on)
+                </label>
+                <textarea
+                  id="trash-talk"
+                  placeholder="bet you can't. proving me wrong pays."
+                  value={message}
+                  maxLength={MESSAGE_MAX}
+                  onChange={(e) => setMessage(e.target.value)}
+                  rows={2}
+                  className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                />
+                <SuggestionRow
+                  items={TRASH_TALK_SUGGESTIONS}
+                  onPick={setMessage}
+                  tone="coral"
+                />
+                <p className="text-xs text-muted">
+                  Shown on the challenge link only.
+                </p>
+              </section>
+            </>
+          ) : null}
+
+          <section className="space-y-3">
+            <label className="font-display text-base font-semibold">
+              {isDare ? "How long they have" : "How long you have"}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {DURATION_OPTIONS.map((opt) => (
+                <Chip
+                  key={opt.days}
+                  selected={durationDays === opt.days}
+                  onClick={() => setDurationDays(opt.days)}
+                >
+                  {opt.label}
                 </Chip>
               ))}
             </div>
+            <p className="text-xs text-muted">
+              {isDare
+                ? "Starts the moment you send it."
+                : "Starts the moment you lock in your stake."}
+            </p>
+          </section>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3">
             <input
-              type="text"
-              inputMode="decimal"
-              aria-label="The reward you put up in USDC"
-              placeholder="Custom amount, e.g. 50.00"
-              value={reward}
-              onChange={(e) => setReward(e.target.value)}
-              className="mt-2 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              type="checkbox"
+              checked={acceptSelf}
+              onChange={(e) => setAcceptSelf(e.target.checked)}
+              className="mt-1"
             />
-            <span className="mt-1 block text-xs font-normal text-muted">
-              Pulled from your wallet now and held in the pool. If the pool ends
-              with no winner, you reclaim it.
+            <span className="text-xs font-normal text-muted">
+              Also accept a self-reported photo (low-trust). We cannot confirm a
+              photo is real, recent, or {isDare ? "theirs" : "yours"}, so it is
+              never marked verified and pays at 1x. Leave off to require a real
+              record.
+            </span>
+          </label>
+        </div>
+
+        {/* preview + submit column */}
+        <div className="space-y-4 lg:sticky lg:top-6">
+          <div className="flex items-center gap-1.5 px-1">
+            <IconSparkle className="h-3.5 w-3.5 text-accent-strong" />
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+              What they&apos;ll see
             </span>
           </div>
-        ) : null}
 
-        <div className="text-sm font-medium">
-          <span className="block">
-            {isDare ? "Their lock-in to accept (USDC)" : "Your stake (USDC)"}
-          </span>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(isDare ? DARE_LOCKIN_PRESETS : SELF_STAKE_PRESETS).map((amt) => (
-              <Chip
-                key={amt}
-                selected={stake.trim() === amt}
-                onClick={() => setStake(amt)}
-              >
-                {amt}
-              </Chip>
-            ))}
-          </div>
-          <input
-            type="text"
-            inputMode="decimal"
-            aria-label={isDare ? "Their lock-in in USDC" : "Your stake in USDC"}
-            placeholder={
-              isDare ? "Custom amount, e.g. 5.00" : "Custom amount, e.g. 25.00"
-            }
-            value={stake}
-            onChange={(e) => setStake(e.target.value)}
-            className="mt-2 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          <PreviewCard
+            variant={variant}
+            title={goal}
+            amount={headlineAmount}
+            lockIn={stake}
+            recipient={target}
+            trashTalk={message}
           />
-          <span className="mt-1 block text-xs font-normal text-muted">
-            {isDare
-              ? "The small amount they put up to lock in - real money keeps the goal honest. They get it back when they hit the goal, and you never pocket it."
-              : "Pulled from your wallet when you lock in. Hit the goal and it comes back with a cut of the forfeits; miss and it goes to whoever did."}
-          </span>
-        </div>
 
-        {isDare ? (
-          <>
-            <label className="block text-sm font-medium">
-              Who is it for (optional)
-              <input
-                type="text"
-                placeholder="@handle"
-                value={target}
-                maxLength={TARGET_HANDLE_MAX}
-                onChange={(e) => setTarget(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
-              />
-              <span className="mt-1 block text-xs text-muted">
-                Enter their @handle and they will see this under Invited to you
-                in the app. Leave blank to just share the link. Never made
-                public.
-              </span>
-            </label>
-
-            <label className="block text-sm font-medium">
-              A message (optional)
-              <textarea
-                placeholder="bet you can't. proving me wrong pays."
-                value={message}
-                maxLength={MESSAGE_MAX}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={2}
-                className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
-              />
-              <span className="mt-1 block text-xs text-muted">
-                Trash talk, encouragement, whatever lands. Shown on the challenge
-                link only.
-              </span>
-            </label>
-          </>
-        ) : null}
-
-        <div className="text-sm font-medium">
-          <span className="block">
-            {isDare ? "How long they have" : "How long you have"}
-          </span>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {DURATION_OPTIONS.map((opt) => (
-              <Chip
-                key={opt.days}
-                selected={durationDays === opt.days}
-                onClick={() => setDurationDays(opt.days)}
-              >
-                {opt.label}
-              </Chip>
-            ))}
-          </div>
-          <span className="mt-1 block text-xs font-normal text-muted">
-            {isDare
-              ? "Starts the moment you send it."
-              : "Starts the moment you lock in your stake."}
-          </span>
-        </div>
-
-        {/* SPOTTER, egging you on right where you commit. His line is the calm
-            deadpan intro; his pose is the only thing that reacts to the stake -
-            he never says the number. */}
-        <SpotterSays
-          surface="pools-header"
-          state="idle"
-          pose={stakeEntered ? "cheer" : "lounging"}
-          size="md"
-        />
-
-        <SignInGate
-          note={
-            isDare
-              ? "Sign in to send this challenge."
-              : "Sign in to start your commitment."
-          }
-        >
-          {(openSignIn) => (
-            <Button
-              type="button"
-              variant="primary"
-              pop
-              disabled={!ready || busy || linking}
-              onClick={() => {
-                if (!authenticated) {
-                  openSignIn();
-                  return;
-                }
-                void submit();
-              }}
-              className="w-full py-3.5 text-base"
-            >
-              {primaryLabel}
-            </Button>
-          )}
-        </SignInGate>
-
-        {status.kind === "approving" || status.kind === "depositing" ? (
-          <div className="rounded-xl border border-edge bg-surface-raised p-4 text-sm">
-            <p className="font-medium">
-              {isDare ? (
-                <>
-                  Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
-                  {status.kind === "approving"
-                    ? "approving USDC for the reward"
-                    : "putting the reward into the pool on Base"}
-                </>
-              ) : (
-                "Creating your commitment pool on Base"
-              )}
-            </p>
-          </div>
-        ) : null}
-
-        {linking ? (
-          <div className="rounded-xl border border-edge bg-surface-raised p-4 text-sm">
-            <p className="font-medium">
-              Reward is in. Signing to mint your challenge link...
-            </p>
-          </div>
-        ) : null}
-
-        {isDare && status.kind === "done" ? (
-          <div className="space-y-1 rounded-xl border border-accent/40 bg-accent-deep/40 p-4">
-            <p className="text-sm font-semibold text-accent">
-              Reward of <Money usd={reward.trim()} /> is in the pool.
-            </p>
-            <ArcTxLink
-              txHash={status.depositHash}
-              label="View the funding tx"
-            />
-          </div>
-        ) : null}
-
-        {formError !== null ? (
-          <ErrorNote
-            title="Check the challenge"
-            detail={formError}
-            onRetry={() => setFormError(null)}
-          />
-        ) : null}
-
-        {status.kind === "error" ? (
-          <ErrorNote
-            title={
-              isDare ? "Could not put up the reward" : "Could not create your commitment"
-            }
-            detail={status.message}
-            onRetry={reset}
-          />
-        ) : null}
-
-        {phase.kind === "error" ? (
-          <ErrorNote
-            title={
+          <SignInGate
+            note={
               isDare
-                ? "The reward is up, but the link did not send"
-                : "Could not create your commitment"
+                ? "Sign in to send this challenge."
+                : "Sign in to start your commitment."
             }
-            detail={phase.message}
-            onRetry={() => setPhase({ kind: "idle" })}
-          />
-        ) : null}
-      </Card>
+          >
+            {(openSignIn) => (
+              <Button
+                type="button"
+                variant={isDare ? "coral" : "primary"}
+                pop
+                disabled={!ready || busy || linking}
+                onClick={() => {
+                  if (!authenticated) {
+                    openSignIn();
+                    return;
+                  }
+                  void submit();
+                }}
+                className="h-14 w-full text-lg"
+              >
+                {primaryLabel}
+                {status.kind === "idle" &&
+                !linking &&
+                authenticated &&
+                !busy ? (
+                  <IconArrow className="h-5 w-5" />
+                ) : null}
+              </Button>
+            )}
+          </SignInGate>
+
+          {status.kind === "approving" || status.kind === "depositing" ? (
+            <div className="rounded-xl border border-edge bg-surface-raised p-4 text-sm">
+              <p className="font-medium">
+                {isDare ? (
+                  <>
+                    Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
+                    {status.kind === "approving"
+                      ? "approving USDC for the reward"
+                      : "putting the reward into the pool on Base"}
+                  </>
+                ) : (
+                  "Creating your commitment pool on Base"
+                )}
+              </p>
+            </div>
+          ) : null}
+
+          {linking ? (
+            <div className="rounded-xl border border-edge bg-surface-raised p-4 text-sm">
+              <p className="font-medium">
+                Reward is in. Signing to mint your challenge link...
+              </p>
+            </div>
+          ) : null}
+
+          {isDare && status.kind === "done" ? (
+            <div className="space-y-1 rounded-xl border border-accent/40 bg-accent-deep/40 p-4">
+              <p className="text-sm font-semibold text-accent">
+                Reward of <Money usd={reward.trim() === "" ? "0" : reward.trim()} />{" "}
+                is in the pool.
+              </p>
+              <ArcTxLink txHash={status.depositHash} label="View the funding tx" />
+            </div>
+          ) : null}
+
+          {formError !== null ? (
+            <ErrorNote
+              title="Check the challenge"
+              detail={formError}
+              onRetry={() => setFormError(null)}
+            />
+          ) : null}
+
+          {status.kind === "error" ? (
+            <ErrorNote
+              title={
+                isDare
+                  ? "Could not put up the reward"
+                  : "Could not create your commitment"
+              }
+              detail={status.message}
+              onRetry={reset}
+            />
+          ) : null}
+
+          {phase.kind === "error" ? (
+            <ErrorNote
+              title={
+                isDare
+                  ? "The reward is up, but the link did not send"
+                  : "Could not create your commitment"
+              }
+              detail={phase.message}
+              onRetry={() => setPhase({ kind: "idle" })}
+            />
+          ) : null}
+
+          <p className="px-1 text-center text-[11px] leading-snug text-muted">
+            {FOOTER_NOTE}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
