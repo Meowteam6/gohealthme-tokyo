@@ -478,9 +478,12 @@ async function fetchMetricByDay(
       } else {
         const r = rec as SleepRecord & {
           total_sleep_seconds?: number;
+          total?: number;
           duration?: number;
         };
-        const secs = r.total_sleep_seconds ?? r.duration ?? null;
+        // Junction reports actual asleep time as `total` (seconds) and time in
+        // bed as `duration`; prefer asleep so "sleep 7 hours" means 7 asleep.
+        const secs = r.total_sleep_seconds ?? r.total ?? r.duration ?? null;
         keepMax(day, typeof secs === "number" ? secs / 3600 : null);
       }
     }
