@@ -29,6 +29,17 @@
   --gold: #f3b13c;
   --gold-strong: #eaa11f;
   --gold-deep: #a9760c;        /* rich legible gold: money text on cream, and a soft gold tint at low opacity */
+  /* Warm tan for chips, pills, and "held by SPOTTER" wells - a step warmer than
+     surface so pill fills read tactile, not flat white. */
+  --secondary: #f4ead5;
+  --secondary-foreground: #1f3b25;
+  /* Chunky "pressable" candy depth - the biggest playful signal, and the one
+     the flat surfaces were missing. On-palette (emerald/coral/border), opt-in
+     per component via the shadow utilities below. */
+  --shadow-pop: 0 4px 0 0 var(--accent-strong);
+  --shadow-pop-coral: 0 4px 0 0 var(--coral-strong);
+  --shadow-pop-edge: 0 6px 0 0 var(--border);
+  --radius-card: 1.5rem;       /* rounder, friendlier feature card (rounded-3xl) */
 }
 
 @theme inline {
@@ -46,8 +57,24 @@
   --color-gold: var(--gold);
   --color-gold-strong: var(--gold-strong);
   --color-gold-deep: var(--gold-deep);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-baloo);
+}
+
+@layer utilities {
+  /* Opt-in playful backdrop for hero / composer sections only. Emerald dots at
+     low opacity so it never fights body text. */
+  .bg-dot-grid {
+    background-image: radial-gradient(
+      circle,
+      rgba(16, 185, 129, 0.1) 1.5px,
+      transparent 1.5px
+    );
+    background-size: 18px 18px;
+  }
 }
 
 body {

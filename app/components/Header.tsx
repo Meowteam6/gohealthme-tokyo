@@ -239,7 +239,7 @@ export default function Header() {
       <div className="mx-auto flex h-16 max-w-5xl items-center gap-2 px-3 sm:gap-3 sm:px-4">
         <Link
           href="/"
-          className="shrink-0 text-base font-bold tracking-tight sm:text-lg"
+          className="shrink-0 font-display text-lg font-extrabold tracking-tight sm:text-xl"
         >
           Go<span className="text-accent">Health</span>Me
         </Link>

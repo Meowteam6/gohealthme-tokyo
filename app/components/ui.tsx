@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { baseTxUrl } from "@/lib/chains";
 import type { ProofPolicy } from "@/lib/contract";
 
@@ -266,6 +266,106 @@ export function Stat({ label, value }: { label: string; value: ReactNode }) {
         {label}
       </p>
       <p className="mt-1 text-lg font-semibold leading-snug">{value}</p>
+    </div>
+  );
+}
+
+// -------------------------------------------------- playful shared primitives
+// The vibe layer: display font, full radius, and the chunky "candy" press. New
+// and additive - surfaces adopt them to stop hand-rolling flat controls. Money
+// and verdicts still render only through Money/Verdict above; a button or chip
+// never states a number.
+
+/**
+ * The shared pressable button. `pop` gives it the chunky candy shadow that sits
+ * flush underneath and compresses on press (a transform, not a keyframe, so it
+ * respects reduced-motion). `coral` is for human/dare actions, never money.
+ */
+export function Button({
+  variant = "primary",
+  pop = false,
+  className = "",
+  children,
+  ...props
+}: ComponentPropsWithoutRef<"button"> & {
+  variant?: "primary" | "secondary" | "coral" | "ghost";
+  pop?: boolean;
+}) {
+  const base =
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 py-2.5 font-display text-sm font-bold transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60";
+  const variants: Record<string, string> = {
+    primary: "bg-accent text-white hover:bg-accent-strong",
+    secondary:
+      "border-2 border-edge bg-secondary text-secondary-foreground hover:border-accent/50",
+    coral: "bg-coral-strong text-white hover:bg-coral",
+    ghost: "text-accent-strong hover:bg-secondary",
+  };
+  const popClass =
+    pop && variant !== "ghost"
+      ? `${
+          variant === "coral"
+            ? "shadow-[var(--shadow-pop-coral)]"
+            : "shadow-[var(--shadow-pop)]"
+        } hover:translate-y-px active:translate-y-[3px] active:shadow-none disabled:translate-y-0 disabled:shadow-none`
+      : "";
+  return (
+    <button
+      className={`${base} ${variants[variant]} ${popClass} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * A tactile selectable pill: border-2 with a warm-tan fill, emerald when
+ * selected. Powers amount pickers, duration pills, and suggestion chips.
+ * aria-pressed plus a visible ring keep selection from being colour-only.
+ */
+export function Chip({
+  selected = false,
+  className = "",
+  children,
+  ...props
+}: ComponentPropsWithoutRef<"button"> & { selected?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      className={`inline-flex min-h-11 items-center justify-center rounded-full border-2 px-5 py-2.5 font-display text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+        selected
+          ? "border-accent bg-accent text-white"
+          : "border-edge bg-secondary text-secondary-foreground hover:border-accent/50"
+      } ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * A rounded, friendly feature card. `pop` adds the raised edge shadow for hero /
+ * preview cards. Replaces the hand-rolled `rounded-2xl border border-edge
+ * bg-surface p-5` repeated across surfaces.
+ */
+export function Card({
+  pop = false,
+  className = "",
+  children,
+}: {
+  pop?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`rounded-3xl border border-edge bg-surface p-5 sm:p-6 ${
+        pop ? "shadow-[var(--shadow-pop-edge)]" : ""
+      } ${className}`}
+    >
+      {children}
     </div>
   );
 }

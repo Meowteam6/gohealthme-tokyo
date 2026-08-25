@@ -46,7 +46,7 @@ export default function SceneHeader({
               {eyebrow}
             </p>
           ) : null}
-          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+          <h1 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">
             {title}
           </h1>
           {subtitle !== undefined ? (
