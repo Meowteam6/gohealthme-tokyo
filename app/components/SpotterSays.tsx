@@ -17,12 +17,12 @@ import type { Locale, Surface, SpotterState, Tone } from "@/lib/spotter-lines";
 const POSE_BY_STATE: Record<SpotterState, string> = {
   idle: "lounging",
   empty: "peek",
-  verifying: "peek",
+  verifying: "detective",
   "won-verified": "payday",
   "paid-self-reported": "standing",
   broke: "broke",
-  error: "standing",
-  "streak-nudge": "standing",
+  error: "facepalm",
+  "streak-nudge": "flex",
   joined: "cheer",
 };
 

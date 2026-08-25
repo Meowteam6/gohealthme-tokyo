@@ -7,11 +7,25 @@
 // profile-paid-wall: "the health category is never shown"). Mapping a win to an
 // action pose would leak that category.
 
-export type GoalPose = "flushot" | "screening" | "checkup" | "dental" | "greet";
+export type GoalPose =
+  | "run"
+  | "lift"
+  | "sleep"
+  | "meditate"
+  | "flushot"
+  | "screening"
+  | "checkup"
+  | "dental"
+  | "greet";
 
-// Order matters: the most specific match wins. "greet" is the neutral fallback
-// for any goal we don't have a bespoke pose for yet.
+// Order matters: the most specific match wins. The activity poses lead because
+// steps / workout / sleep / meditation are the common wearable goals now. "greet"
+// is the neutral fallback for any goal we don't have a bespoke pose for yet.
 const RULES: ReadonlyArray<readonly [GoalPose, RegExp]> = [
+  ["run", /\b(steps?|walk|walking|run|running|ran|jog|jogging|cardio|distance|\bkm\b|miles?|marathon)/i],
+  ["lift", /\b(workout|work ?out|gym|lift|lifting|weights?|strength|exercise|train|training|push[\s-]?ups?|squats?|reps?)/i],
+  ["sleep", /\b(sleep|slept|bed[\s-]?time|rest|nap)/i],
+  ["meditate", /\b(medit|mindful|mindfulness|yoga|breath|breathe|calm|stress)/i],
   ["flushot", /\b(flu|influenza|vaccin|vaxx?|immuniz|shot|jab|booster)/i],
   ["dental", /\b(dental|dentist|teeth|tooth|floss|cleaning)/i],
   ["screening", /\b(screen|biometric|blood[\s-]?pressure|\bbmi\b|glucose|cholesterol|lipid|a1c|lab[\s-]?(work|panel|test))/i],
