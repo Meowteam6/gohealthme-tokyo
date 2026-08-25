@@ -10,6 +10,7 @@
 // charged - the signature only proves the wallet is yours.
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
@@ -31,6 +32,7 @@ type Status =
 function ClaimHandleInner() {
   const { ready, authenticated, address, getArcWalletClient } =
     useEmbeddedWallet();
+  const queryClient = useQueryClient();
   const [handle, setHandle] = useState("");
   const [emoji, setEmoji] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -106,6 +108,10 @@ function ClaimHandleInner() {
         return;
       }
 
+      // Refresh the header's handle lookup so the wallet chip flips from
+      // "Claim a name" to @handle immediately, without waiting for a navigation
+      // to refetch the cached resolve.
+      await queryClient.invalidateQueries({ queryKey: ["social-resolve"] });
       setStatus({ kind: "done", handle: handleCheck.handle });
     } catch {
       setStatus({
