@@ -171,10 +171,7 @@ const ABI = [
     type: "function",
     name: "joinPool",
     stateMutability: "nonpayable",
-    inputs: [
-      { name: "poolId", type: "uint256" },
-      { name: "nullifierHash", type: "uint256" },
-    ],
+    inputs: [{ name: "poolId", type: "uint256" }],
     outputs: [],
   },
   // ---- HealthVerdict

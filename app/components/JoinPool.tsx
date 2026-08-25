@@ -107,7 +107,6 @@ function JoinPoolInner({
           }
         }
 
-        const nullifier = BigInt(address);
         const calls: SponsoredCall[] = [];
         if (entryFee > 0n) {
           calls.push({
@@ -121,7 +120,7 @@ function JoinPoolInner({
           to: poolsAddress,
           abi: healthPoolsAbi,
           functionName: "joinPool",
-          args: [poolId, nullifier],
+          args: [poolId],
         });
 
         setStatus({ kind: "joining" });
@@ -154,10 +153,9 @@ function JoinPoolInner({
         return;
       }
 
-      // joinPool's second parameter is a dedupe value the contract stores and
-      // rejects on reuse (ALREADY_JOINED). The wallet address IS the entry
-      // identity, so it is the value: one wallet, one entry, enforced on-chain.
-      const nullifier = BigInt(address);
+      // One wallet, one entry is enforced on-chain: joinPool dedupes on
+      // msg.sender (ALREADY_JOINED on reuse), so it takes only the poolId — no
+      // caller-supplied nullifier. World ID was removed in the Base build.
       const walletClient = await getArcWalletClient();
       setStatus({ kind: "joining" });
 
@@ -186,7 +184,7 @@ function JoinPoolInner({
         address: poolsAddress,
         abi: healthPoolsAbi,
         functionName: "joinPool",
-        args: [poolId, nullifier],
+        args: [poolId],
       });
       const joinReceipt = await publicClient.waitForTransactionReceipt({
         hash: joinHash,

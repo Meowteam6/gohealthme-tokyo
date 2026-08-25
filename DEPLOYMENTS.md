@@ -1,3 +1,20 @@
+# GoHealthMe V3 (Base) deployments
+
+## CURRENT — Base Sepolia (chain 84532), 2026-08-24
+- HealthPoolsV3: `0x66815e3AC541eB18d01D2aed25D0D9779583D832`
+- Explorer: https://sepolia.basescan.org/address/0x66815e3AC541eB18d01D2aed25D0D9779583D832
+- owner (deployer): `0xc278e8e4621A0Ba02bACB6291E595ecd168A04e1` (DEPLOYER_PRIVATE_KEY)
+- oracle: `0xBceC12DcF814662c4D47a7532C9CD7748116B9F4`
+- authorizedSettler (SPOTTER Circle wallet): `0xf44100b58eE001736ED0267509bC2FC6bFfd697d`
+- USDC: `0x036CbD53842c5426634e7929541eC2318f3dCF7e` (Base Sepolia)
+- verdict registry: `0x0` (oracle-only; enable later via `setHealthVerdict` when the CRE/DON path lands)
+- commitmentFeeBps (rake): 0 — pilot compliance lock, enforced by a deploy-time `require`.
+- joinGateEnabled: false — closed-pilot allowlist OFF by default; the owner turns it on and allowlists the family for the closed real-money test.
+- App wiring: `NEXT_PUBLIC_HEALTH_POOLS_ADDRESS` updated in local `app/.env.local`. MUST ALSO be set in Vercel production env before the app ships against this contract.
+- Supersedes the prior V3 deploy `0x1928a5A6caC8f701fba2a89bf83C5BEEaFBd48d1` (had no join allowlist).
+
+---
+
 HealthPools (Arc testnet, chain 5042002)
 
 ## CURRENT (canonical) — gated, 2026-07-27

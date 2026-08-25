@@ -29,6 +29,11 @@ vi.mock("@/lib/contract", async (importOriginal) => ({
 vi.mock("@/lib/server/pools", () => ({
   participantJoined: (...args: unknown[]) => participantJoined(...args),
 }));
+// Access gating is covered by access.test.ts; here the caller is approved so
+// these tests exercise the attester/drain-vector logic, not the closed-beta gate.
+vi.mock("@/lib/server/access", () => ({
+  isAllowed: () => Promise.resolve(true),
+}));
 
 const { MAX_EVIDENCE_BASE64_CHARS, attesterJobIsForClaim } = await import(
   "@/lib/server/evidence"
