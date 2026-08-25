@@ -265,7 +265,7 @@ function StreakCard({
         <>
           <p className="mt-3 rounded-xl border border-dashed border-edge p-4 text-sm text-muted">
             No wearable connected yet. Link a provider (WHOOP, Oura, Fitbit,
-            Garmin…) to start tracking your streak toward the bounty.
+            Garmin…) to start tracking your streak toward your goal.
           </p>
           <ConnectButton address={address} />
         </>
@@ -517,7 +517,7 @@ export default function DashboardContent() {
         ) : (joinedQuery.data ?? []).length === 0 ? (
           <EmptyState
             title="Nothing on the line yet"
-            detail="Pick a goal somebody else's USDC is staked on. One wallet, one entry, and SPOTTER pays the moment you prove it."
+            detail="Pick a goal with USDC staked on it. One wallet, one entry, and SPOTTER pays the moment you prove it."
             action={
               <Link
                 href="/pools"

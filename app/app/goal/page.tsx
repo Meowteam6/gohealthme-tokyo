@@ -3,7 +3,7 @@ import GoalMatch from "@/components/GoalMatch";
 
 export const metadata: Metadata = {
   title: "Your goal — GoHealthMe",
-  description: "Live sponsor-funded pools matched to the goal you typed.",
+  description: "Live health pools matched to the goal you typed.",
 };
 
 export default async function GoalPage({

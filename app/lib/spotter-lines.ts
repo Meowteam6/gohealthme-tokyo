@@ -63,7 +63,7 @@ export const SPOTTER_LINES: SpotterLine[] = [
   { id: "dash-h2", surface: "dashboard-header", state: "idle", tone: "deadpan", text: { en: "Watching the money so you don't have to." } },
   { id: "dash-h3", surface: "dashboard-header", state: "idle", tone: "deadpan", text: { en: "Your goals. My problem now." } },
 
-  { id: "pools-h1", surface: "pools-header", state: "idle", tone: "deadpan", text: { en: "Somebody put money up. It's just sitting there. Rude not to." } },
+  { id: "pools-h1", surface: "pools-header", state: "idle", tone: "deadpan", text: { en: "Put your money where your goal is. Then go get it back." } },
   { id: "pools-h2", surface: "pools-header", state: "idle", tone: "deadpan", text: { en: "Pick one. Do the thing. Get paid. In that order." } },
 
   { id: "agent-h1", surface: "agent-header", state: "idle", tone: "deadpan", text: { en: "I buy the proof, I make the call, I move the money." } },

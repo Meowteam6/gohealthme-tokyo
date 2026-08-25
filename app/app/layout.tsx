@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "GoHealthMe",
   description:
-    "Set a health goal, a sponsor puts up the USDC, and an agent named SPOTTER verifies it and pays you the moment it can prove you did it.",
+    "Set a health goal, stake USDC on it, and an agent named SPOTTER verifies it and pays you the moment it can prove you did it.",
 };
 
 export const viewport: Viewport = {

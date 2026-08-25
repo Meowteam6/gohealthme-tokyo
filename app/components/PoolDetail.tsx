@@ -550,25 +550,42 @@ export default function PoolDetail({ id }: { id: string }) {
         <h1 className="mt-3 text-2xl font-bold leading-tight sm:text-3xl">
           {goalTitle}
         </h1>
-        {/* When the funder has claimed a handle we name them; otherwise the
-            identity reads "A sponsor" and the raw address is demoted to a small
-            secondary link, so a wall of hex never stands in for the funder. The
-            self-staked (model 2) branch has no funder and is untouched. */}
-        <p className="mt-2 text-sm text-muted">
-          {funderHandle !== null ? "Funder " : "A sponsor "}
-          <a
-            href={arcAddressUrl(pool.creator)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={
-              funderHandle !== null
-                ? "font-mono underline decoration-edge underline-offset-2 hover:text-foreground"
-                : "ml-1 font-mono text-xs underline decoration-edge underline-offset-2 hover:text-foreground"
-            }
-          >
-            {displayName(pool.creator)}
-          </a>
-        </p>
+        {/* A self-staked commitment pool (model 2) has no funder - every
+            participant stakes their own USDC and the creator merely set the
+            pool up - so it must never read "A sponsor". Name the creator
+            instead. For sponsor-funded models (0, 1) the funder's claimed
+            handle names them; otherwise the identity reads "A sponsor" and the
+            raw address is demoted to a small secondary link, so a wall of hex
+            never stands in for the funder. */}
+        {pool.bountyModel === 2 ? (
+          <p className="mt-2 text-sm text-muted">
+            Created by{" "}
+            <a
+              href={arcAddressUrl(pool.creator)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono underline decoration-edge underline-offset-2 hover:text-foreground"
+            >
+              {displayName(pool.creator)}
+            </a>
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-muted">
+            {funderHandle !== null ? "Funder " : "A sponsor "}
+            <a
+              href={arcAddressUrl(pool.creator)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={
+                funderHandle !== null
+                  ? "font-mono underline decoration-edge underline-offset-2 hover:text-foreground"
+                  : "ml-1 font-mono text-xs underline decoration-edge underline-offset-2 hover:text-foreground"
+              }
+            >
+              {displayName(pool.creator)}
+            </a>
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

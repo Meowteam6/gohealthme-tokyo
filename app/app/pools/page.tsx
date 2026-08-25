@@ -146,11 +146,11 @@ export default function PoolsPage() {
   return (
     <div className="space-y-6">
       <SceneHeader
-        title="Bounty pools"
+        title="Health pools"
         subtitle="Live health-commitment pools on Base Sepolia. Join with your wallet, hit your goal, get paid in USDC. Testnet USDC only, no real value."
         pose="spotter-standing.png"
         poseAlt="SPOTTER the otter, standing, ready to point you at a pool"
-        spotterLine="Somebody put money up. It's just sitting there. Rude not to."
+        spotterLine="Put your money where your goal is. Then go get it back."
       >
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Badge tone="muted">Base Sepolia</Badge>
@@ -192,7 +192,7 @@ export default function PoolsPage() {
           0 ? (
         <EmptyState
           title="No pools yet"
-          detail="Pools appear here the moment a sponsor creates one on Base. Be the first to fund a bounty."
+          detail="Pools appear here the moment someone creates one on Base. Be the first to put a goal on the board."
           action={
             <Link
               href="/pools/create"

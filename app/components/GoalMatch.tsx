@@ -102,7 +102,7 @@ export default function GoalMatch({ query }: { query: string }) {
     <div className="space-y-6">
       <div>
         <p className="text-sm font-semibold uppercase tracking-widest text-accent">
-          Somebody already put money on this
+          Money&apos;s already on this goal
         </p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">
           {query === "" ? "Live goals with money behind them" : `"${query}"`}
@@ -129,7 +129,7 @@ export default function GoalMatch({ query }: { query: string }) {
       ) : matches.data.length === 0 ? (
         <EmptyState
           title="Nothing staked on this one yet."
-          detail="No live pool matches your goal. Create the pool and let a sponsor fund it - or browse what is already funded."
+          detail="No live pool matches your goal. Create the pool and stake your goal - or browse what is already live."
           action={
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
