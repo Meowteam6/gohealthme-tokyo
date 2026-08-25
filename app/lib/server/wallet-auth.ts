@@ -44,7 +44,8 @@
 // visibility and never money. /api/evidence/submit is unauthenticated for the
 // same reason.
 
-import { getAddress, isAddress, verifyMessage, type Address } from "viem";
+import { getAddress, isAddress, type Address } from "viem";
+import { getArcPublicClient } from "@/lib/contract";
 
 export const WALLET_AUTH_ADDRESS_HEADER = "x-gohealthme-address";
 export const WALLET_AUTH_TIMESTAMP_HEADER = "x-gohealthme-timestamp";
@@ -145,18 +146,27 @@ export async function verifyWalletSignature(params: {
     walletAuthMessage(address.toLowerCase(), timestamp),
   ];
 
+  // Verify through a Base public client, NOT offline. An offline ecrecover only
+  // validates a plain-EOA (65-byte) signature; a smart-contract wallet - a
+  // Coinbase Smart Wallet, or a Dynamic embedded smart account - produces an
+  // ERC-1271 / ERC-6492 signature (here ~224 bytes) that can only be validated
+  // by calling the account's isValidSignature on-chain. viem's client.verifyMessage
+  // recovers an EOA offline first and falls back to the on-chain 1271/6492 path,
+  // so it covers both wallet kinds. Verifying offline was why a smart-wallet user
+  // was rejected with "sign with the wallet you are claiming for".
+  const client = getArcPublicClient();
   for (const message of candidates) {
     let valid = false;
     try {
-      valid = await verifyMessage({
+      valid = await client.verifyMessage({
         address: checksummed,
         message,
         signature: signature as `0x${string}`,
       });
     } catch {
-      // A malformed signature makes viem throw rather than return false. Both
-      // mean the same thing to the caller, so fall through to the next
-      // candidate and, failing that, the generic rejection below.
+      // A malformed signature, or an RPC hiccup on the 1271 call, makes viem
+      // throw rather than return false. Fall through to the next candidate and,
+      // failing that, the generic rejection below.
       valid = false;
     }
     if (valid) return { ok: true, address: checksummed };
