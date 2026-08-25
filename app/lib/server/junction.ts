@@ -183,6 +183,45 @@ export async function createLinkToken(
   return { userId, linkUrl };
 }
 
+// -------------------------------------------------------- mobile SDK sign-in
+
+interface SignInTokenResponse {
+  user_id?: string;
+  sign_in_token?: string;
+}
+
+/**
+ * Mint a short-lived Vital SDK sign-in token for a wallet's Junction user.
+ *
+ * The native mobile SDK (Apple Health on iOS, Health Connect on Android)
+ * authenticates with this token instead of the API key, so JUNCTION_API_KEY
+ * stays a server-side secret and never reaches the device. The token is scoped
+ * to the SAME Junction user a wallet already maps to (client_user_id =
+ * address.toLowerCase()), which is what makes the phone's HealthKit sync land
+ * under the exact user the web verdict path reads from — one wallet, one health
+ * identity across web and mobile.
+ *
+ * This mints an auth credential only: no raw health data is fetched or returned
+ * here, so the privacy invariant at the top of this module is unchanged.
+ */
+export async function createSignInToken(
+  address: string,
+): Promise<{ userId: string; signInToken: string }> {
+  const userId = await getOrCreateUser(address);
+  // POST — a write that issues a fresh credential, so it runs exactly once (jx
+  // only retries GETs). The endpoint takes no request body.
+  const resp = await jx<SignInTokenResponse>(
+    `/v2/user/${encodeURIComponent(userId)}/sign_in_token`,
+    { method: "POST" },
+  );
+  if (!resp.sign_in_token) {
+    // Throw rather than return an empty token: a caller must never treat a
+    // missing credential as a usable one.
+    throw new Error("Junction issued no sign_in_token for the user");
+  }
+  return { userId, signInToken: resp.sign_in_token };
+}
+
 // ---------------------------------------------------------- connection status
 
 interface ProvidersResponse {
