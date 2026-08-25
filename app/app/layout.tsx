@@ -5,6 +5,7 @@ import "./globals.css";
 import Providers from "./providers";
 import Header from "@/components/Header";
 import HelperWidget from "@/components/HelperWidget";
+import AccessGate from "@/components/AccessGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,7 +42,7 @@ export default function RootLayout({
         <Providers>
           <Header />
           <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
-            {children}
+            <AccessGate>{children}</AccessGate>
           </main>
           <footer className="border-t border-edge px-4 py-6 text-center text-xs text-muted">
             <p>

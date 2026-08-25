@@ -72,6 +72,7 @@ import {
 } from "@/lib/server/http";
 import { participantJoined } from "@/lib/server/pools";
 import { computeGoalId } from "@/lib/server/verdict";
+import { isAllowed } from "@/lib/server/access";
 
 export async function POST(request: Request) {
   const cid = newCorrelationId("evidence-submit");
@@ -142,6 +143,18 @@ export async function POST(request: Request) {
       return jsonError(
         403,
         "Join this pool before submitting a record for it.",
+      );
+    }
+
+    // Closed-beta gate: only an approved wallet can spend TEE inference. This
+    // route has no signature proof (membership above is its identity gate), so
+    // the check is on the same body address the pool credits and pays. Fails
+    // closed, and runs before the enclave is touched so nothing is spent for a
+    // wallet that is not in the beta.
+    if (!(await isAllowed(address))) {
+      return jsonError(
+        403,
+        "This wallet is not in the GoHealthMe closed beta yet.",
       );
     }
 

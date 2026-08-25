@@ -44,6 +44,7 @@
 import { isAddress, type Address } from "viem";
 import { credit, debit, getBalance } from "@/lib/server/balance";
 import { sponsorUsdc } from "@/lib/server/treasury";
+import { isAllowed } from "@/lib/server/access";
 import { jsonError, readJsonBody } from "@/lib/server/http";
 import { formatUsdc } from "@/lib/contract";
 import {
@@ -132,6 +133,18 @@ export async function POST(request: Request) {
     const amount = parseAmountUusdc(amountUusdc);
     if (amount === null) {
       return jsonError(400, "amountUusdc must be a positive integer");
+    }
+
+    // Closed-beta gate: only an approved wallet can move money out. This route is
+    // unauthenticated by design (see the header note), so this gates the claimed
+    // body address rather than a proven one — an allowlist gate on top of the
+    // rate/floor guards, not a substitute for the deferred money-path auth. Fails
+    // closed and runs before any balance or treasury read.
+    if (!(await isAllowed(address))) {
+      return jsonError(
+        403,
+        "This wallet is not in the GoHealthMe closed beta yet.",
+      );
     }
 
     const recipient = address as Address;

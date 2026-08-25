@@ -23,6 +23,7 @@ import { fetchPool } from "@/lib/contract";
 import { poolCanPay } from "@/lib/pool-lifecycle";
 import { createChallenge } from "@/lib/server/challenges";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
+import { isAllowed } from "@/lib/server/access";
 import {
   jsonError,
   newCorrelationId,
@@ -80,6 +81,11 @@ export async function POST(request: Request) {
     const auth = await requireAddressSignature(request, address);
     if (!auth.ok) {
       return jsonError(401, "Sign with the wallet that created this pool.");
+    }
+
+    // Closed-beta gate: the proven wallet must be approved. Fails closed.
+    if (!(await isAllowed(auth.address))) {
+      return jsonError(403, "This wallet is not in the GoHealthMe closed beta yet.");
     }
 
     // Proof 2: that address must be the pool's on-chain creator. A missing or
