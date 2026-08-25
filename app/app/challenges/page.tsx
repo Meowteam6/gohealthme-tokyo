@@ -35,13 +35,17 @@
 // The public redaction rule (feed / profile / pool metadata) is untouched.
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Countdown from "@/components/Countdown";
+import SceneHeader from "@/components/SceneHeader";
 import SignInPanel from "@/components/SignInPanel";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import {
   Badge,
+  Button,
+  Card,
   EmptyState,
   ErrorNote,
   Money,
@@ -289,7 +293,7 @@ function InvitedChallengeCard({
   const { pool, message } = entry;
 
   return (
-    <div className="rounded-2xl border border-accent/40 bg-surface p-5">
+    <Card pop>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Badge>Challenge</Badge>
         <Badge tone="accent">Invited</Badge>
@@ -298,7 +302,7 @@ function InvitedChallengeCard({
         <span className="font-semibold text-foreground">{challengerName}</span>{" "}
         invited you
       </p>
-      <h3 className="mt-1 text-lg font-semibold leading-snug">
+      <h3 className="mt-1 font-display text-lg font-semibold leading-snug">
         {displayGoalSpec(pool.goalSpec)}
       </h3>
       {message !== null ? (
@@ -312,11 +316,11 @@ function InvitedChallengeCard({
       </div>
       <Link
         href={acceptUrl}
-        className={`mt-4 w-full rounded-xl bg-accent-strong font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
+        className={`mt-4 w-full rounded-full bg-accent font-display font-bold text-white hover:bg-accent-strong ${TAP_TARGET}`}
       >
         Accept the dare
       </Link>
-    </div>
+    </Card>
   );
 }
 
@@ -334,7 +338,7 @@ function InChallengeCard({
   const id = pool.id.toString();
 
   return (
-    <div className="rounded-2xl border border-edge bg-surface p-5">
+    <Card>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Badge>Challenge</Badge>
         <Badge tone={status.tone}>{status.label}</Badge>
@@ -343,7 +347,7 @@ function InChallengeCard({
         <span className="font-semibold text-foreground">{challengerName}</span>{" "}
         challenged you
       </p>
-      <h3 className="mt-1 text-lg font-semibold leading-snug">
+      <h3 className="mt-1 font-display text-lg font-semibold leading-snug">
         {displayGoalSpec(pool.goalSpec)}
       </h3>
       <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
@@ -354,15 +358,15 @@ function InChallengeCard({
       </div>
       <Link
         href={`/pools/${id}`}
-        className={`mt-4 w-full rounded-xl font-semibold ${TAP_TARGET} ${
+        className={`mt-4 w-full rounded-full font-display font-bold ${TAP_TARGET} ${
           needsProof
-            ? "bg-accent-strong text-background hover:bg-accent"
-            : "border border-edge text-foreground hover:border-accent/50"
+            ? "bg-accent text-white hover:bg-accent-strong"
+            : "border-2 border-edge text-foreground hover:border-accent/50"
         }`}
       >
         {needsProof ? "Upload your proof" : "View challenge"}
       </Link>
-    </div>
+    </Card>
   );
 }
 
@@ -390,7 +394,7 @@ function SentChallengeCard({ entry }: { entry: SentChallenge }) {
           : `${participantCount} people ${stakerWord}`;
 
   return (
-    <div className="rounded-2xl border border-edge bg-surface p-5">
+    <Card>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Badge>{commitment ? "Commitment" : "Challenge"}</Badge>
         {pool.settled ? <Badge tone="muted">Settled</Badge> : null}
@@ -402,7 +406,7 @@ function SentChallengeCard({ entry }: { entry: SentChallenge }) {
             ? "Your commitment - lock in your stake"
             : "A reward you put up for a friend"}
       </p>
-      <h3 className="mt-1 text-lg font-semibold leading-snug">
+      <h3 className="mt-1 font-display text-lg font-semibold leading-snug">
         {displayGoalSpec(pool.goalSpec)}
       </h3>
       <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
@@ -420,31 +424,35 @@ function SentChallengeCard({ entry }: { entry: SentChallenge }) {
       </div>
       <Link
         href={`/pools/${id}`}
-        className={`mt-4 w-full rounded-xl border border-edge font-semibold text-foreground hover:border-accent/50 ${TAP_TARGET}`}
+        className={`mt-4 w-full rounded-full border-2 border-edge font-display font-bold text-foreground hover:border-accent/50 ${TAP_TARGET}`}
       >
         View challenge
       </Link>
-    </div>
+    </Card>
   );
 }
 
 /** The two honest ways to start a challenge, side by side. Both land on
- *  /challenge/new with the matching variant preselected. */
+ *  /challenge/new with the matching variant preselected. Emerald for the stake
+ *  you put on yourself; coral for the human act of daring a friend - coral is
+ *  warmth, never a number. */
 function StartChallengeCTAs() {
+  const router = useRouter();
   return (
-    <div className="flex flex-col gap-3 sm:flex-row">
-      <Link
-        href="/challenge/new?v=self"
-        className="inline-block rounded-xl bg-accent-strong px-6 py-3 text-center text-sm font-semibold text-background hover:bg-accent"
+    <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+      <Button
+        pop
+        onClick={() => router.push("/challenge/new?v=self")}
       >
         Stake on yourself
-      </Link>
-      <Link
-        href="/challenge/new?v=dare"
-        className="inline-block rounded-xl border border-accent/40 bg-accent/10 px-6 py-3 text-center text-sm font-semibold text-accent-strong hover:bg-accent/15"
+      </Button>
+      <Button
+        variant="coral"
+        pop
+        onClick={() => router.push("/challenge/new?v=dare")}
       >
         Dare a friend
-      </Link>
+      </Button>
     </div>
   );
 }
@@ -504,7 +512,9 @@ function MyChallengesContent() {
     return (
       <div className="mx-auto max-w-md space-y-4">
         <div className="text-center">
-          <p className="text-lg font-semibold">Sign in to see your challenges</p>
+          <p className="font-display text-lg font-semibold">
+            Sign in to see your challenges
+          </p>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
             The dares aimed at you and the ones you have sent live here once you
             sign in.
@@ -573,7 +583,7 @@ function MyChallengesContent() {
       {invited.length > 0 ? (
         <section className="space-y-4">
           <div>
-            <h2 className="text-lg font-semibold">Invited to you</h2>
+            <h2 className="font-display text-lg font-semibold">Invited to you</h2>
             <p className="mt-1 text-sm text-muted">
               Dares aimed straight at your handle. Accept one, stake the small
               lock-in, and go for the goal - hit it and you collect your lock-in
@@ -593,7 +603,9 @@ function MyChallengesContent() {
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Challenges you&apos;re in</h2>
+          <h2 className="font-display text-lg font-semibold">
+            Challenges you&apos;re in
+          </h2>
           <p className="mt-1 text-sm text-muted">
             Dares a friend aimed at you and you accepted with a lock-in stake.
             Upload your proof and you collect your stake back plus the reward the
@@ -618,7 +630,9 @@ function MyChallengesContent() {
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Challenges you started</h2>
+          <h2 className="font-display text-lg font-semibold">
+            Challenges you started
+          </h2>
           <p className="mt-1 text-sm text-muted">
             Commitments you staked on your own goal, and rewards you put up for a
             friend. Either way you never keep a participant&apos;s stake.
@@ -643,15 +657,13 @@ function MyChallengesContent() {
 export default function ChallengesPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          My challenges
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          The goals you have put real USDC behind - your own commitments, the
-          dares you sent, and the ones aimed at you.
-        </p>
-      </div>
+      <SceneHeader
+        title="My challenges"
+        subtitle="The goals you have put testnet USDC behind - your own commitments, the dares you sent, and the ones aimed at you."
+        pose="spotter-greet.png"
+        poseAlt="SPOTTER the otter waving hello, ready to introduce your dares"
+        spotterLine="Dare a friend, or stake on yourself. I hold the pot either way."
+      />
       {DYNAMIC_CONFIGURED ? (
         <MyChallengesContent />
       ) : (

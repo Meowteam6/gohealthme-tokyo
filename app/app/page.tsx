@@ -1,6 +1,49 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import GoalIntent from "@/components/GoalIntent";
-import { Badge, Money } from "@/components/ui";
+import SpotterSays from "@/components/SpotterSays";
+import { Badge, Button, Card, Money } from "@/components/ui";
+
+// A small emerald "candy" chip that holds a step number or an icon. Kept local
+// to the home surface so the numbered steps and the why-crypto cards share one
+// tactile mark instead of hand-rolling a badge per block.
+function IconChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent/12 font-display text-sm font-bold text-accent-strong">
+      {children}
+    </span>
+  );
+}
+
+// Reasons this has to be crypto, each with its own icon so the wall of text
+// reads as three friendly cards. Stroke icons match the app's 24x24 set.
+const reasons = [
+  {
+    title: "Here now",
+    body: "Dare one friend, fund their goal, they get paid in USDC when they hit it. Verified in a sealed enclave - nobody sees the health data.",
+    icon: <path d="M13 2 4 14h7l-1 8 9-12h-7z" />,
+  },
+  {
+    title: "You vs your goal, nobody else",
+    body: "You put your own USDC up on your own goal and get it back, with a cut of what the no-shows forfeited, the moment you hit it. A sponsor can fund it instead - either way you are never pitted against another person.",
+    icon: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <circle cx="12" cy="12" r="4" />
+      </>
+    ),
+  },
+  {
+    title: "Where it's going",
+    body: "Whole families and communities, across borders and languages, competing to show up for each other. The licensed road ahead.",
+    icon: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3.5 9h17M3.5 15h17M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
+      </>
+    ),
+  },
+];
 
 const steps = [
   {
@@ -20,14 +63,14 @@ const steps = [
 export default function Home() {
   return (
     <div className="flex flex-col gap-14 py-6 sm:py-12">
-      <section className="grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+      <section className="bg-dot-grid grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         {/* Left: the pitch. Every functional control stays; only the layout
             goes asymmetric so SPOTTER gets to share the hero. */}
         <div className="text-center lg:text-left">
-          <p className="text-sm font-semibold uppercase tracking-widest text-accent-strong">
+          <p className="font-display text-sm font-semibold uppercase tracking-widest text-accent-strong">
             Free money with extra steps. The steps are the point.
           </p>
-          <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+          <h1 className="mt-4 font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
             Stake on yourself. Get it back - and then some.
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
@@ -58,15 +101,16 @@ export default function Home() {
             .
           </p>
           <GoalIntent />
-          <div className="mt-6">
-            <Link
-              href="/challenge/new"
-              className="inline-flex items-center gap-2 rounded-xl border border-accent/40 bg-accent/10 px-6 py-3 text-sm font-semibold text-accent-strong hover:bg-accent/15"
-            >
-              or dare a friend and put up a reward
-              <span aria-hidden="true">-&gt;</span>
+          <div className="mt-6 flex flex-col items-center gap-2 lg:items-start">
+            {/* Coral = the human dare, never money. A real CTA, so it wears the
+                shared candy Button instead of a hand-rolled pill. */}
+            <Link href="/challenge/new" className="inline-flex">
+              <Button variant="coral" pop type="button">
+                or dare a friend and put up a reward
+                <span aria-hidden="true">-&gt;</span>
+              </Button>
             </Link>
-            <p className="mt-2 max-w-md text-xs text-muted">
+            <p className="max-w-md text-xs text-muted">
               You fund the reward, they hit the goal, they get paid. They flake,
               you get it back. Their health data stays private the whole way.
             </p>
@@ -99,26 +143,28 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right: Mr Otter and the payout moment. */}
+        {/* Right: SPOTTER introduces itself, out loud, and the payout moment. */}
         <div className="relative mx-auto w-full max-w-sm">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-4 -z-10 rounded-full bg-accent/20 blur-3xl"
           />
-          <div className="otter-float relative overflow-hidden rounded-3xl border border-edge bg-surface shadow-sm">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/spotter/spotter-nature.png"
-              alt="SPOTTER, the GoHealthMe otter, standing on a mossy rock by a sunlit riverbank"
-              className="aspect-square w-full object-cover"
+          <Card pop className="otter-float flex flex-col items-center gap-4 text-center">
+            {/* The otter now talks: a real pose plus a live SPOTTER line,
+                routed through SpotterSays rather than a mute raw <img>. */}
+            <SpotterSays
+              surface="agent-header"
+              state="idle"
+              pose="greet"
+              size="md"
             />
-            <div className="p-5">
-              <p className="text-base font-semibold">Meet SPOTTER</p>
+            <div>
+              <p className="font-display text-base font-bold">Meet SPOTTER</p>
               <p className="mt-1 text-sm text-muted">
                 The agent that holds the money, checks your proof, and pays you.
               </p>
             </div>
-          </div>
+          </Card>
           <div className="absolute -bottom-5 -left-3 flex flex-col gap-0.5 rounded-2xl border border-gold/40 bg-surface px-4 py-3 shadow-md sm:-left-6">
             <span className="text-xs font-medium uppercase tracking-wide text-muted">
               SPOTTER paid you
@@ -130,26 +176,21 @@ export default function Home() {
 
       <section className="grid gap-4 sm:grid-cols-3">
         {steps.map((step, i) => (
-          <div
-            key={step.title}
-            className="rounded-2xl border border-edge bg-surface p-6"
-          >
-            <p className="font-mono text-sm font-bold text-accent">
-              0{i + 1}
-            </p>
-            <h2 className="mt-2 text-lg font-semibold">{step.title}</h2>
+          <Card key={step.title}>
+            <IconChip>0{i + 1}</IconChip>
+            <h2 className="mt-4 font-display text-lg font-bold">{step.title}</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted">
               {step.body}
             </p>
-          </div>
+          </Card>
         ))}
       </section>
 
       <section className="rounded-3xl border border-edge bg-surface-raised p-8 sm:p-10">
-        <p className="text-xs font-semibold uppercase tracking-widest text-accent-strong">
+        <p className="font-display text-xs font-semibold uppercase tracking-widest text-accent-strong">
           Why it has to be crypto
         </p>
-        <h2 className="mt-3 max-w-2xl text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
+        <h2 className="mt-3 max-w-2xl font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
           You can&apos;t Venmo your grandma in another country to go for a walk.
           You can pay her in USDC the second she does.
         </h2>
@@ -160,29 +201,30 @@ export default function Home() {
           money lands the moment they hit it.
         </p>
         <div className="mt-8 grid gap-5 sm:grid-cols-3">
-          <div>
-            <p className="text-sm font-semibold">Here now</p>
-            <p className="mt-1 text-sm leading-relaxed text-muted">
-              Dare one friend, fund their goal, they get paid in USDC when they
-              hit it. Verified in a sealed enclave — nobody sees the health data.
-            </p>
-          </div>
-          <div>
-            <p className="text-sm font-semibold">You vs your goal, nobody else</p>
-            <p className="mt-1 text-sm leading-relaxed text-muted">
-              You put your own USDC up on your own goal and get it back, with a
-              cut of what the no-shows forfeited, the moment you hit it. A sponsor
-              can fund it instead - either way you are never pitted against
-              another person.
-            </p>
-          </div>
-          <div>
-            <p className="text-sm font-semibold">Where it&apos;s going</p>
-            <p className="mt-1 text-sm leading-relaxed text-muted">
-              Whole families and communities, across borders and languages,
-              competing to show up for each other. The licensed road ahead.
-            </p>
-          </div>
+          {reasons.map((reason) => (
+            <Card key={reason.title}>
+              <IconChip>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  {reason.icon}
+                </svg>
+              </IconChip>
+              <p className="mt-4 font-display text-sm font-bold">
+                {reason.title}
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-muted">
+                {reason.body}
+              </p>
+            </Card>
+          ))}
         </div>
         <p className="mt-8 text-xs leading-relaxed text-muted">
           Today it runs on Base Sepolia with play-money USDC while we build. Real

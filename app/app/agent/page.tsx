@@ -3,6 +3,9 @@ import type { Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseAddressUrl } from "@/lib/chains";
 import { optionalEnv } from "@/lib/server/env";
+import { Card } from "@/components/ui";
+import SpotterMascot from "@/components/SpotterMascot";
+import SpotterSays from "@/components/SpotterSays";
 import AgentFeed from "./AgentFeed";
 
 export const metadata: Metadata = {
@@ -42,67 +45,77 @@ export default function AgentPage() {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-2xl border border-edge bg-surface p-6">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted">
+      <Card pop className="bg-dot-grid">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 flex-1 space-y-4">
+            <p className="font-display text-xs font-bold uppercase tracking-widest text-accent-strong">
               SPOTTER — settlement agent
             </p>
+            <h1 className="font-display text-2xl font-bold leading-tight sm:text-3xl">
+              The otter runs the money.
+            </h1>
             {address !== null ? (
               <>
-                <p className="mt-4 break-all font-mono text-2xl font-semibold leading-tight sm:text-3xl">
-                  {address}
-                </p>
-                <div className="mt-4 flex flex-wrap items-center gap-4">
-                  <span className="text-xs uppercase tracking-wide text-muted">
-                    Base Sepolia · chain id 84532
-                  </span>
-                  <a
-                    href={baseAddressUrl(address)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-accent underline"
-                  >
-                    View on Basescan
-                  </a>
+                {/* The hex address is real and worth showing, but it is no
+                 *  longer the hero: demoted to a tactile mono chip under a
+                 *  friendly label so SPOTTER is who greets you, not the key. */}
+                <div className="space-y-2">
+                  <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
+                    SPOTTER&apos;s wallet
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="inline-flex max-w-full items-center break-all rounded-full border-2 border-edge bg-secondary px-3 py-1 font-mono text-xs text-secondary-foreground">
+                      {address}
+                    </span>
+                    <a
+                      href={baseAddressUrl(address)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-accent underline"
+                    >
+                      View on Basescan
+                    </a>
+                  </div>
+                  {/* Testnet play-money disclosure stays visible, but in plain
+                   *  words instead of a chain id - tan, never gold. */}
+                  <p className="inline-flex items-center rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
+                    Base testnet · test USDC, not real money yet
+                  </p>
                 </div>
-                {/* Precise about whose money moves. settle() pays achievers out
-                 *  of the pool balance held by HealthPools - the reward is the
-                 *  sponsor's USDC leaving the pool, never this wallet's. This
-                 *  wallet signs the settlement and covers the gas; nobody signs
-                 *  it by hand. */}
-                <p className="mt-4 text-sm text-muted">
-                  SPOTTER settles payouts on Base. The moment a goal is verified
-                  it signs the settle() that releases each pool&apos;s USDC to
-                  the achievers - the reward is the pool&apos;s own funds leaving
-                  the pool, and this wallet covers the gas, not the payout.
-                  Nobody signs it by hand.
+                {/* Precise about whose money moves, in friendly words: no
+                 *  settle(), no chain id. The reward is the sponsor's USDC
+                 *  leaving the pool, never this wallet's; SPOTTER only covers
+                 *  the network fee, and nobody signs it by hand. */}
+                <p className="text-sm leading-relaxed text-muted">
+                  The moment a goal is verified, SPOTTER releases each
+                  pool&apos;s USDC straight to the people who hit it - no human
+                  ever taps a button. The reward is the sponsor&apos;s money
+                  leaving the pool; SPOTTER just covers the tiny network fee to
+                  send it.
                 </p>
               </>
             ) : (
-              <p className="mt-4 text-sm text-muted">
+              <p className="text-sm leading-relaxed text-muted">
                 SPOTTER is GoHealthMe&apos;s settlement agent. The moment a goal
-                is verified it releases each pool&apos;s USDC to the achievers,
-                so payouts happen without anyone signing off by hand. Automatic
-                settlement is not live on this deployment yet.
+                is verified it releases each pool&apos;s USDC to the people who
+                hit it, so payouts happen without anyone signing off by hand.
+                Automatic payouts are not switched on for this deployment yet.
               </p>
             )}
           </div>
-          <div className="shrink-0 self-center sm:self-start">
-            <div className="otter-float w-36 overflow-hidden rounded-2xl border border-edge bg-surface-raised sm:w-44">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/spotter/spotter-watching.png"
-                alt="SPOTTER, the otter, watching the ledger"
-                className="aspect-square w-full object-cover"
-              />
-            </div>
-            <p className="mt-2 text-center text-xs uppercase tracking-wide text-muted">
-              {configured ? "on the clock" : "standing by"}
-            </p>
-          </div>
+          <SpotterMascot
+            pose="watching"
+            caption="SPOTTER"
+            sublabel={configured ? "on the clock" : "standing by"}
+            size="md"
+            className="self-center sm:self-start"
+          />
         </div>
-      </section>
+        {/* SPOTTER speaks for himself - the deadpan agent-header line. */}
+        <div className="mt-6">
+          <SpotterSays surface="agent-header" state="idle" size="md" />
+        </div>
+      </Card>
 
       <AgentFeed />
     </div>

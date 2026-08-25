@@ -19,7 +19,14 @@ import { useQuery } from "@tanstack/react-query";
 import JoinPool from "@/components/JoinPool";
 import { fetchParticipant, fetchPool, formatUsdc } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { Money, Skeleton, TAP_TARGET } from "@/components/ui";
+import { Money, Skeleton } from "@/components/ui";
+
+// A full-width Next Link dressed as the shared candy control. Emerald-tinted
+// once you are in (the go-get-paid onward step), tan and secondary before that
+// (the quieter "see the whole thing" read). Button is a <button> and cannot be
+// a Link, so its look is matched here.
+const ONWARD_BASE =
+  "flex min-h-11 w-full items-center justify-center rounded-full border-2 px-5 py-3 font-display text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 export default function ChallengeAccept({ poolId }: { poolId: string }) {
   const { address } = useEmbeddedWallet();
@@ -91,7 +98,11 @@ export default function ChallengeAccept({ poolId }: { poolId: string }) {
 
       <Link
         href={`/pools/${poolId}`}
-        className={`w-full rounded-xl border border-accent/40 bg-accent-deep/30 font-semibold text-accent hover:bg-accent-deep/50 ${TAP_TARGET}`}
+        className={`${ONWARD_BASE} ${
+          joined
+            ? "border-accent bg-accent-deep/10 text-accent-strong hover:bg-accent-deep/20"
+            : "border-edge bg-secondary text-secondary-foreground hover:border-accent/50"
+        }`}
       >
         {joined ? "Upload your proof and get paid" : "See the full challenge"}
       </Link>

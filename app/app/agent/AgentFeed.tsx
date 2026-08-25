@@ -38,7 +38,7 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
       : null;
 
   return (
-    <li className="rounded-xl border border-edge bg-surface-raised p-4">
+    <li className="rounded-3xl border border-edge bg-surface-raised p-4 sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="flex flex-wrap items-center gap-2 font-mono text-xs text-muted">
           {shortGoal(claim.goalId)}
@@ -92,7 +92,7 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
                 rel="noopener noreferrer"
                 className="text-xs text-accent underline"
               >
-                settle tx
+                payout tx
               </a>
             ) : null}
           </p>
@@ -119,7 +119,7 @@ export default function AgentFeed() {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold">Recent claims</h2>
+      <h2 className="font-display text-lg font-bold">Recent claims</h2>
       {feed.isPending ? (
         <Skeleton className="h-24 w-full" />
       ) : feed.data !== undefined && feed.data.length > 0 ? (
@@ -130,14 +130,14 @@ export default function AgentFeed() {
         </ol>
       ) : (
         <div className="space-y-4">
-          <SpotterSays surface="agent-empty" state="empty" />
+          <SpotterSays surface="agent-empty" state="empty" size="md" />
           <EmptyState
             title="SPOTTER has done nothing yet."
             detail="Join a pool, upload a record, and SPOTTER buys the verification and pays out here."
             action={
               <Link
                 href={`/pools/${CLAIMABLE_POOL_ID}`}
-                className="inline-flex min-h-11 items-center rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 Give it something to verify
               </Link>

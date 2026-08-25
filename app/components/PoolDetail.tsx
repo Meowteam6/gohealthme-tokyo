@@ -10,8 +10,11 @@ import ChallengeContribute from "@/components/ChallengeContribute";
 import EvidenceUpload from "@/components/EvidenceUpload";
 import WearableCheck from "@/components/WearableCheck";
 import ClaimRail, { type ClaimRailState, type VerdictKind } from "@/components/ClaimRail";
+import SpotterSays from "@/components/SpotterSays";
+import SpotterMascot from "@/components/SpotterMascot";
 import {
   Badge,
+  Card,
   ErrorNote,
   Money,
   ProofTierBadges,
@@ -70,7 +73,7 @@ function BrowsePoolsLink({ label = "Browse live pools" }: { label?: string }) {
   return (
     <Link
       href="/pools"
-      className={`mt-4 rounded-xl bg-accent-strong font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
+      className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       {label}
     </Link>
@@ -290,7 +293,7 @@ export default function PoolDetail({ id }: { id: string }) {
         detail={
           poolQuery.error instanceof Error
             ? poolQuery.error.message
-            : "Unknown error reading from Base Sepolia."
+            : "We could not reach the network just now. Give it another try."
         }
         onRetry={() => {
           void poolQuery.refetch();
@@ -327,7 +330,8 @@ export default function PoolDetail({ id }: { id: string }) {
     }
     return (
       <div className="mx-auto max-w-md py-12 text-center">
-        <h1 className="text-2xl font-bold tracking-tight">
+        <SpotterMascot pose="watching" size="md" className="mx-auto" />
+        <h1 className="mt-4 font-display text-2xl font-bold tracking-tight">
           This is a private challenge
         </h1>
         <p className="mt-3 text-sm text-muted">
@@ -430,21 +434,18 @@ export default function PoolDetail({ id }: { id: string }) {
   const claimSection = !joined ? null : (
     <>
       {agentBroke ? (
-        <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
-          <p className="text-base font-semibold text-warning">
-            SPOTTER is out of budget
-          </p>
-          <p className="mt-1 text-sm text-foreground/80">
-            The agent buys every verification from its own wallet, and that
-            wallet reads 0.00 USDC. A check started now stops at the buy step
-            and nobody gets paid. Nothing you did - come back once it is topped
-            up.
+        <div className="rounded-3xl border border-warning/40 bg-warning/10 p-4 sm:p-5">
+          <SpotterSays surface="agent-header" state="broke" size="sm" />
+          <p className="mt-3 text-sm text-foreground/80">
+            I buy every verification from my own wallet, and right now it is
+            empty. A check started now stops at the buy step and nobody gets
+            paid. Nothing you did - come back once I am topped up.
           </p>
           <Link
             href="/agent"
-            className={`mt-3 rounded-xl border border-warning/50 text-warning hover:bg-warning/10 ${TAP_TARGET}`}
+            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border-2 border-warning/50 px-5 py-2.5 font-display text-sm font-bold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            See SPOTTER&apos;s wallet
+            See my wallet
           </Link>
         </div>
       ) : null}
@@ -467,8 +468,9 @@ export default function PoolDetail({ id }: { id: string }) {
               <button
                 key={m}
                 type="button"
+                aria-pressed={selected}
                 onClick={() => choosePath(m)}
-                className={`rounded-xl border ${TAP_TARGET} ${tone}`}
+                className={`rounded-full border-2 font-display font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${TAP_TARGET} ${tone}`}
               >
                 {label}
               </button>
@@ -478,7 +480,7 @@ export default function PoolDetail({ id }: { id: string }) {
       ) : null}
       <section
         id="proof-upload"
-        className="rounded-2xl border border-accent/40 bg-surface p-5"
+        className="rounded-3xl border border-accent/40 bg-surface p-5 sm:p-6"
       >
         {claimPathPending ? (
           <div className="space-y-3">
@@ -547,7 +549,7 @@ export default function PoolDetail({ id }: { id: string }) {
             Preventive care - Earn from a {formatUsdc(pool.balance)} USDC bounty
           </p>
         ) : null}
-        <h1 className="mt-3 text-2xl font-bold leading-tight sm:text-3xl">
+        <h1 className="mt-3 font-display text-2xl font-bold leading-tight sm:text-3xl">
           {goalTitle}
         </h1>
         {/* A self-staked commitment pool (model 2) has no funder - every
@@ -586,6 +588,11 @@ export default function PoolDetail({ id }: { id: string }) {
             </a>
           </p>
         )}
+        {phase === "live" ? (
+          <div className="mt-5">
+            <SpotterSays surface="pools-header" state="idle" size="md" />
+          </div>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -617,37 +624,55 @@ export default function PoolDetail({ id }: { id: string }) {
 
       {phase === "live" ? (
         <div className="space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+          <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
             Participant actions
           </p>
           {!canPay ? (
-            <section className="rounded-2xl border border-warning/40 bg-warning/10 p-5">
-              <h2 className="text-lg font-semibold text-warning">
-                This pool cannot pay out
-              </h2>
-              <p className="mt-1 text-sm text-foreground/80">
-                It was created with no bounty per achiever, so even a verified
-                claim settles to zero USDC. We are not offering to join or
-                upload here - it would pass verification and pay you nothing.
-              </p>
-              <BrowsePoolsLink label="Find a pool that can pay" />
+            <section className="rounded-3xl border border-warning/40 bg-warning/10 p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <SpotterMascot
+                  pose="watching"
+                  size="sm"
+                  className="mx-auto sm:mx-0"
+                />
+                <div className="min-w-0">
+                  <h2 className="font-display text-lg font-semibold text-warning">
+                    This pool cannot pay out
+                  </h2>
+                  <p className="mt-1 text-sm text-foreground/80">
+                    It was set up with no reward per achiever, so even a verified
+                    claim would land you zero. I am not going to let you join or
+                    upload here - you would pass and still walk away with nothing.
+                  </p>
+                  <BrowsePoolsLink label="Find a pool that can pay" />
+                </div>
+              </div>
             </section>
           ) : unverifiableNow && !joined ? (
-            <section className="rounded-2xl border border-warning/40 bg-warning/10 p-5">
-              <h2 className="text-lg font-semibold text-warning">
-                This goal cannot be verified right now
-              </h2>
-              <p className="mt-1 text-sm text-foreground/80">{providerDown}</p>
-              <p className="mt-2 text-sm text-foreground/80">
-                The {formatUsdc(pool.entryFee)} USDC entry fee is real money and
-                joining will not be offered while SPOTTER has no way to check
-                the goal. Document-verified pools are unaffected.
-              </p>
-              <BrowsePoolsLink label="Find a pool that can pay" />
+            <section className="rounded-3xl border border-warning/40 bg-warning/10 p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <SpotterMascot
+                  pose="watching"
+                  size="sm"
+                  className="mx-auto sm:mx-0"
+                />
+                <div className="min-w-0">
+                  <h2 className="font-display text-lg font-semibold text-warning">
+                    I cannot check this goal right now
+                  </h2>
+                  <p className="mt-1 text-sm text-foreground/80">{providerDown}</p>
+                  <p className="mt-2 text-sm text-foreground/80">
+                    The {formatUsdc(pool.entryFee)} USDC entry fee is real money,
+                    so I am not going to sell you a spot while I have no way to
+                    read the goal. Document-verified pools are unaffected.
+                  </p>
+                  <BrowsePoolsLink label="Find a pool that can pay" />
+                </div>
+              </div>
             </section>
           ) : (
-            <section className="rounded-2xl border border-edge bg-surface p-5">
-              <h2 className="text-lg font-semibold">Join this pool</h2>
+            <Card pop>
+              <h2 className="font-display text-lg font-semibold">Join this pool</h2>
               <p className="mb-4 mt-1 text-sm text-muted">
                 {pool.bountyModel === 2
                   ? `Stake the ${formatUsdc(pool.entryFee)} USDC entry, hit the goal during the period, and your stake comes back plus a share of what everyone who didn't show up left behind.`
@@ -665,35 +690,46 @@ export default function PoolDetail({ id }: { id: string }) {
                 entryFee={pool.entryFee}
                 alreadyJoined={joined}
               />
-            </section>
+            </Card>
           )}
 
           {canPay ? claimSection : null}
         </div>
       ) : phase === "expired" ? (
         <div className="space-y-4">
-          <section className="rounded-2xl border border-edge bg-surface p-5">
-            <h2 className="text-lg font-semibold">This pool has ended</h2>
-            <p className="mt-1 text-sm text-muted">
-              The goal window closed on {formatDay(pool.periodEnd)}, so joining
-              is closed. SPOTTER settles the payouts for verified achievers now
-              that the period is over.
-            </p>
-            {!joined ? (
-              <>
-                <p className="mt-2 text-sm text-muted">
-                  {participantCount === 0
-                    ? "Nobody joined this one, so there is nothing here to settle."
-                    : "You are not in this pool, so nothing here settles for you."}
+          <Card>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+              <SpotterMascot
+                pose="nature"
+                size="sm"
+                className="mx-auto sm:mx-0"
+              />
+              <div className="min-w-0">
+                <h2 className="font-display text-lg font-semibold">
+                  This pool has ended
+                </h2>
+                <p className="mt-1 text-sm text-muted">
+                  The goal window closed on {formatDay(pool.periodEnd)}, so
+                  joining is closed. I pay out the verified achievers now that
+                  the period is over.
                 </p>
-                <BrowsePoolsLink />
-              </>
-            ) : null}
-          </section>
+                {!joined ? (
+                  <>
+                    <p className="mt-2 text-sm text-muted">
+                      {participantCount === 0
+                        ? "Nobody joined this one, so there is nothing here for me to pay."
+                        : "You are not in this pool, so nothing here pays out for you."}
+                    </p>
+                    <BrowsePoolsLink />
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </Card>
 
           {joined ? (
             <>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
                 Your claim
               </p>
               {claimSection}
@@ -701,14 +737,25 @@ export default function PoolDetail({ id }: { id: string }) {
           ) : null}
         </div>
       ) : (
-        <section className="rounded-2xl border border-edge bg-surface p-5">
-          <h2 className="text-lg font-semibold">This pool has settled</h2>
-          <p className="mt-1 text-sm text-muted">
-            Bounties were paid to verified achievers. Nothing more happens on
-            this pool - the next payout is on a pool that is still open.
-          </p>
-          <BrowsePoolsLink />
-        </section>
+        <Card>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <SpotterMascot
+              pose="nature"
+              size="sm"
+              className="mx-auto sm:mx-0"
+            />
+            <div className="min-w-0">
+              <h2 className="font-display text-lg font-semibold">
+                This pool has settled
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                I paid the verified achievers. Nothing more happens on this pool
+                - the next payout is on a pool that is still open.
+              </p>
+              <BrowsePoolsLink />
+            </div>
+          </div>
+        </Card>
       )}
 
       {phase !== "settled" && canPay ? (
@@ -721,12 +768,12 @@ export default function PoolDetail({ id }: { id: string }) {
           <ChallengeContribute poolId={pool.id} potUsd={formatUsdc(pool.balance)} />
         ) : (
           <div className="space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
               Sponsor action
             </p>
-            <section className="rounded-2xl border border-edge bg-surface p-5">
+            <Card>
               <FundPool poolId={pool.id} />
-            </section>
+            </Card>
           </div>
         )
       ) : null}

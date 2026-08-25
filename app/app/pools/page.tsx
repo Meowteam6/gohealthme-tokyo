@@ -21,6 +21,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import PoolCard from "@/components/PoolCard";
 import SceneHeader from "@/components/SceneHeader";
+import SpotterSays from "@/components/SpotterSays";
 import {
   Badge,
   EmptyState,
@@ -205,15 +206,25 @@ export default function PoolsPage() {
       ) : (
         <div className="space-y-8">
           <section className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
               Live, open to join
             </p>
             {liveSplit.verifiable.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-accent/30 bg-accent-deep/20 p-3 text-sm text-accent">
-                {grouped.live.length === 0
-                  ? "No live pools right now. Create one and put a goal on the board."
-                  : "Every live pool right now is a wearable goal, and none of them can be verified until the provider is back. Create a document-verified pool and put a goal on the board."}
-              </p>
+              grouped.live.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-edge bg-surface/50 px-5 py-8">
+                  <SpotterSays surface="pools-empty" state="empty" size="md" />
+                  <p className="mt-3 text-sm text-muted">
+                    Nobody has staked a goal yet. Create one and put it on the
+                    board.
+                  </p>
+                </div>
+              ) : (
+                <p className="rounded-2xl border border-warning/40 bg-warning/10 p-3 text-sm text-foreground/80">
+                  Every live pool right now is a wearable goal, and SPOTTER
+                  can&apos;t check those until the provider is back. Create a
+                  document-verified pool and put a goal on the board.
+                </p>
+              )
             ) : (
               <PoolGrid pools={liveSplit.verifiable} phase="live" />
             )}
@@ -221,7 +232,7 @@ export default function PoolsPage() {
 
           {providerDown !== null && liveSplit.unverifiable.length > 0 ? (
             <section className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-warning">
+              <p className="font-display text-xs font-semibold uppercase tracking-wide text-warning">
                 Wearable goals - not joinable right now
               </p>
               <p className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-foreground/80">
@@ -240,7 +251,7 @@ export default function PoolsPage() {
 
           {expiredSplit.awaitingSettlement.length > 0 ? (
             <section className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
                 Ended, awaiting settlement
               </p>
               <PoolGrid
@@ -252,13 +263,13 @@ export default function PoolsPage() {
 
           {expiredSplit.closedEmpty.length > 0 ? (
             <section className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
                 Closed, nobody joined
               </p>
               <p className="text-sm text-muted">
-                Their period ended with no participants on record. settle() has
-                nobody to pay in these, so nothing is pending - they stay here
-                as history.
+                Their window closed with nobody signed up, so there is no one
+                for SPOTTER to pay. Nothing is pending here - they just sit on
+                the riverbank as history.
               </p>
               <PoolGrid pools={expiredSplit.closedEmpty} phase="expired" />
             </section>
@@ -266,7 +277,7 @@ export default function PoolsPage() {
 
           {grouped.settled.length > 0 ? (
             <section className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
                 Settled
               </p>
               <PoolGrid pools={grouped.settled} phase="settled" />

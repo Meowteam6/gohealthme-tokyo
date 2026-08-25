@@ -26,7 +26,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import BalanceCard from "@/components/BalanceCard";
 import Countdown from "@/components/Countdown";
 import SignInPanel from "@/components/SignInPanel";
-import { Badge, EmptyState, ErrorNote, Skeleton, TAP_TARGET } from "@/components/ui";
+import SpotterSays from "@/components/SpotterSays";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorNote,
+  Skeleton,
+} from "@/components/ui";
 import {
   displayGoalSpec,
   evidenceTypeOf,
@@ -144,8 +152,10 @@ function ConnectButton({
 
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant={secondary ? "secondary" : "primary"}
+        pop
         disabled={opening}
         onClick={() => {
           setError(null);
@@ -168,14 +178,10 @@ function ConnectButton({
             })
             .finally(() => setOpening(false));
         }}
-        className={`mt-3 rounded-xl font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${TAP_TARGET} ${
-          secondary
-            ? "border border-edge text-foreground hover:border-accent/50"
-            : "bg-accent-strong text-background hover:bg-accent"
-        }`}
+        className="mt-3"
       >
         {opening ? "Opening the connect flow" : label}
-      </button>
+      </Button>
       {error !== null ? (
         <div className="mt-3">
           <ErrorNote
@@ -191,7 +197,7 @@ function ConnectButton({
             href={fallbackUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={`inline-flex items-center justify-center rounded-xl bg-accent-strong px-5 font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
+            className={`inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
           >
             Open the wearable connect page
           </a>
@@ -237,8 +243,8 @@ function StreakCard({
   };
 
   return (
-    <section className="rounded-2xl border border-edge bg-surface p-5">
-      <h2 className="text-lg font-semibold">Streak progress</h2>
+    <Card pop className="bg-dot-grid">
+      <h2 className="font-display text-lg font-semibold">Streak progress</h2>
       {healthQuery.isLoading ? (
         <div className="mt-3 space-y-2">
           <Skeleton className="h-8 w-40" />
@@ -255,7 +261,7 @@ function StreakCard({
           </p>
           <Link
             href="/pools"
-            className={`mt-3 rounded-xl border border-edge font-semibold text-foreground hover:border-accent/50 ${TAP_TARGET}`}
+            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border-2 border-edge bg-secondary px-5 py-2.5 font-display text-sm font-bold text-secondary-foreground transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Find a goal you can still prove
           </Link>
@@ -267,13 +273,9 @@ function StreakCard({
           <p className="mt-3 rounded-xl border border-accent/40 bg-accent-deep/20 p-4 text-sm text-foreground/80">
             {authReason}
           </p>
-          <button
-            type="button"
-            onClick={unlock}
-            className={`mt-3 rounded-xl bg-accent-strong font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
-          >
+          <Button type="button" pop onClick={unlock} className="mt-3">
             Sign and show my streak
-          </button>
+          </Button>
         </>
       ) : !providerConnected(state) ? (
         <>
@@ -285,9 +287,25 @@ function StreakCard({
         </>
       ) : (
         <div className="mt-3">
-          <p className="text-3xl font-bold text-accent">
+          {/* The streak count is the dashboard's one hero moment, so SPOTTER
+           *  speaks to it. An active streak gets a cheering, dry nudge; a count
+           *  of zero has nothing to celebrate yet, so the bubble stays a dry
+           *  empty-state line - never a loud one, which is reserved for a
+           *  verified payout. */}
+          <div className="mb-3">
+            {(progress?.streakDays ?? 0) > 0 ? (
+              <SpotterSays
+                surface="dashboard-header"
+                state="streak-nudge"
+                pose="cheer"
+              />
+            ) : (
+              <SpotterSays surface="dashboard-empty" state="empty" />
+            )}
+          </div>
+          <p className="font-display text-4xl font-bold text-accent">
             {progress?.streakDays ?? 0}
-            <span className="text-lg font-semibold text-foreground">
+            <span className="font-display text-lg font-semibold text-foreground">
               {progress?.targetDays !== null && progress?.targetDays !== undefined
                 ? ` of ${progress.targetDays} days`
                 : " days"}
@@ -306,7 +324,7 @@ function StreakCard({
           />
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -375,15 +393,15 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
   }
 
   return (
-    <section className="rounded-2xl border border-edge bg-surface p-5">
-      <h2 className="text-lg font-semibold">Latest synced data</h2>
+    <Card>
+      <h2 className="font-display text-lg font-semibold">Latest synced data</h2>
       <p className="mt-1 text-sm text-muted">
         Pulled live from your linked provider via Junction.
       </p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {data.sleep.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-muted">Sleep</h3>
+            <h3 className="font-display text-sm font-semibold text-muted">Sleep</h3>
             <ul className="mt-2 space-y-1 text-sm">
               {data.sleep.slice(0, 7).map((d) => (
                 <li key={`s-${d.date}`} className="flex justify-between">
@@ -399,7 +417,7 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
         )}
         {data.activity.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-muted">Steps</h3>
+            <h3 className="font-display text-sm font-semibold text-muted">Steps</h3>
             <ul className="mt-2 space-y-1 text-sm">
               {data.activity.slice(0, 7).map((d) => (
                 <li key={`a-${d.date}`} className="flex justify-between">
@@ -413,7 +431,7 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
           </div>
         )}
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -491,7 +509,9 @@ export default function DashboardContent() {
     return (
       <div className="mx-auto max-w-md space-y-4">
         <div className="text-center">
-          <p className="text-lg font-semibold">Sign in to see your goals</p>
+          <p className="font-display text-lg font-semibold">
+            Sign in to see your goals
+          </p>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
             Your joined pools, streak progress, and payouts live here once you
             sign in.
@@ -510,7 +530,7 @@ export default function DashboardContent() {
   return (
     <div className="space-y-6">
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Joined pools</h2>
+        <h2 className="font-display text-lg font-semibold">Joined pools</h2>
         {joinedQuery.isLoading ? (
           <div className="space-y-3">
             <Skeleton className="h-28" />
@@ -535,7 +555,7 @@ export default function DashboardContent() {
             action={
               <Link
                 href="/pools"
-                className="inline-block rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
+                className="inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-6 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 Browse pools
               </Link>
@@ -550,13 +570,13 @@ export default function DashboardContent() {
               <Link
                 key={pool.id.toString()}
                 href={`/pools/${pool.id.toString()}`}
-                className="block rounded-2xl border border-edge bg-surface p-5 transition-colors hover:border-accent/50"
+                className="block rounded-3xl border border-edge bg-surface p-5 transition-colors hover:border-accent/50 sm:p-6"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Badge>{pool.initiative}</Badge>
                   <Badge tone={result.tone}>{result.text}</Badge>
                 </div>
-                <h3 className="mt-3 text-lg font-semibold leading-snug">
+                <h3 className="mt-3 font-display text-lg font-semibold leading-snug">
                   {displayGoalSpec(pool.goalSpec)}
                 </h3>
                 <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted">

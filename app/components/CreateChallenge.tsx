@@ -56,7 +56,8 @@ import {
   MESSAGE_MAX,
   TARGET_HANDLE_MAX,
 } from "@/lib/challenges";
-import { ArcTxLink, ErrorNote, Money } from "@/components/ui";
+import { ArcTxLink, Button, Card, Chip, ErrorNote, Money } from "@/components/ui";
+import SpotterSays from "@/components/SpotterSays";
 
 const DURATION_OPTIONS: { label: string; days: number }[] = [
   { label: "1 week", days: 7 },
@@ -64,7 +65,23 @@ const DURATION_OPTIONS: { label: string; days: number }[] = [
   { label: "30 days", days: 30 },
 ];
 
+// Quick-pick amounts, so the common stakes are one tap. Match the placeholders
+// below (a small friend lock-in, a heavier self-stake, a mid-size reward). The
+// text input stays for any custom amount - the chips are shortcuts, not a cap.
+const SELF_STAKE_PRESETS = ["10", "25", "50"];
+const DARE_LOCKIN_PRESETS = ["3", "5", "10"];
+const REWARD_PRESETS = ["25", "50", "100"];
+
 const SECONDS_PER_DAY = 86_400;
+
+// A Next Link dressed as the shared candy Button. Button is a <button> and
+// cannot be a Link, so the post-create navigation matches its look here rather
+// than hand-rolling a one-off style: emerald pop for the go-do-it action, a
+// tan-filled secondary for the quieter "start another".
+const CANDY_LINK_PRIMARY =
+  "inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-3 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const CANDY_LINK_SECONDARY =
+  "inline-flex min-h-11 items-center justify-center rounded-full border-2 border-edge bg-secondary px-5 py-2.5 font-display text-sm font-bold text-secondary-foreground transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 const CHALLENGE_INITIATIVE = "challenge";
 // Both variants are commitment pools (bountyModel 2). See the compliance-lane
@@ -174,6 +191,12 @@ function CreateChallengeInner() {
   }, []);
 
   const isDare = variant === "dare";
+
+  // SPOTTER perks up the moment there is real money on the line. A lightweight
+  // numeric read (never parseUsdc, which throws on a half-typed amount) so a
+  // bad keystroke just leaves him lounging. He never says the number - only his
+  // pose reacts; the amount lives in the input and the Money slot.
+  const stakeEntered = stake.trim() !== "" && Number(stake) > 0;
 
   const clearForm = () => {
     reset();
@@ -410,8 +433,8 @@ function CreateChallengeInner() {
   if (phase.kind === "selfDone") {
     return (
       <div className="space-y-5">
-        <div className="space-y-2 rounded-2xl border border-accent/40 bg-accent-deep/40 p-5">
-          <p className="text-base font-semibold text-accent">
+        <Card pop className="space-y-2 border-accent/40">
+          <p className="font-display text-lg font-bold text-accent-strong">
             Your commitment is live. One tap to lock it in.
           </p>
           <p className="text-sm text-foreground/80">
@@ -419,19 +442,18 @@ function CreateChallengeInner() {
             Put up your <Money usd={stake.trim()} /> and you are in: hit the goal
             and it comes back with a cut of what everyone who flaked forfeited.
           </p>
-        </div>
+        </Card>
+
+        <SpotterSays surface="join" state="joined" pose="cheer" size="md" />
 
         <div className="flex flex-wrap gap-3">
-          <Link
-            href={`/pools/${phase.poolId}`}
-            className="rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
-          >
+          <Link href={`/pools/${phase.poolId}`} className={CANDY_LINK_PRIMARY}>
             Stake to lock in and invite friends
           </Link>
           <button
             type="button"
             onClick={clearForm}
-            className="rounded-xl border border-edge px-5 py-3 text-sm font-medium text-muted hover:text-foreground"
+            className={CANDY_LINK_SECONDARY}
           >
             Start another
           </button>
@@ -447,8 +469,8 @@ function CreateChallengeInner() {
   if (phase.kind === "dareDone") {
     return (
       <div className="space-y-5">
-        <div className="space-y-2 rounded-2xl border border-accent/40 bg-accent-deep/40 p-5">
-          <p className="text-base font-semibold text-accent">
+        <Card pop className="space-y-2 border-accent/40">
+          <p className="font-display text-lg font-bold text-accent-strong">
             Dare sent. The reward is on the line.
           </p>
           {address !== null ? (
@@ -462,10 +484,10 @@ function CreateChallengeInner() {
             collect their lock-in back plus your reward, the moment it is
             verified.
           </p>
-        </div>
+        </Card>
 
         <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+          <p className="font-display text-xs font-bold uppercase tracking-wide text-muted">
             Send it to them
           </p>
           {/* Web Share / Text / Email, prefilled with the dare, reward and
@@ -486,16 +508,13 @@ function CreateChallengeInner() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Link
-            href={`/pools/${phase.poolId}`}
-            className="rounded-xl border border-edge px-5 py-3 text-sm font-medium text-muted hover:text-foreground"
-          >
+          <Link href={`/pools/${phase.poolId}`} className={CANDY_LINK_SECONDARY}>
             View the pool
           </Link>
           <button
             type="button"
             onClick={clearForm}
-            className="rounded-xl border border-edge px-5 py-3 text-sm font-medium text-muted hover:text-foreground"
+            className={CANDY_LINK_SECONDARY}
           >
             Send another
           </button>
@@ -522,19 +541,25 @@ function CreateChallengeInner() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+      <Card pop className="bg-dot-grid">
+        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
           Start a challenge
         </h1>
-        <p className="mt-2 text-sm text-muted">
+        <p className="mt-2 max-w-md text-sm text-muted">
           Put real USDC behind a goal - yours or a friend&apos;s. Nobody ever
           sees the health data, only the verdict.
         </p>
-      </div>
+        {/* Honest, always visible: this is testnet play-money. Tan sticker, not
+            gold - gold is reserved for money actually in motion. */}
+        <span className="mt-3 inline-flex items-center rounded-full border-2 border-edge bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground">
+          Testnet demo · play-money USDC, no real value
+        </span>
+      </Card>
 
       {/* The one clear choice. Both build a commitment pool; the difference is
-          whose goal it is and whether you seed a reward. */}
-      <div className="grid gap-2 sm:grid-cols-2">
+          whose goal it is and whether you seed a reward. Candy tiles: emerald
+          pop for staking on yourself, coral pop for a human dare. */}
+      <div className="grid gap-3 sm:grid-cols-2">
         <button
           type="button"
           onClick={() => {
@@ -542,13 +567,13 @@ function CreateChallengeInner() {
             setFormError(null);
           }}
           aria-pressed={!isDare}
-          className={`rounded-2xl border p-4 text-left ${
+          className={`rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
             !isDare
-              ? "border-accent/60 bg-accent-deep/40"
-              : "border-edge bg-surface hover:border-accent/40"
+              ? "border-accent bg-accent-deep/10 shadow-[var(--shadow-pop)]"
+              : "border-edge bg-surface shadow-[var(--shadow-pop-edge)] hover:border-accent/40"
           }`}
         >
-          <p className="text-sm font-semibold">Stake on yourself</p>
+          <p className="font-display text-base font-bold">Stake on yourself</p>
           <p className="mt-1 text-xs text-muted">
             Your USDC on your own goal. Hit it, get it back plus a cut of the
             forfeits.
@@ -561,13 +586,13 @@ function CreateChallengeInner() {
             setFormError(null);
           }}
           aria-pressed={isDare}
-          className={`rounded-2xl border p-4 text-left ${
+          className={`rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
             isDare
-              ? "border-accent/60 bg-accent-deep/40"
-              : "border-edge bg-surface hover:border-accent/40"
+              ? "border-[color:var(--coral-strong)] bg-secondary shadow-[var(--shadow-pop-coral)]"
+              : "border-edge bg-surface shadow-[var(--shadow-pop-edge)] hover:border-accent/40"
           }`}
         >
-          <p className="text-sm font-semibold">Dare a friend</p>
+          <p className="font-display text-base font-bold">Dare a friend</p>
           <p className="mt-1 text-xs text-muted">
             You put up a reward. They stake a small lock-in, hit it, and collect
             both.
@@ -575,7 +600,7 @@ function CreateChallengeInner() {
         </button>
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-edge bg-surface p-5">
+      <Card className="space-y-4">
         <p className="text-sm leading-relaxed text-muted">
           {isDare ? (
             <>
@@ -627,39 +652,67 @@ function CreateChallengeInner() {
         </label>
 
         {isDare ? (
-          <label className="block text-sm font-medium">
-            The reward you put up (USDC)
+          <div className="text-sm font-medium">
+            <span className="block">The reward you put up (USDC)</span>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {REWARD_PRESETS.map((amt) => (
+                <Chip
+                  key={amt}
+                  selected={reward.trim() === amt}
+                  onClick={() => setReward(amt)}
+                >
+                  {amt}
+                </Chip>
+              ))}
+            </div>
             <input
               type="text"
               inputMode="decimal"
-              placeholder="50.00"
+              aria-label="The reward you put up in USDC"
+              placeholder="Custom amount, e.g. 50.00"
               value={reward}
               onChange={(e) => setReward(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
+              className="mt-2 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
-            <span className="mt-1 block text-xs text-muted">
+            <span className="mt-1 block text-xs font-normal text-muted">
               Pulled from your wallet now and held in the pool. If the pool ends
               with no winner, you reclaim it.
             </span>
-          </label>
+          </div>
         ) : null}
 
-        <label className="block text-sm font-medium">
-          {isDare ? "Their lock-in to accept (USDC)" : "Your stake (USDC)"}
+        <div className="text-sm font-medium">
+          <span className="block">
+            {isDare ? "Their lock-in to accept (USDC)" : "Your stake (USDC)"}
+          </span>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(isDare ? DARE_LOCKIN_PRESETS : SELF_STAKE_PRESETS).map((amt) => (
+              <Chip
+                key={amt}
+                selected={stake.trim() === amt}
+                onClick={() => setStake(amt)}
+              >
+                {amt}
+              </Chip>
+            ))}
+          </div>
           <input
             type="text"
             inputMode="decimal"
-            placeholder={isDare ? "5.00" : "25.00"}
+            aria-label={isDare ? "Their lock-in in USDC" : "Your stake in USDC"}
+            placeholder={
+              isDare ? "Custom amount, e.g. 5.00" : "Custom amount, e.g. 25.00"
+            }
             value={stake}
             onChange={(e) => setStake(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
+            className="mt-2 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
-          <span className="mt-1 block text-xs text-muted">
+          <span className="mt-1 block text-xs font-normal text-muted">
             {isDare
               ? "The small amount they put up to lock in - real money keeps the goal honest. They get it back when they hit the goal, and you never pocket it."
               : "Pulled from your wallet when you lock in. Hit the goal and it comes back with a cut of the forfeits; miss and it goes to whoever did."}
           </span>
-        </label>
+        </div>
 
         {isDare ? (
           <>
@@ -698,30 +751,37 @@ function CreateChallengeInner() {
           </>
         ) : null}
 
-        <div className="block text-sm font-medium">
-          {isDare ? "How long they have" : "How long you have"}
+        <div className="text-sm font-medium">
+          <span className="block">
+            {isDare ? "How long they have" : "How long you have"}
+          </span>
           <div className="mt-2 flex flex-wrap gap-2">
             {DURATION_OPTIONS.map((opt) => (
-              <button
+              <Chip
                 key={opt.days}
-                type="button"
+                selected={durationDays === opt.days}
                 onClick={() => setDurationDays(opt.days)}
-                className={`rounded-xl border px-4 py-2 text-sm font-medium ${
-                  durationDays === opt.days
-                    ? "border-accent/50 bg-accent-deep text-accent"
-                    : "border-edge bg-surface-raised text-muted hover:text-foreground"
-                }`}
               >
                 {opt.label}
-              </button>
+              </Chip>
             ))}
           </div>
-          <span className="mt-1 block text-xs text-muted">
+          <span className="mt-1 block text-xs font-normal text-muted">
             {isDare
               ? "Starts the moment you send it."
               : "Starts the moment you lock in your stake."}
           </span>
         </div>
+
+        {/* SPOTTER, egging you on right where you commit. His line is the calm
+            deadpan intro; his pose is the only thing that reacts to the stake -
+            he never says the number. */}
+        <SpotterSays
+          surface="pools-header"
+          state="idle"
+          pose={stakeEntered ? "cheer" : "lounging"}
+          size="md"
+        />
 
         <SignInGate
           note={
@@ -731,8 +791,10 @@ function CreateChallengeInner() {
           }
         >
           {(openSignIn) => (
-            <button
+            <Button
               type="button"
+              variant="primary"
+              pop
               disabled={!ready || busy || linking}
               onClick={() => {
                 if (!authenticated) {
@@ -741,10 +803,10 @@ function CreateChallengeInner() {
                 }
                 void submit();
               }}
-              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full py-3.5 text-base"
             >
               {primaryLabel}
-            </button>
+            </Button>
           )}
         </SignInGate>
 
@@ -814,7 +876,7 @@ function CreateChallengeInner() {
             onRetry={() => setPhase({ kind: "idle" })}
           />
         ) : null}
-      </div>
+      </Card>
     </div>
   );
 }

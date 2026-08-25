@@ -38,7 +38,7 @@ export default function PoolCard({
   return (
     <Link
       href={`/pools/${pool.id.toString()}`}
-      className="block rounded-2xl border border-edge bg-surface p-5 transition-colors hover:border-accent/50"
+      className="block rounded-3xl border border-edge bg-surface p-5 transition hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-[var(--shadow-pop-edge)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <div className="flex items-start gap-3">
         <div
@@ -70,7 +70,7 @@ export default function PoolCard({
           Preventive care - Earn from {formatUsdc(pool.balance)} USDC
         </p>
       ) : null}
-      <h3 className="mt-3 text-xl font-semibold leading-snug">
+      <h3 className="mt-3 font-display text-xl font-semibold leading-snug">
         {displayGoalSpec(pool.goalSpec)}
       </h3>
       {/* A self-staked commitment pool (model 2) has no sponsor - the creator
