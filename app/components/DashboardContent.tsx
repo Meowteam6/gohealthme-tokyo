@@ -48,6 +48,7 @@ import {
 } from "@/lib/wearable-provider";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
+import { PopupBlockedError, openJunctionConnect } from "@/lib/junction-connect";
 import {
   authBlockReason,
   fetchWithWalletAuth,
@@ -57,18 +58,6 @@ import {
 interface JoinedPool {
   pool: PoolInfo;
   participant: ParticipantInfo;
-}
-
-/** Open Junction Link to connect a provider (WHOOP, Oura, Fitbit, Garmin…). */
-async function connectHealthData(address: `0x${string}`): Promise<void> {
-  const res = await fetch("/api/junction/link", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ address }),
-  });
-  if (!res.ok) throw new Error(`Link token request failed (${res.status}).`);
-  const { linkUrl } = (await res.json()) as { linkUrl?: string };
-  if (typeof linkUrl === "string") window.open(linkUrl, "_blank", "noopener");
 }
 
 async function fetchJoinedPools(address: `0x${string}`): Promise<JoinedPool[]> {
@@ -150,6 +139,7 @@ function ConnectButton({
   // dead to anyone whose connect flow could not start. It is a money-adjacent
   // path (no wearable, no verification, no payout), so it reports.
   const [error, setError] = useState<string | null>(null);
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
 
   return (
@@ -159,9 +149,17 @@ function ConnectButton({
         disabled={opening}
         onClick={() => {
           setError(null);
+          setFallbackUrl(null);
           setOpening(true);
-          void connectHealthData(address)
+          void openJunctionConnect(address)
             .catch((err: unknown) => {
+              if (err instanceof PopupBlockedError) {
+                // The URL is good; the browser just refused the auto-open.
+                // Offer a link the user taps directly - a real gesture nav is
+                // never blocked.
+                setFallbackUrl(err.linkUrl);
+                return;
+              }
               setError(
                 err instanceof Error
                   ? err.message
@@ -185,6 +183,22 @@ function ConnectButton({
             detail={`${error} Nothing was connected and nothing was charged.`}
             onRetry={() => setError(null)}
           />
+        </div>
+      ) : null}
+      {fallbackUrl !== null ? (
+        <div className="mt-3">
+          <a
+            href={fallbackUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`inline-flex items-center justify-center rounded-xl bg-accent-strong px-5 font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
+          >
+            Open the wearable connect page
+          </a>
+          <p className="mt-2 text-xs text-muted">
+            Your browser blocked the auto-open. Tap to continue to the secure
+            connect page. Nothing is charged.
+          </p>
         </div>
       ) : null}
     </>

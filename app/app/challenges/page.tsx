@@ -84,6 +84,11 @@ interface SentChallenge {
   pool: PoolInfo;
   /** Accepters, or null when the count read missed (the card still renders). */
   participantCount: number | null;
+  /** Whether YOU staked into your own pool. A commitment you staked on yourself
+   *  reads differently from a reward you put up for a friend, and the two are
+   *  the same on-chain object (a bountyModel-2 pool), so the creator's own
+   *  participation is what tells them apart. */
+  selfStaked: boolean;
 }
 
 interface MyChallenges {
@@ -159,7 +164,13 @@ async function fetchMyChallenges(
     }),
   );
 
-  // Sent by you: any challenge pool you created.
+  // Sent by you: any challenge pool you created. Carry your own participation
+  // (from the participants read above) so a commitment you staked on yourself is
+  // told apart from a reward you funded for a friend - both are bountyModel-2
+  // pools, so the creator staking is the only on-chain signal that separates them.
+  const selfJoined = new Map(
+    challengePools.map((pool, i) => [pool.id, participants[i].joined]),
+  );
   const sentPools = challengePools.filter((pool) =>
     sameAddress(pool.creator, address),
   );
@@ -176,6 +187,7 @@ async function fetchMyChallenges(
   const sentChallenges: SentChallenge[] = sentPools.map((pool, i) => ({
     pool,
     participantCount: counts[i],
+    selfStaked: selfJoined.get(pool.id) === true,
   }));
 
   return { inChallenges, sentChallenges };
@@ -355,30 +367,54 @@ function InChallengeCard({
 }
 
 function SentChallengeCard({ entry }: { entry: SentChallenge }) {
-  const { pool, participantCount } = entry;
+  const { pool, participantCount, selfStaked } = entry;
   const id = pool.id.toString();
+  // A commitment you started reads as one when you have staked into it, or when
+  // it holds no reward yet and you have not (a dare always seeds a reward above
+  // zero at creation, so a zero-balance pool you made is an unlocked commitment
+  // waiting for your stake). Best-effort display only; the money reads honestly
+  // either way - your own stake, never a "reward" that is not there.
+  const commitment = selfStaked || (!pool.settled && pool.balance === 0n);
+  const stakerWord = commitment ? "staked" : "accepted";
   const countLabel =
     participantCount === null
       ? null
       : participantCount === 0
-        ? "No one has accepted yet"
+        ? commitment
+          ? selfStaked
+            ? "Just you so far"
+            : "Stake to lock it in"
+          : "No one has accepted yet"
         : participantCount === 1
-          ? "1 person accepted"
-          : `${participantCount} people accepted`;
+          ? `1 person ${stakerWord}`
+          : `${participantCount} people ${stakerWord}`;
 
   return (
     <div className="rounded-2xl border border-edge bg-surface p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Badge>Challenge</Badge>
+        <Badge>{commitment ? "Commitment" : "Challenge"}</Badge>
         {pool.settled ? <Badge tone="muted">Settled</Badge> : null}
       </div>
-      <h3 className="mt-3 text-lg font-semibold leading-snug">
+      <p className="mt-3 text-sm text-muted">
+        {selfStaked
+          ? "You staked on your own goal"
+          : commitment
+            ? "Your commitment - lock in your stake"
+            : "A reward you put up for a friend"}
+      </p>
+      <h3 className="mt-1 text-lg font-semibold leading-snug">
         {displayGoalSpec(pool.goalSpec)}
       </h3>
       <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
-        <span>
-          Reward <Money usd={formatUsdc(pool.balance)} size="sm" />
-        </span>
+        {commitment ? (
+          <span>
+            Your stake <Money usd={formatUsdc(pool.entryFee)} size="sm" />
+          </span>
+        ) : (
+          <span>
+            Reward <Money usd={formatUsdc(pool.balance)} size="sm" />
+          </span>
+        )}
         <Countdown periodStart={pool.periodStart} periodEnd={pool.periodEnd} />
         {countLabel !== null ? <span>{countLabel}</span> : null}
       </div>
@@ -392,14 +428,24 @@ function SentChallengeCard({ entry }: { entry: SentChallenge }) {
   );
 }
 
-function DareAFriend() {
+/** The two honest ways to start a challenge, side by side. Both land on
+ *  /challenge/new with the matching variant preselected. */
+function StartChallengeCTAs() {
   return (
-    <Link
-      href="/challenge/new"
-      className="inline-block rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
-    >
-      Dare a friend
-    </Link>
+    <div className="flex flex-col gap-3 sm:flex-row">
+      <Link
+        href="/challenge/new?v=self"
+        className="inline-block rounded-xl bg-accent-strong px-6 py-3 text-center text-sm font-semibold text-background hover:bg-accent"
+      >
+        Stake on yourself
+      </Link>
+      <Link
+        href="/challenge/new?v=dare"
+        className="inline-block rounded-xl border border-accent/40 bg-accent/10 px-6 py-3 text-center text-sm font-semibold text-accent-strong hover:bg-accent/15"
+      >
+        Dare a friend
+      </Link>
+    </div>
   );
 }
 
@@ -516,8 +562,8 @@ function MyChallengesContent() {
     return (
       <EmptyState
         title="No challenges yet"
-        detail="Dare a friend to hit a goal and put real USDC behind it. When someone dares you back, it shows up here too."
-        action={<DareAFriend />}
+        detail="Stake on your own goal, or dare a friend and put up a reward. When someone dares you back, it shows up here too."
+        action={<StartChallengeCTAs />}
       />
     );
   }
@@ -529,9 +575,9 @@ function MyChallengesContent() {
           <div>
             <h2 className="text-lg font-semibold">Invited to you</h2>
             <p className="mt-1 text-sm text-muted">
-              Dares aimed straight at your handle. Accept one and go for the
-              goal - you pay nothing, and the reward pays the second it is
-              verified.
+              Dares aimed straight at your handle. Accept one, stake the small
+              lock-in, and go for the goal - hit it and you collect your lock-in
+              back plus the reward, the second it is verified.
             </p>
           </div>
           {invited.map((entry) => (
@@ -549,8 +595,9 @@ function MyChallengesContent() {
         <div>
           <h2 className="text-lg font-semibold">Challenges you&apos;re in</h2>
           <p className="mt-1 text-sm text-muted">
-            Dares a friend aimed at you and you accepted. Upload your proof and
-            the reward pays the second it is verified.
+            Dares a friend aimed at you and you accepted with a lock-in stake.
+            Upload your proof and you collect your stake back plus the reward the
+            second it is verified.
           </p>
         </div>
         {data.inChallenges.length === 0 ? (
@@ -571,17 +618,17 @@ function MyChallengesContent() {
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Challenges you sent</h2>
+          <h2 className="text-lg font-semibold">Challenges you started</h2>
           <p className="mt-1 text-sm text-muted">
-            Dares you funded and aimed at someone else. You put up the reward;
-            they get paid the moment they prove it.
+            Commitments you staked on your own goal, and rewards you put up for a
+            friend. Either way you never keep a participant&apos;s stake.
           </p>
         </div>
         {data.sentChallenges.length === 0 ? (
           <EmptyState
-            title="You have not sent any challenges yet"
-            detail="Dare a friend to hit a goal and back it with USDC. They pay nothing to accept."
-            action={<DareAFriend />}
+            title="You have not started any challenges yet"
+            detail="Stake on your own goal, or put up a reward and dare a friend to hit theirs."
+            action={<StartChallengeCTAs />}
           />
         ) : (
           data.sentChallenges.map((entry) => (
@@ -601,7 +648,8 @@ export default function ChallengesPage() {
           My challenges
         </h1>
         <p className="mt-1 text-sm text-muted">
-          Dares aimed at you, and the ones you have put your USDC behind.
+          The goals you have put real USDC behind - your own commitments, the
+          dares you sent, and the ones aimed at you.
         </p>
       </div>
       {DYNAMIC_CONFIGURED ? (

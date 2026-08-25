@@ -14,9 +14,18 @@
 // version credited a flat 10 USDC keyed on a caller-supplied `ref` string, so
 // a fresh ref bought a fresh credit and a loop of curl calls plus
 // /api/balance/withdraw drained the treasury. Safety here is by construction:
-//   - the ledger idempotency key is derived server-side from the address and
-//     the window, never from the request body
-//   - one grant per address per FAUCET_COOLDOWN_MS, reserved atomically
+//   - the ledger idempotency key is derived server-side from the address, the
+//     window, and the per-address grant sequence, never from the request body
+//   - the grant is BALANCE-AWARE: it fires only for a wallet whose spendable
+//     balance (on-chain Arc USDC plus any undelivered in-app balance) has
+//     dropped below one grant's worth. A wallet that still holds practice money
+//     is not topped up, so a user who SPENT their grant on a pool entry can
+//     claim again before the window rolls over, while a funded wallet cannot
+//     drain the treasury by tapping repeatedly. This replaced a flat one-grant-
+//     per-window cooldown that locked a genuine user out the moment they spent.
+//   - an absolute per-address cap of FAUCET_ADDRESS_DAILY_CAP_UUSDC per window,
+//     reserved atomically, so an attacker who sends the grant away to slip back
+//     under the balance threshold still draws a bounded amount per address
 //   - a global budget per window, because fresh addresses cost an attacker
 //     nothing and a per-address limit alone therefore bounds nothing
 //   - a treasury floor, because in-app balance is a claim on real Arc USDC
@@ -34,18 +43,28 @@
 //
 // Response JSON:
 //   200 { balanceUusdc: string, grantedUusdc: string, applied: boolean }
-//   400 bad address | 429 cooldown or budget exhausted (with Retry-After)
-//   503 treasury cannot back the grant, or the ledger is unavailable | 500
+//       applied:false with grantedUusdc "0" is the honest no-op for a wallet
+//       that already holds enough practice money - a skip, not a failure.
+//   400 bad address
+//   429 per-address daily cap or global budget exhausted (with Retry-After)
+//   503 treasury too low, balance unreadable, or the ledger is busy | 500
 
 import { isAddress, type Address } from "viem";
 import { credit, getBalance } from "@/lib/server/balance";
 import { jsonError, readJsonBody } from "@/lib/server/http";
-import { formatUsdc } from "@/lib/contract";
 import {
+  USDC_ADDRESS,
+  erc20Abi,
+  formatUsdc,
+  getArcPublicClient,
+} from "@/lib/contract";
+import {
+  FAUCET_ADDRESS_DAILY_CAP_UUSDC,
   FAUCET_AUTO_BUDGET_UUSDC,
   FAUCET_COOLDOWN_MS,
   FAUCET_DAILY_BUDGET_UUSDC,
   FAUCET_GRANT_UUSDC,
+  FAUCET_REFILL_BALANCE_THRESHOLD_UUSDC,
   faucetClaimRef,
   serverFailure,
   treasuryCanCover,
@@ -53,9 +72,7 @@ import {
 import { treasuryUsdcBalanceUusdc } from "@/app/api/_money/treasury-balance";
 import {
   LEDGER_LOCK,
-  claimOncePerWindow,
   releaseFromWindow,
-  releaseOncePerWindow,
   spendFromWindow,
   withLock,
 } from "@/app/api/_money/rate-limit";
@@ -77,6 +94,36 @@ function tooManyRequests(message: string, retryAfterSeconds: number): Response {
 function hoursFrom(seconds: number): string {
   const hours = Math.ceil(seconds / 3600);
   return `${hours} hour${hours === 1 ? "" : "s"}`;
+}
+
+/**
+ * How much spendable practice USDC a wallet holds right now, in uUSDC, and how
+ * much of that is still sitting in the in-app ledger.
+ *
+ * `spendableUusdc` is the on-chain Arc USDC that actually pays gas and pool
+ * entry fees PLUS any in-app ledger balance not yet delivered onto Arc. Reading
+ * both matters: the funding chain (lib/faucet-funding.ts) withdraws every grant
+ * onto Arc, so a funded wallet reads ~0 in the ledger while holding real USDC
+ * on chain. A balance-aware faucet that looked only at the ledger would see
+ * that zero and re-grant on every tap - a treasury drain - so the on-chain
+ * figure is the one that tells us whether the user has genuinely run out.
+ *
+ * `inAppUusdc` is returned alongside so the skip response can report the ledger
+ * balance the success contract already carries, without a second read.
+ */
+async function readSpendable(
+  address: Address,
+): Promise<{ spendableUusdc: bigint; inAppUusdc: bigint }> {
+  const [onChainUusdc, inAppUusdc] = await Promise.all([
+    getArcPublicClient().readContract({
+      address: USDC_ADDRESS,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [address],
+    }),
+    getBalance(address),
+  ]);
+  return { spendableUusdc: onChainUusdc + inAppUusdc, inAppUusdc };
 }
 
 export async function POST(request: Request) {
@@ -126,21 +173,62 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. One grant per address per window, reserved atomically so two
-    //    simultaneous requests for the same address cannot both pass.
-    const perAddress = await claimOncePerWindow(
+    // 2. Balance-aware eligibility, also a pure read so it needs no cleanup.
+    //    The faucet exists to unblock a wallet that has run out of practice
+    //    USDC, not to top up one that still has some. A wallet holding at least
+    //    one grant's worth of spendable balance does not need more, and
+    //    re-granting it on every tap is how the treasury drains. Reading the
+    //    on-chain balance (not just the in-app ledger, which the funding chain
+    //    empties onto Arc after every grant) is what lets a user who SPENT their
+    //    grant on a pool entry claim again before the window rolls over: their
+    //    spendable balance is now below the threshold. This is not a cap and not
+    //    an error - it is a skip, reported as applied:false so the funding chain
+    //    can still deliver any undelivered in-app balance onto Arc.
+    let spendableUusdc: bigint;
+    let inAppUusdc: bigint;
+    try {
+      ({ spendableUusdc, inAppUusdc } = await readSpendable(recipient));
+    } catch (err) {
+      return serverFailure(SCOPE, err, {
+        status: 503,
+        message:
+          "Could not read your current balance, so no faucet grant was made.",
+      });
+    }
+    if (spendableUusdc >= FAUCET_REFILL_BALANCE_THRESHOLD_UUSDC) {
+      return Response.json({
+        balanceUusdc: inAppUusdc.toString(),
+        grantedUusdc: "0",
+        applied: false,
+      });
+    }
+
+    // 3. Absolute per-address ceiling, reserved atomically so two simultaneous
+    //    requests for the same address cannot both slip past it. This bounds an
+    //    attacker who empties a wallet between grants to slip back under the
+    //    balance threshold: no address is granted more than
+    //    FAUCET_ADDRESS_DAILY_CAP_UUSDC per window however it shuffles funds.
+    //    The reserved running total is the grant sequence the ledger ref uses,
+    //    so each grant this window credits a distinct ref instead of collapsing.
+    const perAddress = await spendFromWindow(
       addressKey,
+      FAUCET_GRANT_UUSDC,
+      FAUCET_ADDRESS_DAILY_CAP_UUSDC,
       FAUCET_COOLDOWN_MS,
       now,
     );
     if (perAddress.kind === "deny") {
       return tooManyRequests(
-        `This address already claimed from the faucet. Try again in about ${hoursFrom(perAddress.retryAfterSeconds)}.`,
+        `This address has reached its daily practice-money limit of ${formatUsdc(FAUCET_ADDRESS_DAILY_CAP_UUSDC)} USDC. Try again in about ${hoursFrom(perAddress.retryAfterSeconds)}.`,
         perAddress.retryAfterSeconds,
       );
     }
+    // Running per-address total including this reservation. Distinct per grant,
+    // so the ledger ref below is distinct per grant.
+    const reservedTotalUusdc =
+      FAUCET_ADDRESS_DAILY_CAP_UUSDC - perAddress.remainingUusdc;
 
-    // 3. Global budget across every address. This is the guard that actually
+    // 4. Global budget across every address. This is the guard that actually
     //    bounds a scripted attack, since fresh addresses are free.
     const budget = await spendFromWindow(
       GLOBAL_BUDGET_KEY,
@@ -150,7 +238,12 @@ export async function POST(request: Request) {
       now,
     );
     if (budget.kind === "deny") {
-      await releaseOncePerWindow(addressKey, FAUCET_COOLDOWN_MS, now);
+      await releaseFromWindow(
+        addressKey,
+        FAUCET_GRANT_UUSDC,
+        FAUCET_COOLDOWN_MS,
+        now,
+      );
       return tooManyRequests(
         isAuto
           ? "The automatic faucet reserve for today is used up. Tap Get test USDC to draw from the full faucet."
@@ -159,19 +252,29 @@ export async function POST(request: Request) {
       );
     }
 
-    // 4. Credit under a server-derived ref. Two taps in the same window
-    //    produce the same ref, so the ledger applies exactly one of them even
-    //    if the reservation above were somehow bypassed. The ledger lock is
-    //    what stops this write from clobbering a concurrent debit elsewhere:
-    //    the ledger is one JSON blob with no compare-and-swap, so every
-    //    mutation of it has to be serialised.
+    // 5. Credit under the server-derived ref for this grant sequence. A retry of
+    //    the SAME reserved slot produces the same ref, so the ledger applies it
+    //    exactly once; a later, legitimate grant in the same window carries a
+    //    higher sequence and a distinct ref, so a user who spent their money is
+    //    not silently deduped. The ledger lock is what stops this write from
+    //    clobbering a concurrent debit elsewhere: the ledger is one JSON blob
+    //    with no compare-and-swap, so every mutation of it has to be serialised.
     let applied: boolean;
     try {
       const outcome = await withLock(LEDGER_LOCK, () =>
-        credit(recipient, FAUCET_GRANT_UUSDC, faucetClaimRef(recipient, now)),
+        credit(
+          recipient,
+          FAUCET_GRANT_UUSDC,
+          faucetClaimRef(recipient, now, reservedTotalUusdc),
+        ),
       );
       if (outcome.kind === "busy") {
-        await releaseOncePerWindow(addressKey, FAUCET_COOLDOWN_MS, now);
+        await releaseFromWindow(
+          addressKey,
+          FAUCET_GRANT_UUSDC,
+          FAUCET_COOLDOWN_MS,
+          now,
+        );
         await releaseFromWindow(
           GLOBAL_BUDGET_KEY,
           FAUCET_GRANT_UUSDC,
@@ -186,7 +289,12 @@ export async function POST(request: Request) {
       applied = outcome.value.applied;
     } catch (err) {
       // Nothing was granted, so hand both reservations back.
-      await releaseOncePerWindow(addressKey, FAUCET_COOLDOWN_MS, now);
+      await releaseFromWindow(
+        addressKey,
+        FAUCET_GRANT_UUSDC,
+        FAUCET_COOLDOWN_MS,
+        now,
+      );
       await releaseFromWindow(
         GLOBAL_BUDGET_KEY,
         FAUCET_GRANT_UUSDC,
@@ -199,9 +307,15 @@ export async function POST(request: Request) {
       });
     }
 
-    // The ledger deduped this window's ref, so no balance moved. Give the
-    // budget back rather than silently burning it.
+    // The ledger deduped this reserved slot's ref, so no balance moved. Hand
+    // both reservations back rather than silently burning them.
     if (!applied) {
+      await releaseFromWindow(
+        addressKey,
+        FAUCET_GRANT_UUSDC,
+        FAUCET_COOLDOWN_MS,
+        now,
+      );
       await releaseFromWindow(
         GLOBAL_BUDGET_KEY,
         FAUCET_GRANT_UUSDC,

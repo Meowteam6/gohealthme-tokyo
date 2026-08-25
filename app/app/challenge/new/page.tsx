@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import CreateChallenge from "@/components/CreateChallenge";
 
 export const metadata: Metadata = {
-  title: "Challenge a friend - GoHealthMe",
+  title: "Start a challenge - GoHealthMe",
   description:
-    "Dare someone to hit a goal and put real USDC behind it. They hit it, they get paid the second it is verified. Nobody ever sees their health data.",
+    "Stake your own USDC on your own goal and get it back plus a cut of the forfeits, or put up a reward and dare a friend. Verified in a confidential enclave - nobody ever sees the health data.",
 };
 
 export default function NewChallengePage() {

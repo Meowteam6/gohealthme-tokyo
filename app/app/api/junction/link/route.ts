@@ -5,7 +5,12 @@
 
 import { isAddress } from "viem";
 import { createLinkToken } from "@/lib/server/junction";
-import { errorMessage, jsonError, readJsonBody } from "@/lib/server/http";
+import {
+  errorMessage,
+  jsonError,
+  newCorrelationId,
+  readJsonBody,
+} from "@/lib/server/http";
 
 export async function POST(request: Request) {
   try {
@@ -22,6 +27,16 @@ export async function POST(request: Request) {
     const { userId, linkUrl } = await createLinkToken(address);
     return Response.json({ userId, linkUrl });
   } catch (err) {
-    return jsonError(502, errorMessage(err));
+    // Junction's failure text names the request path and account state, and a
+    // missing/invalid JUNCTION_API_KEY throws here too - none of that belongs
+    // on the wire to an unauthenticated caller. Log the real cause in full and
+    // answer with an honest, generic line (never a fake success): the connect
+    // flow surfaces this as "could not start", not a silently linked device.
+    const correlationId = newCorrelationId("junction-link");
+    console.error(`[${correlationId}] ${errorMessage(err)}`, err);
+    return jsonError(
+      502,
+      `Wearable connection is temporarily unavailable. Reference ${correlationId}.`,
+    );
   }
 }

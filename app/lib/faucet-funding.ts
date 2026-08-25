@@ -83,6 +83,63 @@ export async function fetchWalletUsdc(address: Address): Promise<bigint> {
   })) as bigint;
 }
 
+/** Options for reconcileWalletUsdc. */
+export interface ReconcileOptions {
+  /** Delay between reads, in ms. Defaults to 2000. */
+  intervalMs?: number;
+  /** How long to keep polling before giving up, in ms. Defaults to 30000. */
+  timeoutMs?: number;
+  /**
+   * Called after every genuine on-chain read with the real balance in base
+   * units. Each value is a live balanceOf result, never a synthesised number,
+   * so a caller can render it directly as the figure climbs to the true total.
+   */
+  onRead?: (balance: bigint) => void;
+}
+
+/**
+ * Poll the real on-chain balance until it reflects a delivered transfer.
+ *
+ * WHY THIS EXISTS. The withdraw route waits for its own receipt, so the transfer
+ * has genuinely landed by the time funding reports `funded`. But the RPC read
+ * replica the balance query reads from can still lag the transaction by a few
+ * seconds, so an immediate balanceOf returns the pre-fund figure. Left alone,
+ * the displayed balance would not move until the next 30s query interval (or a
+ * re-login), even though the money is already there.
+ *
+ * This reads balanceOf on a fixed interval until the balance reaches at least
+ * `target` base units or the window elapses, handing every read to `onRead` as
+ * it arrives. Nothing here is optimistic or synthesised: the number the caller
+ * shows is always a live chain read, it just refreshes fast enough to track the
+ * replica catching up instead of waiting for the slow interval.
+ *
+ * Returns the last balance read. That value may still be below `target` if the
+ * window elapsed first (a persistently lagging replica); the caller keeps its
+ * existing periodic refetch, which reconciles the figure once the replica lands.
+ */
+export async function reconcileWalletUsdc(
+  address: Address,
+  target: bigint,
+  options: ReconcileOptions = {},
+): Promise<bigint> {
+  const intervalMs = options.intervalMs ?? 2_000;
+  const timeoutMs = options.timeoutMs ?? 30_000;
+  const deadline = Date.now() + timeoutMs;
+  let last = 0n;
+  for (;;) {
+    try {
+      last = await fetchWalletUsdc(address);
+      options.onRead?.(last);
+      if (last >= target) return last;
+    } catch {
+      // Transient RPC or replica error: keep trying inside the window rather
+      // than surfacing a failure — the periodic query is the durable backstop.
+    }
+    if (Date.now() >= deadline) return last;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
 /** Options for a funding attempt. */
 export interface FundingOptions {
   /**

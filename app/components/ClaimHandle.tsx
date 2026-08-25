@@ -1,16 +1,23 @@
 "use client";
 
 // Claim (or change) the handle for the connected wallet. The write is proven
-// by a wallet signature: fetchWithWalletAuth attaches the EIP-191 headers the
-// server verifies before it touches the profiles table. No transaction is
-// sent and nothing is charged - the signature only proves the wallet is yours.
+// by a wallet signature: the SAME wallet client both signs the EIP-191 proof
+// and supplies the address that is submitted, so the address that signs is
+// always the address claimed. The server recovers the signer and rejects a
+// mismatch, so reading the address from one place (the resolved wallet) while
+// signing with another (the connector's active account) is what made an
+// external wallet's own claim fail. No transaction is sent and nothing is
+// charged - the signature only proves the wallet is yours.
 
 import { useState } from "react";
 import Link from "next/link";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { useWalletAuth } from "@/lib/useWalletAuth";
-import { authBlockReason, fetchWithWalletAuth } from "@/lib/client-auth";
+import {
+  authHeadersOf,
+  clientWalletAuthMessage,
+  isUserRejection,
+} from "@/lib/client-auth";
 import { checkEmoji, checkHandle, HANDLE_MAX, EMOJI_MAX } from "@/lib/social";
 import { ErrorNote } from "@/components/ui";
 import SignInGate from "@/components/SignInGate";
@@ -22,8 +29,8 @@ type Status =
   | { kind: "error"; message: string };
 
 function ClaimHandleInner() {
-  const { ready, authenticated, address } = useEmbeddedWallet();
-  const requestAuth = useWalletAuth();
+  const { ready, authenticated, address, getArcWalletClient } =
+    useEmbeddedWallet();
   const [handle, setHandle] = useState("");
   const [emoji, setEmoji] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -48,32 +55,48 @@ function ClaimHandleInner() {
     }
 
     setStatus({ kind: "saving" });
-    try {
-      const sent = await fetchWithWalletAuth(
-        "/api/social/handle",
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            address,
-            handle: handleCheck.handle,
-            emoji: emojiCheck.emoji,
-          }),
-        },
-        requestAuth,
-      );
 
-      if (!sent.response.ok) {
-        if (sent.auth.kind !== "ok") {
-          setStatus({
-            kind: "error",
-            message:
-              authBlockReason(sent.auth) ??
-              "Sign with your wallet to claim this handle.",
-          });
-          return;
-        }
-        const body = (await sent.response.json().catch(() => ({}))) as {
+    // Sign the ownership proof and read the claimed address from the SAME
+    // wallet client. The signer address (client.account.address) is the one the
+    // server recovers from the signature, so submitting exactly that address -
+    // rather than a separately resolved wallet address - guarantees the server
+    // sees the signature and the claim naming one identical wallet.
+    let signerAddress: string;
+    let signature: string;
+    const timestamp = new Date().toISOString();
+    try {
+      const walletClient = await getArcWalletClient();
+      signerAddress = walletClient.account.address;
+      signature = await walletClient.signMessage({
+        account: walletClient.account,
+        message: clientWalletAuthMessage(signerAddress, timestamp),
+      });
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        message: isUserRejection(err)
+          ? "Claiming needs a signature to prove the wallet is yours. Nothing is charged and no transaction is sent."
+          : "Your wallet could not sign the proof of ownership. Reconnect it and try again.",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/social/handle", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...authHeadersOf({ address: signerAddress, timestamp, signature }),
+        },
+        body: JSON.stringify({
+          address: signerAddress,
+          handle: handleCheck.handle,
+          emoji: emojiCheck.emoji,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as {
           error?: string;
         };
         setStatus({

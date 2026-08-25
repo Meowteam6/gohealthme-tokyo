@@ -10,7 +10,14 @@
 // and cannot drift between the routes that enforce them.
 //
 // THE INVARIANTS THESE BUY
-//   - One address is granted at most FAUCET_GRANT_UUSDC per FAUCET_COOLDOWN_MS.
+//   - The faucet only grants to a wallet whose spendable balance has fallen
+//     below FAUCET_REFILL_BALANCE_THRESHOLD_UUSDC, so a wallet that still holds
+//     practice money is never topped up further. This is what lets a genuine
+//     user who SPENT their grant on a pool entry get more before the window
+//     rolls over, without opening a treasury drain for a wallet that is fine.
+//   - One address is granted at most FAUCET_ADDRESS_DAILY_CAP_UUSDC per
+//     FAUCET_COOLDOWN_MS, the absolute per-address ceiling that bounds an
+//     attacker who empties a wallet between grants (send-out, then re-claim).
 //   - Across all addresses the faucet cannot hand out more than
 //     FAUCET_DAILY_BUDGET_UUSDC per window, so a script with a thousand fresh
 //     addresses is bounded by the budget rather than by the address count.
@@ -62,6 +69,34 @@ export const FAUCET_DAILY_BUDGET_UUSDC = 30_000_000n;
  * stay a whole number of grants and strictly below the daily budget.
  */
 export const FAUCET_AUTO_BUDGET_UUSDC = 15_000_000n;
+
+/**
+ * A wallet is eligible for a faucet grant only while its spendable balance sits
+ * below this, in uUSDC: one grant's worth (0.50 USDC). "Spendable" is the
+ * on-chain Arc USDC that pays gas and pool entry fees plus any in-app ledger
+ * balance not yet delivered onto Arc; the route reads both. The point is to
+ * unblock a wallet that has genuinely run out, not to top up one that is fine:
+ * a wallet at or above this does not need more, and re-granting it every tap is
+ * how the treasury drains. A user who spends their grant on a pool entry drops
+ * back below this and can claim again before the window rolls over - the whole
+ * fix. It is deliberately equal to the grant, so the faucet refills you by one
+ * grant exactly when you hold less than one grant. Keep it at most one grant, or
+ * a single tap could leave a wallet still eligible for the next.
+ */
+export const FAUCET_REFILL_BALANCE_THRESHOLD_UUSDC = FAUCET_GRANT_UUSDC;
+
+/**
+ * Absolute ceiling on what ONE address may be granted inside one window: 2.00
+ * USDC (four grants). The balance threshold above unblocks the honest ran-out
+ * user, but it can be defeated by an attacker who sends the granted USDC to
+ * another wallet to drop back under the threshold and re-claim. This cap is the
+ * backstop that makes that pointless: no address draws more than this per window
+ * no matter how it shuffles funds. It is aligned with WITHDRAW_DAILY_CAP_UUSDC
+ * so the grant-then-withdraw loop is bounded consistently on both legs, and it
+ * is above one grant so a user who plays through several pools in a day can
+ * still refill. It must stay a whole number of grants.
+ */
+export const FAUCET_ADDRESS_DAILY_CAP_UUSDC = 2_000_000n;
 
 /** Real Arc USDC one address may move out of the treasury per window: 2.00. */
 export const WITHDRAW_DAILY_CAP_UUSDC = 2_000_000n;
@@ -136,21 +171,32 @@ export function spendVerdict(
 }
 
 /**
- * Ledger idempotency key for a faucet grant, derived ONLY from the address and
- * the window the grant falls in.
+ * Ledger idempotency key for a faucet grant, derived server-side from the
+ * address, the window, and the per-address grant sequence within that window.
  *
- * This is the whole bug that used to live in /api/blink/topup: the key came
- * from a caller-supplied UUID, so a fresh UUID per request bought a fresh
- * credit and the faucet was a money printer. A server-derived key means two
- * concurrent taps collapse onto ONE ledger credit, because the balance ledger
- * already refuses to apply the same ref twice to the same address.
+ * The caller-supplied part of the old key was the whole bug: a fresh UUID per
+ * request bought a fresh credit and the faucet was a money printer. Nothing
+ * here is caller-supplied, so that exploit stays dead. What is different from
+ * the first server-derived version is the grantSeqUusdc segment: because the
+ * faucet now grants more than once per window (a user who spent their grant is
+ * refilled before the window rolls over), a key scoped to the window alone
+ * would collapse the second, legitimate grant onto the first and silently
+ * credit nothing. The sequence is the running per-address reserved total from
+ * the rate limiter's atomic counter, so each distinct reservation gets a
+ * distinct ref while a retry of the SAME reserved slot still dedupes to one
+ * credit. The per-address daily cap, not this key, is what bounds concurrent
+ * distinct reservations; the money printer is dead by cap now, not by collapse.
  *
  * It uses the same bucket function as the rate limiter, so the ledger's
  * idempotency and the faucet's per-address gate can never disagree about which
  * window a request belongs to.
  */
-export function faucetClaimRef(address: string, nowMs: number): string {
-  return `faucet:${address.toLowerCase()}:${windowBucket(nowMs, FAUCET_COOLDOWN_MS)}`;
+export function faucetClaimRef(
+  address: string,
+  nowMs: number,
+  grantSeqUusdc: bigint,
+): string {
+  return `faucet:${address.toLowerCase()}:${windowBucket(nowMs, FAUCET_COOLDOWN_MS)}:${grantSeqUusdc.toString()}`;
 }
 
 // ------------------------------------------------------------ treasury floor

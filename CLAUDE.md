@@ -12,6 +12,49 @@ This repo is GoHealthMe's architecture adapted for the **Circle Agentic Economy 
 
 The agent is named **SPOTTER**. One name across every surface.
 
+## QA loop protocol — how to actually do it
+
+A QA loop that only walks the happy path is worse than none: it reports "seamless" while
+half the surfaces are broken. This section is binding because a loop already shipped that
+missed a dead funding button, a failing handle claim, a hanging wearable connect, a raw
+dev string on the SPOTTER page, and stale challenge copy — all live, all at once.
+
+**Walk every route, not the happy path.** Every iteration enumerates and exercises EVERY
+top-level surface as a fresh, non-crypto user, at phone width and desktop:
+`/` (home), `/pools` + a `/pools/[id]` detail, `/challenges` + `/challenge/new`,
+`/dashboard`, `/agent` (SPOTTER), `/sponsor`, `/wallet` (settings), `/handle`, `/feed`,
+`/u/[handle]`, `/goal`. On each, click EVERY interactive control and follow it to its result.
+
+**Assert on the real result, never on render.** A button that shows "Added" while the
+balance stays $0.00 is a FAIL. Verify the on-chain delta (USDC balanceOf), the network
+response (200 with real data, not 500), or the DOM state that proves the action happened.
+"The page loaded" and "it built" are not verification.
+
+**Test state transitions, not just first run.** Fund -> spend on a pool entry -> try to
+fund again. Join -> revisit -> verify. Most breaks (faucet lockout, stale caches, empty
+states) only appear on the second action, not the first.
+
+**A broken critical-path control is a P0 to FIX in the same pass.** Do not file it as a
+note and move on. The loop exists to catch AND fix; flagging a dead button and stopping is
+the failure mode this section prevents.
+
+**Every surface must reflect the CURRENT product model.** The pilot is self-staked
+commitment. Leftover copy from a prior model (sponsor-only, wager framing, World ID) is a
+bug, not cosmetic. Grep for retired terms after any model change.
+
+**No dev strings reach end users.** Env-var names ("set CIRCLE_* variables"), raw stack
+traces, "run the provisioning script", and internal error text are bugs. A user sees an
+honest product state or an honest "not live yet" — never the plumbing.
+
+**Verify the backend is provisioned, not just coded.** A missing env var (Redis, treasury
+key, JUNCTION_API_KEY) makes a correct route return 500. Check that the deployment actually
+has what the code needs before declaring a flow works; a green build over an unprovisioned
+backend is a broken app.
+
+**Done means the whole chain works, verified end to end:** sign in -> add practice money
+(and re-add after spending) -> browse -> join gasless -> connect a real wearable -> claim a
+handle -> see SPOTTER settle -> payout lands. Not "4 of 8 buttons work."
+
 ## The product does not change
 
 GoHealthMe stays GoHealthMe. Sponsor-funded health pools, one-wallet-one-entry enforced on-chain by `joinPool` (World ID was removed in the Circle build), confidential AI verification in a TEE, instant USDC settlement on Arc.

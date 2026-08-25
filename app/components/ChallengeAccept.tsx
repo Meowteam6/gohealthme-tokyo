@@ -3,19 +3,23 @@
 // The Accept control on the you've-been-challenged landing.
 //
 // Accepting a challenge IS joining its pool: this wraps the SAME JoinPool
-// primitive the pool page uses, with the entry fee pinned to zero (the
-// challenger funded the pot; the target pays nothing). One wallet, one entry is
-// enforced on-chain by joinPool exactly as everywhere else. After joining, the
-// target is handed off to the pool page, which is where evidence upload and the
-// claim rail live - this landing does not reimplement that flow, it routes into
-// it.
+// primitive the pool page uses. Every pool on the deployed contract carries an
+// entry fee above zero (the contract requires every player to be a staker), so
+// accepting means staking that lock-in - JoinPool approves and pulls exactly
+// p.entryFee, read LIVE from the chain here, never a hardcoded amount. Passing a
+// zero fee would skip the approval and the join would revert on the missing
+// allowance, so the real fee has to be known before the button can act. One
+// wallet, one entry is enforced on-chain by joinPool exactly as everywhere else.
+// After joining, the target is handed off to the pool page, which is where
+// evidence upload and the claim rail live - this landing does not reimplement
+// that flow, it routes into it.
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import JoinPool from "@/components/JoinPool";
-import { fetchParticipant } from "@/lib/contract";
+import { fetchParticipant, fetchPool, formatUsdc } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { TAP_TARGET } from "@/components/ui";
+import { Money, Skeleton, TAP_TARGET } from "@/components/ui";
 
 export default function ChallengeAccept({ poolId }: { poolId: string }) {
   const { address } = useEmbeddedWallet();
@@ -26,6 +30,18 @@ export default function ChallengeAccept({ poolId }: { poolId: string }) {
   } catch {
     poolIdBig = null;
   }
+
+  // The lock-in is the pool's on-chain entry fee, read live. JoinPool approves
+  // and pulls exactly this, so the value has to be resolved before we can hand
+  // it a safe amount - a zero fee would under-approve and the join would revert.
+  const poolQuery = useQuery({
+    queryKey: ["pool", poolId],
+    queryFn: () => {
+      if (poolIdBig === null) throw new Error("Invalid pool id.");
+      return fetchPool(poolIdBig);
+    },
+    enabled: poolIdBig !== null,
+  });
 
   // Reflect an already-accepted challenge so a returning target sees "you are
   // in" and a route onward, instead of tapping accept and hitting an
@@ -45,9 +61,34 @@ export default function ChallengeAccept({ poolId }: { poolId: string }) {
 
   if (poolIdBig === null) return null;
 
+  const entryFee = poolQuery.data?.entryFee ?? null;
+
   return (
     <div className="space-y-4">
-      <JoinPool poolId={poolIdBig} entryFee={0n} alreadyJoined={joined} />
+      {entryFee !== null && entryFee > 0n && !joined ? (
+        <p className="text-sm text-muted">
+          Accepting stakes your <Money usd={formatUsdc(entryFee)} size="sm" />{" "}
+          lock-in. Hit the goal and it comes back with the reward; the challenger
+          never keeps it.
+        </p>
+      ) : null}
+
+      {entryFee !== null ? (
+        <JoinPool poolId={poolIdBig} entryFee={entryFee} alreadyJoined={joined} />
+      ) : poolQuery.isError ? (
+        // Never fall back to a zero fee - that would send a join that reverts on
+        // the missing allowance. When the live read fails, say so and send them
+        // to the pool page, where the join primitive loads the fee fresh.
+        <p className="text-sm text-muted">
+          Could not read the stake for this challenge right now. Open the full
+          challenge below to accept it.
+        </p>
+      ) : (
+        // Hold the button until the live read lands; JoinPool renders once it
+        // knows the exact lock-in to approve.
+        <Skeleton className="h-12 w-full rounded-xl" />
+      )}
+
       <Link
         href={`/pools/${poolId}`}
         className={`w-full rounded-xl border border-accent/40 bg-accent-deep/30 font-semibold text-accent hover:bg-accent-deep/50 ${TAP_TARGET}`}

@@ -19,7 +19,11 @@ import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatUsdc } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { fetchWalletUsdc, useTestUsdcFunding } from "@/lib/faucet-funding";
+import {
+  fetchWalletUsdc,
+  reconcileWalletUsdc,
+  useTestUsdcFunding,
+} from "@/lib/faucet-funding";
 
 type ChipState = "idle" | "done" | "fallback";
 
@@ -44,12 +48,30 @@ export default function TestUsdcChip() {
 
   const run = async () => {
     setState("idle");
+    // The balance the chip is showing right now, so the reconcile target is the
+    // expected total after delivery rather than the delivered amount alone.
+    const baseline = balanceQuery.data ?? 0n;
     const result = await fund(address);
     if (result.kind === "funded") {
       setState("done");
+      // Existing invalidation: one immediate refetch. On its own this often
+      // reads the pre-fund figure, because the RPC read replica lags the tx.
       await queryClient.invalidateQueries({
         queryKey: ["wallet-usdc", address],
       });
+      // Reconcile against real reads: poll balanceOf on a short interval and
+      // write each genuine read into the cache, so the chip climbs to the true
+      // balance within a few seconds instead of waiting for the 30s interval or
+      // a re-login. Every value shown is a live chain read, never a fake bump.
+      void reconcileWalletUsdc(
+        address as `0x${string}`,
+        baseline + result.movedUusdc,
+        {
+          onRead: (value) => {
+            queryClient.setQueryData(["wallet-usdc", address], value);
+          },
+        },
+      );
     } else {
       setState("fallback");
     }

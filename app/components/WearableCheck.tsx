@@ -27,6 +27,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { displayGoalSpec, fetchGoalId, fetchPool } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
+import { PopupBlockedError, openJunctionConnect } from "@/lib/junction-connect";
 import {
   deferredPeriodEndMs,
   failureModeOf,
@@ -43,7 +44,7 @@ import {
   providerDownReason,
   providerQueryKey,
 } from "@/lib/wearable-provider";
-import { fetchWithWalletAuth } from "@/lib/client-auth";
+import { fetchWithWalletAuth, type WalletAuthRequester } from "@/lib/client-auth";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import {
   claimScreenOf,
@@ -100,21 +101,6 @@ type CheckStatus =
   // moved must stay on screen even when the run dies.
   | { kind: "error"; message: string; ledger?: LedgerEntry[] };
 
-/** Open Junction Link in a new tab to connect WHOOP, Oura, Fitbit, Garmin. */
-async function openConnectFlow(address: `0x${string}`): Promise<void> {
-  const res = await fetch("/api/junction/link", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ address }),
-  });
-  if (!res.ok) throw new Error(`Link token request failed (${res.status}).`);
-  const { linkUrl } = (await res.json()) as { linkUrl?: string };
-  if (typeof linkUrl !== "string") {
-    throw new Error("The connect flow did not return a link URL.");
-  }
-  window.open(linkUrl, "_blank", "noopener");
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -143,6 +129,12 @@ function WearableCheckInner({
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<CheckStatus>({ kind: "idle" });
   const [connectError, setConnectError] = useState<string | null>(null);
+  // Set only when the browser blocked the connect popup: the real Junction
+  // Link URL, rendered as a link the user taps directly (a true gesture is
+  // never blocked). Null the rest of the time.
+  const [connectFallbackUrl, setConnectFallbackUrl] = useState<string | null>(
+    null,
+  );
   // Which wallet address the ledger restore last completed for. Until it
   // matches the connected address the UI shows a loading state rather than an
   // idle box (a lie for anyone whose claim already ran) or the previous
@@ -167,13 +159,31 @@ function WearableCheckInner({
 
   const readableGoal = displayGoalSpec(goalSpec);
 
+  // The connection-status read must resolve on its own, without ever opening a
+  // wallet prompt of its own. A claim surface already prompts once on mount
+  // (the ledger restore); a SECOND blocking signature prompt fired by this
+  // read is what pinned the UI on "Checking for a connected wearable" when it
+  // was dismissed - the query stayed pending forever and the Connect button
+  // below was never reached. Read cached-only: reuse any signature already
+  // collected, and when there is none the route answers 401 and the explicit
+  // "Sign and check" action shows instead of an infinite spinner. Only an
+  // explicit refresh (the 401-on-stale-credential retry) may re-sign.
+  const providerStatusAuth = useCallback<WalletAuthRequester>(
+    (options) =>
+      requestAuth({
+        refresh: options?.refresh,
+        cachedOnly: options?.refresh === true ? options?.cachedOnly : true,
+      }),
+    [requestAuth],
+  );
+
   // The provider read is shared with the dashboard and the pool list through
   // one query key: same endpoint, same parsed shape, one request per address.
   const providerQuery = useQuery({
     queryKey: providerQueryKey(address),
     queryFn: () => {
       if (address === null) throw new Error("No wallet connected.");
-      return fetchProviderState(address, requestAuth);
+      return fetchProviderState(address, providerStatusAuth);
     },
     enabled: address !== null,
     retry: false,
@@ -787,7 +797,14 @@ function WearableCheckInner({
             type="button"
             onClick={() => {
               setConnectError(null);
-              void openConnectFlow(address).catch((err: unknown) => {
+              setConnectFallbackUrl(null);
+              void openJunctionConnect(address).catch((err: unknown) => {
+                if (err instanceof PopupBlockedError) {
+                  // Not a failure - the URL is good, the browser just refused
+                  // the auto-open. Offer a link the user taps directly.
+                  setConnectFallbackUrl(err.linkUrl);
+                  return;
+                }
                 setConnectError(
                   err instanceof Error
                     ? err.message
@@ -799,6 +816,17 @@ function WearableCheckInner({
           >
             Connect a wearable
           </button>
+          {connectFallbackUrl !== null ? (
+            <a
+              href={connectFallbackUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setConnectFallbackUrl(null)}
+              className="block w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3.5 text-center text-base font-semibold text-accent hover:bg-accent-deep"
+            >
+              Your browser blocked the popup - tap here to connect
+            </a>
+          ) : null}
           <button
             type="button"
             onClick={() => {

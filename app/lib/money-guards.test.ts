@@ -2,10 +2,12 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   BLINK_ALLOWED_CHAIN_ID,
   BLINK_MAX_DEPOSIT_USD,
+  FAUCET_ADDRESS_DAILY_CAP_UUSDC,
   FAUCET_AUTO_BUDGET_UUSDC,
   FAUCET_COOLDOWN_MS,
   FAUCET_DAILY_BUDGET_UUSDC,
   FAUCET_GRANT_UUSDC,
+  FAUCET_REFILL_BALANCE_THRESHOLD_UUSDC,
   TREASURY_FLOOR_UUSDC,
   WITHDRAW_DAILY_CAP_UUSDC,
   checkBlinkDeposit,
@@ -50,30 +52,92 @@ describe("windowRetryAfterSeconds", () => {
 });
 
 describe("faucetClaimRef", () => {
-  it("is derived only from the address and the window", () => {
+  const SEQ = FAUCET_GRANT_UUSDC;
+
+  it("collapses a retry of the same reserved slot", () => {
     // The old route keyed idempotency on a caller-supplied UUID, so a fresh
-    // UUID bought a fresh credit. Same address, same window must collapse.
-    expect(faucetClaimRef("0xAbC", NOW)).toBe(faucetClaimRef("0xabc", NOW + 5));
+    // UUID bought a fresh credit. Same address, window and grant sequence must
+    // collapse onto one ledger credit, so a retry of one slot cannot double-pay.
+    expect(faucetClaimRef("0xAbC", NOW, SEQ)).toBe(
+      faucetClaimRef("0xabc", NOW + 5, SEQ),
+    );
   });
 
   it("agrees with the rate limiter about which window a moment is in", () => {
     // The ledger ref and the per-address gate must never disagree, or one of
     // them can allow a grant the other has already counted.
     const bucket = windowBucket(NOW, FAUCET_COOLDOWN_MS);
-    expect(faucetClaimRef("0xaaa", NOW)).toBe(`faucet:0xaaa:${bucket}`);
+    expect(faucetClaimRef("0xaaa", NOW, SEQ)).toBe(
+      `faucet:0xaaa:${bucket}:${SEQ.toString()}`,
+    );
+  });
+
+  it("differs across grant sequences in the same window", () => {
+    // The whole point of the balance-aware refill: a user who spent their grant
+    // is granted again in the same window under a higher reserved total, so the
+    // second grant must carry a distinct ref rather than dedupe onto the first.
+    expect(faucetClaimRef("0xaaa", NOW, FAUCET_GRANT_UUSDC)).not.toBe(
+      faucetClaimRef("0xaaa", NOW, FAUCET_GRANT_UUSDC * 2n),
+    );
   });
 
   it("differs across addresses", () => {
-    expect(faucetClaimRef("0xaaa", NOW)).not.toBe(faucetClaimRef("0xbbb", NOW));
+    expect(faucetClaimRef("0xaaa", NOW, SEQ)).not.toBe(
+      faucetClaimRef("0xbbb", NOW, SEQ),
+    );
   });
 
   it("always differs after a full window, so a valid claim is never deduped", () => {
     for (let offset = 0; offset < 5; offset += 1) {
       const t = NOW + offset * 977;
-      expect(faucetClaimRef("0xaaa", t)).not.toBe(
-        faucetClaimRef("0xaaa", t + FAUCET_COOLDOWN_MS),
+      expect(faucetClaimRef("0xaaa", t, SEQ)).not.toBe(
+        faucetClaimRef("0xaaa", t + FAUCET_COOLDOWN_MS, SEQ),
       );
     }
+  });
+});
+
+describe("faucet balance-aware refill", () => {
+  it("refills only below one grant's worth of spendable balance", () => {
+    // The threshold is what lets a user who spent their grant claim again while
+    // still refusing a wallet that already holds practice money. It is one
+    // grant, so a wallet holding less than a grant is topped back up to roughly
+    // one grant, and a wallet holding a grant or more is left alone.
+    expect(FAUCET_REFILL_BALANCE_THRESHOLD_UUSDC).toBe(FAUCET_GRANT_UUSDC);
+    expect(FAUCET_REFILL_BALANCE_THRESHOLD_UUSDC).toBeGreaterThan(0n);
+  });
+
+  it("caps a single address at a whole number of grants above one", () => {
+    // The absolute per-address ceiling is the backstop for an attacker who
+    // sends the grant away to slip back under the threshold. It must be a whole
+    // number of grants, and above one so an honest user who plays several pools
+    // in a day can still refill.
+    expect(FAUCET_ADDRESS_DAILY_CAP_UUSDC % FAUCET_GRANT_UUSDC).toBe(0n);
+    expect(FAUCET_ADDRESS_DAILY_CAP_UUSDC).toBeGreaterThan(FAUCET_GRANT_UUSDC);
+    expect(FAUCET_ADDRESS_DAILY_CAP_UUSDC).toBeLessThanOrEqual(
+      FAUCET_DAILY_BUDGET_UUSDC,
+    );
+  });
+
+  it("bounds a single address to its cap on the shared spend counter", () => {
+    // The per-address gate reserves grant-sized amounts against the per-address
+    // cap on the same atomic counter the global budget uses, so once the
+    // running per-address total crosses the cap the address is denied.
+    let total = 0n;
+    let allowed = 0;
+    for (let i = 0; i < 100; i += 1) {
+      total += FAUCET_GRANT_UUSDC;
+      const verdict = spendVerdict(
+        total,
+        FAUCET_GRANT_UUSDC,
+        FAUCET_ADDRESS_DAILY_CAP_UUSDC,
+      );
+      if (verdict.kind === "allow") allowed += 1;
+      else break;
+    }
+    expect(BigInt(allowed) * FAUCET_GRANT_UUSDC).toBe(
+      FAUCET_ADDRESS_DAILY_CAP_UUSDC,
+    );
   });
 });
 
