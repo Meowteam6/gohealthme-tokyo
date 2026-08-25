@@ -489,14 +489,20 @@ export default function HelperWidget() {
   // panel only opens after hydration and there is no server/client mismatch.
   useEffect(() => {
     const persisted = readPersisted();
-    if (persisted.autoOpened !== true && persisted.dismissed !== true) {
-      writePersisted({ ...persisted, autoOpened: true });
-      // Syncing from an external store (localStorage) after hydration is the
-      // intended use of an effect here, and opening post-hydration is what
-      // avoids a server/client mismatch; the heuristic cannot tell.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setOpen(true);
-    }
+    if (persisted.autoOpened === true || persisted.dismissed === true) return;
+    // Do not auto-open on phones: the panel is ~full width and up to 70vh tall
+    // there, so it would bury the hero and the sign-in CTA the instant a
+    // first-time visitor lands. Desktop has room for the corner panel; a phone
+    // visitor taps the bubble if they want help. matchMedia is client-only and
+    // this effect runs after hydration, so the server still renders the closed
+    // bubble (no hydration mismatch).
+    if (!window.matchMedia("(min-width: 640px)").matches) return;
+    writePersisted({ ...persisted, autoOpened: true });
+    // Syncing from an external store (localStorage) after hydration is the
+    // intended use of an effect here, and opening post-hydration is what
+    // avoids a server/client mismatch; the heuristic cannot tell.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpen(true);
   }, []);
 
   // Same key + fn as TestUsdcChip: the cache is shared, so no double fetch.
