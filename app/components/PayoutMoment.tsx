@@ -19,12 +19,20 @@ export default function PayoutMoment({
   paidUsd,
   txHash,
   selfReported = false,
+  selfStaked = false,
   initialOpen = true,
 }: {
   paidUsd: string;
   txHash: string | null;
   /** The low-trust tier. When true the moment NEVER claims "verified". */
   selfReported?: boolean;
+  /**
+   * Self-staked commitment pool (bountyModel 2). Independent of selfReported:
+   * this is the economic model, not the proof tier. When true, the payout is
+   * the achiever's own stake back PLUS a share of the forfeited stakes, so the
+   * moment says so above the hype line. Does not touch the trust ribbon.
+   */
+  selfStaked?: boolean;
   /** Dev/preview only: start with the takeover already dismissed. */
   initialOpen?: boolean;
 }) {
@@ -72,6 +80,11 @@ export default function PayoutMoment({
         <p className="mt-1 text-sm font-semibold text-foreground">
           SPOTTER paid you.
         </p>
+        {selfStaked ? (
+          <p className="text-sm text-muted">
+            Your stake back, plus a cut of what the no-shows left on the table.
+          </p>
+        ) : null}
         <p className="text-sm text-muted">Absolute unit. Run it back.</p>
         {txHash !== null ? (
           <p className="mt-2">
@@ -156,6 +169,12 @@ export default function PayoutMoment({
             <p className="mt-2 text-base font-semibold text-foreground">
               SPOTTER paid you.
             </p>
+            {selfStaked ? (
+              <p className="mt-1 text-sm text-muted">
+                Your stake back, plus a cut of what the no-shows left on the
+                table.
+              </p>
+            ) : null}
             <p className="mt-1 text-sm text-muted">Absolute unit. Run it back.</p>
             {txHash !== null ? (
               <p className="mt-4">

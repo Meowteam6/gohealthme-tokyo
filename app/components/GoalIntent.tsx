@@ -32,13 +32,15 @@ export default function GoalIntent() {
         aria-label="Your goal"
         className="w-full flex-1 rounded-xl border border-edge bg-surface px-5 py-4 text-base text-foreground placeholder:text-muted focus:border-accent/60 focus:outline-none"
       />
-      {/* Not "Put money on it": to a stranger that reads as a bill, and the
-          truth is the opposite - the money on the table is a sponsor's. */}
+      {/* Self-stake is the default now: you put your own USDC on your own goal
+          and get it back plus a cut of the forfeits. Sponsor-funded pools still
+          exist, but the premise is you backing you - so the CTA is about staking
+          on the goal, not collecting somebody else's money. */}
       <button
         type="submit"
         className="rounded-xl bg-accent-strong px-8 py-4 text-base font-semibold text-background hover:bg-accent"
       >
-        See who&apos;s paying
+        Stake on it
       </button>
     </form>
   );

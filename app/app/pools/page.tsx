@@ -147,7 +147,7 @@ export default function PoolsPage() {
     <div className="space-y-6">
       <SceneHeader
         title="Bounty pools"
-        subtitle="Live sponsor-funded pools on Base Sepolia. Join with your wallet, hit the goal, get paid in USDC. Testnet USDC only, no real value."
+        subtitle="Live health-commitment pools on Base Sepolia. Join with your wallet, hit your goal, get paid in USDC. Testnet USDC only, no real value."
         pose="spotter-standing.png"
         poseAlt="SPOTTER the otter, standing, ready to point you at a pool"
         spotterLine="Somebody put money up. It's just sitting there. Rude not to."

@@ -16,6 +16,7 @@ interface Match {
   balance: string;
   entryFee: string;
   periodEnd: string;
+  bountyModel: number;
   score: number;
 }
 
@@ -54,7 +55,17 @@ function MatchCard({ match, lead }: { match: Match; lead: boolean }) {
       <p className="mt-3 text-base font-semibold">
         {displayGoalSpec(match.goalSpec)}
       </p>
-      {balanceUsd !== null ? (
+      {/* A self-staked commitment pool (model 2) is funded by the participants'
+          own stakes, so it must never claim a sponsor put the money up. Sponsor
+          pools keep the existing framing. */}
+      {match.bountyModel === 2 ? (
+        entryFeeUsd !== null ? (
+          <p className="mt-2 text-sm text-muted">
+            Stake <Money usd={entryFeeUsd} size="sm" /> USDC, hit it, get it back
+            plus a cut of the forfeits.
+          </p>
+        ) : null
+      ) : balanceUsd !== null ? (
         <p className="mt-2 text-sm text-muted">
           <Money usd={balanceUsd} size="sm" /> staked by a sponsor. Not you.
         </p>

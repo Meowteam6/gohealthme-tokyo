@@ -126,7 +126,19 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
         setStatus({ kind: "error", message });
         throw new Error(message);
       }
-      if (amount <= 0n) {
+      // A zero-funding createPool is legitimate: a self-staked commitment pool
+      // (bountyModel 2) takes no sponsor seed — every participant stakes their
+      // own entry fee through joinPool, so createPool itself pulls no USDC (the
+      // contract only pulls initialFunding when it is above zero). Allow amount
+      // 0 for exactly that call — createPool with initialFunding (args[6]) 0 —
+      // and skip the balance preflight and approval below. Every other
+      // USDC-pulling call (fundPool, backGoal, a sponsor-seeded createPool)
+      // still requires a positive amount.
+      const zeroFundingCreate =
+        amount === 0n &&
+        call.functionName === "createPool" &&
+        call.args[6] === 0n;
+      if (amount < 0n || (amount === 0n && !zeroFundingCreate)) {
         const message = "Deposit amount must be greater than zero.";
         setStatus({ kind: "error", message });
         throw new Error(message);
@@ -254,7 +266,7 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
         } catch {
           balance = null;
         }
-        if (balance !== null && !canCoverUsdcCosts(balance, amount)) {
+        if (amount > 0n && balance !== null && !canCoverUsdcCosts(balance, amount)) {
           fundingGap = {
             address: owner,
             balance,

@@ -366,7 +366,12 @@ function WearableCheckInner({
   const poolQuery = useQuery({
     queryKey: ["pool", poolId.toString()],
     queryFn: () => fetchPool(poolId),
-    enabled: status.kind === "agent" && status.runStatus === "recorded",
+    // Also kept enabled on "paid" so PayoutMoment can read the pool's bounty
+    // model (self-staked pools describe the payout as stake-back + forfeits).
+    // Shares PoolDetail's cache key, so this is usually served without a fetch.
+    enabled:
+      status.kind === "agent" &&
+      (status.runStatus === "recorded" || status.runStatus === "paid"),
   });
   const periodEndMs =
     status.kind === "agent" && status.runStatus === "recorded"
@@ -520,6 +525,7 @@ function WearableCheckInner({
           <PayoutMoment
             paidUsd={toUsd2(paid.paidUsd)}
             txHash={paid.txHash ?? null}
+            selfStaked={poolQuery.data?.bountyModel === 2}
           />
         ) : null}
 

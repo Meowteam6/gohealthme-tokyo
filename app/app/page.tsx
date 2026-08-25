@@ -5,7 +5,7 @@ import { Badge, Money } from "@/components/ui";
 const steps = [
   {
     title: "Say what you are going to do",
-    body: "Sleep streak, flu shot, back in the gym. A sponsor's USDC is already staked behind it - not yours.",
+    body: "Sleep streak, flu shot, back in the gym. Put your own USDC behind it - the ones who show up split what the ones who don't leave on the table.",
   },
   {
     title: "SPOTTER buys the proof-check",
@@ -13,7 +13,7 @@ const steps = [
   },
   {
     title: "Paid the second it is proven",
-    body: "The verdict comes out of a confidential enclave - nobody ever sees your health data - and SPOTTER settles the pool on Base. The bounty leaves the sponsor's pool and lands in your wallet. SPOTTER covers the gas and the proof-check, not the bounty. No human in the loop.",
+    body: "The verdict comes out of a confidential enclave - nobody ever sees your health data - and SPOTTER settles the pool on Base. Your stake comes back with a cut of the forfeited stakes, straight to your wallet. SPOTTER covers the gas and the proof-check. No human in the loop.",
   },
 ];
 
@@ -28,13 +28,13 @@ export default function Home() {
             Free money with extra steps. The steps are the point.
           </p>
           <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-            Your goal. Somebody else&apos;s money.
+            Stake on yourself. Get it back - and then some.
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
-            Say what you are going to do. A sponsor puts up the USDC. An agent
-            buys whatever it needs to check your proof, decides, and releases the
-            sponsor&apos;s money to you on the spot. No human in the loop, and
-            nobody ever sees your health data.
+            Put your own USDC behind your own goal. Hit it, you get your stake
+            back plus a cut of what everyone who didn&apos;t show up forfeited.
+            SPOTTER buys the proof-check, makes the call, and pays you on the
+            spot. Nobody ever sees your health data.
           </p>
           {/* The one honest line. "Put money on it" read like a bill, and the
               only testnet disclosure in the app used to be on /pools - a
@@ -168,10 +168,12 @@ export default function Home() {
             </p>
           </div>
           <div>
-            <p className="text-sm font-semibold">A reward, not a bet</p>
+            <p className="text-sm font-semibold">You vs your goal, nobody else</p>
             <p className="mt-1 text-sm leading-relaxed text-muted">
-              A sponsor — or you — puts the money up. You show up for yourself and
-              collect. Nobody is pitted against anybody.
+              You put your own USDC up on your own goal and get it back, with a
+              cut of what the no-shows forfeited, the moment you hit it. A sponsor
+              can fund it instead - either way you are never pitted against
+              another person.
             </p>
           </div>
           <div>

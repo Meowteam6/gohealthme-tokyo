@@ -408,7 +408,12 @@ function EvidenceUploadInner({
   const poolQuery = useQuery({
     queryKey: ["pool", poolId.toString()],
     queryFn: () => fetchPool(poolId),
-    enabled: status.kind === "agent" && status.runStatus === "recorded",
+    // Also kept enabled on "paid" so PayoutMoment can read the pool's bounty
+    // model (self-staked pools describe the payout as stake-back + forfeits).
+    // Shares PoolDetail's cache key, so this is usually served without a fetch.
+    enabled:
+      status.kind === "agent" &&
+      (status.runStatus === "recorded" || status.runStatus === "paid"),
   });
   const periodEndMs =
     status.kind === "agent" && status.runStatus === "recorded"
@@ -661,6 +666,7 @@ function EvidenceUploadInner({
             selfReported={status.ledger.some(
               (e) => e.kind === "verdict" && e.selfReported === true,
             )}
+            selfStaked={poolQuery.data?.bountyModel === 2}
           />
         ) : null}
 

@@ -42,6 +42,10 @@ export async function GET(request: Request) {
           balance: pool.balance.toString(),
           entryFee: pool.entryFee.toString(),
           periodEnd: pool.periodEnd.toString(),
+          // Model 2 is a self-staked commitment pool: the money is the
+          // participants' own stakes, not a sponsor's. The card copy branches on
+          // this so it never tells a self-staker a sponsor funded their goal.
+          bountyModel: pool.bountyModel,
           score,
         };
       })

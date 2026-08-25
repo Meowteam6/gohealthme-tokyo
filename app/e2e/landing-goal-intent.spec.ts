@@ -17,18 +17,20 @@ test.describe("landing page", () => {
     await page.goto("/");
 
     await expect(
-      page.getByRole("heading", { name: /Your goal\. Somebody else's money\./i }),
+      page.getByRole("heading", {
+        name: /Stake on yourself\. Get it back - and then some\./i,
+      }),
     ).toBeVisible();
     await demoBeat();
     // Nobody should be able to type a goal without first learning the stakes.
-    await expect(page.getByText("Arc Testnet", { exact: true })).toBeVisible();
+    await expect(page.getByText("Base Sepolia", { exact: true })).toBeVisible();
     await expect(
       page.getByText("nothing here can cost you real money"),
     ).toBeVisible();
     await demoBeat();
     await expect(page.getByLabel("Your goal")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "See who's paying" }),
+      page.getByRole("button", { name: "Stake on it" }),
     ).toBeVisible();
     await demoBeat();
   });
@@ -70,7 +72,7 @@ test.describe("landing page", () => {
       .getByLabel("Your goal")
       .pressSequentially("sleep streak", { delay: 60 });
     await demoBeat();
-    await page.getByRole("button", { name: "See who's paying" }).click();
+    await page.getByRole("button", { name: "Stake on it" }).click();
 
     await expect(page).toHaveURL(/\/goal\?q=sleep(\+|%20)streak/);
     // The routed query actually matched: the sleep pool leads the list.
@@ -84,7 +86,7 @@ test.describe("landing page", () => {
   test("routes an empty goal to the unfiltered list", async ({ page }) => {
     await page.goto("/");
 
-    await page.getByRole("button", { name: "See who's paying" }).click();
+    await page.getByRole("button", { name: "Stake on it" }).click();
 
     await expect(page).toHaveURL(/\/goal$/);
   });

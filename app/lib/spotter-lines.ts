@@ -77,7 +77,7 @@ export const SPOTTER_LINES: SpotterLine[] = [
   { id: "dash-e2", surface: "dashboard-empty", state: "empty", tone: "dry", text: { en: "Empty. Go put your name on a pool." } },
 
   { id: "pools-e1", surface: "pools-empty", state: "empty", tone: "dry", text: { en: "No live pools right now. Even I'm just watching the river." } },
-  { id: "pools-e2", surface: "pools-empty", state: "empty", tone: "dry", text: { en: "Quiet out here. Check back when a sponsor shows up." } },
+  { id: "pools-e2", surface: "pools-empty", state: "empty", tone: "dry", text: { en: "Quiet out here. Nobody's staked a goal yet - could be you." } },
 
   { id: "agent-e1", surface: "agent-empty", state: "empty", tone: "dry", text: { en: "I've done nothing yet. Give me something to verify." } },
   { id: "agent-e2", surface: "agent-empty", state: "empty", tone: "dry", text: { en: "Idle otter. Feed me a claim." } },

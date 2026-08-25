@@ -620,9 +620,11 @@ export default function PoolDetail({ id }: { id: string }) {
             <section className="rounded-2xl border border-edge bg-surface p-5">
               <h2 className="text-lg font-semibold">Join this pool</h2>
               <p className="mb-4 mt-1 text-sm text-muted">
-                {isDocGoal
-                  ? `Pay the ${formatUsdc(pool.entryFee)} USDC entry fee, then upload your record. The bounty pays out the moment your document is verified.`
-                  : `Pay the ${formatUsdc(pool.entryFee)} USDC entry fee, hit the goal during the period, and the bounty pays out the moment your result is verified.`}
+                {pool.bountyModel === 2
+                  ? `Stake the ${formatUsdc(pool.entryFee)} USDC entry, hit the goal during the period, and your stake comes back plus a share of what everyone who didn't show up left behind.`
+                  : isDocGoal
+                    ? `Pay the ${formatUsdc(pool.entryFee)} USDC entry fee, then upload your record. The bounty pays out the moment your document is verified.`
+                    : `Pay the ${formatUsdc(pool.entryFee)} USDC entry fee, hit the goal during the period, and the bounty pays out the moment your result is verified.`}
               </p>
               {participantCount === 0 ? (
                 <p className="mb-4 rounded-xl border border-dashed border-accent/30 bg-accent-deep/20 p-3 text-sm text-accent">

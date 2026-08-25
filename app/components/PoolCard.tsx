@@ -73,10 +73,22 @@ export default function PoolCard({
       <h3 className="mt-3 text-xl font-semibold leading-snug">
         {displayGoalSpec(pool.goalSpec)}
       </h3>
+      {/* A self-staked commitment pool (model 2) has no sponsor - the creator
+          just set the terms and every participant stakes their own USDC - so the
+          "Funder" label would be misleading. Show it only for sponsor-funded
+          models; the payout-model label stays either way. */}
       <p className="mt-1 text-xs text-muted">
-        Funder {shortAddress(pool.creator)} ·{" "}
+        {pool.bountyModel !== 2
+          ? `Funder ${shortAddress(pool.creator)} · `
+          : ""}
         {BOUNTY_MODEL_LABELS[pool.bountyModel] ?? "Custom model"}
       </p>
+      {pool.bountyModel === 2 && pool.entryFee > 0n ? (
+        <p className="mt-1 text-xs text-muted">
+          Stake {formatUsdc(pool.entryFee)} USDC. Hit it, get it back plus a cut
+          of the forfeits.
+        </p>
+      ) : null}
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-surface-raised p-3">
           <p className="text-xs uppercase tracking-wide text-muted">Bounty pool</p>
