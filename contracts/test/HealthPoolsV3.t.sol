@@ -699,6 +699,19 @@ contract HealthPoolsV3Test is Test {
         assertEq(pools.commitmentFeeBps(), cap, "fee set to cap by owner");
     }
 
+    /// @notice PILOT COMPLIANCE LOCK: a freshly deployed pool ships with the
+    ///         commitment rake OFF (commitmentFeeBps == 0). The real-money pilot
+    ///         depends on the platform taking no cut of losers' forfeited stakes
+    ///         — a non-zero default reads as operating a gambling business. If a
+    ///         future change sets a non-zero default in the constructor, this
+    ///         test must fail loudly. The 20% ceiling is a cap only an explicit
+    ///         owner action can approach, never a default.
+    function test_Pilot_commitmentFeeDefaultsToZero() public {
+        HealthPoolsV3 fresh = new HealthPoolsV3(address(usdc), oracle, settler, address(verdict));
+        assertEq(fresh.commitmentFeeBps(), 0, "pilot ships with the commitment rake at 0");
+        assertEq(fresh.MAX_COMMITMENT_FEE_BPS(), 2_000, "rake ceiling stays 20% (2000 bps), never a default");
+    }
+
     /// @notice Property: for any staker count, hit pattern, and fee, model-2
     ///         settlement conserves funds exactly (users + owner fee + pool dust ==
     ///         pot) and never taxes an achiever below her own stake.

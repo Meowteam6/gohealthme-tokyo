@@ -35,7 +35,14 @@ contract Deploy is Script {
         HealthPoolsV3 pools = new HealthPoolsV3(token, oracle, settler, verdictRegistry);
         vm.stopBroadcast();
 
+        // Pilot compliance lock: the real-money pilot must deploy with the
+        // commitment rake OFF. A non-zero cut of losers' forfeited stakes is the
+        // single feature that reads as operating a gambling business, so assert
+        // it at deploy time rather than trusting the constructor default.
+        require(pools.commitmentFeeBps() == 0, "PILOT_RAKE_MUST_BE_ZERO");
+
         console.log("HealthPoolsV3 deployed at:", address(pools));
+        console.log("  rake   : 0 bps (pilot compliance lock)");
         console.log("  usdc   :", token);
         console.log("  oracle :", oracle);
         console.log("  settler:", settler);
