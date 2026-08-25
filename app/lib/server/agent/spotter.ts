@@ -429,12 +429,13 @@ const POOLS_READ_ABI = [
       {
         name: "",
         type: "tuple",
-        // Field order MUST mirror struct Pool in HealthPools.sol exactly;
+        // Field order MUST mirror struct Pool in HealthPoolsV3.sol exactly;
         // a mismatch decodes silently into the wrong fields.
         components: [
           { name: "creator", type: "address" },
           { name: "bountyModel", type: "uint8" },
           { name: "settled", type: "bool" },
+          { name: "cancelled", type: "bool" },
           { name: "periodStart", type: "uint64" },
           { name: "periodEnd", type: "uint64" },
           { name: "entryFee", type: "uint256" },
@@ -468,9 +469,8 @@ const POOLS_READ_ABI = [
           { name: "joined", type: "bool" },
           { name: "resultRecorded", type: "bool" },
           { name: "verdict", type: "bool" },
+          { name: "refunded", type: "bool" },
           { name: "multiplierBps", type: "uint16" },
-          { name: "nullifierHash", type: "uint256" },
-          { name: "backingTotal", type: "uint256" },
         ],
       },
     ],

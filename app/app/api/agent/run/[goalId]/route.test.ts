@@ -126,6 +126,7 @@ function pool(overrides: Record<string, unknown> = {}) {
     creator: USER,
     bountyModel: 0,
     settled: false,
+    cancelled: false,
     periodStart: 123n,
     periodEnd: 456n,
     entryFee: 0n,

@@ -24,7 +24,7 @@ import { scanInWindows, poolsScanFromBlock } from "@/lib/server/chunked-logs";
 import type { PoolAggregate } from "@/lib/sponsor-metrics";
 
 const poolJoinedEvent = parseAbiItem(
-  "event PoolJoined(uint256 indexed poolId, address indexed participant, uint256 nullifierHash)",
+  "event PoolJoined(uint256 indexed poolId, address indexed participant)",
 );
 const resultRecordedEvent = parseAbiItem(
   "event ResultRecorded(uint256 indexed poolId, address indexed participant, bool verdict, uint16 multiplierBps)",

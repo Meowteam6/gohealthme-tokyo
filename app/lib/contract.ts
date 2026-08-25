@@ -158,6 +158,7 @@ export const healthPoolsAbi = [
           { name: "creator", type: "address" },
           { name: "bountyModel", type: "uint8" },
           { name: "settled", type: "bool" },
+          { name: "cancelled", type: "bool" },
           { name: "periodStart", type: "uint64" },
           { name: "periodEnd", type: "uint64" },
           { name: "entryFee", type: "uint256" },
@@ -184,9 +185,8 @@ export const healthPoolsAbi = [
           { name: "joined", type: "bool" },
           { name: "resultRecorded", type: "bool" },
           { name: "verdict", type: "bool" },
+          { name: "refunded", type: "bool" },
           { name: "multiplierBps", type: "uint16" },
-          { name: "nullifierHash", type: "uint256" },
-          { name: "backingTotal", type: "uint256" },
         ],
       },
     ],
@@ -239,7 +239,6 @@ export const healthPoolsAbi = [
     inputs: [
       { name: "poolId", type: "uint256", indexed: true },
       { name: "participant", type: "address", indexed: true },
-      { name: "nullifierHash", type: "uint256", indexed: false },
     ],
   },
   {
@@ -288,7 +287,7 @@ export const achieverPaidEvent = parseAbiItem(
   "event AchieverPaid(uint256 indexed poolId, address indexed participant, uint256 amount)",
 );
 export const poolJoinedEvent = parseAbiItem(
-  "event PoolJoined(uint256 indexed poolId, address indexed participant, uint256 nullifierHash)",
+  "event PoolJoined(uint256 indexed poolId, address indexed participant)",
 );
 export const resultRecordedEvent = parseAbiItem(
   "event ResultRecorded(uint256 indexed poolId, address indexed participant, bool verdict, uint16 multiplierBps)",
@@ -381,6 +380,7 @@ export interface PoolInfo {
   creator: Address;
   bountyModel: number;
   settled: boolean;
+  cancelled: boolean;
   periodStart: bigint;
   periodEnd: bigint;
   entryFee: bigint;
@@ -393,9 +393,8 @@ export interface ParticipantInfo {
   joined: boolean;
   resultRecorded: boolean;
   verdict: boolean;
+  refunded: boolean;
   multiplierBps: number;
-  nullifierHash: bigint;
-  backingTotal: bigint;
 }
 
 export class ContractNotConfiguredError extends Error {
@@ -422,6 +421,7 @@ async function readPool(address: Address, id: bigint): Promise<PoolInfo> {
     creator: pool.creator,
     bountyModel: pool.bountyModel,
     settled: pool.settled,
+    cancelled: pool.cancelled,
     periodStart: pool.periodStart,
     periodEnd: pool.periodEnd,
     entryFee: pool.entryFee,
@@ -582,9 +582,8 @@ export async function fetchParticipant(
     joined: p.joined,
     resultRecorded: p.resultRecorded,
     verdict: p.verdict,
+    refunded: p.refunded,
     multiplierBps: p.multiplierBps,
-    nullifierHash: p.nullifierHash,
-    backingTotal: p.backingTotal,
   };
 }
 

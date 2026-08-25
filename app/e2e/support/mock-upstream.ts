@@ -75,6 +75,7 @@ const POOL_TUPLE = {
     { name: "creator", type: "address" },
     { name: "bountyModel", type: "uint8" },
     { name: "settled", type: "bool" },
+    { name: "cancelled", type: "bool" },
     { name: "periodStart", type: "uint64" },
     { name: "periodEnd", type: "uint64" },
     { name: "entryFee", type: "uint256" },
@@ -91,9 +92,8 @@ const PARTICIPANT_TUPLE = {
     { name: "joined", type: "bool" },
     { name: "resultRecorded", type: "bool" },
     { name: "verdict", type: "bool" },
+    { name: "refunded", type: "bool" },
     { name: "multiplierBps", type: "uint16" },
-    { name: "nullifierHash", type: "uint256" },
-    { name: "backingTotal", type: "uint256" },
   ],
 } as const;
 
@@ -293,6 +293,7 @@ function ethCall(to: Address, data: Hex): Hex {
           creator: found.creator,
           bountyModel: found.bountyModel,
           settled: found.settled,
+          cancelled: found.cancelled,
           periodStart: BigInt(found.periodStart),
           periodEnd: BigInt(found.periodEnd),
           entryFee: BigInt(found.entryFee),
@@ -310,9 +311,8 @@ function ethCall(to: Address, data: Hex): Hex {
           joined: false,
           resultRecorded: false,
           verdict: false,
+          refunded: false,
           multiplierBps: 0,
-          nullifierHash: "0",
-          backingTotal: "0",
         } satisfies ParticipantFixture);
       return encodeFunctionResult({
         abi: ABI,
@@ -321,9 +321,8 @@ function ethCall(to: Address, data: Hex): Hex {
           joined: found.joined,
           resultRecorded: found.resultRecorded,
           verdict: found.verdict,
+          refunded: found.refunded,
           multiplierBps: found.multiplierBps,
-          nullifierHash: BigInt(found.nullifierHash),
-          backingTotal: BigInt(found.backingTotal),
         },
       });
     }

@@ -135,6 +135,8 @@ export interface PoolFixture {
   /** 0 = fixed bounty per achiever, 1 = pro-rata pot split. */
   bountyModel: number;
   settled: boolean;
+  /** Locked for refunds instead of payouts (cancelPool). */
+  cancelled: boolean;
   /** Epoch seconds, decimal string. */
   periodStart: string;
   periodEnd: string;
@@ -151,9 +153,8 @@ export interface ParticipantFixture {
   joined: boolean;
   resultRecorded: boolean;
   verdict: boolean;
+  refunded: boolean;
   multiplierBps: number;
-  nullifierHash: string;
-  backingTotal: string;
 }
 
 /**
@@ -241,9 +242,8 @@ export function joinedParticipant(): ParticipantFixture {
     joined: true,
     resultRecorded: false,
     verdict: false,
+    refunded: false,
     multiplierBps: 0,
-    nullifierHash: "0",
-    backingTotal: "0",
   };
 }
 
@@ -263,6 +263,7 @@ export interface PoolOptions {
   entryFee?: string;
   balance?: string;
   settled?: boolean;
+  cancelled?: boolean;
   startsInSeconds?: number;
   endsInSeconds?: number;
   bountyModel?: number;
@@ -276,6 +277,7 @@ export function pool(options: PoolOptions): PoolFixture {
     creator: "0x00000000000000000000000000000000c0ffee00",
     bountyModel: options.bountyModel ?? 1,
     settled: options.settled ?? false,
+    cancelled: options.cancelled ?? false,
     periodStart: secondsFromNow(options.startsInSeconds ?? -HOUR),
     periodEnd: secondsFromNow(options.endsInSeconds ?? 24 * HOUR),
     entryFee: options.entryFee ?? "0",
