@@ -6,7 +6,8 @@
 //   1. Reuse, not reinvention: pool creation runs through the existing
 //      CreatePool form and top-ups through the existing FundPool component, both
 //      unchanged. This file only adds the console shell, the sponsor's own-pool
-//      filter, and the privacy-safe outcome view.
+//      filter, and the privacy-safe outcome view. Presentation is the warm-light
+//      "gold" reskin; the data reads below are the originals.
 //   2. k-anonymity floor (lib/sponsor-metrics): every outcome figure — per pool
 //      and across the portfolio — is withheld unless it derives from at least
 //      five participants. Sponsor capital (balances, the sponsor's own funding)
@@ -20,20 +21,22 @@
 // covered-entity claim. Those change the regulatory posture of the product and
 // are held for legal review, not written into console UI.
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import CreatePool from "@/components/CreatePool";
 import SponsorPoolOutcome from "@/components/SponsorPoolOutcome";
 import SignInGate from "@/components/SignInGate";
+import SceneHeader from "@/components/SceneHeader";
+import { Icon, type IconName } from "@/components/SponsorIcons";
 import {
   Badge,
+  Button,
+  Card,
   EmptyState,
   ErrorNote,
   Money,
   PoolCardSkeleton,
-  Stat,
-  TAP_TARGET,
 } from "@/components/ui";
 import { fetchPools, formatUsdc, type PoolInfo } from "@/lib/contract";
 import { toPoolAggregate, type PoolEventTotals } from "@/lib/sponsor-data";
@@ -43,9 +46,6 @@ import {
   type PoolAggregate,
 } from "@/lib/sponsor-metrics";
 import { useEmbeddedWallet } from "@/lib/wallet";
-
-const PRIVACY_LINE =
-  "Outcomes here are aggregate only. SPOTTER verifies each goal in a confidential enclave, and only the verdict ever leaves it — no sponsor sees a participant's health data, and no figure is shown that could point at one person.";
 
 interface ConsoleData {
   pools: PoolInfo[];
@@ -60,7 +60,43 @@ function CountValue({ value }: { value: number | null }) {
 
 /** A withheld money total reads as held, never as a false zero. */
 function MoneyValue({ usd }: { usd: string | null }) {
-  return usd !== null ? <Money usd={usd} /> : <span className="text-muted">Held</span>;
+  return usd !== null ? (
+    <Money usd={usd} />
+  ) : (
+    <span className="text-muted">Held</span>
+  );
+}
+
+// A single candy stat tile. The icon chip carries the only tone; the figure
+// itself renders through Money/CountValue with no colour adjective, per the
+// honest-core rule. Gold is never used here — these are static, at-rest totals,
+// and gold is reserved for money in motion.
+function StatTile({
+  icon,
+  chip,
+  label,
+  children,
+}: {
+  icon: IconName;
+  chip: string;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-3xl border-2 border-edge bg-surface p-4 shadow-[var(--shadow-pop-edge)]">
+      <span
+        className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${chip}`}
+      >
+        <Icon name={icon} className="h-5 w-5" />
+      </span>
+      <div>
+        <p className="text-xs font-medium text-muted">{label}</p>
+        <p className="mt-0.5 font-display text-lg font-extrabold tracking-tight sm:text-xl">
+          {children}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function PortfolioSummary({ aggregates }: { aggregates: PoolAggregate[] }) {
@@ -68,39 +104,120 @@ function PortfolioSummary({ aggregates }: { aggregates: PoolAggregate[] }) {
   const d = useMemo(() => portfolioDisplay(totals), [totals]);
 
   return (
-    <section className="space-y-4 rounded-2xl border border-edge bg-surface p-5">
+    <section className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Your pools at a glance</h2>
+        <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+          Your pools at a <span className="text-accent">glance</span>
+        </h2>
         <Badge tone="muted">
           {d.poolCount} {d.poolCount === 1 ? "pool" : "pools"}
         </Badge>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatTile
+          icon="vault"
+          chip="bg-accent/12 text-accent-strong"
           label="In your pools"
-          value={<Money usd={formatUsdc(d.totalBalanceUsdc)} />}
-        />
-        <Stat
+        >
+          <Money usd={formatUsdc(d.totalBalanceUsdc)} />
+        </StatTile>
+        <StatTile
+          icon="coins"
+          chip="bg-accent/12 text-accent-strong"
           label="You funded"
-          value={<Money usd={formatUsdc(d.totalToppedUpUsdc)} />}
-        />
-        <Stat
+        >
+          <Money usd={formatUsdc(d.totalToppedUpUsdc)} />
+        </StatTile>
+        <StatTile
+          icon="payout"
+          chip="bg-accent/12 text-accent-strong"
           label="Paid to achievers"
-          value={
-            <MoneyValue
-              usd={d.totalPaidUsdc !== null ? formatUsdc(d.totalPaidUsdc) : null}
-            />
-          }
-        />
-        <Stat label="Participants" value={<CountValue value={d.totalJoined} />} />
-        <Stat
+        >
+          <MoneyValue
+            usd={d.totalPaidUsdc !== null ? formatUsdc(d.totalPaidUsdc) : null}
+          />
+        </StatTile>
+        <StatTile
+          icon="users"
+          chip="bg-secondary text-secondary-foreground"
+          label="Participants"
+        >
+          <CountValue value={d.totalJoined} />
+        </StatTile>
+        <StatTile
+          icon="trophy"
+          chip="bg-secondary text-secondary-foreground"
           label="Goal completions"
-          value={<CountValue value={d.totalCompletions} />}
-        />
+        >
+          <CountValue value={d.totalCompletions} />
+        </StatTile>
       </div>
+    </section>
+  );
+}
 
-      <p className="text-xs leading-relaxed text-muted">{PRIVACY_LINE}</p>
+// The k-anonymity + enclave promise, made a proud feature instead of fine
+// print. Deep-emerald band (trust) with three plain-language points. No number
+// lives on this band, so no honest-core primitive is needed here.
+const PRIVACY_POINTS: { icon: IconName; title: string; body: string }[] = [
+  {
+    icon: "lock",
+    title: "Sealed enclave",
+    body: "SPOTTER checks each goal against the raw health data inside a confidential enclave nobody — us included — can see into.",
+  },
+  {
+    icon: "eye",
+    title: "Verdict only",
+    body: "The enclave hands back one word: paid, or not yet. No steps, no sleep hours, no heart rate ever leaves it.",
+  },
+  {
+    icon: "fingerprint",
+    title: "k-anonymous, always",
+    body: "Cohort numbers read as “Fewer than 5” until a pool is big enough that no figure can point at one person.",
+  },
+];
+
+function PrivacyFeature() {
+  return (
+    <section className="overflow-hidden rounded-3xl bg-accent-deep px-5 py-8 text-white sm:px-9 sm:py-10">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+        <div>
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
+            <Icon name="shield" className="h-4 w-4" />
+            The promise, not the fine print
+          </span>
+          <h2 className="mt-4 font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
+            Your money is public.
+            <br />
+            Their health data never is.
+          </h2>
+          <p className="mt-3 max-w-md text-sm leading-relaxed text-white/80 sm:text-base">
+            You always see what you funded and what got paid, in aggregate —
+            never a participant&apos;s actual steps, sleep, or vitals. That line
+            does not move for anyone.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {PRIVACY_POINTS.map((point) => (
+            <div
+              key={point.title}
+              className="rounded-2xl bg-white/[0.08] p-4 backdrop-blur-sm"
+            >
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
+                <Icon name={point.icon} className="h-4 w-4" />
+              </span>
+              <p className="mt-3 font-display text-sm font-bold">
+                {point.title}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-white/75">
+                {point.body}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
@@ -168,51 +285,71 @@ export default function SponsorConsole() {
     [myPools, consoleQuery.data],
   );
 
-  const createPanel = (
-    <div className="space-y-3">
-      {showCreate ? (
-        <div className="rounded-2xl border border-edge bg-surface p-5">
-          <CreatePool />
-          <button
-            type="button"
-            onClick={() => setShowCreate(false)}
-            className="mt-4 text-sm font-medium text-muted hover:text-foreground"
-          >
-            Hide the form
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className={`rounded-xl bg-accent-strong font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
+  const hero = (
+    <SceneHeader
+      title="Sponsor console"
+      subtitle="Put USDC on a health goal, top it up as it fills, and watch exactly what it buys. Every outcome below is aggregate only, and nobody ever sees a participant's health data."
+      eyebrow="Fund the goal"
+      pose="spotter-detective.png"
+      poseAlt="SPOTTER the otter, inspecting the ledger through a magnifying glass"
+      spotterLine="I hold the bag, not your business. I check each goal in a sealed enclave and hand out one word: paid, or not yet."
+    >
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Badge tone="warning">Base Sepolia · testnet · play money</Badge>
+        <Link
+          href="/pools"
+          className="inline-flex items-center gap-1 text-sm font-semibold text-accent-strong underline decoration-accent/40 decoration-2 underline-offset-4 hover:decoration-accent"
         >
-          Create a pool
-        </button>
-      )}
-    </div>
+          Browse all pools
+          <Icon name="arrow" className="h-4 w-4" />
+        </Link>
+      </div>
+    </SceneHeader>
   );
 
-  const header = (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Sponsor console
-        </h1>
-        <Badge tone="warning">Base Sepolia</Badge>
+  // The big candy "create a pool" call to action. Collapsed it is a proud
+  // invitation; expanded it hands off to the unchanged CreatePool form.
+  const createPanel = showCreate ? (
+    <Card pop>
+      <CreatePool />
+      <button
+        type="button"
+        onClick={() => setShowCreate(false)}
+        className="mt-4 min-h-11 text-sm font-medium text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        Hide the form
+      </button>
+    </Card>
+  ) : (
+    <Card
+      pop
+      className="flex flex-col items-start gap-4 bg-dot-grid sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div>
+        <h2 className="font-display text-xl font-bold tracking-tight sm:text-2xl">
+          Fund a new goal
+        </h2>
+        <p className="mt-1 max-w-md text-sm leading-relaxed text-muted">
+          Name the behavior, set the reward, and drop in testnet USDC. SPOTTER
+          holds it and pays out the moment a goal clears.
+        </p>
       </div>
-      <p className="text-sm text-muted">
-        Put USDC on a health goal, top it up as it fills, and watch what it
-        buys. Every outcome below is aggregate only, and nobody ever sees a
-        participant&apos;s health data. Testnet USDC has no real value.
-      </p>
-    </div>
+      <Button
+        variant="primary"
+        pop
+        onClick={() => setShowCreate(true)}
+        className="shrink-0"
+      >
+        Create a pool
+        <Icon name="arrow" className="h-5 w-5" />
+      </Button>
+    </Card>
   );
 
   if (!ready) {
     return (
-      <div className="space-y-6">
-        {header}
+      <div className="space-y-8">
+        {hero}
         <div className="grid gap-4 sm:grid-cols-2">
           <PoolCardSkeleton />
           <PoolCardSkeleton />
@@ -223,42 +360,33 @@ export default function SponsorConsole() {
 
   if (!authenticated || address === null) {
     return (
-      <div className="space-y-6">
-        {header}
+      <div className="space-y-8">
+        {hero}
         <EmptyState
           title="Sign in to run a pool"
           detail="Creating and funding a bounty pulls USDC from your wallet, so the console opens once you sign in. Your pools and their aggregate outcomes live here."
           action={
             <SignInGate note="Sign in to run a pool.">
               {(openSignIn) => (
-                <button
-                  type="button"
-                  onClick={openSignIn}
-                  className="rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
-                >
+                <Button variant="primary" pop onClick={openSignIn}>
                   Sign in
-                </button>
+                </Button>
               )}
             </SignInGate>
           }
         />
+        <PrivacyFeature />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        {header}
-        <Link
-          href="/pools"
-          className="text-sm font-medium text-muted underline hover:text-foreground"
-        >
-          Browse all pools
-        </Link>
-      </div>
+    <div className="space-y-10">
+      {hero}
 
       {createPanel}
+
+      <PrivacyFeature />
 
       {consoleQuery.isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -285,9 +413,11 @@ export default function SponsorConsole() {
       ) : (
         <>
           <PortfolioSummary aggregates={aggregates} />
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Your pools</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+          <section id="pools" className="space-y-5">
+            <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+              Your <span className="text-accent">pools</span>
+            </h2>
+            <div className="grid gap-4 lg:grid-cols-2">
               {myPools.map((pool, i) => (
                 <SponsorPoolOutcome
                   key={pool.id.toString()}

@@ -17,14 +17,12 @@
 //     is read from the junction route, never hard-coded to a pool id.
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import PoolCard from "@/components/PoolCard";
-import SceneHeader from "@/components/SceneHeader";
 import SpotterSays from "@/components/SpotterSays";
 import {
   Badge,
-  EmptyState,
   ErrorNote,
   PoolCardSkeleton,
   TAP_TARGET,
@@ -54,6 +52,27 @@ function PoolGrid({ pools, phase }: { pools: PoolInfo[]; phase: PoolPhase }) {
         <PoolCard key={pool.id.toString()} pool={pool} phase={phase} />
       ))}
     </div>
+  );
+}
+
+// A warm SPOTTER-voiced label for each grouping. Kept to a single scannable
+// line so the board reads at a glance - no engineering words (no "settle",
+// no "settlement", no chain jargon) ever reach the visitor.
+function SectionLabel({
+  children,
+  tone = "muted",
+}: {
+  children: ReactNode;
+  tone?: "muted" | "warning";
+}) {
+  return (
+    <p
+      className={`font-display text-sm font-bold uppercase tracking-wide ${
+        tone === "warning" ? "text-warning" : "text-accent-strong"
+      }`}
+    >
+      {children}
+    </p>
   );
 }
 
@@ -146,29 +165,71 @@ export default function PoolsPage() {
 
   return (
     <div className="space-y-6">
-      <SceneHeader
-        title="Health pools"
-        subtitle="Live health-commitment pools on Base Sepolia. Join with your wallet, hit your goal, get paid in USDC. Testnet USDC only, no real value."
-        pose="spotter-standing.png"
-        poseAlt="SPOTTER the otter, standing, ready to point you at a pool"
-        spotterLine="Put your money where your goal is. Then go get it back."
-      >
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Badge tone="muted">Base Sepolia</Badge>
-          <Link
-            href="/challenge/new"
-            className={`rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-strong hover:bg-accent/15 ${TAP_TARGET}`}
-          >
-            Challenge a friend
-          </Link>
-          <Link
-            href="/pools/create"
-            className={`rounded-xl bg-accent-strong font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
-          >
-            Create pool
-          </Link>
+      {/* Hero: SPOTTER inviting you onto the board. Ported from the gold browse
+          design - dot-grid candy panel, two-tone display headline, a deadpan
+          SPOTTER dare, and the testnet play-money disclosure kept in plain
+          sight (tan sticker, never gold - gold is only ever money in motion). */}
+      <section className="relative overflow-hidden rounded-3xl border-2 border-edge bg-surface p-6 shadow-[var(--shadow-pop-edge)] sm:p-8">
+        <div
+          aria-hidden="true"
+          className="bg-dot-grid pointer-events-none absolute inset-0 opacity-70"
+        />
+        <div className="relative flex flex-col items-start gap-8 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-xl">
+            <p className="font-display text-xs font-bold uppercase tracking-widest text-accent-strong">
+              Live pools
+            </p>
+            <h1 className="mt-2 font-display text-4xl font-extrabold leading-[1.05] text-balance sm:text-5xl">
+              Find a goal <span className="text-accent">worth money.</span>
+            </h1>
+            <p className="mt-3 max-w-md text-pretty text-base leading-relaxed text-muted">
+              Put a little down, hit your goal, and the pool pays you out. Miss
+              it, and your stake helps pay whoever showed up.
+            </p>
+
+            <div className="mt-5 inline-flex items-center gap-2 rounded-full border-2 border-edge bg-secondary px-3.5 py-1.5 text-xs font-bold text-secondary-foreground">
+              Testnet play money on Base Sepolia - practice cash, not real
+              dollars. Yet.
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <Badge tone="muted">Base Sepolia</Badge>
+              <Link
+                href="/challenge/new"
+                className={`rounded-full border-2 border-[color:var(--coral-strong)]/40 bg-secondary font-display font-bold text-[color:var(--coral-strong)] hover:border-[color:var(--coral-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${TAP_TARGET}`}
+              >
+                Challenge a friend
+              </Link>
+              <Link
+                href="/pools/create"
+                className={`rounded-full bg-accent font-display font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${TAP_TARGET}`}
+              >
+                Create pool
+              </Link>
+            </div>
+          </div>
+
+          <div className="relative flex shrink-0 flex-col items-center self-center">
+            <div className="relative max-w-[13rem] rounded-2xl rounded-bl-sm border border-edge bg-surface px-4 py-3 shadow-sm">
+              <p className="text-sm font-medium leading-snug text-foreground">
+                Pick one, stake it, and prove me wrong. I&apos;ll be watching the
+                wearables.
+              </p>
+              <span className="mt-1 block text-[11px] font-bold uppercase tracking-wide text-accent-strong">
+                SPOTTER
+              </span>
+            </div>
+            <div className="otter-float mt-1 h-40 w-40 sm:h-48 sm:w-48">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/spotter/spotter-point.png"
+                alt="SPOTTER the otter pointing you toward a pool to join"
+                className="h-full w-full object-contain drop-shadow-md"
+              />
+            </div>
+          </div>
         </div>
-      </SceneHeader>
+      </section>
 
       {poolsQuery.isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -191,37 +252,49 @@ export default function PoolsPage() {
       ) : grouped === null ||
         grouped.live.length + grouped.expired.length + grouped.settled.length ===
           0 ? (
-        <EmptyState
-          title="No pools yet"
-          detail="Pools appear here the moment someone creates one on Base. Be the first to put a goal on the board."
-          action={
-            <Link
-              href="/pools/create"
-              className="inline-block rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
-            >
-              Create the first pool
-            </Link>
-          }
-        />
+        // "Quiet on the river": a lounging SPOTTER moment, not a bare message.
+        <div className="flex flex-col items-center gap-4 rounded-3xl border-2 border-dashed border-edge bg-secondary/40 px-6 py-12 text-center">
+          <div className="otter-float h-28 w-28">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/spotter/spotter-lounging.png"
+              alt="SPOTTER the otter floating on its back, taking it easy"
+              className="h-full w-full object-contain drop-shadow-md"
+            />
+          </div>
+          <div className="max-w-sm">
+            <h3 className="font-display text-xl font-extrabold">
+              Quiet on the river
+            </h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted">
+              No pools are running yet. Put the first goal on the board and
+              SPOTTER will watch it for you.
+            </p>
+          </div>
+          <Link
+            href="/pools/create"
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-3 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            Create the first pool
+          </Link>
+        </div>
       ) : (
         <div className="space-y-8">
           <section className="space-y-3">
-            <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-              Live, open to join
-            </p>
+            <SectionLabel>Jump in now</SectionLabel>
             {liveSplit.verifiable.length === 0 ? (
               grouped.live.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-edge bg-surface/50 px-5 py-8">
+                <div className="rounded-3xl border-2 border-dashed border-edge bg-secondary/40 px-5 py-8">
                   <SpotterSays surface="pools-empty" state="empty" size="md" />
                   <p className="mt-3 text-sm text-muted">
-                    Nobody has staked a goal yet. Create one and put it on the
-                    board.
+                    Nobody has put a goal on the board yet. Start one and be the
+                    first in.
                   </p>
                 </div>
               ) : (
-                <p className="rounded-2xl border border-warning/40 bg-warning/10 p-3 text-sm text-foreground/80">
+                <p className="rounded-2xl border-2 border-warning/40 bg-warning/10 p-3 text-sm text-foreground/80">
                   Every live pool right now is a wearable goal, and SPOTTER
-                  can&apos;t check those until the provider is back. Create a
+                  can&apos;t check those until the provider is back. Start a
                   document-verified pool and put a goal on the board.
                 </p>
               )
@@ -232,10 +305,10 @@ export default function PoolsPage() {
 
           {providerDown !== null && liveSplit.unverifiable.length > 0 ? (
             <section className="space-y-3">
-              <p className="font-display text-xs font-semibold uppercase tracking-wide text-warning">
-                Wearable goals - not joinable right now
-              </p>
-              <p className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-foreground/80">
+              <SectionLabel tone="warning">
+                Wearables need a minute - not joinable yet
+              </SectionLabel>
+              <p className="rounded-2xl border-2 border-warning/40 bg-warning/10 p-3 text-sm text-foreground/80">
                 {providerDown} The entry fee is real money, so these are held
                 back until SPOTTER can check them again. Document-verified pools
                 run through the confidential attester and are unaffected.
@@ -251,8 +324,10 @@ export default function PoolsPage() {
 
           {expiredSplit.awaitingSettlement.length > 0 ? (
             <section className="space-y-3">
-              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-                Ended, awaiting settlement
+              <SectionLabel>Time&apos;s up - SPOTTER&apos;s counting</SectionLabel>
+              <p className="text-sm text-muted">
+                The window closed. SPOTTER is working out who hit their goal and
+                paying them out.
               </p>
               <PoolGrid
                 pools={expiredSplit.awaitingSettlement}
@@ -263,13 +338,11 @@ export default function PoolsPage() {
 
           {expiredSplit.closedEmpty.length > 0 ? (
             <section className="space-y-3">
-              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-                Closed, nobody joined
-              </p>
+              <SectionLabel>Quiet on the riverbank</SectionLabel>
               <p className="text-sm text-muted">
-                Their window closed with nobody signed up, so there is no one
-                for SPOTTER to pay. Nothing is pending here - they just sit on
-                the riverbank as history.
+                Their window closed with nobody signed up, so there is no one for
+                SPOTTER to pay. Nothing is pending here - they just sit on the
+                riverbank as history.
               </p>
               <PoolGrid pools={expiredSplit.closedEmpty} phase="expired" />
             </section>
@@ -277,9 +350,7 @@ export default function PoolsPage() {
 
           {grouped.settled.length > 0 ? (
             <section className="space-y-3">
-              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-                Settled
-              </p>
+              <SectionLabel>All wrapped up</SectionLabel>
               <PoolGrid pools={grouped.settled} phase="settled" />
             </section>
           ) : null}

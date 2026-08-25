@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import Countdown from "@/components/Countdown";
 import JoinPool from "@/components/JoinPool";
@@ -10,6 +10,7 @@ import ChallengeContribute from "@/components/ChallengeContribute";
 import EvidenceUpload from "@/components/EvidenceUpload";
 import WearableCheck from "@/components/WearableCheck";
 import ClaimRail, { type ClaimRailState, type VerdictKind } from "@/components/ClaimRail";
+import ShareChallenge from "@/components/ShareChallenge";
 import SpotterSays from "@/components/SpotterSays";
 import SpotterMascot from "@/components/SpotterMascot";
 import {
@@ -19,7 +20,6 @@ import {
   Money,
   ProofTierBadges,
   Skeleton,
-  Stat,
   TAP_TARGET,
 } from "@/components/ui";
 import { arcAddressUrl } from "@/lib/chains";
@@ -80,6 +80,145 @@ function BrowsePoolsLink({ label = "Browse live pools" }: { label?: string }) {
   );
 }
 
+// ------------------------------------------------------- reskin presentation
+// Small inline icons — this app carries no icon dependency, so the few glyphs
+// the candy stat cards and share row want are drawn here with currentColor so
+// each inherits the tint of the chip it sits in. Decorative only (aria-hidden).
+type IconName =
+  | "back"
+  | "coins"
+  | "clock"
+  | "users"
+  | "calendar"
+  | "wallet"
+  | "flask";
+
+function Icon({
+  name,
+  className = "size-4",
+}: {
+  name: IconName;
+  className?: string;
+}) {
+  const paths: Record<IconName, ReactNode> = {
+    back: <path d="M15 18l-6-6 6-6" />,
+    coins: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7.5v9M14.5 9.5a2.5 2.5 0 0 0-2.5-1.5c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2a2.5 2.5 0 0 1-2.5-1.5" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+    users: (
+      <>
+        <path d="M16 19v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="3.5" />
+        <path d="M22 19v-2a4 4 0 0 0-3-3.87" />
+      </>
+    ),
+    calendar: (
+      <>
+        <rect x="3" y="4.5" width="18" height="16.5" rx="2.5" />
+        <path d="M3 9.5h18M8 2.5v4M16 2.5v4" />
+      </>
+    ),
+    wallet: (
+      <>
+        <rect x="3" y="6" width="18" height="13" rx="2.5" />
+        <path d="M3 10.5h18M16.5 14.5h1.5" />
+      </>
+    ),
+    flask: (
+      <>
+        <path d="M9 3h6M10 3v6L4.7 17.2A2 2 0 0 0 6.4 20.3h11.2a2 2 0 0 0 1.7-3.1L14 9V3" />
+        <path d="M7.5 14.5h9" />
+      </>
+    ),
+  };
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {paths[name]}
+    </svg>
+  );
+}
+
+type StatTint = "neutral" | "accent" | "warm";
+
+/** A candy stat card: chunky border, a soft edge shadow, and a tinted icon
+ *  chip. Money still renders through <Money> in the value slot — the tint lives
+ *  on the card chrome, never inside the number. Reward and entry read WARM tan,
+ *  not gold: a static balance is not money in motion. */
+function StatCandy({
+  icon,
+  label,
+  value,
+  tint = "neutral",
+  span = false,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: ReactNode;
+  tint?: StatTint;
+  span?: boolean;
+}) {
+  const ring: Record<StatTint, string> = {
+    neutral: "border-edge bg-surface-raised",
+    accent: "border-accent/25 bg-accent/5",
+    warm: "border-[color:var(--secondary)] bg-secondary/40",
+  };
+  const chip: Record<StatTint, string> = {
+    neutral: "bg-surface text-muted",
+    accent: "bg-accent/15 text-accent-strong",
+    warm: "bg-secondary text-secondary-foreground",
+  };
+  return (
+    <div
+      className={`flex flex-col gap-2 rounded-2xl border-2 p-4 shadow-sm ${ring[tint]} ${
+        span ? "col-span-2" : ""
+      }`}
+    >
+      <span
+        className={`inline-flex size-8 items-center justify-center rounded-full ${chip[tint]}`}
+      >
+        {icon}
+      </span>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+          {label}
+        </p>
+        <p className="mt-0.5 font-display text-lg font-bold leading-snug text-foreground">
+          {value}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** The testnet play-money sticker. Tan, never gold — a testnet marker must not
+ *  borrow the money-in-motion colour. */
+function TestnetSticker() {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground">
+      <Icon name="flask" className="size-3.5" />
+      Testnet · play money
+    </span>
+  );
+}
+
 /** The claim ledger, read owner-only and cachedOnly (never prompts): it drives
  *  the claim rail's progress and the restored proof path. hasLedger tells a
  *  withheld claim (a claim exists, signature not cached) apart from no claim. */
@@ -102,6 +241,15 @@ export default function PoolDetail({ id }: { id: string }) {
   // never race the render or overwrite a tap.
   const [pinnedPath, setPinnedPath] = useState<ProofPath | null>(null);
   const choosePath = (path: ProofPath) => setPinnedPath(path);
+  // The public origin for the shareable pool link. useSyncExternalStore is the
+  // hydration-safe way to read a client-only value: null on the server and the
+  // hydrating render, the real origin once mounted - no setState-in-effect, no
+  // mismatch. Same pattern ShareChallenge uses for its own origin.
+  const shareOrigin = useSyncExternalStore(
+    () => () => {},
+    () => window.location.origin,
+    () => null,
+  );
   const poolId = useMemo(() => {
     try {
       const parsed = BigInt(id);
@@ -478,10 +626,28 @@ export default function PoolDetail({ id }: { id: string }) {
           })}
         </div>
       ) : null}
+      {/* The prove-it surface is the whole game, so it is the loudest card on
+          the page: a thick emerald border with a soft emerald ring glow and a
+          floating "Prove it now" tab. SPOTTER encourages before, then flips to
+          the detective pose while the run is verifying. The real WearableCheck
+          / EvidenceUpload mount unchanged inside — only the frame is new. */}
       <section
         id="proof-upload"
-        className="rounded-3xl border border-accent/40 bg-surface p-5 sm:p-6"
+        className="relative rounded-3xl border-2 border-accent bg-surface p-5 shadow-[0_0_0_5px_rgba(16,185,129,0.12)] sm:p-7"
       >
+        <span className="absolute -top-3 left-5 inline-flex items-center rounded-full bg-accent px-3 py-1 font-display text-xs font-extrabold uppercase tracking-wide text-white shadow-[var(--shadow-pop)]">
+          Prove it now
+        </span>
+        <h2 className="mb-3 mt-2 font-display text-2xl font-extrabold leading-tight">
+          Prove it
+        </h2>
+        <div className="mb-5">
+          {runStatus === "verifying" ? (
+            <SpotterSays surface="evidence" state="verifying" size="sm" />
+          ) : (
+            <SpotterSays surface="join" state="joined" size="sm" />
+          )}
+        </div>
         {claimPathPending ? (
           <div className="space-y-3">
             <Skeleton className="h-6 w-40" />
@@ -521,16 +687,20 @@ export default function PoolDetail({ id }: { id: string }) {
 
   const workbench = (
     <div className="min-w-0 space-y-8">
-      <div>
-        {/* -ml-4 keeps the text optically flush with the heading below while
-            the padding gives the link a real 44px thumb target. */}
-        <Link
-          href="/pools"
-          className={`-ml-4 text-muted hover:text-foreground ${TAP_TARGET}`}
-        >
-          Back to pools
-        </Link>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="rounded-3xl border-2 border-accent/15 bg-surface p-5 shadow-[var(--shadow-pop-edge)] sm:p-7">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          {/* -ml-2 keeps the text optically flush while the padding still gives
+              the link a real 44px thumb target. */}
+          <Link
+            href="/pools"
+            className={`-ml-2 inline-flex items-center gap-1 text-muted hover:text-foreground ${TAP_TARGET}`}
+          >
+            <Icon name="back" className="size-4" />
+            All pools
+          </Link>
+          <TestnetSticker />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <Badge>{pool.initiative}</Badge>
           <ProofTierBadges policy={policy} />
           {phase === "settled" ? (
@@ -549,7 +719,7 @@ export default function PoolDetail({ id }: { id: string }) {
             Preventive care - Earn from a {formatUsdc(pool.balance)} USDC bounty
           </p>
         ) : null}
-        <h1 className="mt-3 font-display text-2xl font-bold leading-tight sm:text-3xl">
+        <h1 className="mt-3 font-display text-3xl font-extrabold leading-[1.08] tracking-tight sm:text-4xl">
           {goalTitle}
         </h1>
         {/* A self-staked commitment pool (model 2) has no funder - every
@@ -596,12 +766,21 @@ export default function PoolDetail({ id }: { id: string }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat
+        <StatCandy
+          tint="warm"
+          icon={<Icon name="coins" />}
           label="Reward pool"
           value={<Money usd={formatUsdc(pool.balance)} />}
         />
-        <Stat label="Entry fee" value={<Money usd={formatUsdc(pool.entryFee)} />} />
-        <Stat
+        <StatCandy
+          tint="warm"
+          icon={<Icon name="wallet" />}
+          label={pool.bountyModel === 2 ? "Entry stake" : "Entry fee"}
+          value={<Money usd={formatUsdc(pool.entryFee)} />}
+        />
+        <StatCandy
+          tint="accent"
+          icon={<Icon name="clock" />}
           label="Time remaining"
           value={
             <Countdown
@@ -610,16 +789,33 @@ export default function PoolDetail({ id }: { id: string }) {
             />
           }
         />
-        <Stat
-          label="Payout model"
-          value={BOUNTY_MODEL_LABELS[pool.bountyModel] ?? "Custom model"}
-        />
-        <Stat
+        <StatCandy
+          tint="accent"
+          icon={<Icon name="users" />}
           label="Participants"
           value={participantCount !== null ? participantCount : "--"}
         />
-        <Stat label="Starts" value={formatDay(pool.periodStart)} />
-        <Stat label="Ends" value={formatDay(pool.periodEnd)} />
+        <StatCandy
+          icon={<Icon name="calendar" />}
+          label="Starts"
+          value={formatDay(pool.periodStart)}
+        />
+        <StatCandy
+          icon={<Icon name="calendar" />}
+          label="Ends"
+          value={formatDay(pool.periodEnd)}
+        />
+        <StatCandy
+          span
+          tint="accent"
+          icon={<Icon name="wallet" />}
+          label="Payout model"
+          value={
+            <span className="text-base">
+              {BOUNTY_MODEL_LABELS[pool.bountyModel] ?? "Custom model"}
+            </span>
+          }
+        />
       </div>
 
       {phase === "live" ? (
@@ -671,9 +867,14 @@ export default function PoolDetail({ id }: { id: string }) {
               </div>
             </section>
           ) : (
-            <Card pop>
-              <h2 className="font-display text-lg font-semibold">Join this pool</h2>
-              <p className="mb-4 mt-1 text-sm text-muted">
+            <div className="rounded-3xl border-2 border-accent/20 bg-surface p-5 shadow-[var(--shadow-pop-edge)] sm:p-7">
+              <p className="mb-1 font-display text-xs font-bold uppercase tracking-wide text-accent-strong">
+                Ready when you are
+              </p>
+              <h2 className="mb-2 font-display text-2xl font-extrabold leading-tight">
+                {isChallenge ? "Take the dare" : "Join this pool"}
+              </h2>
+              <p className="mb-4 text-sm text-muted">
                 {pool.bountyModel === 2
                   ? `Stake the ${formatUsdc(pool.entryFee)} USDC entry, hit the goal during the period, and your stake comes back plus a share of what everyone who didn't show up left behind.`
                   : isDocGoal
@@ -690,7 +891,7 @@ export default function PoolDetail({ id }: { id: string }) {
                 entryFee={pool.entryFee}
                 alreadyJoined={joined}
               />
-            </Card>
+            </div>
           )}
 
           {canPay ? claimSection : null}
@@ -764,16 +965,42 @@ export default function PoolDetail({ id }: { id: string }) {
           // goal and sweep() returns the whole pot to the challenger, not
           // pro-rata to contributors. ChallengeContribute is the funnel that
           // states that before anyone can add - never the bare FundPool, which
-          // tops up with no disclosure.
+          // tops up with no disclosure. Re-sharing a challenge uses its private
+          // /c/<token> invite link (handed out at creation and on the landing),
+          // never this gated pool URL, so no share row is offered here.
           <ChallengeContribute poolId={pool.id} potUsd={formatUsdc(pool.balance)} />
         ) : (
           <div className="space-y-4">
-            <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-              Sponsor action
-            </p>
-            <Card>
-              <FundPool poolId={pool.id} />
-            </Card>
+            {/* Share block: bring more people onto a PUBLIC pool. The pool's own
+                page URL is public and safe to send, so it is handed to the
+                existing ShareChallenge for Text / Email / Copy. shareOrigin is
+                read on the client, so the row appears once mounted. */}
+            {shareOrigin !== null ? (
+              <div className="rounded-3xl border-2 border-edge bg-surface p-5 shadow-[var(--shadow-pop-edge)] sm:p-7">
+                <h2 className="mb-1 font-display text-xl font-extrabold">
+                  Bring people in
+                </h2>
+                <p className="mb-4 text-sm text-muted">
+                  More people on the goal makes for a livelier pool. Send it to
+                  someone who should be in.
+                </p>
+                <ShareChallenge
+                  url={`${shareOrigin}/pools/${id}`}
+                  title="Join me on GoHealthMe"
+                  message={`Get in on this goal with me on GoHealthMe: ${goalTitle}.`}
+                  emailSubject="Join this pool on GoHealthMe"
+                  shareLabel="Share pool"
+                />
+              </div>
+            ) : null}
+            <div className="space-y-4">
+              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
+                Sweeten the pot
+              </p>
+              <Card>
+                <FundPool poolId={pool.id} />
+              </Card>
+            </div>
           </div>
         )
       ) : null}
