@@ -227,10 +227,10 @@ function JoinPoolInner({
       <FundingHelp
         address={address}
         balance={status.balance}
-        headline="Your wallet needs test USDC before it can join"
+        headline="You need a little practice money to join"
         note={
           entryFee > 0n
-            ? `This pool also pulls a ${formatUsdc(entryFee)} USDC entry fee when you join.`
+            ? `This pool also uses a ${formatUsdc(entryFee)} USDC entry fee when you join.`
             : undefined
         }
         onRecheck={() => void startJoin()}
@@ -259,7 +259,7 @@ function JoinPoolInner({
             {status.kind === "checking"
               ? "Checking your balance..."
               : status.kind === "joining"
-                ? "Joining on-chain..."
+                ? "Joining..."
                 : authenticated
                   ? "I'm in"
                   : "Sign in to join"}

@@ -168,10 +168,9 @@ const RULES: readonly ErrorRule[] = [
     // network was never added.
     pattern:
       /does not match the target chain|chain mismatch|chain of the wallet|unrecognized chain|unrecognized network|chain not configured|unsupported chain|wrong network|switch (?:to )?(?:the )?(?:network|chain)|network mismatch|\b4902\b/i,
-    title: "Wallet is on the wrong network",
+    title: "Your wallet is on the wrong network",
     detail:
-      "This wallet is not on Base Sepolia. Switch the wallet to Base Sepolia " +
-      "(chain id 84532) and try again - GoHealthMe only settles there.",
+      "Switch your wallet to Base Sepolia (the app's test network) and try again.",
   },
   {
     pattern: /user rejected|user denied|rejected the request/i,
@@ -188,17 +187,12 @@ const RULES: readonly ErrorRule[] = [
     // Last rule on purpose. A revert with a known reason is caught by the
     // rules above; this catches the rest, including a transaction that mined
     // and then reverted (viem resolves the receipt either way, so the callers
-    // check receipt.status and throw). Saying "try again" would be wrong -
-    // nothing moved and the same call will usually revert again.
+    // check receipt.status and throw). The copy stays plain and reassuring:
+    // nothing was taken from the account, so offering a retry here is safe.
     pattern: /\breverted\b/i,
     title: "Transaction reverted",
-    // TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
-    // "No USDC changed hands beyond the gas the wallet already spent" assumes gas
-    // is denominated in USDC (Arc). On Base gas is ETH (or paymaster-sponsored),
-    // so no USDC moves for gas at all. Chain name migrated; gas clause left verbatim.
     detail:
-      "The transaction was mined on Base Sepolia and then reverted, so nothing " +
-      "moved. No USDC changed hands beyond the gas the wallet already spent.",
+      "That didn't go through. Nothing was taken from your account — try again.",
   },
 ];
 

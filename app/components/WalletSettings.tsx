@@ -14,7 +14,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useEmbeddedReveal } from "@dynamic-labs/sdk-react-core";
 import { useState } from "react";
-import { arcAddressUrl, arcTestnet } from "@/lib/chains";
+import { arcAddressUrl } from "@/lib/chains";
 import { formatUsdc } from "@/lib/contract";
 import { fetchWalletUsdc } from "@/lib/faucet-funding";
 import { useEmbeddedWallet } from "@/lib/wallet";
@@ -164,9 +164,9 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
               </Link>
             )}
           </Row>
-          <Row label="Network">
-            {arcTestnet.name}
-            <span className="ml-1 text-muted">(chain {arcTestnet.id})</span>
+          <Row label="Mode">
+            Practice
+            <span className="ml-1 text-muted">(test network)</span>
           </Row>
           <Row label="Balance">
             {balanceQuery.isLoading ? (
@@ -187,14 +187,14 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
               </span>
             )}
           </Row>
-          <Row label="Explorer">
+          <Row label="Public record">
             <a
               href={arcAddressUrl(address)}
               target="_blank"
               rel="noopener noreferrer"
               className="text-accent underline underline-offset-2"
             >
-              View on Basescan
+              See the public receipt
             </a>
           </Row>
         </div>

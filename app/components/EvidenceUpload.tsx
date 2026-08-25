@@ -915,7 +915,7 @@ function EvidenceUploadInner({
               className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
             >
               {authenticated
-                ? "Verify record and claim bounty"
+                ? "Submit and get paid"
                 : "Sign in to submit"}
             </button>
           )}

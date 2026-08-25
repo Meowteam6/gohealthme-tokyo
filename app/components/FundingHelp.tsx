@@ -110,10 +110,10 @@ export default function FundingHelp({
   address,
   balance,
   needed = 0n,
-  headline = "Your wallet needs test USDC first",
+  headline = "One quick thing first",
   note,
   onRecheck,
-  recheckLabel = "I added USDC, check again",
+  recheckLabel = "I added it, check again",
 }: {
   /** The signed-in wallet, or null while it is still resolving. */
   address: string | null;
@@ -175,16 +175,14 @@ export default function FundingHelp({
 
   const primaryLabel = funding
     ? phase === "moving"
-      ? "Delivering to your wallet..."
-      : "Getting test USDC..."
-    : "Get test USDC";
+      ? "Delivering..."
+      : "Adding..."
+    : "Add practice money";
 
-  // The external Circle faucet is the fallback now: shown only when the in-app
-  // grant could not fund the wallet (budget spent, nothing to move, an error),
-  // or when there is no signed-in address to grant to.
-  const showFallback =
-    address === null || (outcome !== null && outcome.kind !== "funded");
-
+  // Shown only when the in-app grant could not fund the wallet (budget spent,
+  // nothing to move, an error). The manual faucet steps always live in the
+  // collapsed advanced options below, so this is just the honest heads-up that
+  // the automatic add did not land.
   const fallbackReason =
     outcome === null
       ? null
@@ -198,14 +196,12 @@ export default function FundingHelp({
     <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
       <p className="text-base font-semibold text-warning">{headline}</p>
       <p className="mt-1 text-sm text-foreground/80">
-        On GoHealthMe, joining is gas-free - the network fee is covered for you.
-        You just need a little test USDC in your wallet for the amount this
-        action uses. It is test USDC and has no real value.
+        Your account needs a little practice money before it can do anything —
+        we&apos;re adding it for you now. It is practice money on a test network
+        and has no real value.
         {note !== undefined && note !== "" ? ` ${note}` : ""}
-        {balance !== null
-          ? ` Current balance: ${formatUsdc(balance)} USDC.`
-          : ""}
-        {needed > 0n ? ` This action pulls ${formatUsdc(needed)} USDC.` : ""}
+        {balance !== null ? ` You have $${formatUsdc(balance)} right now.` : ""}
+        {needed > 0n ? ` This uses $${formatUsdc(needed)}.` : ""}
       </p>
 
       {address !== null ? (
@@ -221,33 +217,39 @@ export default function FundingHelp({
             {primaryLabel}
           </button>
           <p className="mt-2 text-xs text-muted">
-            One tap grants you {formatUsdc(FAUCET_GRANT_UUSDC)} test USDC and
-            delivers it to your Base wallet. Testnet only, no real value.
+            One tap adds ${formatUsdc(FAUCET_GRANT_UUSDC)} of practice money to
+            your account. Test network only, never real money.
           </p>
           {outcome !== null && outcome.kind === "funded" ? (
             <p
               className="mt-2 text-sm font-semibold text-accent"
               aria-live="polite"
             >
-              Test USDC delivered to your wallet. Continuing...
+              Practice money added. Continuing...
             </p>
           ) : null}
         </>
       ) : (
         <p className="mt-4 text-sm text-muted">
-          Sign in to grant yourself test USDC.
+          Sign in to add practice money.
         </p>
       )}
 
-      {showFallback ? (
-        <div className="mt-4 border-t border-warning/30 pt-4">
-          <p className="text-sm text-foreground/80" role="status">
-            {fallbackReason !== null
-              ? `In-app funding did not go through: ${fallbackReason} You can still get test USDC directly.`
-              : "Prefer to fund the wallet yourself? Get test USDC directly from the Circle faucet."}
-          </p>
+      {fallbackReason !== null ? (
+        <p className="mt-3 text-sm text-foreground/80" role="status">
+          {`We could not add it for you automatically: ${fallbackReason} You can add it yourself in the advanced options below.`}
+        </p>
+      ) : null}
 
-          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted">
+      {/* The raw faucet steps are the power-user path now, tucked behind a
+          disclosure so the plain "we're adding it for you" flow above is the
+          default. Kept fully available for anyone who wants to fund by hand. */}
+      <details className="mt-4 border-t border-warning/30 pt-4">
+        <summary className="min-h-11 cursor-pointer text-sm font-semibold text-foreground/80">
+          Having trouble? Show advanced options
+        </summary>
+        <div className="mt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
             Your wallet address
           </p>
           {address === null ? (
@@ -261,7 +263,7 @@ export default function FundingHelp({
           )}
 
           <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted">
-            Getting test USDC
+            Add practice money yourself
           </p>
           <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm text-foreground/80">
             {FUNDING_STEPS.map((step) => (
@@ -296,7 +298,7 @@ export default function FundingHelp({
             </button>
           ) : null}
         </div>
-      ) : null}
+      </details>
     </div>
   );
 }

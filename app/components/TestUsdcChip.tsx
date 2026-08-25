@@ -59,23 +59,23 @@ export default function TestUsdcChip() {
   const label = funding
     ? phase === "moving"
       ? "Delivering..."
-      : "Getting..."
-    : "Get test USDC";
+      : "Adding..."
+    : "Add practice money";
 
   return (
     <div className="flex flex-wrap items-center gap-2 py-1">
       <span
-        title="Spendable test USDC in your Base wallet. Testnet only, no real value."
+        title="Not real money — for trying things out, never charged."
         className="inline-flex min-h-11 items-center rounded-lg border border-edge bg-surface-raised px-2 font-mono text-[11px] text-muted sm:px-3 sm:text-xs"
       >
         <span className="font-sans font-semibold uppercase tracking-wide">
-          Balance
+          Practice money
         </span>
         <span aria-hidden className="mx-1">
-          ·
+          :
         </span>
         <span className="tabular-nums">
-          {balance !== undefined ? formatUsdc(balance) : "--"} USDC
+          ${balance !== undefined ? formatUsdc(balance) : "--"}
         </span>
       </span>
       <button
@@ -84,7 +84,7 @@ export default function TestUsdcChip() {
         onClick={() => {
           void run();
         }}
-        title="Grant yourself test USDC and deliver it to your wallet. Testnet only, no real value."
+        title="Add practice money to your account. Not real money — never charged."
         className="inline-flex min-h-11 items-center rounded-lg border border-accent/50 px-2 text-[11px] font-semibold text-accent hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 sm:text-xs"
       >
         {label}
@@ -99,7 +99,7 @@ export default function TestUsdcChip() {
           href="/dashboard"
           className="text-[11px] text-warning underline sm:text-xs"
         >
-          faucet dry - fund on dashboard
+          could not add it — open dashboard
         </Link>
       ) : null}
     </div>

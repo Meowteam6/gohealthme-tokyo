@@ -263,8 +263,11 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
             rel="noopener noreferrer"
             className="mt-1 inline-block break-all text-sm text-accent underline"
           >
-            View transfer on Basescan
+            See the public receipt
           </a>
+          <span className="mt-0.5 block text-xs text-muted">
+            (anyone can check this — that&apos;s the point)
+          </span>
         </div>
       ) : null}
       {move.kind === "refused" ? <LimitNote message={move.message} /> : null}

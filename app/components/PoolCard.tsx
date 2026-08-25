@@ -78,9 +78,13 @@ export default function PoolCard({
           "Funder" label would be misleading. Show it only for sponsor-funded
           models; the payout-model label stays either way. */}
       <p className="mt-1 text-xs text-muted">
-        {pool.bountyModel !== 2
-          ? `Funder ${shortAddress(pool.creator)} · `
-          : ""}
+        {pool.bountyModel !== 2 ? (
+          <>
+            A sponsor{" "}
+            <span className="opacity-70">{shortAddress(pool.creator)}</span>
+            {" · "}
+          </>
+        ) : null}
         {BOUNTY_MODEL_LABELS[pool.bountyModel] ?? "Custom model"}
       </p>
       {pool.bountyModel === 2 && pool.entryFee > 0n ? (
@@ -91,7 +95,7 @@ export default function PoolCard({
       ) : null}
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-surface-raised p-3">
-          <p className="text-xs uppercase tracking-wide text-muted">Bounty pool</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Reward pool</p>
           <p className="mt-0.5 text-lg font-bold text-accent">
             {formatUsdc(pool.balance)} USDC
           </p>

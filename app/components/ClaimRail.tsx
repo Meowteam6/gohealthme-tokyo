@@ -127,7 +127,10 @@ function PaidBody({
       <p className="mt-1 text-sm font-semibold text-gold">SPOTTER paid you.</p>
       {paid.txHash !== null ? (
         <p className="mt-3">
-          <ArcTxLink txHash={paid.txHash} label="View the payout on Basescan" />
+          <ArcTxLink txHash={paid.txHash} label="See the public receipt" />
+          <span className="mt-0.5 block text-xs text-muted">
+            (anyone can check this — that&apos;s the point)
+          </span>
         </p>
       ) : null}
       <p className="mt-3 text-xs text-muted">{PRIVACY_LINE}</p>

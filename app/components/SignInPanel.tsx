@@ -176,8 +176,8 @@ function SignInPanelInner() {
       ) : (
         <div className="mt-4 space-y-3">
           <p className="text-sm text-muted">
-            The quickest way in is a Base Account. It is created on your device
-            with a passkey - no seed phrase, no extension, nothing to install.
+            The fastest way in — just your fingerprint or face, no password to
+            remember.
           </p>
 
           {/* Preferred placement (gas-credit Req 3): the Base Account button
@@ -207,9 +207,8 @@ function SignInPanelInner() {
             {baseBusy ? "Opening Base..." : "Sign in with Base"}
           </button>
           <p className="text-xs text-muted">
-            New here? This creates your Base Account with a passkey. Already have
-            one? The same button signs you in. On Base, transactions here can be
-            gas-free.
+            New here? This sets up your account. Already have one? The same
+            button signs you in.
           </p>
 
           <div className="flex items-center gap-3 py-1">

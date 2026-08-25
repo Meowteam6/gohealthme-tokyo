@@ -547,7 +547,7 @@ export default function DashboardContent() {
                 </h3>
                 <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted">
                   <span>
-                    Bounty pool{" "}
+                    Reward pool{" "}
                     <span className="font-semibold text-accent">
                       {formatUsdc(pool.balance)} USDC
                     </span>

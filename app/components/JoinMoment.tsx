@@ -125,7 +125,10 @@ export default function JoinMoment({
         <p className="text-sm text-muted">{spotterLine}</p>
         {txHash !== null ? (
           <p className="mt-2">
-            <ArcTxLink txHash={txHash} label="View join transaction on Basescan" />
+            <ArcTxLink txHash={txHash} label="See the public receipt" />
+            <span className="mt-0.5 block text-xs text-muted">
+              (anyone can check this — that&apos;s the point)
+            </span>
           </p>
         ) : null}
       </div>
@@ -187,10 +190,10 @@ export default function JoinMoment({
             <p className="mt-2 text-sm text-muted">{spotterLine}</p>
             {txHash !== null ? (
               <p className="mt-4">
-                <ArcTxLink
-                  txHash={txHash}
-                  label="View join transaction on Basescan"
-                />
+                <ArcTxLink txHash={txHash} label="See the public receipt" />
+                <span className="mt-0.5 block text-xs text-muted">
+                  (anyone can check this — that&apos;s the point)
+                </span>
               </p>
             ) : null}
             <button

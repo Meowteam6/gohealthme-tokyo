@@ -125,27 +125,27 @@ describe("humanizeTxError", () => {
     expect(result.title).toBe("Not enough USDC");
   });
 
-  it("maps a chain mismatch to the wrong-network message", () => {
+  it("maps a chain mismatch to the out-of-sync message", () => {
     const result = humanizeTxError(viemError(CHAIN_MISMATCH_FIXTURE));
-    expect(result.title).toBe("Wallet is on the wrong network");
+    expect(result.title).toBe("Your wallet is on the wrong network");
     expect(result.detail).toContain("Base Sepolia");
-    expect(result.detail).toContain("84532");
+    expect(result.detail).toContain("try again");
     expect(result.detail).not.toContain("viem");
   });
 
-  it("maps the 4902 unrecognized-chain code to the wrong-network message", () => {
+  it("maps the 4902 unrecognized-chain code to the out-of-sync message", () => {
     const result = humanizeTxError({
       code: 4902,
       message: "Unrecognized chain ID 0x14A34. Try adding the chain first.",
     });
-    expect(result.title).toBe("Wallet is on the wrong network");
+    expect(result.title).toBe("Your wallet is on the wrong network");
   });
 
-  it("maps a switch-network prompt to the wrong-network message", () => {
+  it("maps a switch-network prompt to the out-of-sync message", () => {
     const result = humanizeTxError(
       viemError("Wallet failed to switch to the network."),
     );
-    expect(result.title).toBe("Wallet is on the wrong network");
+    expect(result.title).toBe("Your wallet is on the wrong network");
   });
 
   it("does not call an unrelated failure a wrong-network error", () => {
@@ -218,16 +218,16 @@ describe("humanizeTxError", () => {
 
   it("maps a mined-then-reverted transaction to the reverted message", () => {
     // What the deposit and join flows throw when receipt.status is not
-    // "success": the transaction was mined, so nothing "went wrong sending"
-    // it, and nothing moved.
+    // "success": the transaction was mined but reverted, so nothing was taken
+    // from the account. The copy reassures and offers a retry.
     const result = humanizeTxError(
       new Error(
         "The fundPool transaction 0xabc reverted on Arc testnet.",
       ),
     );
     expect(result.title).toBe("Transaction reverted");
-    expect(result.detail).toContain("nothing");
-    expect(result.detail).not.toContain("Try again");
+    expect(result.detail).toContain("Nothing was taken from your account");
+    expect(result.detail).toContain("try again");
   });
 
   it("keeps a known revert reason ahead of the generic reverted rule", () => {

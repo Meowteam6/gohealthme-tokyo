@@ -255,7 +255,7 @@ export default function PoolDetail({ id }: { id: string }) {
   // Resolve the funder address to a handle when it has claimed one. Called
   // unconditionally with whatever is known this render (empty until the pool
   // loads), so the rules of hooks hold across the early returns below.
-  const { displayName } = useDisplayNames(
+  const { displayName, handleFor } = useDisplayNames(
     poolQuery.data ? [poolQuery.data.pool.creator] : [],
   );
 
@@ -512,6 +512,11 @@ export default function PoolDetail({ id }: { id: string }) {
     </>
   );
 
+  // The funder's claimed handle, or null when the wallet never claimed one.
+  // Null means the header shows "A sponsor" with the address as a demoted link
+  // rather than a raw hex string standing in as the funder's identity.
+  const funderHandle = handleFor(pool.creator);
+
   const workbench = (
     <div className="min-w-0 space-y-8">
       <div>
@@ -545,13 +550,21 @@ export default function PoolDetail({ id }: { id: string }) {
         <h1 className="mt-3 text-2xl font-bold leading-tight sm:text-3xl">
           {goalTitle}
         </h1>
+        {/* When the funder has claimed a handle we name them; otherwise the
+            identity reads "A sponsor" and the raw address is demoted to a small
+            secondary link, so a wall of hex never stands in for the funder. The
+            self-staked (model 2) branch has no funder and is untouched. */}
         <p className="mt-2 text-sm text-muted">
-          Funder{" "}
+          {funderHandle !== null ? "Funder " : "A sponsor "}
           <a
             href={arcAddressUrl(pool.creator)}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-mono underline decoration-edge underline-offset-2 hover:text-foreground"
+            className={
+              funderHandle !== null
+                ? "font-mono underline decoration-edge underline-offset-2 hover:text-foreground"
+                : "ml-1 font-mono text-xs underline decoration-edge underline-offset-2 hover:text-foreground"
+            }
           >
             {displayName(pool.creator)}
           </a>
@@ -560,7 +573,7 @@ export default function PoolDetail({ id }: { id: string }) {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Stat
-          label="Bounty pool"
+          label="Reward pool"
           value={<Money usd={formatUsdc(pool.balance)} />}
         />
         <Stat label="Entry fee" value={<Money usd={formatUsdc(pool.entryFee)} />} />

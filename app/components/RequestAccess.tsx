@@ -206,7 +206,7 @@ export default function RequestAccess({
       if (auth.kind !== "ok") {
         setError(
           authBlockReason(auth) ??
-            "Sign the request with your wallet to send it. Nothing is charged.",
+            "This just confirms it's really you — nothing is charged.",
         );
         return;
       }
@@ -311,7 +311,7 @@ export default function RequestAccess({
           {submitting ? "Sending…" : "Request access"}
         </button>
         <p className="text-center text-xs text-muted">
-          Signing proves the wallet is yours. No transaction, no charge.
+          This just confirms it&apos;s really you — nothing is charged.
         </p>
       </form>
     </Shell>
