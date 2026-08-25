@@ -189,13 +189,32 @@ interface ProvidersResponse {
   providers: Array<{ slug?: string; status?: string }>;
 }
 
-/** True once the user has linked at least one health-data provider. */
+// Provider statuses that mean the link exists on paper but will never yield
+// data (revoked, mid-connect, expired token). A row in one of these states must
+// not count as "connected", or the verdict path proceeds on a device that can
+// only ever return an empty read and the user is told "goal not met" when the
+// real state is "reconnect your device".
+const UNUSABLE_PROVIDER_STATUS = new Set([
+  "error",
+  "disconnected",
+  "paused",
+  "expired",
+  "unauthorized",
+  "revoked",
+]);
+
+/** True once the user has at least one health-data provider in a usable state. */
 export async function isConnected(address: string): Promise<boolean> {
   const userId = await getOrCreateUser(address);
   const { providers } = await jx<ProvidersResponse>(
     `/v2/user/providers/${userId}`,
   );
-  return Array.isArray(providers) && providers.length > 0;
+  if (!Array.isArray(providers)) return false;
+  // A provider with no status field is treated as usable (some connectors omit
+  // it); only an explicitly bad status disqualifies a row.
+  return providers.some(
+    (p) => !UNUSABLE_PROVIDER_STATUS.has((p.status ?? "").toLowerCase()),
+  );
 }
 
 // -------------------------------------------------------------- progress feed
@@ -300,19 +319,12 @@ export async function getProgress(
   // data doesn't reset progress.
   let streakDays = 0;
   if (windowStartISO !== undefined) {
-    const today = new Date();
-    const winEndDate =
-      windowEndISO !== undefined &&
-      new Date(`${windowEndISO}T00:00:00Z`) < today
-        ? new Date(`${windowEndISO}T00:00:00Z`)
-        : today;
-    const cur = new Date(`${windowStartISO}T00:00:00Z`);
-    while (cur <= winEndDate) {
-      const key = cur.toISOString().slice(0, 10);
-      const score = byDay.get(key);
-      if (score !== undefined && score >= threshold) streakDays += 1;
-      cur.setUTCDate(cur.getUTCDate() + 1);
-    }
+    streakDays = windowDayCount(
+      byDay,
+      threshold,
+      windowStartISO,
+      windowEndISO,
+    ).qualifyingDays;
   } else {
     const cursor = new Date(`${newest}T00:00:00Z`);
     for (let i = 0; i < goalDays; i += 1) {
@@ -343,6 +355,193 @@ export async function getProgress(
     baselineWeekAvg,
     days: dates.map((d) => ({ date: d, score: byDay.get(d) as number })),
   };
+}
+
+// -------------------------------------------------- goal-metric verdict feed
+
+/**
+ * The wearable metrics SPOTTER can verify a goal against. Each maps to a
+ * specific Junction/Vital summary and a per-day field, so a steps goal is
+ * judged on steps and a sleep goal on sleep - never one silently on the other.
+ */
+export type WearableMetric =
+  | "sleep_score"
+  | "sleep_hours"
+  | "steps"
+  | "active_calories"
+  | "distance_km"
+  | "workouts";
+
+/**
+ * Per-window result for one metric. daysWithData === 0 means "connected but
+ * nothing has synced for this period yet", which the verdict must treat as
+ * sync-in-progress, NOT as a missed goal.
+ */
+export interface MetricProgress {
+  qualifyingDays: number;
+  daysWithData: number;
+}
+
+/**
+ * Count days in [windowStart, min(windowEnd, today)] that have data and that
+ * meet the threshold. Shared by the sleep-streak feed (getProgress) and the
+ * metric feed (getMetricProgress).
+ */
+function windowDayCount(
+  byDay: Map<string, number>,
+  threshold: number,
+  windowStartISO: string,
+  windowEndISO?: string,
+): MetricProgress {
+  const today = new Date();
+  const winEnd =
+    windowEndISO !== undefined && new Date(`${windowEndISO}T00:00:00Z`) < today
+      ? new Date(`${windowEndISO}T00:00:00Z`)
+      : today;
+  const cur = new Date(`${windowStartISO}T00:00:00Z`);
+  let qualifyingDays = 0;
+  let daysWithData = 0;
+  while (cur <= winEnd) {
+    const key = cur.toISOString().slice(0, 10);
+    const v = byDay.get(key);
+    if (v !== undefined) {
+      daysWithData += 1;
+      if (v >= threshold) qualifyingDays += 1;
+    }
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return { qualifyingDays, daysWithData };
+}
+
+interface ActivityFields {
+  calendar_date?: string;
+  date?: string;
+  steps?: number | null;
+  calories_active?: number | null;
+  active_calories?: number | null;
+  calories?: number | null;
+  distance?: number | null;
+  distance_meters?: number | null;
+}
+interface ActivitySummaryResponse {
+  activity?: ActivityFields[];
+  data?: ActivityFields[];
+}
+interface WorkoutRecord {
+  calendar_date?: string;
+  date?: string;
+  time_start?: string;
+  distance?: number | null;
+  distance_meters?: number | null;
+}
+interface WorkoutResponse {
+  workouts?: WorkoutRecord[];
+  data?: WorkoutRecord[];
+}
+
+function activityDay(rec: ActivityFields): string | null {
+  return rec.calendar_date?.slice(0, 10) ?? rec.date?.slice(0, 10) ?? null;
+}
+function workoutDay(rec: WorkoutRecord): string | null {
+  return (
+    rec.calendar_date?.slice(0, 10) ??
+    rec.date?.slice(0, 10) ??
+    rec.time_start?.slice(0, 10) ??
+    null
+  );
+}
+
+/**
+ * Fetch the right Junction/Vital summary for `metric` and reduce it to one
+ * number per calendar day: best sleep score, longest sleep in hours, daily
+ * steps or active calories, summed workout distance in km, or workout count.
+ * Raw records never leave this function - only the derived per-day map does.
+ */
+async function fetchMetricByDay(
+  userId: string,
+  metric: WearableMetric,
+  range: string,
+): Promise<Map<string, number>> {
+  const byDay = new Map<string, number>();
+  const keepMax = (day: string | null, value: number | null): void => {
+    if (day === null || value === null || !Number.isFinite(value)) return;
+    const prev = byDay.get(day);
+    if (prev === undefined || value > prev) byDay.set(day, value);
+  };
+
+  if (metric === "sleep_score" || metric === "sleep_hours") {
+    const resp = await jx<SleepResponse>(`/v2/summary/sleep/${userId}?${range}`);
+    for (const rec of resp.sleep ?? resp.data ?? []) {
+      const day = dayKey(rec);
+      if (metric === "sleep_score") {
+        keepMax(day, recScore(rec));
+      } else {
+        const r = rec as SleepRecord & {
+          total_sleep_seconds?: number;
+          duration?: number;
+        };
+        const secs = r.total_sleep_seconds ?? r.duration ?? null;
+        keepMax(day, typeof secs === "number" ? secs / 3600 : null);
+      }
+    }
+    return byDay;
+  }
+
+  if (metric === "steps" || metric === "active_calories") {
+    const resp = await jx<ActivitySummaryResponse>(
+      `/v2/summary/activity/${userId}?${range}`,
+    );
+    for (const rec of resp.activity ?? resp.data ?? []) {
+      const day = activityDay(rec);
+      if (metric === "steps") {
+        keepMax(day, typeof rec.steps === "number" ? rec.steps : null);
+      } else {
+        const cal =
+          rec.calories_active ?? rec.active_calories ?? rec.calories ?? null;
+        keepMax(day, typeof cal === "number" ? cal : null);
+      }
+    }
+    return byDay;
+  }
+
+  // distance_km and workouts both read the workouts summary: distance sums each
+  // day's workout distance (km); workouts counts sessions per day.
+  const resp = await jx<WorkoutResponse>(
+    `/v2/summary/workouts/${userId}?${range}`,
+  );
+  for (const w of resp.workouts ?? resp.data ?? []) {
+    const day = workoutDay(w);
+    if (day === null) continue;
+    if (metric === "distance_km") {
+      const meters = w.distance ?? w.distance_meters ?? null;
+      const km = typeof meters === "number" ? meters / 1000 : 0;
+      byDay.set(day, (byDay.get(day) ?? 0) + km);
+    } else {
+      byDay.set(day, (byDay.get(day) ?? 0) + 1);
+    }
+  }
+  return byDay;
+}
+
+/**
+ * Verdict-facing progress for an arbitrary wearable goal: fetch the metric the
+ * goal is actually about and count qualifying days inside the pool period. This
+ * is the fix for "every wearable pool judged on sleep" - the caller passes the
+ * classified metric, and a steps goal is checked on steps.
+ */
+export async function getMetricProgress(
+  address: string,
+  metric: WearableMetric,
+  threshold: number,
+  windowStartISO: string,
+  windowEndISO: string,
+): Promise<MetricProgress> {
+  const userId = await getOrCreateUser(address);
+  const end = new Date();
+  const start = new Date(`${windowStartISO}T00:00:00Z`);
+  const range = `start_date=${isoDate(start)}&end_date=${isoDate(end)}`;
+  const byDay = await fetchMetricByDay(userId, metric, range);
+  return windowDayCount(byDay, threshold, windowStartISO, windowEndISO);
 }
 
 // ------------------------------------------------------------- recent data
