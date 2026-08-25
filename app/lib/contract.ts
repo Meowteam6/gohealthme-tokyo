@@ -137,17 +137,6 @@ export const healthPoolsAbi = [
   },
   {
     type: "function",
-    name: "backGoal",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "poolId", type: "uint256" },
-      { name: "user", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [],
-  },
-  {
-    type: "function",
     name: "fundPool",
     stateMutability: "nonpayable",
     inputs: [
@@ -265,26 +254,6 @@ export const healthPoolsAbi = [
   },
   {
     type: "event",
-    name: "GoalBacked",
-    inputs: [
-      { name: "poolId", type: "uint256", indexed: true },
-      { name: "participant", type: "address", indexed: true },
-      { name: "backer", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    type: "event",
-    name: "BackerPaid",
-    inputs: [
-      { name: "poolId", type: "uint256", indexed: true },
-      { name: "backer", type: "address", indexed: true },
-      { name: "participant", type: "address", indexed: false },
-      { name: "amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    type: "event",
     name: "AchieverPaid",
     inputs: [
       { name: "poolId", type: "uint256", indexed: true },
@@ -317,12 +286,6 @@ export const poolCreatedEvent = parseAbiItem(
 // address params let the RPC filter server-side per wallet.
 export const achieverPaidEvent = parseAbiItem(
   "event AchieverPaid(uint256 indexed poolId, address indexed participant, uint256 amount)",
-);
-export const backerPaidEvent = parseAbiItem(
-  "event BackerPaid(uint256 indexed poolId, address indexed backer, address participant, uint256 amount)",
-);
-export const goalBackedEvent = parseAbiItem(
-  "event GoalBacked(uint256 indexed poolId, address indexed participant, address indexed backer, uint256 amount)",
 );
 export const poolJoinedEvent = parseAbiItem(
   "event PoolJoined(uint256 indexed poolId, address indexed participant, uint256 nullifierHash)",

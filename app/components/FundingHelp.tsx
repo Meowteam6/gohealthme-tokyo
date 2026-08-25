@@ -1,9 +1,10 @@
 "use client";
 
-// The first-run wall. Arc testnet pays gas in USDC, so a brand new wallet
-// holds nothing and cannot send ANY transaction - not a join, not a top-up,
-// not a stake. Every USDC-pulling surface needs the same explanation and the
-// same escape hatch, so it lives here rather than inside JoinPool.
+// The first-run wall. Joining is gas-free (the network fee is sponsored), but a
+// brand new wallet still holds no USDC to cover the amount an action pulls - a
+// pool entry fee, a top-up. Every USDC-pulling surface needs the same
+// explanation and the same escape hatch, so it lives here rather than inside
+// JoinPool.
 //
 // The instructions matter: at faucet.circle.com you PASTE an address and pick
 // a network from a long dropdown, you do not "send" anything, and Arc Testnet
@@ -196,16 +197,10 @@ export default function FundingHelp({
   return (
     <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
       <p className="text-base font-semibold text-warning">{headline}</p>
-      {/* TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
-          "Arc testnet pays gas in USDC, so a zero balance cannot send any transaction"
-          is false on Base: gas is ETH and the CDP paymaster sponsors smart-wallet
-          users, so those users need no gas at all. This whole first-run funding
-          wall (and "your Base wallet" delivery copy below) is left verbatim on
-          purpose — a human rewrites it with the real Base gas/paymaster story. */}
       <p className="mt-1 text-sm text-foreground/80">
-        Arc testnet pays gas in USDC, so a wallet with a zero balance cannot
-        send any transaction - even a free pool needs a little to cover the
-        gas. The USDC is test USDC and has no real value.
+        On GoHealthMe, joining is gas-free - the network fee is covered for you.
+        You just need a little test USDC in your wallet for the amount this
+        action uses. It is test USDC and has no real value.
         {note !== undefined && note !== "" ? ` ${note}` : ""}
         {balance !== null
           ? ` Current balance: ${formatUsdc(balance)} USDC.`

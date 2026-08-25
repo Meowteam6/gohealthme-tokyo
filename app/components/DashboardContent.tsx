@@ -552,12 +552,6 @@ export default function DashboardContent() {
                       {formatUsdc(pool.balance)} USDC
                     </span>
                   </span>
-                  <span>
-                    Backed with{" "}
-                    <span className="font-semibold text-foreground">
-                      {formatUsdc(participant.backingTotal)} USDC
-                    </span>
-                  </span>
                   <Countdown
                     periodStart={pool.periodStart}
                     periodEnd={pool.periodEnd}

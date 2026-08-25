@@ -69,7 +69,7 @@ function useStubWallet(): EmbeddedWalletState {
  * Arc testnet, and returns a viem wallet client.
  *
  * Public interface is identical to the previous wallet hook so all
- * consumers (JoinPool, FundPool, BackGoal, CreatePool, Header, useUsdcDeposit)
+ * consumers (JoinPool, FundPool, CreatePool, Header, useUsdcDeposit)
  * are untouched. The `wallet` field from the old interface was confirmed
  * unused by consumers (grep -rn ".wallet" app/components app/lib returned 0 hits).
  */

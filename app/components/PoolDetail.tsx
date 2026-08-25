@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import Countdown from "@/components/Countdown";
 import JoinPool from "@/components/JoinPool";
-import BackGoal from "@/components/BackGoal";
 import FundPool from "@/components/FundPool";
 import ChallengeContribute from "@/components/ChallengeContribute";
 import EvidenceUpload from "@/components/EvidenceUpload";
@@ -367,9 +366,9 @@ export default function PoolDetail({ id }: { id: string }) {
   const claimIsSelfReported =
     claimLedger?.some((e) => e.kind === "verdict" && e.selfReported === true) ===
     true;
-  // joinPool and backGoal revert with PERIOD_ENDED once the period closes,
-  // so an expired pool must never offer either action. Evidence and the
-  // receipt stay visible for joined participants until settlement runs.
+  // joinPool reverts with PERIOD_ENDED once the period closes, so an expired
+  // pool must never offer it. Evidence and the receipt stay visible for joined
+  // participants until settlement runs.
   const phase = poolPhase(pool, asOfSeconds);
 
   // A wearable goal with the provider refusing us cannot be checked at all.
@@ -640,16 +639,6 @@ export default function PoolDetail({ id }: { id: string }) {
           )}
 
           {canPay ? claimSection : null}
-
-          {/* Backers are only ever paid on ACHIEVERS (HealthPools._payBackers).
-              A pool that cannot pay its achievers also cannot make backing win,
-              and with join/upload suppressed no one here can become an achiever,
-              so a stake would only forfeit. Hide backing on unpayable pools. */}
-          {canPay ? (
-            <section className="rounded-2xl border border-edge bg-surface p-5">
-              <BackGoal poolId={pool.id} />
-            </section>
-          ) : null}
         </div>
       ) : phase === "expired" ? (
         <div className="space-y-4">
@@ -657,8 +646,8 @@ export default function PoolDetail({ id }: { id: string }) {
             <h2 className="text-lg font-semibold">This pool has ended</h2>
             <p className="mt-1 text-sm text-muted">
               The goal window closed on {formatDay(pool.periodEnd)}, so joining
-              and backing are closed. SPOTTER settles the payouts for verified
-              achievers now that the period is over.
+              is closed. SPOTTER settles the payouts for verified achievers now
+              that the period is over.
             </p>
             {!joined ? (
               <>

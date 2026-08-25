@@ -30,11 +30,11 @@ import {
  * (see notes/Blink Integration Brief.md).
  *
  * Every USDC-pulling contract call in the app (createPool initialFunding,
- * fundPool top-up, backGoal stake) funnels through runUsdcDeposit below.
+ * fundPool top-up) funnels through runUsdcDeposit below.
  * On Saturday the two-step "approve USDC then call the contract" flow gets
  * replaced by a single Blink one-tap deposit (Blink-on-Base + Circle Gateway
  * minting USDC straight onto Arc). Isolating it here means the Blink swap
- * touches THIS file only, not CreatePool / FundPool / BackGoal.
+ * touches THIS file only, not CreatePool / FundPool.
  */
 
 /** The contract write that consumes the approved USDC, by name + args. */
@@ -51,8 +51,7 @@ export type DepositCall =
         bigint,
       ];
     }
-  | { functionName: "fundPool"; args: readonly [bigint, bigint] }
-  | { functionName: "backGoal"; args: readonly [bigint, Address, bigint] };
+  | { functionName: "fundPool"; args: readonly [bigint, bigint] };
 
 export type DepositStatus =
   | { kind: "idle" }
@@ -132,7 +131,7 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
       // contract only pulls initialFunding when it is above zero). Allow amount
       // 0 for exactly that call — createPool with initialFunding (args[6]) 0 —
       // and skip the balance preflight and approval below. Every other
-      // USDC-pulling call (fundPool, backGoal, a sponsor-seeded createPool)
+      // USDC-pulling call (fundPool, a sponsor-seeded createPool)
       // still requires a positive amount.
       const zeroFundingCreate =
         amount === 0n &&

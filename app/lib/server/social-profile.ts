@@ -8,7 +8,7 @@
 // A profile is public identity ONLY: a wallet address, a handle, an optional
 // avatar glyph. There is no health column anywhere in the schema, so nothing
 // this module can read or write is health-revealing. On-chain stats (wins,
-// USDC, backers) are derived separately in social-stats.ts, never stored here.
+// USDC) are derived separately in social-stats.ts, never stored here.
 
 import {
   getSupabaseAnon,

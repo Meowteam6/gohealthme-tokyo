@@ -6,13 +6,9 @@
 //
 // The counters map to the paid-wall:
 //   goalsHit    = AchieverPaid events paying this wallet (a verified win, paid)
-//   usdcEarned  = sum of AchieverPaid + BackerPaid amounts to this wallet
+//   usdcEarned  = sum of AchieverPaid amounts to this wallet
 //   poolsJoined = PoolJoined events for this wallet
-//   backerWins  = BackerPaid events to this wallet as a backer
 //   winStreak   = trailing run of verdict==true in this wallet's ResultRecorded
-// and the peer sets (addresses only; the caller resolves handles):
-//   backerAddresses  = wallets backing this wallet   (GoalBacked, participant=A)
-//   backingAddresses = wallets this wallet backs      (GoalBacked, backer=A)
 //
 // getLogs is filtered server-side by the indexed address param, so each query
 // is scoped to one wallet rather than the whole contract, and the result is
@@ -21,11 +17,9 @@
 import { getAddress, type Address, type Hex } from "viem";
 import {
   achieverPaidEvent,
-  backerPaidEvent,
   formatUsdc,
   getArcPublicClient,
   getHealthPoolsAddress,
-  goalBackedEvent,
   healthPoolsAbi,
   healthVerdictReadAbi,
   poolJoinedEvent,
@@ -41,11 +35,10 @@ export interface SocialWin {
   at: string;
   amountUsd: string; // formatted, two decimals, e.g. "40.00"
   txHash: string; // the settlement tx -> Arcscan link
-  role: "achiever" | "backer";
-  /** Trust tier of an achiever win (from the HealthVerdict facet bitmap); null
-   *  for a backer win, which makes no tier claim of its own. A "self-reported"
-   *  win is a real win but must NEVER render as verified. "unknown" is neither
-   *  proven verified nor known self-reported. */
+  role: "achiever";
+  /** Trust tier of an achiever win (from the HealthVerdict facet bitmap). A
+   *  "self-reported" win is a real win but must NEVER render as verified.
+   *  "unknown" is neither proven verified nor known self-reported. */
   tier: ProofTier | null;
 }
 
@@ -60,10 +53,7 @@ export interface SocialStats {
   selfReportedWins: number;
   usdcEarned: bigint; // USDC in 6-decimal base units
   poolsJoined: number;
-  backerWins: number;
   winStreak: number;
-  backerAddresses: string[];
-  backingAddresses: string[];
   recentWins: SocialWin[]; // newest first, capped at WINS_LIMIT
 }
 
@@ -73,10 +63,7 @@ export const EMPTY_STATS: SocialStats = {
   selfReportedWins: 0,
   usdcEarned: 0n,
   poolsJoined: 0,
-  backerWins: 0,
   winStreak: 0,
-  backerAddresses: [],
-  backingAddresses: [],
   recentWins: [],
 };
 
@@ -86,7 +73,7 @@ const WINS_LIMIT = 12;
 
 // Each event query is windowed (Arc caps a single getLogs at 100k blocks and
 // runs sub-second blocks) via scanInWindows from the pinned deploy-era start.
-// The six per-wallet scans run at once, so each uses a small window concurrency
+// The per-wallet scans run at once, so each uses a small window concurrency
 // to keep their combined peak under the RPC rate limit.
 const SCAN_CONCURRENCY = 2;
 
@@ -106,20 +93,6 @@ function byPosition(a: Positioned, b: Positioned): number {
   const bb = b.blockNumber ?? 0n;
   if (ab !== bb) return ab < bb ? -1 : 1;
   return (a.logIndex ?? 0) - (b.logIndex ?? 0);
-}
-
-/** Distinct lowercased addresses, preserving first-seen order. */
-function distinctAddresses(values: (string | undefined)[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const value of values) {
-    if (value === undefined) continue;
-    const lower = value.toLowerCase();
-    if (seen.has(lower)) continue;
-    seen.add(lower);
-    out.push(lower);
-  }
-  return out;
 }
 
 /**
@@ -230,63 +203,35 @@ export async function getSocialStats(rawAddress: string): Promise<SocialStats> {
     const scan = <T>(
       query: (fromBlock: bigint, toBlock: bigint) => Promise<T[]>,
     ) => scanInWindows(start, latest, query, SCAN_CONCURRENCY);
-    const [achiever, backerPaid, joined, results, backedForMe, backedByMe] =
-      await Promise.all([
-        scan((fromBlock, toBlock) =>
-          client.getLogs({
-            address: poolsAddress,
-            event: achieverPaidEvent,
-            args: { participant: account },
-            fromBlock,
-            toBlock,
-          }),
-        ),
-        scan((fromBlock, toBlock) =>
-          client.getLogs({
-            address: poolsAddress,
-            event: backerPaidEvent,
-            args: { backer: account },
-            fromBlock,
-            toBlock,
-          }),
-        ),
-        scan((fromBlock, toBlock) =>
-          client.getLogs({
-            address: poolsAddress,
-            event: poolJoinedEvent,
-            args: { participant: account },
-            fromBlock,
-            toBlock,
-          }),
-        ),
-        scan((fromBlock, toBlock) =>
-          client.getLogs({
-            address: poolsAddress,
-            event: resultRecordedEvent,
-            args: { participant: account },
-            fromBlock,
-            toBlock,
-          }),
-        ),
-        scan((fromBlock, toBlock) =>
-          client.getLogs({
-            address: poolsAddress,
-            event: goalBackedEvent,
-            args: { participant: account },
-            fromBlock,
-            toBlock,
-          }),
-        ),
-        scan((fromBlock, toBlock) =>
-          client.getLogs({
-            address: poolsAddress,
-            event: goalBackedEvent,
-            args: { backer: account },
-            fromBlock,
-            toBlock,
-          }),
-        ),
-      ]);
+    const [achiever, joined, results] = await Promise.all([
+      scan((fromBlock, toBlock) =>
+        client.getLogs({
+          address: poolsAddress,
+          event: achieverPaidEvent,
+          args: { participant: account },
+          fromBlock,
+          toBlock,
+        }),
+      ),
+      scan((fromBlock, toBlock) =>
+        client.getLogs({
+          address: poolsAddress,
+          event: poolJoinedEvent,
+          args: { participant: account },
+          fromBlock,
+          toBlock,
+        }),
+      ),
+      scan((fromBlock, toBlock) =>
+        client.getLogs({
+          address: poolsAddress,
+          event: resultRecordedEvent,
+          args: { participant: account },
+          fromBlock,
+          toBlock,
+        }),
+      ),
+    ]);
 
     // Trust tier per winning pool, read from the HealthVerdict facet bitmap.
     // A win is only counted as verified when the chain proves a trust facet;
@@ -312,42 +257,32 @@ export async function getSocialStats(rawAddress: string): Promise<SocialStats> {
 
     let usdcEarned = 0n;
     for (const log of achiever) usdcEarned += log.args.amount ?? 0n;
-    for (const log of backerPaid) usdcEarned += log.args.amount ?? 0n;
 
     // Win streak: trailing run of verified results in chronological order.
     const streak = [...results].sort(byPosition).reduce((run, log) => {
       return log.args.verdict === true ? run + 1 : 0;
     }, 0);
 
-    // Recent payout rows: both kinds of money-in event this wallet received,
-    // newest first, capped. Each carries the settlement tx hash directly off
-    // the log; block time is resolved for the capped set only.
+    // Recent payout rows: the achiever payouts this wallet received, newest
+    // first, capped. Each carries the settlement tx hash directly off the log;
+    // block time is resolved for the capped set only.
     type WinLog = {
       blockNumber: bigint | null;
       logIndex: number | null;
       txHash: string;
       amount: bigint;
-      role: "achiever" | "backer";
+      role: "achiever";
       tier: ProofTier | null;
     };
-    const winLogs: WinLog[] = [
-      ...achiever.map((log) => ({
+    const winLogs: WinLog[] = achiever
+      .map((log) => ({
         blockNumber: log.blockNumber,
         logIndex: log.logIndex,
         txHash: String(log.transactionHash ?? ""),
         amount: log.args.amount ?? 0n,
         role: "achiever" as const,
         tier: tierOfPool(log.args.poolId),
-      })),
-      ...backerPaid.map((log) => ({
-        blockNumber: log.blockNumber,
-        logIndex: log.logIndex,
-        txHash: String(log.transactionHash ?? ""),
-        amount: log.args.amount ?? 0n,
-        role: "backer" as const,
-        tier: null,
-      })),
-    ]
+      }))
       .filter((w) => w.txHash !== "")
       .sort((a, b) => byPosition(b, a))
       .slice(0, WINS_LIMIT);
@@ -372,16 +307,7 @@ export async function getSocialStats(rawAddress: string): Promise<SocialStats> {
       selfReportedWins,
       usdcEarned,
       poolsJoined: joined.length,
-      backerWins: backerPaid.length,
       winStreak: streak,
-      // backers OF this wallet: the backer address on each GoalBacked to it.
-      backerAddresses: distinctAddresses(
-        backedForMe.map((log) => log.args.backer),
-      ),
-      // wallets this wallet is backing: the participant on each of its stakes.
-      backingAddresses: distinctAddresses(
-        backedByMe.map((log) => log.args.participant),
-      ),
       recentWins,
     };
 

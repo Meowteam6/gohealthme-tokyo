@@ -2,12 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ProfilePaidWall,
-  type Peer,
   type ProfileData,
   type Win,
 } from "@/components/profile-paid-wall";
 import { formatUsdc } from "@/lib/contract";
-import { getProfileByHandle, resolveProfiles } from "@/lib/server/social-profile";
+import { getProfileByHandle } from "@/lib/server/social-profile";
 import { getSocialStats } from "@/lib/server/social-stats";
 import { checkHandle } from "@/lib/social";
 
@@ -70,17 +69,6 @@ export default async function ProfilePage({
 
   const stats = await getSocialStats(profile.address);
 
-  // Resolve backer/backing wallets to handles. Only wallets that have claimed a
-  // handle appear as named peers; anonymous backers are counted in the stats
-  // but not named here.
-  const peerAddresses = [...stats.backerAddresses, ...stats.backingAddresses];
-  const peerProfiles = await resolveProfiles(peerAddresses);
-  const toPeers = (addresses: string[]): Peer[] =>
-    addresses
-      .map((address) => peerProfiles.get(address.toLowerCase()))
-      .filter((p): p is NonNullable<typeof p> => p !== undefined)
-      .map((p) => ({ handle: p.handle, emoji: avatarGlyph(p.handle, p.emoji) }));
-
   const wins: Win[] = stats.recentWins.map((win, index) => ({
     id: `${win.txHash}-${index}`,
     at: win.at,
@@ -100,8 +88,6 @@ export default async function ProfilePage({
     selfReportedWins: stats.selfReportedWins,
     usdcEarned: formatUsdc(stats.usdcEarned),
     winStreak: stats.winStreak,
-    backers: toPeers(stats.backerAddresses),
-    backing: toPeers(stats.backingAddresses),
     wins,
   };
 

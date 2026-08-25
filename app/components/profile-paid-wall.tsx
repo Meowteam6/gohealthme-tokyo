@@ -3,9 +3,9 @@
 //
 // THE REDACTION RULE IS STRUCTURAL HERE: ProfileData has no field that can
 // carry an initiative, a goalSpec, or any health label - only a handle, an
-// avatar glyph, an address, counts, USDC amounts, backer handles, and
-// settlement tx hashes. A win row shows a role and its trust tier ("Verified
-// win" / "Self-reported win" / "Backed a winner"), never what the goal was.
+// avatar glyph, an address, counts, USDC amounts, and settlement tx hashes. A
+// win row shows a role and its trust tier ("Verified win" / "Self-reported
+// win"), never what the goal was.
 //
 // THE HONESTY RULE: a self-reported win (a photo/screenshot we cannot confirm
 // is real, recent, or theirs) is a real win paid at 1x, but it must NEVER carry
@@ -20,15 +20,10 @@ export interface Win {
   at: string; // ISO timestamp
   amountUsd: string; // "40.00" - two decimals, exactly as the ledger recorded it
   txHash: string; // settlement tx hash -> Arcscan link
-  role: "achiever" | "backer";
-  /** Trust tier of an achiever win; null for a backer win. A "self-reported"
-   *  win never renders as verified. */
+  role: "achiever";
+  /** Trust tier of an achiever win. A "self-reported" win never renders as
+   *  verified. */
   tier: ProofTier | null;
-}
-
-export interface Peer {
-  handle: string;
-  emoji: string; // avatar glyph, rendered as data
 }
 
 export interface ProfileData {
@@ -39,8 +34,6 @@ export interface ProfileData {
   selfReportedWins: number; // real wins, counted separately, never "verified"
   usdcEarned: string; // "1240.00"
   winStreak: number;
-  backers: Peer[];
-  backing: Peer[];
   wins: Win[]; // most recent first
 }
 
@@ -196,49 +189,6 @@ function relativeTime(iso: string): string {
   return `${Math.floor(day / 365)}y ago`;
 }
 
-/* ---------- peer chip ---------- */
-
-function PeerChip({ peer }: { peer: Peer }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-raised py-1 pl-1 pr-2.5 text-sm">
-      <span
-        aria-hidden="true"
-        className="flex h-6 w-6 items-center justify-center rounded-full bg-background text-sm leading-none"
-      >
-        {peer.emoji}
-      </span>
-      <span className="text-foreground">@{peer.handle}</span>
-    </span>
-  );
-}
-
-function PeerColumn({
-  title,
-  peers,
-  emptyLabel,
-}: {
-  title: string;
-  peers: Peer[];
-  emptyLabel: string;
-}) {
-  return (
-    <div className="flex-1 rounded-2xl border border-edge bg-surface p-5">
-      <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">
-        {title}
-      </h3>
-      {peers.length === 0 ? (
-        <p className="text-sm text-muted">{emptyLabel}</p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {peers.map((peer) => (
-            <PeerChip key={peer.handle} peer={peer} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ---------- win row ---------- */
 
 // Icon container tones per trust tier. Self-reported and unknown wins carry NO
@@ -251,7 +201,6 @@ const WIN_ICON_TONE: Record<"accent" | "warning" | "muted", string> = {
 
 function WinRow({ win, index }: { win: Win; index: number }) {
   const { label, tone, showCheck, sublabel } = profileWinPresentation(
-    win.role,
     win.tier,
   );
   return (
@@ -376,21 +325,7 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
           <PrivacyLine className="mt-4" />
         </section>
 
-        {/* 3. Backing block */}
-        <section className="flex flex-col gap-3 sm:flex-row">
-          <PeerColumn
-            title="Backed by"
-            peers={profile.backers}
-            emptyLabel="No backers yet"
-          />
-          <PeerColumn
-            title="Backing"
-            peers={profile.backing}
-            emptyLabel="Not backing anyone yet"
-          />
-        </section>
-
-        {/* 4. Wins feed - each row carries its own trust tier, so a
+        {/* 3. Wins feed - each row carries its own trust tier, so a
             self-reported win reads as self-reported, never verified. */}
         <section className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
@@ -412,7 +347,7 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
           )}
         </section>
 
-        {/* 5. Footer */}
+        {/* 4. Footer */}
       <footer className="pt-2 text-center text-xs text-muted">
         GoHealthMe &mdash; get paid the instant you hit a verified goal.
       </footer>

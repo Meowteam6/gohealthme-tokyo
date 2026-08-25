@@ -64,10 +64,9 @@ function BackupSection() {
     <section className="mt-6 rounded-2xl border border-edge bg-surface p-5">
       <h2 className="text-lg font-semibold">Back up this wallet</h2>
       <p className="mt-2 text-sm text-muted">
-        This wallet was created for you, so only you can save its keys. Reveal
-        them in Dynamic&apos;s secure view and store them somewhere safe -
-        anyone with them controls the wallet, and no one can recover them for
-        you.
+        This is optional. It shows a secret code for your account. Anyone who
+        sees it can take your money - never share it, not even with someone from
+        GoHealthMe. Only open this somewhere private.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <button
@@ -78,7 +77,9 @@ function BackupSection() {
           }}
           className="min-h-11 rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {busy === "phrase" ? "Opening..." : "Reveal recovery phrase"}
+          {busy === "phrase"
+            ? "Opening..."
+            : "Show my backup code (keep private)"}
         </button>
         <button
           type="button"
@@ -88,7 +89,9 @@ function BackupSection() {
           }}
           className="min-h-11 rounded-xl border border-edge px-5 py-3 text-sm font-semibold text-foreground hover:border-accent/50 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {busy === "key" ? "Opening..." : "Export private key"}
+          {busy === "key"
+            ? "Opening..."
+            : "Show my secret key (keep private)"}
         </button>
       </div>
       {error !== null ? (

@@ -65,9 +65,8 @@ export function tallyWinTiers(tiers: ProofTier[]): {
   return { verifiedWins, selfReportedWins };
 }
 
-/** A profile paid-wall win row's presentation. `tier` is null for a backer
- *  win (whose row makes no trust-tier claim of its own). A self-reported win
- *  never carries a check/shield and never reads "Verified". */
+/** A profile paid-wall win row's presentation. A self-reported win never
+ *  carries a check/shield and never reads "Verified". */
 export interface WinPresentation {
   label: string;
   tone: "accent" | "warning" | "muted";
@@ -77,13 +76,7 @@ export interface WinPresentation {
   sublabel: string | null;
 }
 
-export function profileWinPresentation(
-  role: "achiever" | "backer",
-  tier: ProofTier | null,
-): WinPresentation {
-  if (role === "backer") {
-    return { label: "Backed a winner", tone: "accent", showCheck: true, sublabel: null };
-  }
+export function profileWinPresentation(tier: ProofTier | null): WinPresentation {
   if (tier === "self-reported") {
     return {
       label: "Self-reported win",

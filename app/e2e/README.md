@@ -65,7 +65,7 @@ JSON file store under `DATA_DIR` (`.data-e2e/`, wiped by `globalSetup`).
 
 ## Why the money paths are driven through `request`, not clicks
 
-`EvidenceUpload`, `WearableCheck`, `JoinPool` and `BackGoal` all short-circuit
+`EvidenceUpload`, `WearableCheck` and `JoinPool` all short-circuit
 on the build-time `DYNAMIC_CONFIGURED` flag before they reach any wallet code.
 Rendering their real UI needs a live Dynamic environment id — a real account,
 with live calls to Dynamic's cloud — which the zero-credential constraint rules

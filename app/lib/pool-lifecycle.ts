@@ -15,8 +15,8 @@ export interface LifecycleFields {
 
 /**
  * Classify a pool at a moment in time (unix seconds). "expired" means the
- * period has ended but settlement has not run yet - joining and backing
- * revert on-chain, while evidence and receipts remain meaningful.
+ * period has ended but settlement has not run yet - joining reverts on-chain,
+ * while evidence and receipts remain meaningful.
  */
 export function poolPhase(
   pool: LifecycleFields,

@@ -155,7 +155,7 @@ describe("tallyWinTiers (the verified-wins stat)", () => {
 
 describe("profileWinPresentation (paid-wall win rows)", () => {
   it("renders a self-reported achiever win as self-reported, never verified", () => {
-    const p = profileWinPresentation("achiever", "self-reported");
+    const p = profileWinPresentation("self-reported");
     expect(p.label).toBe("Self-reported win");
     expect(p.label).not.toMatch(/verified/i);
     expect(p.showCheck).toBe(false);
@@ -164,20 +164,15 @@ describe("profileWinPresentation (paid-wall win rows)", () => {
   });
 
   it("renders a verified achiever win with a check badge", () => {
-    const p = profileWinPresentation("achiever", "verified");
+    const p = profileWinPresentation("verified");
     expect(p.label).toBe("Verified win");
     expect(p.showCheck).toBe(true);
   });
 
   it("never presents an unknown-tier win as verified", () => {
-    const p = profileWinPresentation("achiever", "unknown");
+    const p = profileWinPresentation("unknown");
     expect(p.label).not.toMatch(/verified/i);
     expect(p.showCheck).toBe(false);
-  });
-
-  it("leaves a backer win unchanged", () => {
-    const p = profileWinPresentation("backer", null);
-    expect(p.label).toBe("Backed a winner");
   });
 });
 

@@ -55,16 +55,6 @@ function poisonedProfile(): ProfileData {
     verifiedWins: 3,
     usdcEarned: "120.00",
     winStreak: 2,
-    backers: [
-      {
-        handle: "nova_eth",
-        emoji: "N",
-        // poison
-        initiative: "cholesterol",
-        goalSpec: "[doc] flu-shot",
-      },
-    ],
-    backing: [{ handle: "sol_sister", emoji: "S" }],
     wins: [
       {
         id: "w1",
