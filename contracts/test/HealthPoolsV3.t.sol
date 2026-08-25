@@ -712,6 +712,68 @@ contract HealthPoolsV3Test is Test {
         assertEq(fresh.MAX_COMMITMENT_FEE_BPS(), 2_000, "rake ceiling stays 20% (2000 bps), never a default");
     }
 
+    // -------------------------------------------------- closed-pilot join gate
+
+    /// @notice The join gate is OFF by default so open testnet flows are
+    ///         unchanged: a non-allowlisted wallet joins normally.
+    function test_JoinGate_offByDefault_anyoneCanJoin() public {
+        assertEq(pools.joinGateEnabled(), false, "join gate is off by default");
+        uint256 poolId = _newFundedPool(0);
+        _join(poolId, alice); // not allowlisted, gate off -> allowed
+        assertEq(pools.getPool(poolId).balance, FEE, "alice joined with the gate off");
+    }
+
+    /// @notice With the gate ON, only an allowlisted wallet may stake. The money
+    ///         path is gated by the contract, not by a private link.
+    function test_JoinGate_enabled_blocksNonAllowlisted() public {
+        uint256 poolId = _newFundedPool(0);
+        pools.setJoinGateEnabled(true);
+
+        vm.prank(alice);
+        vm.expectRevert(bytes("NOT_ALLOWLISTED"));
+        pools.joinPool(poolId);
+        assertEq(pools.getPool(poolId).balance, 0, "a blocked join stakes nothing");
+
+        pools.setJoinAllowed(alice, true);
+        _join(poolId, alice);
+        assertEq(pools.getPool(poolId).balance, FEE, "allowlisted alice staked one fee");
+    }
+
+    /// @notice The whole family list can be approved in one transaction; anyone
+    ///         off the list is still blocked.
+    function test_JoinGate_batchAllowlist() public {
+        uint256 poolId = _newFundedPool(0);
+        pools.setJoinGateEnabled(true);
+
+        address[] memory list = new address[](2);
+        list[0] = alice;
+        list[1] = bob;
+        pools.setJoinAllowedBatch(list, true);
+
+        _join(poolId, alice);
+        _join(poolId, bob);
+        assertEq(pools.getPool(poolId).balance, FEE * 2, "both allowlisted stakers joined");
+
+        vm.prank(carol);
+        vm.expectRevert(bytes("NOT_ALLOWLISTED"));
+        pools.joinPool(poolId); // carol was not in the batch
+    }
+
+    /// @notice Only the owner controls the gate and the allowlist.
+    function test_JoinGate_ownerOnly() public {
+        address[] memory list = new address[](1);
+        list[0] = bob;
+
+        vm.startPrank(alice);
+        vm.expectRevert(bytes("NOT_OWNER"));
+        pools.setJoinGateEnabled(true);
+        vm.expectRevert(bytes("NOT_OWNER"));
+        pools.setJoinAllowed(bob, true);
+        vm.expectRevert(bytes("NOT_OWNER"));
+        pools.setJoinAllowedBatch(list, true);
+        vm.stopPrank();
+    }
+
     /// @notice Property: for any staker count, hit pattern, and fee, model-2
     ///         settlement conserves funds exactly (users + owner fee + pool dust ==
     ///         pot) and never taxes an achiever below her own stake.

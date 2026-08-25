@@ -94,6 +94,15 @@ contract HealthPoolsV3 is ReentrancyGuard {
     address public healthVerdict; // optional verdict registry; write-once-on latch
     uint16 public commitmentFeeBps; // model-2 fee on forfeitures only; 0 = waived (pilot default)
 
+    /// @notice Closed-pilot join gate (compliance). When joinGateEnabled is
+    ///         true, only allowlisted wallets may joinPool — the on-chain
+    ///         enforcement behind the family-and-friends closed real-money test,
+    ///         so the money-in path is gated by the contract, not by obscurity.
+    ///         Default OFF, so open testnet flows are unchanged; the owner turns
+    ///         it ON for the pilot and allowlists each participant.
+    bool public joinGateEnabled;
+    mapping(address => bool) public joinAllowed;
+
     uint256 public poolCount; // pool ids run 1..poolCount
     mapping(uint256 => Pool) internal pools;
     mapping(uint256 => address[]) internal participantList;
@@ -142,6 +151,8 @@ contract HealthPoolsV3 is ReentrancyGuard {
     event SettlerUpdated(address indexed previousSettler, address indexed newSettler);
     event HealthVerdictUpdated(address indexed previousRegistry, address indexed newRegistry);
     event CommitmentFeeUpdated(uint16 previousBps, uint16 newBps);
+    event JoinGateToggled(bool enabled);
+    event JoinAllowlistUpdated(address indexed account, bool allowed);
 
     // --------------------------------------------------------------- modifiers
 
@@ -226,6 +237,30 @@ contract HealthPoolsV3 is ReentrancyGuard {
         commitmentFeeBps = newBps;
     }
 
+    /// @notice Toggle the closed-pilot join gate. OFF (default) = anyone may
+    ///         join; ON = only allowlisted wallets may join. This is the
+    ///         on-chain half of the family-and-friends closed real-money test.
+    function setJoinGateEnabled(bool enabled) external onlyOwner {
+        joinGateEnabled = enabled;
+        emit JoinGateToggled(enabled);
+    }
+
+    /// @notice Allow or disallow a single wallet from joining while the gate is
+    ///         on. No effect while the gate is off.
+    function setJoinAllowed(address account, bool allowed) external onlyOwner {
+        joinAllowed[account] = allowed;
+        emit JoinAllowlistUpdated(account, allowed);
+    }
+
+    /// @notice Batch form of setJoinAllowed — approve the whole family list in a
+    ///         single transaction.
+    function setJoinAllowedBatch(address[] calldata accounts, bool allowed) external onlyOwner {
+        for (uint256 i; i < accounts.length; ++i) {
+            joinAllowed[accounts[i]] = allowed;
+            emit JoinAllowlistUpdated(accounts[i], allowed);
+        }
+    }
+
     // ---------------------------------------------------------------- actions
 
     /// @notice Permissionless pool creation. Pulls initialFunding from the caller.
@@ -263,6 +298,9 @@ contract HealthPoolsV3 is ReentrancyGuard {
     /// @notice Join a pool. One wallet = one entry (World ID was removed in the
     ///         Circle build; entry is gated on the address here). Pulls entryFee.
     function joinPool(uint256 poolId) external nonReentrant {
+        // Closed-pilot gate: when on, only allowlisted wallets may stake. Off by
+        // default, so this is a no-op until the owner enables the pilot.
+        require(!joinGateEnabled || joinAllowed[msg.sender], "NOT_ALLOWLISTED");
         Pool storage p = _existingPool(poolId);
         require(!p.settled, "SETTLED");
         require(block.timestamp < p.periodEnd, "PERIOD_ENDED");
