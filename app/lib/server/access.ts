@@ -250,6 +250,12 @@ export async function listAccessRequests(limit = 250): Promise<AccessRecord[]> {
  */
 export async function isAllowed(address: string | null | undefined): Promise<boolean> {
   if (typeof address !== "string" || !isAddress(address)) return false;
+  // When the closed-beta gate is disabled (open demo), the SERVER enforcement is
+  // off too. Otherwise the client gate opens but money-out routes (withdraw,
+  // evidence, challenges) still reject every wallet, so the faucet can credit
+  // the ledger but never deliver USDC on-chain. Same flag AccessGate reads, so
+  // client and server agree.
+  if (process.env.NEXT_PUBLIC_ACCESS_GATE_DISABLED === "1") return true;
   if (isAdmin(address)) return true;
   const record = await getAccessRecord(address);
   return record?.status === "approved";
