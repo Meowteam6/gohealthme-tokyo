@@ -152,6 +152,7 @@ function FundPoolInner({
         <ErrorNote
           title="Funding failed"
           detail={status.message}
+          raw={status.raw}
           onRetry={reset}
         />
       ) : null}
