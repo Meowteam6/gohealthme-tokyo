@@ -49,13 +49,19 @@ const DURATION_OPTIONS: { label: string; days: number }[] = [
 
 const SECONDS_PER_DAY = 86_400;
 
-// A challenge is always a challenger-funded, split-pot pool the target joins for
-// free. These are fixed, not form fields: entryFee 0 keeps the target paying
-// nothing, and the split-pot model is the only one that pays at a zero fee
-// (fixed bounty at fee 0 is the F-1 dead pool).
+// A challenge is a challenger-funded, split-pot pool the target was meant to
+// join for FREE (entryFee 0). The deployed HealthPoolsV3 broke that premise:
+// it reverts DEAD_CONFIG on any zero entry fee, for every model (H-1 - every
+// winner must have staked), so a free-to-join pool cannot exist on this
+// contract and every challenge create is guaranteed to fail. Until the
+// product call is made (charge the target a minimum stake, or change the
+// contract), this surface is honestly disabled: banner above the form,
+// submit blocked, and the runUsdcDeposit dead-config funnel as the backstop.
+// CHALLENGES_BLOCKED is the single switch to flip when that decision lands.
 const CHALLENGE_ENTRY_FEE = 0n;
 const CHALLENGE_BOUNTY_MODEL = 1;
 const CHALLENGE_INITIATIVE = "challenge";
+const CHALLENGES_BLOCKED = CHALLENGE_ENTRY_FEE === 0n;
 
 type LinkPhase =
   | { kind: "idle" }
@@ -372,6 +378,18 @@ function CreateChallengeInner() {
         </p>
       </div>
 
+      {CHALLENGES_BLOCKED ? (
+        <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
+          <p className="font-semibold">Challenges are paused for a moment.</p>
+          <p className="mt-1 font-normal">
+            The pool contract now requires everyone who joins to put up a
+            stake, and a challenge is built on the other person joining for
+            free. We are deciding how challenges work under that rule - until
+            then this form cannot send one.
+          </p>
+        </div>
+      ) : null}
+
       <div className="space-y-4 rounded-2xl border border-edge bg-surface p-5">
         <label className="block text-sm font-medium">
           The dare
@@ -477,7 +495,7 @@ function CreateChallengeInner() {
           {(openSignIn) => (
             <button
               type="button"
-              disabled={!ready || busy || linking}
+              disabled={CHALLENGES_BLOCKED || !ready || busy || linking}
               onClick={() => {
                 if (!authenticated) {
                   openSignIn();
@@ -487,7 +505,7 @@ function CreateChallengeInner() {
               }}
               className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {primaryLabel}
+              {CHALLENGES_BLOCKED ? "Challenges are paused" : primaryLabel}
             </button>
           )}
         </SignInGate>
@@ -535,6 +553,7 @@ function CreateChallengeInner() {
           <ErrorNote
             title="Could not put up the reward"
             detail={status.message}
+            raw={status.raw}
             onRetry={reset}
           />
         ) : null}

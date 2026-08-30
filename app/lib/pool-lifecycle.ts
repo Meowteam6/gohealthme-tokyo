@@ -33,31 +33,33 @@ export interface PayabilityFields {
 }
 
 /**
- * The one createPool config that structurally cannot pay any achiever: a
- * fixed-bounty pool (bountyModel 0) with a zero entry fee.
+ * A createPool config the deployed contract will not accept, or that could
+ * never pay an achiever: any pool with a zero entry fee.
  *
- * HealthPools._payAchievers under bountyModel 0 derives every payout from
- * entryFee: `totalOwed += entryFee * multiplierBps / BPS`, and returns early
- * when totalOwed is zero. So a pool created with bountyModel 0 AND entryFee 0
- * settles to nobody no matter how much USDC is in it - the settle transaction
- * succeeds, AchieverPaid never fires, the participant is paid nothing, and the
- * whole pot is reclaimable by the creator via sweep(). entryFee is write-once
- * in createPool, so such a pool can never be repaired after creation.
+ * HealthPoolsV3 (audit finding H-1) requires `entryFee > 0` for EVERY bounty
+ * model - createPool reverts DEAD_CONFIG otherwise - because a fee-free pool
+ * lets winners collect without ever staking. That on-chain rule subsumes the
+ * older F-1 case (fixed bounty at a zero fee derives every payout from
+ * entryFee and so settles to zero for everyone): under V3 a zero fee is dead
+ * for models 0, 1, and 2 alike, before any payout math runs.
  *
- * bountyModel 1 splits the pot pro-rata and is unaffected by entryFee.
+ * This is the single source of truth for that invariant. The create path
+ * guards on it before any tx is sent (CreatePool submit and the runUsdcDeposit
+ * funnel that every createPool passes through), so the user gets a plain
+ * message instead of an on-chain DEAD_CONFIG revert; the read path uses its
+ * negation, poolCanPay, to hide unpayable pools from the list (nothing to
+ * hide on V3 - the contract cannot hold a fee-zero pool - but the predicate
+ * also covers any legacy data a future migration might surface).
  *
- * This is the single source of truth for that invariant (audit finding F-1).
- * The create path guards on it before any tx is sent (CreatePool submit and the
- * runUsdcDeposit funnel that every USDC-pulling call passes through); the read
- * path uses its negation, poolCanPay, to hide unpayable pools from the list.
- * The deployed contract is immutable and does not enforce it, so these
- * off-chain guards are what keep new dead pools from being created on it.
+ * bountyModel stays in the signature so call sites keep naming both halves of
+ * the config they are guarding; under V3 the verdict no longer depends on it.
  */
 export function isEconomicallyDeadConfig(
   bountyModel: number,
   entryFee: bigint,
 ): boolean {
-  return bountyModel === 0 && entryFee === 0n;
+  void bountyModel;
+  return entryFee === 0n;
 }
 
 /**
