@@ -39,24 +39,36 @@
 /** One day in milliseconds. Both rate windows use it. */
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Faucet grant per address per cooldown: 0.50 USDC. */
-export const FAUCET_GRANT_UUSDC = 500_000n;
+/**
+ * Faucet grant per top-up: 12.00 USDC. Pool entry fees run up to 10 USDC and
+ * joins are gas-sponsored, so a grant just needs to cover one entry with a
+ * little margin - the old 0.50 grant left a wallet unable to join anything and
+ * was the pilot-blocking bug. It is deliberately NOT much larger: testnet USDC
+ * is faucet-scarce (the treasury refills at ~1 USDC/5min from the CDP faucet,
+ * see cron/treasury-topup), so a grant far above the entry fee only strands
+ * USDC in idle wallets and funds fewer total joins. Paired with the refill
+ * threshold below (a wallet is topped up whenever it holds less than one grant),
+ * this self-refills a player across successive 10 USDC joins. It must also stay
+ * below what the treasury can cover after the 5 USDC floor.
+ */
+export const FAUCET_GRANT_UUSDC = 12_000_000n;
 
 /** An address may claim the faucet once per this interval. */
 export const FAUCET_COOLDOWN_MS = DAY_MS;
 
 /**
- * Total the faucet may hand out across every address inside one window: 30.00
- * USDC (event capacity: ~60 first-time wallets/day at 0.50 each). This is the
- * guard that actually bounds a scripted attack, because fresh addresses are
- * free and the per-address cooldown alone is not a limit. It is additionally
- * bounded by the live treasury balance via treasuryCanCover, so raising it
- * never hands out more USDC than the treasury actually holds.
+ * Total the faucet may hand out across every address inside one window: 2,400
+ * USDC (pilot capacity: ~200 grants/day at 12 each). This is the guard that
+ * actually bounds a scripted attack, because fresh addresses are free and the
+ * per-address cap alone is not a limit. It is additionally bounded by the live
+ * treasury balance via treasuryCanCover, so raising it never hands out more
+ * USDC than the treasury actually holds - the treasury balance, not this
+ * number, is the real ceiling, so keep the treasury funded for a busy pilot.
  */
-export const FAUCET_DAILY_BUDGET_UUSDC = 30_000_000n;
+export const FAUCET_DAILY_BUDGET_UUSDC = 2_400_000_000n;
 
 /**
- * Sub-ceiling for AUTOMATIC faucet grants, on the same daily counter: 2.50
+ * Sub-ceiling for AUTOMATIC faucet grants, on the same daily counter: 1,200
  * USDC (half the daily budget). A grant the app fires automatically (the
  * first-block auto-fund) is charged against this lower ceiling, so the auto
  * path can consume at most half the day's budget no matter how many pages are
@@ -68,11 +80,11 @@ export const FAUCET_DAILY_BUDGET_UUSDC = 30_000_000n;
  * is a strictly LOWER ceiling than the daily budget, never a raise. It must
  * stay a whole number of grants and strictly below the daily budget.
  */
-export const FAUCET_AUTO_BUDGET_UUSDC = 15_000_000n;
+export const FAUCET_AUTO_BUDGET_UUSDC = 1_200_000_000n;
 
 /**
  * A wallet is eligible for a faucet grant only while its spendable balance sits
- * below this, in uUSDC: one grant's worth (0.50 USDC). "Spendable" is the
+ * below this, in uUSDC: one grant's worth (12 USDC). "Spendable" is the
  * on-chain Arc USDC that pays gas and pool entry fees plus any in-app ledger
  * balance not yet delivered onto Arc; the route reads both. The point is to
  * unblock a wallet that has genuinely run out, not to top up one that is fine:
@@ -86,20 +98,27 @@ export const FAUCET_AUTO_BUDGET_UUSDC = 15_000_000n;
 export const FAUCET_REFILL_BALANCE_THRESHOLD_UUSDC = FAUCET_GRANT_UUSDC;
 
 /**
- * Absolute ceiling on what ONE address may be granted inside one window: 2.00
- * USDC (four grants). The balance threshold above unblocks the honest ran-out
+ * Absolute ceiling on what ONE address may be granted inside one window: 120
+ * USDC (ten grants). The balance threshold above unblocks the honest ran-out
  * user, but it can be defeated by an attacker who sends the granted USDC to
  * another wallet to drop back under the threshold and re-claim. This cap is the
  * backstop that makes that pointless: no address draws more than this per window
  * no matter how it shuffles funds. It is aligned with WITHDRAW_DAILY_CAP_UUSDC
  * so the grant-then-withdraw loop is bounded consistently on both legs, and it
- * is above one grant so a user who plays through several pools in a day can
- * still refill. It must stay a whole number of grants.
+ * is well above one grant so a pilot player can join and re-join many 10 USDC
+ * pools in a day. It must stay a whole number of grants.
  */
-export const FAUCET_ADDRESS_DAILY_CAP_UUSDC = 2_000_000n;
+export const FAUCET_ADDRESS_DAILY_CAP_UUSDC = 120_000_000n;
 
-/** Real Arc USDC one address may move out of the treasury per window: 2.00. */
-export const WITHDRAW_DAILY_CAP_UUSDC = 2_000_000n;
+/**
+ * USDC one address may move out of the treasury onto Arc per window: 120. This
+ * is the leg that actually delivers a faucet grant onto the chain where it pays
+ * pool entry fees and gas, so it must clear the per-address faucet cap or a
+ * granted balance would be stranded in the in-app ledger, unable to reach a 10
+ * USDC entry. Testnet practice USDC (no real value), kept aligned with the
+ * faucet cap so the grant-then-withdraw loop is bounded the same on both legs.
+ */
+export const WITHDRAW_DAILY_CAP_UUSDC = 120_000_000n;
 
 /** Length of the withdrawal rate window. */
 export const WITHDRAW_WINDOW_MS = DAY_MS;

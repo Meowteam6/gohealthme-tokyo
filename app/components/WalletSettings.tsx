@@ -200,6 +200,30 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
         </div>
       </section>
 
+      {/* Self-serve top-up. The in-app faucet grants a small amount from a
+          shared treasury; Circle's testnet faucet lets a user pull 20 USDC
+          straight to their own wallet, which keeps the shared treasury for
+          everyone else. Test USDC only - no real value, same as the rest of
+          this page. */}
+      <section className="rounded-2xl border border-dashed border-edge bg-surface-raised p-5">
+        <h2 className="text-sm font-semibold">Want more test USDC?</h2>
+        <p className="mt-1 text-sm text-muted">
+          Grab 20 USDC free from Circle&apos;s testnet faucet: copy your address
+          above, choose{" "}
+          <span className="font-medium text-foreground">Base Sepolia</span> as
+          the network, and send. One claim every 2 hours.
+        </p>
+        <a
+          href="https://faucet.circle.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-accent underline underline-offset-2"
+        >
+          Open Circle faucet
+          <span aria-hidden="true">-&gt;</span>
+        </a>
+      </section>
+
       {isEmbedded === true ? <BackupSection /> : null}
 
       {isEmbedded === false ? (

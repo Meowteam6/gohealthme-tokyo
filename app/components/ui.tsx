@@ -88,13 +88,26 @@ export function EmptyState({
   title,
   detail,
   action,
+  pose = "peek",
 }: {
   title: string;
   detail: string;
   action?: ReactNode;
+  /** SPOTTER pose shown above the title. Pass null to render no otter. */
+  pose?: string | null;
 }) {
   return (
     <div className="rounded-2xl border border-dashed border-edge bg-surface/50 px-6 py-12 text-center">
+      {pose !== null ? (
+        // A peeking otter softens every empty slot in the product.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/spotter/spotter-${pose}.png`}
+          alt=""
+          aria-hidden="true"
+          className="mx-auto mb-4 h-20 w-auto drop-shadow-sm"
+        />
+      ) : null}
       <p className="text-lg font-semibold">{title}</p>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted">{detail}</p>
       {action !== undefined ? <div className="mt-5">{action}</div> : null}
@@ -111,12 +124,12 @@ export function Badge({
 }) {
   const tones: Record<string, string> = {
     accent: "bg-accent/12 text-accent-strong border-accent/30",
-    muted: "bg-surface-raised text-muted border-edge",
+    muted: "bg-surface-raised text-foreground/75 border-edge",
     warning: "bg-warning/10 text-warning border-warning/30",
   };
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${tones[tone]}`}
+      className={`inline-flex items-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${tones[tone]}`}
     >
       {children}
     </span>

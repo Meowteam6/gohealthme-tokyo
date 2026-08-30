@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import GoalIntent from "@/components/GoalIntent";
-import SpotterSays from "@/components/SpotterSays";
-import { Badge, Button, Card, Money } from "@/components/ui";
+import SpotterIntroCard from "@/components/SpotterIntroCard";
+import HeroBaseCta from "@/components/HeroBaseCta";
+import HeroActivityTicker from "@/components/HeroActivityTicker";
+import { Badge, Button, Card } from "@/components/ui";
 
 // A small emerald "candy" chip that holds a step number or an icon. Kept local
 // to the home surface so the numbered steps and the why-crypto cards share one
@@ -68,17 +70,25 @@ export default function Home() {
             goes asymmetric so SPOTTER gets to share the hero. */}
         <div className="text-center lg:text-left">
           <p className="font-display text-sm font-semibold uppercase tracking-widest text-accent-strong">
-            Free money with extra steps. The steps are the point.
+            A commitment pool for health goals
           </p>
           <h1 className="mt-4 font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-            Stake on yourself. Get it back - and then some.
+            Stake on your goal. Split what the no-shows leave behind.
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
-            Put your own USDC behind your own goal. Hit it, you get your stake
-            back plus a cut of what everyone who didn&apos;t show up forfeited.
-            SPOTTER buys the proof-check, makes the call, and pays you on the
-            spot. Nobody ever sees your health data.
+            Everyone stakes their own USDC on the same goal. Show up and you get
+            your stake back plus a cut of what the no-shows left on the table -
+            paid the second SPOTTER verifies it. A sponsor can fund the pool
+            instead. Nobody ever sees your health data.
           </p>
+          {/* Phone only: the otter and the Base button, surfaced right under the
+              pitch. On desktop the right column carries them; on a phone that
+              column is off the bottom of the screen, so they live here instead.
+              Hidden at lg, where the right column takes over. */}
+          <div className="mx-auto mt-8 flex w-full max-w-sm flex-col gap-4 lg:hidden">
+            <SpotterIntroCard />
+            <HeroBaseCta />
+          </div>
           {/* The one honest line. "Put money on it" read like a bill, and the
               only testnet disclosure in the app used to be on /pools - a
               stranger deserves to know the stakes before they type anything. */}
@@ -141,36 +151,23 @@ export default function Home() {
               claim your handle
             </Link>
           </div>
+
+          {/* Phone only: the live activity ticker, at the foot of the hero. On
+              desktop it lives in the right column above. */}
+          <div className="mx-auto mt-8 w-full max-w-sm lg:hidden">
+            <HeroActivityTicker />
+          </div>
         </div>
 
-        {/* Right: SPOTTER introduces itself, out loud, and the payout moment. */}
-        <div className="relative mx-auto w-full max-w-sm">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-4 -z-10 rounded-full bg-accent/20 blur-3xl"
-          />
-          <Card pop className="otter-float flex flex-col items-center gap-4 text-center">
-            {/* The otter now talks: a real pose plus a live SPOTTER line,
-                routed through SpotterSays rather than a mute raw <img>. */}
-            <SpotterSays
-              surface="agent-header"
-              state="idle"
-              pose="greet"
-              size="md"
-            />
-            <div>
-              <p className="font-display text-base font-bold">Meet SPOTTER</p>
-              <p className="mt-1 text-sm text-muted">
-                The agent that holds the money, checks your proof, and pays you.
-              </p>
-            </div>
-          </Card>
-          <div className="absolute -bottom-5 -left-3 flex flex-col gap-0.5 rounded-2xl border border-gold/40 bg-surface px-4 py-3 shadow-md sm:-left-6">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted">
-              SPOTTER paid you
-            </span>
-            <Money usd="50.00" sign="+" size="lg" tone="gold" />
-          </div>
+        {/* Right column, DESKTOP ONLY: SPOTTER intro over the live activity
+            ticker - the whole system's real on-chain moments (joins, rewards put
+            up, payouts), newest first, never invented rows. Hidden on a phone,
+            where a tall pitch pushed it off the bottom of the screen; the otter +
+            Base button and (below) the ticker are surfaced up front in the left
+            column instead. */}
+        <div className="mx-auto hidden w-full max-w-sm flex-col gap-4 lg:flex">
+          <SpotterIntroCard />
+          <HeroActivityTicker />
         </div>
       </section>
 
@@ -187,19 +184,30 @@ export default function Home() {
       </section>
 
       <section className="rounded-3xl border border-edge bg-surface-raised p-8 sm:p-10">
-        <p className="font-display text-xs font-semibold uppercase tracking-widest text-accent-strong">
-          Why it has to be crypto
-        </p>
-        <h2 className="mt-3 max-w-2xl font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
-          You can&apos;t Venmo your grandma in another country to go for a walk.
-          You can pay her in USDC the second she does.
-        </h2>
-        <p className="mt-4 max-w-2xl leading-relaxed text-muted">
-          Crypto is the only rail that lets someone in one country reward someone
-          in another — instantly, for a real thing they did. No bank, no borders,
-          no week-long wire. Dare a friend, back a parent&apos;s goal, and the
-          money lands the moment they hit it.
-        </p>
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <p className="font-display text-xs font-semibold uppercase tracking-widest text-accent-strong">
+              Why it has to be crypto
+            </p>
+            <h2 className="mt-3 max-w-2xl font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
+              You can&apos;t Venmo your grandma in another country to go for a
+              walk. You can pay her in USDC the second she does.
+            </h2>
+            <p className="mt-4 max-w-2xl leading-relaxed text-muted">
+              Crypto is the only rail that lets someone in one country reward
+              someone in another — instantly, for a real thing they did. No
+              bank, no borders, no week-long wire. Dare a friend, back a
+              parent&apos;s goal, and the money lands the moment they hit it.
+            </p>
+          </div>
+          {/* SPOTTER making the point. eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/spotter/spotter-point.png"
+            alt=""
+            aria-hidden="true"
+            className="hidden h-36 w-auto shrink-0 self-center drop-shadow-sm lg:block"
+          />
+        </div>
         <div className="mt-8 grid gap-5 sm:grid-cols-3">
           {reasons.map((reason) => (
             <Card key={reason.title}>

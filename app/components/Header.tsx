@@ -99,13 +99,13 @@ function AuthControls() {
           onClick={() => {
             void connectBase();
           }}
-          className="hidden min-h-11 items-center gap-2 rounded-lg border border-foreground/15 bg-surface px-3 py-2 text-sm font-semibold text-foreground shadow-sm hover:border-foreground/25 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60 sm:inline-flex"
+          className="hidden min-h-11 items-center gap-2 rounded-xl border-2 border-foreground/20 bg-surface px-5 py-2.5 text-base font-bold text-foreground shadow-[var(--shadow-pop-edge)] transition hover:-translate-y-0.5 hover:border-foreground/35 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60 sm:inline-flex"
         >
           <span
             aria-hidden="true"
-            className="h-3.5 w-3.5 shrink-0 rounded-[2px] bg-[#0000FF]"
+            className="h-4 w-4 shrink-0 rounded-[3px] bg-[#0000FF]"
           />
-          {baseBusy ? "Opening..." : "Base"}
+          {baseBusy ? "Opening..." : "Sign in or create a wallet with Base"}
         </button>
         <DynamicConnectButton buttonClassName="min-h-11 rounded-lg border border-edge px-4 py-2 text-sm font-semibold text-foreground hover:border-accent/50 hover:bg-surface-raised">
           Sign in

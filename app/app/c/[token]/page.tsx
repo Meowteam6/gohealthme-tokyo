@@ -170,8 +170,15 @@ export default async function ChallengeLandingPage({
   return (
     <div className="mx-auto max-w-xl space-y-6 py-6">
       <div className="text-center">
+        {/* SPOTTER cheering the dare on. eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/spotter/spotter-cheer.png"
+          alt=""
+          aria-hidden="true"
+          className="mx-auto mb-3 h-28 w-auto drop-shadow-sm"
+        />
         <Badge tone="accent">Challenge</Badge>
-        <h1 className="mt-4 text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
+        <h1 className="mt-4 font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
           {challengerName} challenged you
         </h1>
         <p className="mt-3 text-base text-foreground/80">

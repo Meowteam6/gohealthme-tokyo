@@ -11,6 +11,7 @@ import EvidenceUpload from "@/components/EvidenceUpload";
 import WearableCheck from "@/components/WearableCheck";
 import ClaimRail, { type ClaimRailState, type VerdictKind } from "@/components/ClaimRail";
 import ShareChallenge from "@/components/ShareChallenge";
+import ChallengeInviteShare from "@/components/ChallengeInviteShare";
 import SpotterSays from "@/components/SpotterSays";
 import SpotterMascot from "@/components/SpotterMascot";
 import {
@@ -758,6 +759,41 @@ export default function PoolDetail({ id }: { id: string }) {
             </a>
           </p>
         )}
+        {/* Invite others, up top where it is findable. A PUBLIC pool's own URL
+            is safe to hand out, so it gets the full Share / Text / Email / Copy
+            row. A CHALLENGE's shareable link is its PRIVATE /c/<token> invite,
+            and pool ids are sequential and walkable, so the token must never be
+            rendered on this page. The creator already holds that invite (from
+            creation and on their Challenges page); point them there instead of
+            leaking it here. */}
+        {shareOrigin !== null ? (
+          <div className="mt-5 rounded-2xl border border-edge bg-surface-raised p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              Invite others
+            </p>
+            {isChallenge ? (
+              isCreator && address !== null ? (
+                // The creator gets their real /c/<token> link inline, revealed
+                // after a one-tap signature - the token is never rendered for a
+                // non-creator viewer of this walkable page.
+                <ChallengeInviteShare poolId={pool.id} address={address} />
+              ) : (
+                <p className="text-sm text-muted">
+                  This challenge is private. Only the person who created it can
+                  share the invite link.
+                </p>
+              )
+            ) : (
+              <ShareChallenge
+                url={`${shareOrigin}/pools/${id}`}
+                title="Join me on GoHealthMe"
+                message={`Get in on this goal with me on GoHealthMe: ${goalTitle}.`}
+                emailSubject="Join this pool on GoHealthMe"
+                shareLabel="Share"
+              />
+            )}
+          </div>
+        ) : null}
         {phase === "live" ? (
           <div className="mt-5">
             <SpotterSays surface="pools-header" state="idle" size="md" />

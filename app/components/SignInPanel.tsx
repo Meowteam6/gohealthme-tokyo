@@ -198,13 +198,13 @@ function SignInPanelInner() {
               setError(null);
               void connectBase();
             }}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-foreground/15 bg-surface px-4 py-3 text-base font-semibold text-foreground shadow-sm hover:border-foreground/25 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-foreground/20 bg-surface px-4 py-3 text-base font-bold text-foreground shadow-[var(--shadow-pop-edge)] transition hover:-translate-y-0.5 hover:border-foreground/35 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span
               aria-hidden="true"
               className="h-4 w-4 shrink-0 rounded-[2px] bg-[#0000FF]"
             />
-            {baseBusy ? "Opening Base..." : "Sign in with Base"}
+            {baseBusy ? "Opening Base..." : "Sign in or create a wallet with Base"}
           </button>
           <p className="text-xs text-muted">
             New here? This sets up your account. Already have one? The same

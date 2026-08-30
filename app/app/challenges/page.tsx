@@ -643,6 +643,7 @@ function MyChallengesContent() {
             title="You have not started any challenges yet"
             detail="Stake on your own goal, or put up a reward and dare a friend to hit theirs."
             action={<StartChallengeCTAs />}
+            pose="point"
           />
         ) : (
           data.sentChallenges.map((entry) => (

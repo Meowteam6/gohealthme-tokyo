@@ -84,6 +84,32 @@ export async function getChallengeByToken(
   return rowToChallenge(data);
 }
 
+/**
+ * The private invite token for the challenge that created a given pool, or null
+ * when the pool is not a challenge, Supabase is not configured, or no row
+ * matches. A challenge creates exactly one pool, so pool_id is unique.
+ *
+ * SECURITY: this returns a secret that gates the /c/<token> landing, so it must
+ * ONLY be called from a route that has already proven the caller is the pool's
+ * creator (see app/api/challenges/invite-token). Never expose it on an
+ * unauthenticated or public-page path - pool ids are sequential and walkable.
+ */
+export async function getInviteTokenByPoolId(
+  poolId: bigint | string,
+): Promise<string | null> {
+  const supabase = getSupabaseServiceRole();
+  if (supabase === null) return null;
+
+  const { data, error } = await supabase
+    .from(CHALLENGES_TABLE)
+    .select("invite_token")
+    .eq("pool_id", Number(poolId))
+    .maybeSingle<{ invite_token: string }>();
+
+  if (error !== null || data === null) return null;
+  return data.invite_token;
+}
+
 /** One dare aimed at a handle: enough to render an "Invited to you" card and to
  *  hand the recipient the token that unlocks the goal on the /c/[token] landing.
  *  The goal text is NOT here - it is read live from the pool on-chain. */

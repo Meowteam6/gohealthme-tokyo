@@ -1,27 +1,33 @@
-// Windowed eth_getLogs for Arc testnet.
+// Windowed eth_getLogs for Base Sepolia.
 //
-// Arc caps a single eth_getLogs at a 100,000-block range, and Arc blocks are
-// sub-second (~0.5s), so any scan that must cover the contract's history has to
-// be split into windows under that cap. A full scan from block 0 is 600+
-// windows; pinning the start near the HealthPools deploy keeps it to a few dozen.
+// Base Sepolia public RPCs cap a single eth_getLogs block range hard: publicnode
+// rejects anything over 50,000 ("exceed maximum block range: 50000") and
+// sepolia.base.org 413s on wide ranges. So any scan that must cover the
+// contract's history is split into windows under that cap. Pinning the start
+// near the HealthPools deploy keeps it to a handful of windows.
 
-/** Under Arc's 100k eth_getLogs window. */
-const RANGE = 90_000n;
+/** Under Base Sepolia's eth_getLogs cap (publicnode maxes at 50k; sepolia.base.org
+ *  smaller still and fails over to publicnode via viem's fallback transport). */
+const RANGE = 45_000n;
 
 /** Default window batch size. A caller running several scans at once passes a
  *  lower value so their combined peak stays under the RPC rate limit. */
 const CONCURRENCY = 6;
 
 /**
- * Scan start for HealthPools history. The canonical contract deployed on
- * 2026-07-27 (~block 54.15M on Arc testnet, which runs ~0.5s blocks), so a full
- * scan from 0 wastes 600+ empty windows. Pinned safely before the deploy;
- * override with HEALTH_POOLS_FROM_BLOCK once history grows enough to retune it.
+ * Scan start for HealthPools history. The canonical V3 contract
+ * (0x66815e3AC541eB18d01D2aed25D0D9779583D832) deployed on Base Sepolia on
+ * 2026-08-24 (~block 45.92M; Base runs ~2s blocks), so a full scan from 0 wastes
+ * thousands of empty windows. Pinned safely before that deploy. The prior
+ * default (54M) was an Arc-testnet block that sits ABOVE Base Sepolia's head
+ * (~46.09M), so every windowed scan short-circuited to empty on Base - the
+ * activity ticker and on-chain stats read nothing. Override with
+ * HEALTH_POOLS_FROM_BLOCK once history grows enough to retune it.
  */
 export function poolsScanFromBlock(): bigint {
   const raw = process.env.HEALTH_POOLS_FROM_BLOCK ?? "";
   if (/^\d+$/.test(raw)) return BigInt(raw);
-  return 54_000_000n;
+  return 45_800_000n;
 }
 
 /**

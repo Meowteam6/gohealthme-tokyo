@@ -22,6 +22,7 @@
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^10.8.0",
     "@circle-fin/x402-batching": "^3.0.4",
+    "@coinbase/cdp-sdk": "^1.55.0",
     "@dynamic-labs/ethereum": "^4.88.6",
     "@dynamic-labs/ethereum-aa": "4.88.6",
     "@dynamic-labs/sdk-react-core": "^4.88.6",
@@ -35,6 +36,9 @@
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
     "@wagmi/core": "^2.22.1",
+    "@x402/core": "^2.24.0",
+    "@x402/evm": "^2.24.0",
+    "@x402/svm": "^2.24.0",
     "jose": "^6.2.3",
     "next": "16.2.9",
     "react": "19.2.4",

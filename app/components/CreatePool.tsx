@@ -275,16 +275,25 @@ function CreatePoolInner() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Create a pool
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          Set a goal and a stake. Everyone who joins puts up the same USDC on
-          hitting their own goal - the ones who do split what the ones who don&apos;t
-          leave behind. Funding it as a sponsor instead? Seed a bounty below and
-          pay achievers from it.
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+            Create a pool
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            Set a goal and a stake. Everyone who joins puts up the same USDC on
+            hitting their own goal - the ones who do split what the ones who
+            don&apos;t leave behind. Funding it as a sponsor instead? Seed a
+            bounty below and pay achievers from it.
+          </p>
+        </div>
+        {/* SPOTTER pointing at the board. eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/spotter/spotter-point.png"
+          alt=""
+          aria-hidden="true"
+          className="hidden h-24 w-auto shrink-0 drop-shadow-sm sm:block"
+        />
       </div>
 
       <div className="space-y-4 rounded-2xl border border-edge bg-surface p-5">

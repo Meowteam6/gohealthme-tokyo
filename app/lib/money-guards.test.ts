@@ -187,7 +187,11 @@ describe("spendVerdict", () => {
     // post-increment total. Only the ones that stay inside the cap may pass.
     let total = 0n;
     let allowed = 0;
-    for (let i = 0; i < 100; i += 1) {
+    // Iterate past the number of grants that fit in the budget so the cap is
+    // actually crossed - derived from the constants so it stays correct if the
+    // budget-to-grant ratio changes.
+    const grantsThatFit = Number(FAUCET_DAILY_BUDGET_UUSDC / FAUCET_GRANT_UUSDC);
+    for (let i = 0; i < grantsThatFit + 5; i += 1) {
       total += FAUCET_GRANT_UUSDC;
       const verdict = spendVerdict(
         total,

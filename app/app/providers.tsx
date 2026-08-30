@@ -133,6 +133,17 @@ export default function Providers({ children }: { children: ReactNode }) {
         // be enabled for this environment in the Dynamic dashboard for it to
         // appear in the modal.)
         coinbaseWalletPreference: "smartWalletOnly",
+        // Identity shown on the Coinbase / Base Account signature prompt
+        // (hosted at keys.coinbase.com). Without appLogoUrl the dialog renders a
+        // BROKEN "App Logo" image, which reads as phishing on a signing screen.
+        // The URL MUST be absolute and on a public, non-SSO origin: keys.coinbase
+        // .com fetches it cross-origin, so a relative path, localhost, or an
+        // SSO-walled *.vercel.app URL all fail. gohealthme.app is the SSO-exempt
+        // custom domain and already serves this square PNG (verified 200).
+        // NOTE: a logo set in the Dynamic dashboard (Design > Branding) OVERRIDES
+        // this value - keep that empty or matching for this to take effect.
+        appName: "GoHealthMe",
+        appLogoUrl: "https://www.gohealthme.app/spotter/spotter.png",
         // EthereumWalletConnectors always; ZeroDevSmartWalletConnectors added
         // only when EMAIL_AA_ENABLED (see the walletConnectors const above).
         walletConnectors,

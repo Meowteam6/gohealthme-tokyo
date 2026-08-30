@@ -57,6 +57,8 @@
   --color-gold: var(--gold);
   --color-gold-strong: var(--gold-strong);
   --color-gold-deep: var(--gold-deep);
+  --color-coral: var(--coral);
+  --color-coral-strong: var(--coral-strong);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --font-sans: var(--font-geist-sans);
