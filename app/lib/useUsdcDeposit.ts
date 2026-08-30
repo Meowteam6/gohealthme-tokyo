@@ -143,18 +143,21 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
         throw new Error(message);
       }
 
-      // Airtight F-1 guard. Every USDC-pulling createPool in the app funnels
-      // through here, so this is the one chokepoint that keeps an economically
-      // dead pool (fixed bounty at a zero entry fee) off the immutable
-      // contract, even from a future caller that builds the args wrong. The
-      // createPool args tuple is [initiative, goalSpec, entryFee, periodStart,
-      // periodEnd, bountyModel, funding]; guard on entryFee and bountyModel.
+      // Airtight dead-config guard. Every createPool in the app funnels
+      // through here, so this is the one chokepoint that keeps a doomed create
+      // off the wire even from a future caller that builds the args wrong.
+      // The deployed HealthPoolsV3 requires an entry fee above zero for every
+      // bounty model (H-1: every winner must have staked) and reverts
+      // DEAD_CONFIG otherwise, so failing here with a plain message beats
+      // letting the wallet surface an opaque on-chain revert. The createPool
+      // args tuple is [initiative, goalSpec, entryFee, periodStart, periodEnd,
+      // bountyModel, funding]; guard on entryFee and bountyModel.
       if (call.functionName === "createPool") {
         const entryFee = call.args[2];
         const bountyModel = call.args[5];
         if (isEconomicallyDeadConfig(bountyModel, entryFee)) {
           const message =
-            "This pool config cannot pay anyone: a fixed bounty at a zero entry fee settles to zero for every achiever. Set an entry fee above zero, or split the pot.";
+            "The pool contract requires an entry fee above zero for every pool - each participant stakes it to join, so every winner has real skin in the game. Set an entry fee above zero.";
           setStatus({ kind: "error", message });
           throw new Error(message);
         }

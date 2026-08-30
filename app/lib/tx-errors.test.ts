@@ -235,6 +235,62 @@ describe("humanizeTxError", () => {
     expect(result.title).toBe("Pool is full");
   });
 
+  it("maps a DEAD_CONFIG revert to the entry-fee message", () => {
+    // HealthPoolsV3 rejects a zero entry fee for every bounty model (H-1).
+    // The create surfaces guard before sending, but a raw revert reaching
+    // here (older client, direct contract call) must still say what to fix.
+    const result = humanizeTxError(viemError(REVERT_FIXTURE("DEAD_CONFIG")));
+    expect(result.title).toBe("Pools need an entry fee");
+    expect(result.detail).toContain("entry fee above zero");
+  });
+
+  it("maps the createPool date guards to the check-the-dates message", () => {
+    expect(
+      humanizeTxError(viemError(REVERT_FIXTURE("BAD_PERIOD"))).title,
+    ).toBe("Check the dates");
+    expect(
+      humanizeTxError(viemError(REVERT_FIXTURE("PERIOD_IN_PAST"))).title,
+    ).toBe("Check the dates");
+  });
+
+  it("maps NOT_ALLOWLISTED to the closed-test message", () => {
+    const result = humanizeTxError(
+      viemError(REVERT_FIXTURE("NOT_ALLOWLISTED")),
+    );
+    expect(result.title).toBe("This is a closed test");
+    expect(result.detail).toContain("invited");
+  });
+
+  it("maps a paymaster sponsorship failure to the gas-sponsorship message", () => {
+    // What an ERC-7677 paymaster rejection looks like from the wallet side,
+    // e.g. when the paymaster policy does not allowlist the pool contract.
+    const result = humanizeTxError(
+      viemError(
+        'Request failed. Details: paymaster service returned an error: {"code":-32002,"message":"request denied by policy"}',
+      ),
+    );
+    expect(result.title).toBe("Gas sponsorship failed");
+    expect(result.detail).toContain("never sent");
+  });
+
+  it("maps an unconfirmed transaction to the still-waiting message, not the sponsorship one", () => {
+    // useGasSponsorship throws this when waitForCallsStatus comes back with
+    // no receipts. "Sponsored" must not trip the /sponsorship/ rule - the
+    // right advice is to wait and check, not to blame the paymaster.
+    const result = humanizeTxError(
+      new Error("Sponsored transaction did not confirm on Base Sepolia."),
+    );
+    expect(result.title).toBe("Still waiting on the network");
+    expect(result.detail).toContain("check your pools");
+  });
+
+  it("maps a wait timeout to the still-waiting message", () => {
+    const result = humanizeTxError(
+      viemError("Timed out while waiting for transaction receipt."),
+    );
+    expect(result.title).toBe("Still waiting on the network");
+  });
+
   it("falls back to a generic line for unknown errors", () => {
     const result = humanizeTxError(new Error("gremlins in the mempool"));
     expect(result.title).toBe("Transaction failed");

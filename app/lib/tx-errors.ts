@@ -150,6 +150,32 @@ const RULES: readonly ErrorRule[] = [
     detail: "This wallet has not joined this pool.",
   },
   {
+    // HealthPoolsV3 H-1: createPool requires entryFee > 0 for every model.
+    pattern: /\bDEAD_CONFIG\b/,
+    title: "Pools need an entry fee",
+    detail:
+      "The pool contract requires an entry fee above zero - every participant " +
+      "stakes it to join, so every winner is someone who staked. Set an entry " +
+      "fee above zero and try again.",
+  },
+  {
+    // createPool date guards: end before start, or an end already in the past
+    // (a device clock far ahead of chain time can also trip these).
+    pattern: /\bBAD_PERIOD\b|\bPERIOD_IN_PAST\b/,
+    title: "Check the dates",
+    detail:
+      "The pool's end time must be after its start and in the future. Pick a " +
+      "duration and try again; if it keeps failing, check this device's clock.",
+  },
+  {
+    // Closed-pilot join gate (HealthPoolsV3 joinGateEnabled).
+    pattern: /\bNOT_ALLOWLISTED\b/,
+    title: "This is a closed test",
+    detail:
+      "Real-money staking is limited to an invited test group right now, and " +
+      "this wallet is not on the list yet.",
+  },
+  {
     pattern: /\bZERO_AMOUNT\b/,
     title: "Amount is zero",
     detail: "The amount must be greater than zero.",
@@ -182,6 +208,33 @@ const RULES: readonly ErrorRule[] = [
       /insufficient funds|exceeds the balance of the account|transfer amount exceeds balance/i,
     title: "Not enough USDC",
     detail: INSUFFICIENT_FUNDS_DETAIL,
+  },
+  {
+    // CDP paymaster (ERC-7677) sponsorship failures on the gasless path: the
+    // paymaster endpoint erroring or its policy declining the transaction
+    // (e.g. the pool contract missing from the policy's allowlist after a
+    // redeploy). Nothing was sent on-chain in this case. Deliberately does
+    // NOT match the word "sponsored" alone - useGasSponsorship's own
+    // "Sponsored transaction did not confirm" is a timing message, matched
+    // by the did-not-confirm rule below.
+    pattern: /paymaster|pm_getPaymaster|sponsorship/i,
+    title: "Gas sponsorship failed",
+    detail:
+      "The gas sponsor declined to cover this transaction, so it was never " +
+      "sent and nothing moved. Try again in a moment; if it keeps happening, " +
+      "tell us - the app's sponsorship settings likely need an update.",
+  },
+  {
+    // A sent transaction or call bundle that never confirmed in time
+    // (waitForTransactionReceipt / waitForCallsStatus timeouts included).
+    // It may STILL land, so the copy warns against blind retries that would
+    // double-create or double-fund.
+    pattern: /did not confirm|timed out|timeout/i,
+    title: "Still waiting on the network",
+    detail:
+      "The network has not confirmed this transaction yet. It may still go " +
+      "through - give it a minute and check your pools before trying again, " +
+      "so it does not happen twice.",
   },
   {
     // Last rule on purpose. A revert with a known reason is caught by the

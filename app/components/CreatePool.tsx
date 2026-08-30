@@ -42,6 +42,12 @@ interface DocTemplate {
  * the UnitedHealthcare rewards catalog (flu shot, biometric screening, lipid
  * panel). Selecting one prefills the form; the goal text is encoded as a
  * document goal at submit time via withDocMarker.
+ *
+ * Entry fees were 0.00 in the Arc era ("free to join"), but the deployed
+ * HealthPoolsV3 reverts DEAD_CONFIG on any zero entry fee (H-1: every winner
+ * must have staked), so free-to-join pools cannot exist on this contract.
+ * The templates now prefill the smallest stake that reads as real (1.00) -
+ * achievers get it back as part of their split-pot share.
  */
 const DOC_TEMPLATES: DocTemplate[] = [
   {
@@ -49,7 +55,7 @@ const DOC_TEMPLATES: DocTemplate[] = [
     label: "Get your flu shot",
     initiative: "flu-shot",
     goal: "Get your annual flu shot and upload your vaccination record showing the date.",
-    entryFee: "0.00",
+    entryFee: "1.00",
     funding: "10.00",
   },
   {
@@ -57,7 +63,7 @@ const DOC_TEMPLATES: DocTemplate[] = [
     label: "Biometric screening",
     initiative: "biometric",
     goal: "Complete a biometric screening and upload the result document (blood pressure, BMI, glucose).",
-    entryFee: "0.00",
+    entryFee: "1.00",
     funding: "50.00",
   },
   {
@@ -65,7 +71,7 @@ const DOC_TEMPLATES: DocTemplate[] = [
     label: "Cholesterol panel under 200",
     initiative: "cholesterol",
     goal: "Upload a lab report showing total cholesterol under 200 mg/dL.",
-    entryFee: "0.00",
+    entryFee: "1.00",
     funding: "25.00",
   },
 ];
@@ -106,18 +112,17 @@ function CreatePoolInner() {
     setInitiative(template.initiative);
     setGoalSpec(template.goal);
     setEntryFee(template.entryFee);
-    // Every doc template has a zero entry fee, and a fixed bounty is a
-    // multiple of the entry fee -- model 0 at fee 0 creates a pool that
-    // settles to zero for everyone. Templates therefore always split the pot.
+    // Templates are sponsor-seeded rewards, so they split the pot: achievers
+    // share the bounty (plus the returned stakes) in proportion to results.
     setBountyModel(1);
     setInitialFunding(template.funding);
     setFormError(null);
   };
 
-  // Fixed bounty pays entryFee * multiplier, so at a zero fee it pays nothing:
-  // the transaction succeeds and AchieverPaid never fires. Guard both in the
-  // UI (radio disabled below) and at submit time (derived model), so no pool
-  // that structurally cannot pay can be created from this form.
+  // The deployed contract rejects a zero entry fee for EVERY payout model
+  // (DEAD_CONFIG - every winner must have staked), so a zero fee is not a
+  // model-selection problem, it is an invalid form. Warn at the fee field
+  // while typing and block at submit; the runUsdcDeposit funnel backstops it.
   const feeIsZero = (() => {
     try {
       return parseUsdc(entryFee.trim() === "" ? "0" : entryFee.trim()) === 0n;
@@ -141,24 +146,6 @@ function CreatePoolInner() {
     }
   })();
 
-  // Models 0 (fixed bounty) and 2 (self-staked commitment) both require an
-  // entry fee above zero; pro-rata (model 1) is the only fee-free option. When
-  // the fee clears to zero the fixed-bounty and self-staked radios disable and
-  // the pro-rata radio force-checks, so leaving bountyModel at 0 or 2 would let
-  // the visible selection contradict internal state (and the submit-time error
-  // text). Snap the model to 1 the moment the fee goes to zero; model 2 stays
-  // fully selectable while the fee is above zero.
-  const handleEntryFeeChange = (value: string) => {
-    setEntryFee(value);
-    let nextFeeIsZero: boolean;
-    try {
-      nextFeeIsZero = parseUsdc(value.trim() === "" ? "0" : value.trim()) === 0n;
-    } catch {
-      nextFeeIsZero = false;
-    }
-    if (nextFeeIsZero) setBountyModel(1);
-  };
-
   const submit = async () => {
     setFormError(null);
     let entryFeeUsdc: bigint;
@@ -172,15 +159,12 @@ function CreatePoolInner() {
         throw new Error("Describe the goal participants must hit.");
       }
       entryFeeUsdc = parseUsdc(entryFee.trim() === "" ? "0" : entryFee.trim());
-      if (entryFeeUsdc < 0n) {
-        throw new Error("Entry fee cannot be negative.");
-      }
-      // Self-staked commitment (model 2) IS the entry fee: everyone puts the
-      // same stake up on their own goal, so a zero stake makes no pool. The
-      // contract also reverts DEAD_CONFIG on a zero entry fee for every model.
-      if (bountyModel === 2 && entryFeeUsdc <= 0n) {
+      // The deployed contract reverts DEAD_CONFIG on a zero entry fee for
+      // every payout model (every winner must have staked), so catch it here
+      // with a plain message instead of sending a doomed transaction.
+      if (entryFeeUsdc <= 0n) {
         throw new Error(
-          "A self-staked commitment pool needs an entry fee above zero - that stake is what everyone puts up.",
+          "Set an entry fee above zero. Every participant stakes it to join, and it comes back to them when they hit the goal - the contract does not allow free-to-join pools.",
         );
       }
       fundingUsdc = parseUsdc(
@@ -220,18 +204,13 @@ function CreatePoolInner() {
       accepted,
     });
 
-    // A self-staked commitment pool keeps model 2 (its entry fee is guaranteed
-    // above zero by the validation above). For the sponsor models a fixed bounty
-    // pays entryFee * multiplier, so at a zero fee it settles to zero for
-    // everyone: force the split-pot model when the fee is zero, then hard-block
-    // on the shared F-1 predicate as a backstop. The UI already disables the
-    // model-0 radio at a zero fee, but the assertion is what makes it airtight
-    // if that derivation ever regresses.
-    const bountyModelToUse =
-      bountyModel === 2 ? 2 : entryFeeUsdc === 0n ? 1 : bountyModel;
-    if (isEconomicallyDeadConfig(bountyModelToUse, entryFeeUsdc)) {
+    // Backstop on the shared dead-config predicate. The fee validation above
+    // already rejects a zero entry fee for every model, but the assertion is
+    // what keeps this airtight if that validation ever regresses - the
+    // deployed contract would revert DEAD_CONFIG on the same condition.
+    if (isEconomicallyDeadConfig(bountyModel, entryFeeUsdc)) {
       setFormError(
-        "A fixed-bounty pool needs an entry fee above zero, or switch to split the pot. This config would pay every achiever zero.",
+        "Set an entry fee above zero - the contract does not allow free-to-join pools.",
       );
       return;
     }
@@ -245,7 +224,7 @@ function CreatePoolInner() {
           entryFeeUsdc,
           periodStart,
           periodEnd,
-          bountyModelToUse,
+          bountyModel,
           fundingUsdc,
         ],
       });
@@ -432,12 +411,19 @@ function CreatePoolInner() {
               inputMode="decimal"
               placeholder="5.00"
               value={entryFee}
-              onChange={(e) => handleEntryFeeChange(e.target.value)}
+              onChange={(e) => setEntryFee(e.target.value)}
               className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
             />
             <span className="mt-1 block text-xs text-muted">
-              What each participant pays to join. Use 0 for a free pool.
+              What each participant stakes to join. It comes back to them when
+              they hit the goal.
             </span>
+            {feeIsZero ? (
+              <span className="mt-1 block text-xs font-normal text-warning">
+                Must be above zero - the contract does not allow free-to-join
+                pools, so every winner is someone who staked.
+              </span>
+            ) : null}
           </label>
 
           <label className="block text-sm font-medium">
@@ -482,16 +468,11 @@ function CreatePoolInner() {
         <fieldset className="block text-sm font-medium">
           <legend>Payout model</legend>
           <div className="mt-2 space-y-2">
-            <label
-              className={`flex items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3 ${
-                feeIsZero ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-              }`}
-            >
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3">
               <input
                 type="radio"
                 name="bountyModel"
-                checked={bountyModel === 0 && !feeIsZero}
-                disabled={feeIsZero}
+                checked={bountyModel === 0}
                 onChange={() => setBountyModel(0)}
                 className="mt-1"
               />
@@ -503,20 +484,13 @@ function CreatePoolInner() {
                   Each verified achiever receives the same fixed payout, a
                   multiple of the entry fee.
                 </span>
-                {feeIsZero ? (
-                  <span className="mt-1 block text-xs font-normal text-warning">
-                    Enter an entry fee above 0 to use a fixed bounty. At a zero
-                    fee it would pay every achiever nothing, so the pool splits
-                    the pot instead.
-                  </span>
-                ) : null}
               </span>
             </label>
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3">
               <input
                 type="radio"
                 name="bountyModel"
-                checked={bountyModel === 1 || feeIsZero}
+                checked={bountyModel === 1}
                 onChange={() => setBountyModel(1)}
                 className="mt-1"
               />
@@ -528,16 +502,11 @@ function CreatePoolInner() {
                 </span>
               </span>
             </label>
-            <label
-              className={`flex items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3 ${
-                feeIsZero ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-              }`}
-            >
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3">
               <input
                 type="radio"
                 name="bountyModel"
-                checked={bountyModel === 2 && !feeIsZero}
-                disabled={feeIsZero}
+                checked={bountyModel === 2}
                 onChange={() => setBountyModel(2)}
                 className="mt-1"
               />
@@ -551,12 +520,6 @@ function CreatePoolInner() {
                   didn&apos;t forfeit. No sponsor needed - initial funding can be
                   zero.
                 </span>
-                {feeIsZero ? (
-                  <span className="mt-1 block text-xs font-normal text-warning">
-                    A commitment pool needs an entry fee above 0 - that stake is
-                    the whole point.
-                  </span>
-                ) : null}
               </span>
             </label>
           </div>
@@ -627,6 +590,7 @@ function CreatePoolInner() {
           <ErrorNote
             title="Could not create the pool"
             detail={status.message}
+            raw={status.raw}
             onRetry={reset}
           />
         ) : null}

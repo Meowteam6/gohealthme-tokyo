@@ -56,12 +56,22 @@ export function PoolCardSkeleton() {
 export function ErrorNote({
   title,
   detail,
+  raw,
   onRetry,
 }: {
   title: string;
   detail?: string;
+  /**
+   * Untouched wallet/contract error text, rendered collapsed behind a
+   * "Technical details" summary. Money-path surfaces pass DepositStatus.raw
+   * here so a failure that humanizes to a generic line still shows its real
+   * cause on screen - without it, an unrecognized wallet error is invisible
+   * to both the user and whoever they screenshot it to.
+   */
+  raw?: string;
   onRetry?: () => void;
 }) {
+  const showRaw = raw !== undefined && raw !== "" && raw !== detail;
   return (
     <div
       role="alert"
@@ -70,6 +80,16 @@ export function ErrorNote({
       <p className="text-base font-semibold text-danger">{title}</p>
       {detail !== undefined && detail !== "" ? (
         <p className="mt-1 break-words text-sm text-foreground/80">{detail}</p>
+      ) : null}
+      {showRaw ? (
+        <details className="mt-2 rounded-lg border border-edge bg-surface/50 px-3 py-2">
+          <summary className="cursor-pointer text-xs font-medium text-muted">
+            Technical details
+          </summary>
+          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-muted">
+            {raw}
+          </pre>
+        </details>
       ) : null}
       {onRetry !== undefined ? (
         <button
