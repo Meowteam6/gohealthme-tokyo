@@ -110,6 +110,17 @@ export async function getSpotterWallet(
       `Circle has no wallet for CIRCLE_WALLET_ID=${walletId}; re-run provisioning or fix the env`,
     );
   }
+  // Chain guard (money-path, no silent failures): a Circle wallet provisioned on
+  // another chain reports COMPLETE with a tx hash while doing NOTHING on Base, so
+  // a wrong-chain CIRCLE_WALLET_ID silently no-ops settle(). Refuse it loudly
+  // instead - every settle resolves the wallet through here first.
+  if (wallet.blockchain && wallet.blockchain !== SPOTTER_BLOCKCHAIN) {
+    throw new Error(
+      `CIRCLE_WALLET_ID=${walletId} is on ${wallet.blockchain}, not ${SPOTTER_BLOCKCHAIN}. ` +
+        "A wrong-chain settler wallet reports success on Circle while moving nothing on Base - " +
+        "refusing to act. Set CIRCLE_WALLET_ID to the Base Sepolia settler.",
+    );
+  }
   return {
     id: wallet.id,
     address: wallet.address,

@@ -57,7 +57,7 @@ import {
   readLedger,
   type LedgerEntry,
 } from "@/lib/server/agent/ledger";
-import { getCircleClient } from "@/lib/server/agent/wallet";
+import { getCircleClient, getSpotterWallet } from "@/lib/server/agent/wallet";
 import { arcReader } from "@/lib/server/agent/spotter";
 import { liveBuyDeps } from "@/lib/server/agent/x402";
 import { requireEnv } from "@/lib/server/env";
@@ -171,8 +171,14 @@ async function eligibility(
 }
 
 async function runSweep(): Promise<SweepCounts> {
+  const circle = getCircleClient();
+  // Chain guard (money-path): refuse to sweep unless the settler wallet is on
+  // Base. A wrong-chain CIRCLE_WALLET_ID reports COMPLETE on Circle while doing
+  // nothing on Base, so an unattended cron would silently mark pools "settled"
+  // that never paid. getSpotterWallet throws on a chain mismatch.
+  await getSpotterWallet(circle);
   const deps: SettleClaimDeps = {
-    spotter: { circle: getCircleClient(), reader: arcReader() },
+    spotter: { circle, reader: arcReader() },
     buy: liveBuyDeps(),
   };
 

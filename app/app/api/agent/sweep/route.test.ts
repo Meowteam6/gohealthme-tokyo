@@ -21,6 +21,13 @@ vi.mock("@/lib/server/agent/run", () => ({
 }));
 vi.mock("@/lib/server/agent/wallet", () => ({
   getCircleClient: vi.fn(() => ({})),
+  // The runSweep chain guard resolves the settler wallet before sweeping; the
+  // fake reports Base so the guard passes and the sweep logic under test runs.
+  getSpotterWallet: vi.fn(async () => ({
+    id: "test-wallet",
+    address: "0x5beca2bce03ef2d8d91091744b2cfd6d1a5cd483",
+    blockchain: "BASE-SEPOLIA",
+  })),
 }));
 vi.mock("@/lib/server/agent/spotter", () => ({
   arcReader: vi.fn(() => ({})),
