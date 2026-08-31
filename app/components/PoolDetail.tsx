@@ -14,6 +14,7 @@ import ShareChallenge from "@/components/ShareChallenge";
 import ChallengeInviteShare from "@/components/ChallengeInviteShare";
 import SpotterSays from "@/components/SpotterSays";
 import SpotterMascot from "@/components/SpotterMascot";
+import ClaimPayout from "@/components/ClaimPayout";
 import {
   Badge,
   Card,
@@ -800,6 +801,11 @@ export default function PoolDetail({ id }: { id: string }) {
           </div>
         ) : null}
       </div>
+
+      {/* owed[] is a GLOBAL per-wallet balance, so a settled win from any pool
+       *  shows here the moment it is credited - one tap withdraws it. It renders
+       *  nothing when nothing is owed, so it never intrudes on a fresh visitor. */}
+      {address !== null ? <ClaimPayout address={address} /> : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCandy

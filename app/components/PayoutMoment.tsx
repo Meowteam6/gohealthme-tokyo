@@ -1,9 +1,14 @@
 "use client";
 
-// THE DROP — the payout moment, the emotional peak of the whole product.
-// SPOTTER pays you and holds up the coin; the world leans in. Fires only on a
-// real settled payout: paidUsd comes from the ledger's settle entry (the
+// THE DROP — the settlement moment, the emotional peak of the whole product.
+// SPOTTER settles your win and holds up the coin; the world leans in. Fires only
+// on a real settled payout: paidUsd comes from the ledger's settle entry (the
 // AchieverPaid delta), never from a transaction merely succeeding.
+//
+// Honest about the money's state: AchieverPaid CREDITS owed[] on a pull-payment
+// contract, it does not move USDC to the wallet. So this moment says the win is
+// settled and credited, and points at the one-tap claim (ClaimPayout / withdraw)
+// that pulls it into the wallet - it never asserts the money is already there.
 //
 // Honest-core: the amount is the gold mono Money, still, no count-up. Two paid
 // branches share the exact same celebration because money moved in both - only
@@ -71,14 +76,17 @@ export default function PayoutMoment({
       />
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <Stamp tone="gold">Paid</Stamp>
+          <Stamp tone="gold">Settled</Stamp>
           {tierChip}
         </div>
         <p className="mt-2">
           <Money usd={paidUsd} tone="gold" sign="+" size="xl" />
         </p>
         <p className="mt-1 text-sm font-semibold text-foreground">
-          SPOTTER paid you.
+          SPOTTER settled your win.
+        </p>
+        <p className="text-sm text-muted">
+          Credited to you on-chain. Claim your USDC to pull it into your wallet.
         </p>
         {selfStaked ? (
           <p className="text-sm text-muted">
@@ -106,7 +114,7 @@ export default function PayoutMoment({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="SPOTTER paid you"
+        aria-label="SPOTTER settled your win"
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
       >
         <button
@@ -170,7 +178,11 @@ export default function PayoutMoment({
               <Money usd={paidUsd} tone="gold" sign="+" size="xl" />
             </p>
             <p className="mt-2 text-base font-semibold text-foreground">
-              SPOTTER paid you.
+              SPOTTER settled your win.
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              Credited to you on-chain. Claim your USDC to pull it into your
+              wallet.
             </p>
             {selfStaked ? (
               <p className="mt-1 text-sm text-muted">

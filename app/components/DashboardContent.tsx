@@ -24,6 +24,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import BalanceCard from "@/components/BalanceCard";
+import ClaimPayout from "@/components/ClaimPayout";
 import Countdown from "@/components/Countdown";
 import SignInPanel from "@/components/SignInPanel";
 import SpotterSays from "@/components/SpotterSays";
@@ -529,6 +530,11 @@ export default function DashboardContent() {
 
   return (
     <div className="space-y-6">
+      {/* A settled win is CREDITED on-chain but not in the wallet until the
+       *  winner withdraws, so the claim card leads the page: it is the highest-
+       *  value action here and renders only when the chain says money is owed. */}
+      <ClaimPayout address={address} />
+
       <section className="space-y-4">
         <h2 className="font-display text-lg font-semibold">Joined pools</h2>
         {joinedQuery.isLoading ? (

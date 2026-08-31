@@ -145,6 +145,38 @@ export const healthPoolsAbi = [
     ],
     outputs: [],
   },
+  // Pull-payment withdrawals (C-1). settle() only CREDITS owed[user]; these are
+  // the ONLY functions that move USDC out of the contract, so the claim UI must
+  // call them - a settled payout sits stranded until withdraw() runs. Signatures
+  // verified against contracts/src/HealthPoolsV3.sol.
+  {
+    type: "function",
+    name: "owed",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "withdraw",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [{ name: "amount", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "sweep",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "poolId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "claimRefund",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "poolId", type: "uint256" }],
+    outputs: [],
+  },
   {
     type: "function",
     name: "getPool",
@@ -260,6 +292,17 @@ export const healthPoolsAbi = [
       { name: "amount", type: "uint256", indexed: false },
     ],
   },
+  // Emitted by withdraw() when USDC actually leaves the contract for the caller.
+  // Unlike AchieverPaid (a credit to owed[]), this is the real transfer, so the
+  // claim hook asserts on it to confirm money moved - never on tx success alone.
+  {
+    type: "event",
+    name: "Withdrawn",
+    inputs: [
+      { name: "account", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
   // PoolFunded carries the funder ADDRESS (indexed) and amount only - no
   // initiative, no goalSpec, no health string - so reading it to name who
   // chipped in to a pool is redaction-safe. sponsor-data.ts aggregates the same
@@ -285,6 +328,10 @@ export const poolCreatedEvent = parseAbiItem(
 // address params let the RPC filter server-side per wallet.
 export const achieverPaidEvent = parseAbiItem(
   "event AchieverPaid(uint256 indexed poolId, address indexed participant, uint256 amount)",
+);
+// The real USDC-out event, for asserting a withdraw actually moved money.
+export const withdrawnEvent = parseAbiItem(
+  "event Withdrawn(address indexed account, uint256 amount)",
 );
 export const poolJoinedEvent = parseAbiItem(
   "event PoolJoined(uint256 indexed poolId, address indexed participant)",
@@ -429,6 +476,27 @@ async function readPool(address: Address, id: bigint): Promise<PoolInfo> {
     initiative: pool.initiative,
     goalSpec: pool.goalSpec,
   };
+}
+
+/**
+ * The USDC a wallet can pull right now via withdraw(), in 6-decimal base units.
+ *
+ * settle() only CREDITS this ledger (owed[user]); the funds do not reach the
+ * wallet until withdraw() runs. This read is what tells the claim UI there is
+ * money to claim. Returns 0n when the contract address is unset - the same
+ * not-configured convention the write path uses - so a misconfigured build
+ * shows "nothing to claim" rather than throwing on a public read.
+ */
+export async function readOwed(account: Address): Promise<bigint> {
+  const address = getHealthPoolsAddress();
+  if (address === null) return 0n;
+  const client = getArcPublicClient();
+  return client.readContract({
+    address,
+    abi: healthPoolsAbi,
+    functionName: "owed",
+    args: [account],
+  });
 }
 
 /**

@@ -149,6 +149,53 @@ const RULES: readonly ErrorRule[] = [
     title: "Not a participant",
     detail: "This wallet has not joined this pool.",
   },
+  // Pull-payment claim reverts (withdraw / sweep / claimRefund on HealthPoolsV3).
+  // NOT_SETTLED is distinct from the "already settled" rule above: the SETTLED
+  // pattern uses a word boundary, and the underscore in NOT_SETTLED is a word
+  // character, so it never matches here.
+  {
+    pattern: /\bNOTHING_OWED\b/,
+    title: "Nothing to claim",
+    detail:
+      "Nothing to claim right now. Settled winnings show up here the moment a " +
+      "pool you won pays out.",
+  },
+  {
+    pattern: /\bNOTHING_TO_SWEEP\b/,
+    title: "Nothing to reclaim",
+    detail: "This pool has no leftover USDC to send back to you.",
+  },
+  {
+    pattern: /\bREFUNDS_PENDING\b/,
+    title: "Refunds still pending",
+    detail:
+      "You can reclaim the remainder only once every participant has claimed " +
+      "their refund. Give it a moment and try again.",
+  },
+  {
+    pattern: /\bNOT_CREATOR\b/,
+    title: "Not the pool creator",
+    detail: "Only the wallet that created this pool can do that.",
+  },
+  {
+    pattern: /\bNOT_CANCELLED\b/,
+    title: "Pool is not cancelled",
+    detail:
+      "Refunds are only available on a cancelled pool. This one is still " +
+      "running or already settled.",
+  },
+  {
+    pattern: /\bALREADY_REFUNDED\b/,
+    title: "Already refunded",
+    detail: "This wallet has already claimed its refund from this pool.",
+  },
+  {
+    pattern: /\bNOT_SETTLED\b/,
+    title: "Pool has not settled yet",
+    detail:
+      "This pool has to settle before that can happen. It settles once its " +
+      "period ends.",
+  },
   {
     // HealthPoolsV3 H-1: createPool requires entryFee > 0 for every model.
     pattern: /\bDEAD_CONFIG\b/,

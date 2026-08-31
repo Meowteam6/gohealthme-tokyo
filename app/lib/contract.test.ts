@@ -6,11 +6,13 @@
 // enforcement refuses a modality a pool does not accept.
 
 import { describe, it, expect } from "vitest";
+import type { Address } from "viem";
 import {
   claimModalityFor,
   displayGoalSpec,
   evidenceTypeOf,
   proofPolicyOf,
+  readOwed,
   withDocMarker,
   withProofPolicy,
   type Modality,
@@ -224,6 +226,27 @@ describe("claimModalityFor enforcement", () => {
       ok: false,
       reason: "invalid",
     });
+  });
+});
+
+describe("readOwed not-configured path", () => {
+  it("returns 0n when the contract address is unset, with no network read", async () => {
+    // Mirrors the file's convention: a public read on an unconfigured build
+    // resolves to a safe zero (nothing to claim) rather than throwing, so the
+    // claim card degrades to hidden instead of erroring.
+    const prev = process.env.NEXT_PUBLIC_HEALTH_POOLS_ADDRESS;
+    process.env.NEXT_PUBLIC_HEALTH_POOLS_ADDRESS = "";
+    try {
+      const account =
+        "0x8ba1f109551bD432803012645Ac136ddd64DBA72" as Address;
+      expect(await readOwed(account)).toBe(0n);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.NEXT_PUBLIC_HEALTH_POOLS_ADDRESS;
+      } else {
+        process.env.NEXT_PUBLIC_HEALTH_POOLS_ADDRESS = prev;
+      }
+    }
   });
 });
 

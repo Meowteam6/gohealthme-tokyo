@@ -120,11 +120,16 @@ function PaidBody({
   }
   return (
     <div className="rounded-xl border border-gold/40 bg-gold-deep/30 p-4 text-center">
-      <Stamp tone="gold">Paid</Stamp>
+      <Stamp tone="gold">Settled</Stamp>
       <p className="mt-3">
         <Money usd={paid.paidUsd} tone="gold" sign="+" size="lg" />
       </p>
-      <p className="mt-1 text-sm font-semibold text-gold">SPOTTER paid you.</p>
+      <p className="mt-1 text-sm font-semibold text-gold">
+        SPOTTER settled your win.
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        Credited on-chain. Claim your USDC to pull it into your wallet.
+      </p>
       {paid.txHash !== null ? (
         <p className="mt-3">
           <ArcTxLink txHash={paid.txHash} label="See the public receipt" />

@@ -261,6 +261,49 @@ describe("humanizeTxError", () => {
     expect(result.detail).toContain("invited");
   });
 
+  it("maps NOTHING_OWED to the nothing-to-claim message", () => {
+    // withdraw() reverts NOTHING_OWED when owed[caller] is zero. The claim
+    // card gates on readOwed > 0, but a race (two taps, a stale read) can still
+    // reach the revert, and it must read as calm, not a failure.
+    const result = humanizeTxError(viemError(REVERT_FIXTURE("NOTHING_OWED")));
+    expect(result.title).toBe("Nothing to claim");
+    expect(result.detail).toContain("Nothing to claim right now");
+  });
+
+  it("maps NOTHING_TO_SWEEP to the nothing-to-reclaim message", () => {
+    const result = humanizeTxError(viemError(REVERT_FIXTURE("NOTHING_TO_SWEEP")));
+    expect(result.title).toBe("Nothing to reclaim");
+  });
+
+  it("maps REFUNDS_PENDING to the refunds-pending message", () => {
+    const result = humanizeTxError(viemError(REVERT_FIXTURE("REFUNDS_PENDING")));
+    expect(result.title).toBe("Refunds still pending");
+    expect(result.detail).toContain("every participant");
+  });
+
+  it("maps NOT_CREATOR to the not-the-creator message", () => {
+    const result = humanizeTxError(viemError(REVERT_FIXTURE("NOT_CREATOR")));
+    expect(result.title).toBe("Not the pool creator");
+  });
+
+  it("maps NOT_CANCELLED to the not-cancelled message", () => {
+    const result = humanizeTxError(viemError(REVERT_FIXTURE("NOT_CANCELLED")));
+    expect(result.title).toBe("Pool is not cancelled");
+  });
+
+  it("maps ALREADY_REFUNDED to the already-refunded message", () => {
+    const result = humanizeTxError(viemError(REVERT_FIXTURE("ALREADY_REFUNDED")));
+    expect(result.title).toBe("Already refunded");
+  });
+
+  it("maps NOT_SETTLED to the not-settled-yet message, not the already-settled one", () => {
+    // The underscore in NOT_SETTLED is a word character, so the \bSETTLED\b
+    // rule for "already settled" never matches it. sweep() before settlement
+    // must read as "settle first", never as "already settled".
+    const result = humanizeTxError(viemError(REVERT_FIXTURE("NOT_SETTLED")));
+    expect(result.title).toBe("Pool has not settled yet");
+  });
+
   it("maps a paymaster sponsorship failure to the gas-sponsorship message", () => {
     // What an ERC-7677 paymaster rejection looks like from the wallet side,
     // e.g. when the paymaster policy does not allowlist the pool contract.
