@@ -1,9 +1,13 @@
-// SPOTTER's on-chain identity: a Circle developer-controlled wallet on Arc
-// testnet. The CLI-provisioned Agent Wallet cannot run headless (its session
+// SPOTTER's on-chain identity: a Circle developer-controlled wallet on Base
+// Sepolia. The CLI-provisioned Agent Wallet cannot run headless (its session
 // secrets live in the OS keychain), so this static API-key client is the
 // always-on actor that records verdicts and settles pools. Provisioning is a
 // one-time operation run from scripts/provision-spotter.ts; the runtime only
 // ever reads the wallet back by CIRCLE_WALLET_ID.
+//
+// The wallet MUST be on the same chain as HealthPoolsV3 (Base Sepolia) - a Circle
+// wallet provisioned on another chain cannot sign a Base transaction, so it could
+// never call settle(). This constant is the single source of that chain.
 
 import {
   initiateDeveloperControlledWalletsClient,
@@ -11,7 +15,7 @@ import {
 } from "@circle-fin/developer-controlled-wallets";
 import { optionalEnv, requireEnv } from "@/lib/server/env";
 
-export const SPOTTER_BLOCKCHAIN = "ARC-TESTNET";
+export const SPOTTER_BLOCKCHAIN = "BASE-SEPOLIA";
 export const SPOTTER_WALLET_SET_NAME = "SPOTTER";
 
 export type CircleClient = Pick<

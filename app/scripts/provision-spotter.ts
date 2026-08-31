@@ -1,4 +1,4 @@
-// One-time provisioning for SPOTTER's Circle wallet on Arc testnet.
+// One-time provisioning for SPOTTER's Circle wallet on Base Sepolia.
 //
 // Run from app/ (loads repo-root .env then app/.env.local):
 //   npm run agent:provision
@@ -14,7 +14,7 @@ import {
   fundSpotterFromFaucet,
 } from "../lib/server/agent/wallet";
 
-const EXPLORER_BASE = "https://testnet.arcscan.app/address/";
+const EXPLORER_BASE = "https://sepolia.basescan.org/address/";
 
 async function main(): Promise<void> {
   const existing = process.env.CIRCLE_WALLET_ID?.trim();
@@ -51,9 +51,15 @@ async function main(): Promise<void> {
   console.log(`CIRCLE_WALLET_ID=${spotter.walletId}`);
   console.log(`SPOTTER_WALLET_ADDRESS=${spotter.address}`);
   console.log(
-    "\nNext: make SPOTTER the oracle and settler once the agent run loop " +
-      "exists - scripts/set-agent-oracle.sh " +
-      spotter.address,
+    "\nNext:\n" +
+      "  1. Paste the three lines above into Vercel prod env and app/.env.local.\n" +
+      "  2. Fund " +
+      spotter.address +
+      " with Base Sepolia ETH for gas (settle() is a real tx).\n" +
+      "  3. Make it the contract settler (owner tx):\n" +
+      "       setAuthorizedSettler(" +
+      spotter.address +
+      ") on HealthPoolsV3 with the deployer key.",
   );
 }
 
