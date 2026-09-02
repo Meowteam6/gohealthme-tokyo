@@ -88,6 +88,11 @@ export interface ArcReader {
   getPoolState(
     poolId: bigint,
   ): Promise<{ settled: boolean; periodEnd: bigint; periodStart?: bigint }>;
+  /** Pool ids run 1..poolCount and are never deleted, so this is the whole
+   *  pool list in one read - the only way to find a pool no claim points at
+   *  (see settleDuePoolAsSpotter). Required: the sweep's pool phase is a money
+   *  path, and a fake that silently lacks it would settle nothing. */
+  poolCount(): Promise<bigint>;
   /** The pool's USDC balance as a two-decimal USD string. Optional so
    *  existing fakes keep compiling; callers must tolerate its absence. */
   poolBalanceUsd?(poolId: bigint): Promise<string>;
@@ -318,6 +323,97 @@ export async function settlePoolAsSpotter(
   }
 }
 
+export type DuePoolOutcome =
+  | { status: "not-due"; periodEnd: bigint }
+  | { status: "already-settled" }
+  | { status: "busy" }
+  | { status: "settled"; txHash: Hex };
+
+/**
+ * Settle a pool that no claim will ever settle.
+ *
+ * settlePoolAsSpotter above is claim-driven: it starts from a goalId, which
+ * only exists because a participant submitted proof. A participant who joins a
+ * pool and then uploads nothing produces no claim, so the sweep never learns
+ * their pool exists, settle() is never called, and the contract's B-2 path -
+ * refund every participant the oracle never adjudicated - never runs. Their
+ * stake stays in the contract with no path out. Measured on Base Sepolia
+ * 2026-09-02: pools 2, 3 and 4 each held 0.50 USDC of a participant 11-22h
+ * past periodEnd, unsettled, with no claim to settle them.
+ *
+ * So this settles a pool for the pool's own sake. It deliberately does NOT
+ * check canSettle(goalId): there is no goal here, and the point is precisely
+ * the participants the registry has nothing to say about. The contract decides
+ * who is paid and who is refunded.
+ *
+ * The money rule holds in its state form. There is no AchieverPaid event to
+ * assert on when every participant is refunded rather than paid, so the proof
+ * of settlement is the pool's own `settled` flag, re-read after the
+ * transaction. A green transaction that left the pool unsettled is reported as
+ * a failure, never as a settlement.
+ */
+export async function settleDuePoolAsSpotter(
+  deps: SpotterDeps,
+  input: { poolId: bigint },
+): Promise<DuePoolOutcome> {
+  const now = deps.nowSeconds?.() ?? BigInt(Math.floor(Date.now() / 1000));
+  const pools = requireEnv("HEALTH_POOLS_ADDRESS");
+
+  const state = await deps.reader.getPoolState(input.poolId);
+  if (state.settled) return { status: "already-settled" };
+  if (now <= state.periodEnd) {
+    return { status: "not-due", periodEnd: state.periodEnd };
+  }
+
+  let lockToken: string | null = null;
+  if (deps.settleLock !== undefined) {
+    lockToken = await deps.settleLock.acquire(input.poolId);
+    if (lockToken === null) return { status: "busy" };
+  }
+
+  try {
+    if (deps.settleLock !== undefined) {
+      // Same reason as the claim path: the read above predates the lock, so a
+      // settler that finished and released while this sweep queued would other-
+      // wise be paid for in gas on a certain ALREADY_SETTLED revert.
+      const fresh = await deps.reader.getPoolState(input.poolId);
+      if (fresh.settled) return { status: "already-settled" };
+    }
+
+    let txHash: Hex;
+    try {
+      txHash = await executeAsSpotter(deps.circle, {
+        contractAddress: pools,
+        abiFunctionSignature: "settle(uint256)",
+        abiParameters: [input.poolId.toString()],
+      });
+    } catch (err) {
+      if (revertKind(err) === "already-settled") {
+        return { status: "already-settled" };
+      }
+      const after = await deps.reader
+        .getPoolState(input.poolId)
+        .catch(() => null);
+      if (after?.settled === true) return { status: "already-settled" };
+      throw err;
+    }
+
+    const after = await deps.reader.getPoolState(input.poolId);
+    if (!after.settled) {
+      throw new Error(
+        `settle tx ${txHash} succeeded but pool ${input.poolId} is still unsettled - ` +
+          "a green transaction is not a settlement; do not report this as settled",
+      );
+    }
+
+    return { status: "settled", txHash };
+  } finally {
+    if (deps.settleLock !== undefined && lockToken !== null) {
+      await deps.settleLock.release(input.poolId, lockToken);
+    }
+  }
+}
+
 export async function recordResultAsSpotter(
   deps: SpotterDeps,
   input: {
@@ -452,6 +548,13 @@ const POOLS_READ_ABI = [
     stateMutability: "view",
     inputs: [],
     outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "poolCount",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
   },
   {
     type: "function",
@@ -599,6 +702,13 @@ export function arcReader(
         periodEnd: BigInt(pool.periodEnd),
         periodStart: BigInt(pool.periodStart),
       };
+    },
+    async poolCount() {
+      return client.readContract({
+        address: pools(),
+        abi: POOLS_READ_ABI,
+        functionName: "poolCount",
+      });
     },
     async poolBalanceUsd(poolId) {
       const pool = await client.readContract({

@@ -43,6 +43,7 @@ import { timingSafeEqual } from "crypto";
 import { isAddress, type Address, type Hex } from "viem";
 import {
   settleRecordedClaim,
+  livePoolSettleLock,
   SETTLE_UNPAYABLE_MESSAGE,
   type SettleClaimDeps,
 } from "@/lib/server/agent/run";
@@ -58,7 +59,13 @@ import {
   type LedgerEntry,
 } from "@/lib/server/agent/ledger";
 import { getCircleClient, getSpotterWallet } from "@/lib/server/agent/wallet";
-import { arcReader } from "@/lib/server/agent/spotter";
+import {
+  arcReader,
+  settleDuePoolAsSpotter,
+  type ArcReader,
+  type SpotterDeps,
+  type SpotterExecutor,
+} from "@/lib/server/agent/spotter";
 import { liveBuyDeps } from "@/lib/server/agent/x402";
 import { requireEnv } from "@/lib/server/env";
 import { errorMessage, jsonError } from "@/lib/server/http";
@@ -84,12 +91,27 @@ const DUE_BATCH = 200;
  *  that drains itself as legacy claims are re-queued or settle. */
 const FALLBACK_SCAN_LIMIT = 100;
 
+/** How long after periodEnd a pool must sit before the pool phase settles it.
+ *  A participant whose proof is mid-verification has no settled claim yet, and
+ *  settling underneath them turns a payout into a refund (the contract refunds
+ *  whoever the oracle never adjudicated). This margin gives an in-flight
+ *  verification room to land; the claim phase settles those properly. */
+const POOL_SETTLE_MIN_AGE_S = 30 * 60;
+
+/** Settles per sweep from the pool phase. Reads are cheap, settles are not;
+ *  the remainder is picked up by the next cron tick two minutes later. */
+const POOL_SETTLE_MAX_PER_SWEEP = 10;
+
 interface SweepCounts {
   swept: string[];
   settled: number;
   deferred: number;
   errors: number;
   truncated: boolean;
+  /** Pools settled by the pool phase (abandoned pools, no claim to drive them). */
+  poolsSettled: number;
+  /** One line per pool the pool phase could not settle. Never silent. */
+  poolErrors: string[];
 }
 
 function authorized(request: Request): boolean {
@@ -103,7 +125,7 @@ function authorized(request: Request): boolean {
 
 type Eligibility =
   | { settle: true; poolId: bigint; participant: Address }
-  | { settle: false };
+  | { settle: false; poolId?: bigint };
 
 /**
  * Decide whether a claim is worth a settle attempt, from its ledger alone.
@@ -160,7 +182,9 @@ async function eligibility(
       : Date.parse(deferred.periodEndIso);
   if (dueMs !== null && Number.isFinite(dueMs)) {
     await addPendingSettlement(goalId, Math.floor(dueMs / 1000));
-    if (dueMs > nowMs) return { settle: false };
+    // Not due yet: the claim path owns this pool. Report the linkage so the
+    // pool phase leaves it alone rather than refunding a claim mid-flight.
+    if (dueMs > nowMs) return { settle: false, poolId: BigInt(plan.poolId) };
   }
 
   return {
@@ -168,6 +192,60 @@ async function eligibility(
     poolId: BigInt(plan.poolId),
     participant: plan.participant as Address,
   };
+}
+
+/**
+ * Phase 2: settle pools no claim will ever settle.
+ *
+ * The claim phase above can only reach a pool some participant submitted proof
+ * for. A participant who joins and never uploads anything leaves no ledger
+ * entry at all, so their pool is invisible here, settle() is never called, and
+ * the contract's refund-the-unadjudicated path never runs - their stake has no
+ * way out of the contract. Measured on Base Sepolia 2026-09-02: pools 2, 3 and
+ * 4 each held a participant's 0.50 USDC, 11-22h past periodEnd, unsettled.
+ *
+ * Pool ids run 1..poolCount and are never deleted, so this enumerates them
+ * oldest-first: the longest-stuck stake is always freed first, whatever the
+ * time budget allows. Pools the claim phase is already handling are skipped.
+ */
+async function sweepDuePools(
+  circle: SpotterExecutor,
+  reader: ArcReader,
+  claimPools: Set<string>,
+  outOfTime: () => boolean,
+): Promise<{ poolsSettled: number; poolErrors: string[] }> {
+  const poolsSettled = { count: 0 };
+  const poolErrors: string[] = [];
+  const deps: SpotterDeps = {
+    circle,
+    reader,
+    settleLock: livePoolSettleLock(),
+  };
+
+  const total = await reader.poolCount();
+  const cutoff =
+    BigInt(Math.floor(Date.now() / 1000)) - BigInt(POOL_SETTLE_MIN_AGE_S);
+
+  for (let poolId = 1n; poolId <= total; poolId++) {
+    if (outOfTime() || poolsSettled.count >= POOL_SETTLE_MAX_PER_SWEEP) break;
+    if (claimPools.has(poolId.toString())) continue;
+
+    try {
+      const state = await reader.getPoolState(poolId);
+      if (state.settled) continue;
+      // Still running, or inside the margin an in-flight verification needs.
+      if (state.periodEnd >= cutoff) continue;
+
+      const outcome = await settleDuePoolAsSpotter(deps, { poolId });
+      if (outcome.status === "settled") poolsSettled.count += 1;
+    } catch (err) {
+      // Surfaced in the response, never swallowed: an unsettleable pool is a
+      // participant whose stake is still stuck.
+      poolErrors.push(`pool ${poolId}: ${errorMessage(err)}`);
+    }
+  }
+
+  return { poolsSettled: poolsSettled.count, poolErrors };
 }
 
 async function runSweep(): Promise<SweepCounts> {
@@ -189,8 +267,12 @@ async function runSweep(): Promise<SweepCounts> {
     deferred: 0,
     errors: 0,
     truncated: false,
+    poolsSettled: 0,
+    poolErrors: [],
   };
   const seen = new Set<string>();
+  /** Pools the claim phase owns this tick; the pool phase must not touch them. */
+  const claimPools = new Set<string>();
 
   const outOfTime = () => Date.now() - startedAt >= SWEEP_BUDGET_MS;
 
@@ -201,6 +283,7 @@ async function runSweep(): Promise<SweepCounts> {
 
     const ledger = await readLedger(goalId);
     const verdict = await eligibility(goalId, ledger, Date.now());
+    if (verdict.poolId !== undefined) claimPools.add(verdict.poolId.toString());
     if (!verdict.settle) return;
 
     counts.swept.push(goalId);
@@ -235,6 +318,15 @@ async function runSweep(): Promise<SweepCounts> {
     await consider(goalId);
   }
 
+  const pools = await sweepDuePools(
+    circle,
+    deps.spotter.reader,
+    claimPools,
+    outOfTime,
+  );
+  counts.poolsSettled = pools.poolsSettled;
+  counts.poolErrors = pools.poolErrors;
+
   return counts;
 }
 
@@ -250,6 +342,8 @@ async function sweep(): Promise<Response> {
     deferred: 0,
     errors: 0,
     truncated: false,
+    poolsSettled: 0,
+    poolErrors: [],
     skipped: "a sweep is already running",
   });
 }

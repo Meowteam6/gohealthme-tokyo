@@ -63,6 +63,7 @@ function fakeExecutor() {
 
 function fakeReader(overrides: Partial<ArcReader> = {}): ArcReader {
   return {
+    poolCount: vi.fn().mockResolvedValue(1n),
     getPoolState: vi
       .fn()
       .mockResolvedValue({ settled: false, periodEnd: 1_000n }),

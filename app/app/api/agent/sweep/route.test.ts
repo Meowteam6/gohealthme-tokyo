@@ -16,6 +16,10 @@ const settleRecordedClaim = vi.fn();
 
 vi.mock("@/lib/server/agent/run", () => ({
   settleRecordedClaim: (...args: unknown[]) => settleRecordedClaim(...args),
+  livePoolSettleLock: vi.fn(() => ({
+    acquire: vi.fn(async () => "token"),
+    release: vi.fn(),
+  })),
   SETTLE_UNPAYABLE_MESSAGE:
     "pool settled before this claim completed; a one-shot settle cannot pay it retroactively",
 }));
@@ -29,8 +33,11 @@ vi.mock("@/lib/server/agent/wallet", () => ({
     blockchain: "BASE-SEPOLIA",
   })),
 }));
+const settleDuePoolAsSpotter = vi.fn();
+let readerFake: Record<string, unknown> = {};
 vi.mock("@/lib/server/agent/spotter", () => ({
-  arcReader: vi.fn(() => ({})),
+  arcReader: vi.fn(() => readerFake),
+  settleDuePoolAsSpotter: (...args: unknown[]) => settleDuePoolAsSpotter(...args),
 }));
 vi.mock("@/lib/server/agent/x402", () => ({
   liveBuyDeps: vi.fn(() => ({})),
@@ -85,7 +92,13 @@ function record(goalId: string) {
 beforeEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
+  readerFake = { poolCount: vi.fn(async () => 0n), getPoolState: vi.fn() };
 });
+
+/** now - seconds, as a bigint periodEnd. */
+function endedSecondsAgo(seconds: number): bigint {
+  return BigInt(Math.floor(Date.now() / 1000) - seconds);
+}
 
 describe("sweep auth", () => {
   it("rejects a request with no authorization header", async () => {
@@ -111,6 +124,8 @@ describe("sweep auth", () => {
       deferred: 0,
       errors: 0,
       truncated: false,
+      poolsSettled: 0,
+      poolErrors: [],
     });
   });
 });
@@ -162,6 +177,8 @@ describe("sweep eligibility", () => {
       deferred: 0,
       errors: 0,
       truncated: false,
+      poolsSettled: 0,
+      poolErrors: [],
     });
     expect(settleRecordedClaim).toHaveBeenCalledTimes(1);
     const [, input] = settleRecordedClaim.mock.calls[0] as [
@@ -250,6 +267,129 @@ describe("sweep eligibility", () => {
     await POST(req("POST", `Bearer ${SECRET}`));
 
     expect(await listDuePendingSettlements(Date.now() / 1000, 10)).toEqual([]);
+  });
+});
+
+// Phase 2. The claim phase can only reach a pool some participant submitted
+// proof for; a participant who joins and uploads nothing leaves no ledger entry
+// at all, so nothing ever settles their pool and the contract's refund path
+// never runs. Measured on Base Sepolia 2026-09-02: pools 2, 3 and 4 each held
+// a participant's 0.50 USDC, 11-22h past periodEnd, unsettled, with no claim
+// pointing at them. These pin the pool-driven phase that frees those stakes -
+// and pin the two things it must NOT do: settle underneath a claim that is
+// mid-verification, and swallow a pool it could not settle.
+describe("sweep pool phase", () => {
+  it("settles an abandoned pool that no claim points at", async () => {
+    const { POST } = await loadRoute();
+    readerFake = {
+      poolCount: vi.fn(async () => 2n),
+      getPoolState: vi.fn(async (poolId: bigint) =>
+        poolId === 1n
+          ? { settled: true, periodEnd: endedSecondsAgo(90_000) }
+          : { settled: false, periodEnd: endedSecondsAgo(80_000) },
+      ),
+    };
+    settleDuePoolAsSpotter.mockResolvedValue({
+      status: "settled",
+      txHash: "0xabc",
+    });
+
+    const res = await POST(req("POST", `Bearer ${SECRET}`));
+
+    expect(await res.json()).toMatchObject({ poolsSettled: 1, poolErrors: [] });
+    expect(settleDuePoolAsSpotter).toHaveBeenCalledTimes(1);
+    const [, input] = settleDuePoolAsSpotter.mock.calls[0] as [
+      unknown,
+      { poolId: bigint },
+    ];
+    expect(input.poolId).toBe(2n);
+  });
+
+  it("leaves a pool inside the settle margin alone, so a verification in flight can land", async () => {
+    const { POST } = await loadRoute();
+    readerFake = {
+      poolCount: vi.fn(async () => 1n),
+      // Ended five minutes ago: past periodEnd, inside the margin.
+      getPoolState: vi.fn(async () => ({
+        settled: false,
+        periodEnd: endedSecondsAgo(300),
+      })),
+    };
+
+    const res = await POST(req("POST", `Bearer ${SECRET}`));
+
+    expect(await res.json()).toMatchObject({ poolsSettled: 0 });
+    expect(settleDuePoolAsSpotter).not.toHaveBeenCalled();
+  });
+
+  it("leaves a pool the claim phase owns alone, even when it is long past due", async () => {
+    const { POST, appendLedger } = await loadRoute();
+    const pending = "0x" + "a1".repeat(32);
+    await appendLedger(pending, plan({ poolId: "3" }));
+    await appendLedger(pending, record(pending));
+    // A deferred claim whose re-poll moment is still ahead: the claim path owns
+    // pool 3 and will pay this participant properly.
+    await appendLedger(pending, {
+      kind: "settle",
+      status: "deferred",
+      periodEndIso: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    readerFake = {
+      poolCount: vi.fn(async () => 3n),
+      getPoolState: vi.fn(async () => ({
+        settled: false,
+        periodEnd: endedSecondsAgo(80_000),
+      })),
+    };
+    settleDuePoolAsSpotter.mockResolvedValue({
+      status: "settled",
+      txHash: "0xabc",
+    });
+
+    const res = await POST(req("POST", `Bearer ${SECRET}`));
+
+    const settled = settleDuePoolAsSpotter.mock.calls.map(
+      (c) => (c[1] as { poolId: bigint }).poolId,
+    );
+    expect(settled).toEqual([1n, 2n]);
+    expect(settled).not.toContain(3n);
+    expect(await res.json()).toMatchObject({ poolsSettled: 2 });
+  });
+
+  it("never settles a pool that is already settled", async () => {
+    const { POST } = await loadRoute();
+    readerFake = {
+      poolCount: vi.fn(async () => 2n),
+      getPoolState: vi.fn(async () => ({
+        settled: true,
+        periodEnd: endedSecondsAgo(80_000),
+      })),
+    };
+
+    const res = await POST(req("POST", `Bearer ${SECRET}`));
+
+    expect(await res.json()).toMatchObject({ poolsSettled: 0 });
+    expect(settleDuePoolAsSpotter).not.toHaveBeenCalled();
+  });
+
+  it("reports a pool it could not settle instead of swallowing it", async () => {
+    const { POST } = await loadRoute();
+    readerFake = {
+      poolCount: vi.fn(async () => 1n),
+      getPoolState: vi.fn(async () => ({
+        settled: false,
+        periodEnd: endedSecondsAgo(80_000),
+      })),
+    };
+    settleDuePoolAsSpotter.mockRejectedValue(new Error("NOT_SETTLER"));
+
+    const res = await POST(req("POST", `Bearer ${SECRET}`));
+
+    expect(await res.json()).toMatchObject({
+      poolsSettled: 0,
+      poolErrors: ["pool 1: NOT_SETTLER"],
+    });
   });
 });
 

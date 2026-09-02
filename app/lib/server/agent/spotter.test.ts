@@ -11,6 +11,7 @@ import {
   payoutFromLogs,
   revertKind,
   settlePoolAsSpotter,
+  settleDuePoolAsSpotter,
   recordResultAsSpotter,
   recordVerdictAsSpotter,
   type PoolSettleLock,
@@ -70,6 +71,7 @@ function fakeReader(overrides: Partial<ArcReader> = {}): ArcReader {
     getPoolState: vi
       .fn()
       .mockResolvedValue({ settled: false, periodEnd: 1_000n }),
+    poolCount: vi.fn().mockResolvedValue(1n),
     canSettle: vi.fn().mockResolvedValue(true),
     oracleAddress: vi.fn().mockResolvedValue(USER),
     attesterAddress: vi.fn().mockResolvedValue(USER),
@@ -332,6 +334,159 @@ describe("settlePoolAsSpotter", () => {
         participant: USER,
       }),
     ).rejects.toThrow(/reverted/);
+  });
+});
+
+// A pool nobody ever claimed against is the case the claim-driven path cannot
+// reach: every settle in this file so far starts from a goalId that exists
+// because a participant submitted proof. A participant who joins and never
+// uploads anything produces no claim at all, so nothing ever calls settle()
+// for their pool and the contract's refund-the-unadjudicated path (B-2) never
+// runs - their stake sits in the contract forever. Measured on Base Sepolia
+// 2026-09-02: pools 2, 3 and 4 each held a participant's 0.50 USDC 11-22h past
+// periodEnd with settled == false. These tests pin the pool-driven settle that
+// frees them, and pin it to the same money rule as the claim path: the proof
+// of settlement is the pool's own settled flag, never a green transaction.
+describe("settleDuePoolAsSpotter", () => {
+  it("leaves a pool whose period is still running alone, without touching Circle", async () => {
+    stubSpotterEnv();
+    const executor = fakeExecutor();
+
+    const result = await settleDuePoolAsSpotter(deps(executor, fakeReader(), 500n), {
+      poolId: POOL,
+    });
+
+    expect(result).toEqual({ status: "not-due", periodEnd: 1_000n });
+    expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
+  });
+
+  it("reports an already-settled pool without touching Circle", async () => {
+    stubSpotterEnv();
+    const executor = fakeExecutor();
+    const reader = fakeReader({
+      getPoolState: vi
+        .fn()
+        .mockResolvedValue({ settled: true, periodEnd: 1_000n }),
+    });
+
+    const result = await settleDuePoolAsSpotter(deps(executor, reader), {
+      poolId: POOL,
+    });
+
+    expect(result).toEqual({ status: "already-settled" });
+    expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
+  });
+
+  it("settles an abandoned pool and proves it on the settled flag, not the transaction", async () => {
+    stubSpotterEnv();
+    const executor = fakeExecutor();
+    const reader = fakeReader({
+      getPoolState: vi
+        .fn()
+        .mockResolvedValueOnce({ settled: false, periodEnd: 1_000n })
+        .mockResolvedValueOnce({ settled: true, periodEnd: 1_000n }),
+    });
+
+    const result = await settleDuePoolAsSpotter(deps(executor, reader), {
+      poolId: POOL,
+    });
+
+    expect(result).toEqual({ status: "settled", txHash: "0xfeed" });
+    expect(executor.createContractExecutionTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        abiFunctionSignature: "settle(uint256)",
+        abiParameters: ["7"],
+      }),
+    );
+    // Pre-flight read, then the post-transaction read that is the actual proof.
+    expect(reader.getPoolState).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws when the settle transaction lands but the pool is still unsettled", async () => {
+    stubSpotterEnv();
+    const reader = fakeReader({
+      getPoolState: vi
+        .fn()
+        .mockResolvedValue({ settled: false, periodEnd: 1_000n }),
+    });
+
+    await expect(
+      settleDuePoolAsSpotter(deps(fakeExecutor(), reader), { poolId: POOL }),
+    ).rejects.toThrow(/still unsettled/);
+  });
+
+  it("stands down when another settler holds the pool lock", async () => {
+    stubSpotterEnv();
+    const executor = fakeExecutor();
+    const settleLock: PoolSettleLock = {
+      acquire: vi.fn().mockResolvedValue(null),
+      release: vi.fn(),
+    };
+
+    const result = await settleDuePoolAsSpotter(
+      { ...deps(executor), settleLock },
+      { poolId: POOL },
+    );
+
+    expect(result).toEqual({ status: "busy" });
+    expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
+  });
+
+  it("re-reads under the lock: a sweep queued behind the winner sends nothing", async () => {
+    stubSpotterEnv();
+    const executor = fakeExecutor();
+    const reader = fakeReader({
+      getPoolState: vi
+        .fn()
+        .mockResolvedValueOnce({ settled: false, periodEnd: 1_000n })
+        .mockResolvedValueOnce({ settled: true, periodEnd: 1_000n }),
+    });
+    const settleLock: PoolSettleLock = {
+      acquire: vi.fn().mockResolvedValue("token-1"),
+      release: vi.fn(),
+    };
+
+    const result = await settleDuePoolAsSpotter(
+      { ...deps(executor, reader), settleLock },
+      { poolId: POOL },
+    );
+
+    expect(result).toEqual({ status: "already-settled" });
+    expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
+    expect(settleLock.release).toHaveBeenCalledWith(POOL, "token-1");
+  });
+
+  it("decodes an ALREADY_SETTLED revert as already-settled, not as a failure", async () => {
+    stubSpotterEnv();
+    const executor = fakeExecutor({
+      createContractExecutionTransaction: vi
+        .fn()
+        .mockRejectedValue(new Error("execution reverted: ALREADY_SETTLED")),
+    });
+
+    const result = await settleDuePoolAsSpotter(deps(executor), {
+      poolId: POOL,
+    });
+
+    expect(result).toEqual({ status: "already-settled" });
+  });
+
+  it("releases the pool lock even when the settle throws", async () => {
+    stubSpotterEnv();
+    const executor = fakeExecutor({
+      createContractExecutionTransaction: vi
+        .fn()
+        .mockRejectedValue(new Error("boom")),
+    });
+    const settleLock: PoolSettleLock = {
+      acquire: vi.fn().mockResolvedValue("token-1"),
+      release: vi.fn(),
+    };
+
+    await expect(
+      settleDuePoolAsSpotter({ ...deps(executor), settleLock }, { poolId: POOL }),
+    ).rejects.toThrow("boom");
+    expect(settleLock.release).toHaveBeenCalledWith(POOL, "token-1");
   });
 });
 
