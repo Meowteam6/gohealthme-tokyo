@@ -5,9 +5,10 @@ import SponsorConsole from "@/components/SponsorConsole";
 import { EmptyState } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "Sponsor console — GoHealthMe",
+  title: "Sponsor a health goal",
   description:
-    "Create and fund USDC health-goal pools and see privacy-safe aggregate outcomes. No participant health data is ever shown.",
+    "Create and fund USDC health-goal pools and see privacy-safe aggregate outcomes. No participant health data is ever shown. Base Sepolia testnet, play-money USDC.",
+  alternates: { canonical: "/sponsor" },
 };
 
 // Server component that mirrors the dashboard: it only gates on whether sign-in

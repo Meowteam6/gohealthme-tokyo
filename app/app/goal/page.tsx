@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import GoalMatch from "@/components/GoalMatch";
+import { NOINDEX } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Your goal — GoHealthMe",
+  title: "Your goal",
   description: "Live health pools matched to the goal you typed.",
+  robots: NOINDEX,
 };
 
 export default async function GoalPage({

@@ -3,9 +3,10 @@ import Link from "next/link";
 import { Badge } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "Terms - GoHealthMe",
+  title: "Terms",
   description:
     "The rules of the GoHealthMe testnet demo: play-money, not advice, no guarantees. A plain-language, pre-launch notice.",
+  alternates: { canonical: "/terms" },
 };
 
 const EFFECTIVE_DATE = "2026-08-20";

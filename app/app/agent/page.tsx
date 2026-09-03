@@ -3,15 +3,17 @@ import type { Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseAddressUrl } from "@/lib/chains";
 import { optionalEnv } from "@/lib/server/env";
+import { NOINDEX } from "@/lib/site";
 import { Card } from "@/components/ui";
 import SpotterMascot from "@/components/SpotterMascot";
 import SpotterSays from "@/components/SpotterSays";
 import AgentFeed from "./AgentFeed";
 
 export const metadata: Metadata = {
-  title: "SPOTTER — GoHealthMe",
+  title: "SPOTTER",
   description:
     "The settlement agent's on-chain identity and every claim it has touched.",
+  robots: NOINDEX,
 };
 
 // Resolved at request time, not baked at build, so the page reflects the

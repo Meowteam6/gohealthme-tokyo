@@ -3,11 +3,13 @@ import Link from "next/link";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import WalletSettings from "@/components/WalletSettings";
 import { EmptyState } from "@/components/ui";
+import { NOINDEX } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Wallet - GoHealthMe",
+  title: "Wallet",
   description:
     "Your GoHealthMe wallet: address, Base Sepolia balance, whether it is the wallet we made for you or one you connected, and how to back it up.",
+  robots: NOINDEX,
 };
 
 export default function SettingsPage() {

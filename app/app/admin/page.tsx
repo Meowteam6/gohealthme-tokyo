@@ -5,9 +5,11 @@
 
 import type { Metadata } from "next";
 import AdminAccess from "@/components/AdminAccess";
+import { NOINDEX } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Admin · Access requests",
+  robots: NOINDEX,
 };
 
 export default function AdminPage() {

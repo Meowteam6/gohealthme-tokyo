@@ -13,6 +13,7 @@ import {
   getProfileByAddress,
   resolveProfiles,
 } from "@/lib/server/social-profile";
+import { NOINDEX } from "@/lib/site";
 import { displayNameFor } from "@/lib/social";
 
 // The token is a bearer capability and the row is looked up live per request,
@@ -32,8 +33,8 @@ function nowUnixSeconds(): bigint {
 // search result or a link-preview card. The goal is visible ON the page only,
 // behind the unguessable token. Title stays deliberately neutral.
 export const metadata: Metadata = {
-  title: "You've been challenged - GoHealthMe",
-  robots: { index: false, follow: false },
+  title: "You've been challenged",
+  robots: NOINDEX,
 };
 
 /** A friendly dead-end for a bad or expired-from-existence link, with no leak

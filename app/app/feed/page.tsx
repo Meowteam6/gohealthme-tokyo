@@ -3,7 +3,10 @@ import Link from "next/link";
 import NamedPayoutFeed from "@/components/NamedPayoutFeed";
 
 export const metadata: Metadata = {
-  title: "Payout feed - GoHealthMe",
+  title: "Who got paid",
+  description:
+    "Every health-goal payout SPOTTER has settled on Base Sepolia, by handle. Amounts and transactions are public; the health category never is. Testnet play money.",
+  alternates: { canonical: "/feed" },
 };
 
 export default function FeedPage() {

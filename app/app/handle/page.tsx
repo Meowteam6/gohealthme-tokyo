@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import ClaimHandle from "@/components/ClaimHandle";
+import { NOINDEX } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Claim your handle - GoHealthMe",
+  title: "Claim your handle",
+  robots: NOINDEX,
 };
 
 export default function HandlePage() {

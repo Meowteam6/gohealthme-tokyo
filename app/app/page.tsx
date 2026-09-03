@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import GoalIntent from "@/components/GoalIntent";
@@ -5,6 +6,12 @@ import SpotterIntroCard from "@/components/SpotterIntroCard";
 import HeroBaseCta from "@/components/HeroBaseCta";
 import HeroActivityTicker from "@/components/HeroActivityTicker";
 import { Badge, Button, Card } from "@/components/ui";
+
+// Title, description and share card come from the root layout. The landing
+// only pins its canonical so tracking or deploy query strings collapse to /.
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 // A small emerald "candy" chip that holds a step number or an icon. Kept local
 // to the home surface so the numbered steps and the why-crypto cards share one
@@ -76,10 +83,11 @@ export default function Home() {
             Stake on your goal. Split what the no-shows leave behind.
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
-            Everyone stakes their own USDC on the same goal. Show up and you get
-            your stake back plus a cut of what the no-shows left on the table -
-            paid the second SPOTTER verifies it. A sponsor can fund the pool
-            instead. Nobody ever sees your health data.
+            GoHealthMe is a commitment pool for health goals. Everyone stakes
+            their own test USDC on the same goal. Show up and you get your
+            stake back plus a cut of what the no-shows left on the table - paid
+            the second SPOTTER verifies it. A sponsor can fund the pool instead.
+            Nobody ever sees your health data.
           </p>
           {/* Phone only: the otter and the Base button, surfaced right under the
               pitch. On desktop the right column carries them; on a phone that
@@ -171,16 +179,30 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        {steps.map((step, i) => (
-          <Card key={step.title}>
-            <IconChip>0{i + 1}</IconChip>
-            <h2 className="mt-4 font-display text-lg font-bold">{step.title}</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted">
-              {step.body}
-            </p>
-          </Card>
-        ))}
+      {/* One heading anchors the three steps, so a reader (or an answer
+          engine) has a "how does it work" section to land on. Styled as the
+          same eyebrow the why-crypto section uses; the step titles sit under
+          it as h3s. */}
+      <section aria-labelledby="how-it-works">
+        <h2
+          id="how-it-works"
+          className="font-display text-xs font-semibold uppercase tracking-widest text-accent-strong"
+        >
+          How GoHealthMe works
+        </h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          {steps.map((step, i) => (
+            <Card key={step.title}>
+              <IconChip>0{i + 1}</IconChip>
+              <h3 className="mt-4 font-display text-lg font-bold">
+                {step.title}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                {step.body}
+              </p>
+            </Card>
+          ))}
+        </div>
       </section>
 
       <section className="rounded-3xl border border-edge bg-surface-raised p-8 sm:p-10">

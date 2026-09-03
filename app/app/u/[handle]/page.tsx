@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import {
   ProfilePaidWall,
   type ProfileData,
@@ -8,6 +9,7 @@ import {
 import { formatUsdc } from "@/lib/contract";
 import { getProfileByHandle } from "@/lib/server/social-profile";
 import { getSocialStats } from "@/lib/server/social-stats";
+import { NOINDEX } from "@/lib/site";
 import { checkHandle } from "@/lib/social";
 
 // Live on-chain stats and a Supabase lookup on every view, so never prerender.
@@ -26,16 +28,22 @@ export async function generateMetadata({
 }: {
   params: Promise<{ handle: string }>;
 }): Promise<Metadata> {
+  // Profiles are for the people who share them, never for a search result:
+  // both branches are noindex. Titles are absolute so the root template does
+  // not append a second " - GoHealthMe".
   const { handle } = await params;
   const check = checkHandle(handle);
-  if (!check.ok) return { title: "GoHealthMe" };
+  if (!check.ok) return { title: { absolute: "GoHealthMe" }, robots: NOINDEX };
   return {
-    title: `@${check.handle} on GoHealthMe`,
+    title: { absolute: `@${check.handle} on GoHealthMe` },
     description: "Health-goal wins and USDC payouts. No health category is ever shown.",
+    robots: NOINDEX,
   };
 }
 
-/** The unclaimed-handle landing: a growth loop, not a dead 404. */
+/** The landing for a string that cannot be a handle at all: a growth loop,
+ *  not a dead end. A well-formed handle nobody owns is a real 404 instead,
+ *  so /u/<anything> cannot be farmed into an endless set of 200 pages. */
 function Unclaimed({ handle }: { handle: string }) {
   return (
     <main className="min-h-screen bg-background px-4 py-16 text-foreground">
@@ -65,7 +73,7 @@ export default async function ProfilePage({
   if (!check.ok) return <Unclaimed handle={handle} />;
 
   const profile = await getProfileByHandle(check.handle);
-  if (profile === null) return <Unclaimed handle={check.handle} />;
+  if (profile === null) notFound();
 
   const stats = await getSocialStats(profile.address);
 

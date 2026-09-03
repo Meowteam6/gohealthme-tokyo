@@ -3,9 +3,10 @@ import Link from "next/link";
 import { Badge } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "Privacy - GoHealthMe",
+  title: "Privacy",
   description:
     "What GoHealthMe collects, how it is used, and who processes it. A plain-language, pre-launch testnet notice.",
+  alternates: { canonical: "/privacy" },
 };
 
 const EFFECTIVE_DATE = "2026-08-20";
