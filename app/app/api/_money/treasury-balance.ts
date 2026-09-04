@@ -42,3 +42,8 @@ export async function treasuryUsdcBalanceUusdc(): Promise<bigint> {
     args: [treasuryAddress()],
   });
 }
+
+/** The treasury's native ETH (gas) balance on Base Sepolia, in wei. */
+export async function treasuryEthBalanceWei(): Promise<bigint> {
+  return await getArcPublicClient().getBalance({ address: treasuryAddress() });
+}
