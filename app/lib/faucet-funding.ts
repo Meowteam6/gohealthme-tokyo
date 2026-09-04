@@ -51,6 +51,11 @@ export type FundingResult =
   // and the address held no prior in-app balance. Not an error, just nothing
   // happened.
   | { kind: "empty" }
+  // The faucet stood down on purpose: the wallet already holds at least the
+  // refill threshold of spendable USDC (the route answers 200 with
+  // applied:false), and there was no undelivered in-app balance to move. Not a
+  // failure and not a cap - the honest thing to show is "you have enough".
+  | { kind: "enough" }
   // A server cap said no (faucet budget/cooldown, or the withdraw daily cap).
   // Expected, not a fault; carry the server's own honest message.
   | { kind: "budget-exhausted"; message: string }
@@ -58,6 +63,7 @@ export type FundingResult =
 
 interface TopupResponse {
   applied?: boolean;
+  grantedUusdc?: string;
   error?: string;
 }
 interface BalanceResponse {
@@ -173,6 +179,10 @@ export async function runTestUsdcFunding(
   // 1. Grant into the in-app ledger. Best-effort.
   onPhase?.("claiming");
   let faucetRefusal: string | null = null;
+  // 200 with applied:false is the route's balance-aware skip (spendable USDC
+  // already at or above the refill threshold), distinct from a same-window
+  // no-op grant, which also answers 200 but with applied:true.
+  let faucetStoodDown = false;
   try {
     const res = await fetch("/api/blink/topup", {
       method: "POST",
@@ -189,6 +199,8 @@ export async function runTestUsdcFunding(
         kind: "error",
         message: body.error ?? `The faucet responded with status ${res.status}.`,
       };
+    } else if (body.applied === false) {
+      faucetStoodDown = true;
     }
   } catch {
     return { kind: "error", message: "Could not reach the in-app faucet." };
@@ -211,10 +223,12 @@ export async function runTestUsdcFunding(
   }
 
   if (inApp <= 0n) {
-    // Nothing to move. If the faucet refused, that refusal is the reason.
-    return faucetRefusal !== null
-      ? { kind: "budget-exhausted", message: faucetRefusal }
-      : { kind: "empty" };
+    // Nothing to move. If the faucet refused, that refusal is the reason; if it
+    // stood down because the wallet already holds enough, say that instead.
+    if (faucetRefusal !== null) {
+      return { kind: "budget-exhausted", message: faucetRefusal };
+    }
+    return faucetStoodDown ? { kind: "enough" } : { kind: "empty" };
   }
 
   // 3. Deliver it onto Arc. The server caps a single address per day, so move

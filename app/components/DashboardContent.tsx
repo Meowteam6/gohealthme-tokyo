@@ -58,6 +58,7 @@ import {
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { PopupBlockedError, openJunctionConnect } from "@/lib/junction-connect";
+import { resultLabel } from "@/lib/participant-status";
 import {
   authBlockReason,
   fetchWithWalletAuth,
@@ -77,15 +78,6 @@ async function fetchJoinedPools(address: `0x${string}`): Promise<JoinedPool[]> {
   return pools
     .map((pool, i) => ({ pool, participant: participants[i] }))
     .filter((entry) => entry.participant.joined);
-}
-
-function resultLabel(p: ParticipantInfo): { text: string; tone: "accent" | "muted" | "warning" } {
-  if (!p.resultRecorded) return { text: "Pending verification", tone: "warning" };
-  if (p.verdict) {
-    const multiplier = (p.multiplierBps / 10_000).toFixed(2);
-    return { text: `Achieved at ${multiplier}x`, tone: "accent" };
-  }
-  return { text: "Goal missed", tone: "muted" };
 }
 
 /** A verified result on a pool that has not settled yet: the money is owed and
@@ -570,7 +562,7 @@ export default function DashboardContent() {
         ) : (
           (joinedQuery.data ?? []).map((entry) => {
             const { pool, participant } = entry;
-            const result = resultLabel(participant);
+            const result = resultLabel(pool, participant);
             const settlesAt = deferredUntil(entry);
             return (
               <Link

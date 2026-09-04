@@ -25,13 +25,20 @@ import {
   useTestUsdcFunding,
 } from "@/lib/faucet-funding";
 
-type ChipState = "idle" | "done" | "fallback";
+/** What the last tap actually did. `fallback` keeps its dashboard link for
+ *  real failures; `enough` and `capped` are not failures and get no link. */
+type ChipState =
+  | { kind: "idle" }
+  | { kind: "done" }
+  | { kind: "enough" }
+  | { kind: "capped"; message: string }
+  | { kind: "fallback"; message: string };
 
 export default function TestUsdcChip() {
   const { authenticated, address } = useEmbeddedWallet();
   const queryClient = useQueryClient();
   const { phase, funding, fund } = useTestUsdcFunding();
-  const [state, setState] = useState<ChipState>("idle");
+  const [state, setState] = useState<ChipState>({ kind: "idle" });
 
   const balanceQuery = useQuery({
     queryKey: ["wallet-usdc", address],
@@ -47,13 +54,13 @@ export default function TestUsdcChip() {
   if (!authenticated || address === null) return null;
 
   const run = async () => {
-    setState("idle");
+    setState({ kind: "idle" });
     // The balance the chip is showing right now, so the reconcile target is the
     // expected total after delivery rather than the delivered amount alone.
     const baseline = balanceQuery.data ?? 0n;
     const result = await fund(address);
     if (result.kind === "funded") {
-      setState("done");
+      setState({ kind: "done" });
       // Existing invalidation: one immediate refetch. On its own this often
       // reads the pre-fund figure, because the RPC read replica lags the tx.
       await queryClient.invalidateQueries({
@@ -72,8 +79,18 @@ export default function TestUsdcChip() {
           },
         },
       );
+    } else if (result.kind === "enough") {
+      setState({ kind: "enough" });
+    } else if (result.kind === "budget-exhausted") {
+      setState({ kind: "capped", message: result.message });
     } else {
-      setState("fallback");
+      setState({
+        kind: "fallback",
+        message:
+          result.kind === "error"
+            ? result.message
+            : "Nothing was added and nothing was waiting to be delivered.",
+      });
     }
   };
 
@@ -111,18 +128,29 @@ export default function TestUsdcChip() {
       >
         {label}
       </button>
-      {state === "done" ? (
+      {state.kind === "done" ? (
         <span className="text-[11px] text-accent sm:text-xs" aria-live="polite">
           Added
         </span>
       ) : null}
-      {state === "fallback" ? (
-        <Link
-          href="/dashboard"
-          className="text-[11px] text-warning underline sm:text-xs"
-        >
-          could not add it — open dashboard
-        </Link>
+      {state.kind === "enough" ? (
+        <span className="text-[11px] text-muted sm:text-xs" aria-live="polite">
+          you already have enough to play - the faucet tops up wallets that run
+          low
+        </span>
+      ) : null}
+      {state.kind === "capped" ? (
+        <span className="text-[11px] text-warning sm:text-xs" aria-live="polite">
+          {state.message}
+        </span>
+      ) : null}
+      {state.kind === "fallback" ? (
+        <span className="text-[11px] text-warning sm:text-xs" aria-live="polite">
+          {state.message}{" "}
+          <Link href="/dashboard" className="underline">
+            open dashboard
+          </Link>
+        </span>
       ) : null}
     </div>
   );
