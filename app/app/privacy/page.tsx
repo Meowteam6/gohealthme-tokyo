@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const EFFECTIVE_DATE = "2026-08-20";
+const EFFECTIVE_DATE = "2026-09-04";
 const CONTACT_EMAIL = "andre102599@gmail.com";
 
 /**
@@ -167,6 +167,11 @@ export default function PrivacyPage() {
             <li>Supabase - our database (handles, challenge metadata, feedback)</li>
             <li>Google Cloud / Vertex AI - the Gemini model that answers helper questions</li>
             <li>Vercel - hosting for the app and its server</li>
+            <li>
+              Vercel Web Analytics - anonymous page-view and referrer counts so we
+              can see where the pilot gets stuck. It sets no cookies and never
+              receives your wallet address or health data.
+            </li>
             <li>Base Sepolia - the public blockchain where pools settle</li>
             <li>Junction - wearable summaries, only if you connect a device</li>
           </ul>

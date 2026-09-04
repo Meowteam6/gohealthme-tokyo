@@ -5,6 +5,7 @@ import "./globals.css";
 import Providers from "./providers";
 import Header from "@/components/Header";
 import HelperWidget from "@/components/HelperWidget";
+import { Analytics } from "@vercel/analytics/next";
 import AccessGate from "@/components/AccessGate";
 import {
   DEFAULT_DESCRIPTION,
@@ -145,6 +146,10 @@ export default function RootLayout({
           </div>
           <HelperWidget />
         </Providers>
+        {/* Vercel Web Analytics: anonymous page-view counts so the pilot has a
+            funnel to measure. Cookieless, no wallet address, no health data;
+            disclosed on /privacy. */}
+        <Analytics />
       </body>
     </html>
   );
