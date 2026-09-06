@@ -225,9 +225,9 @@ export default async function ChallengeLandingPage({
         </div>
         <p className="mt-4 text-sm text-muted">
           You lock in a stake to accept. Hit the goal and your stake comes back
-          to you with the reward on top, the second it is verified - in a
-          confidential enclave, so nobody ever sees your health data. Only you
-          can claim it: one wallet, one entry.
+          to you with the reward on top, the second it is verified. Only the yes-or-no verdict is written on
+          chain - your health data never is. Only you can claim it: one wallet,
+          one entry.
         </p>
       </div>
 

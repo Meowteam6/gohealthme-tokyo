@@ -8,6 +8,7 @@ import JoinPool from "@/components/JoinPool";
 import FundPool from "@/components/FundPool";
 import ChallengeContribute from "@/components/ChallengeContribute";
 import EvidenceUpload from "@/components/EvidenceUpload";
+import { useDocumentProofAvailable } from "@/lib/useProofStatus";
 import WearableCheck from "@/components/WearableCheck";
 import ClaimRail, { type ClaimRailState, type VerdictKind } from "@/components/ClaimRail";
 import ShareChallenge from "@/components/ShareChallenge";
@@ -266,6 +267,7 @@ export default function PoolDetail({ id }: { id: string }) {
   // polling interval re-classifies the pool while the page sits open - a
   // live pool crossing its period end must drop the join UI, not offer a
   // button that reverts with PERIOD_ENDED.
+  const docAvailable = useDocumentProofAvailable();
   const poolQuery = useQuery({
     queryKey: ["pool", id],
     queryFn: async () => {
@@ -505,7 +507,10 @@ export default function PoolDetail({ id }: { id: string }) {
   // — clamped to the accepted set so a stale restore can never mount a modality
   // the pool does not accept.
   const policy = proofPolicyOf(pool.goalSpec);
-  const accepted = policy.accepted;
+  // While the document verifier is off, only the wearable path is offered.
+  const accepted = docAvailable
+    ? policy.accepted
+    : policy.accepted.filter((m) => m === "wearable");
   const multiPath = accepted.length > 1;
   const candidatePath: Modality = pinnedPath ?? restoredPath ?? policy.floor;
   const proofPath: Modality = accepted.includes(candidatePath)
@@ -581,7 +586,16 @@ export default function PoolDetail({ id }: { id: string }) {
 
   // The single mounted claim surface. Wearable pools default to the wearable
   // check with the document upload one tap away; document pools upload only.
-  const claimSection = !joined ? null : (
+  const claimSection = !joined ? null : isDocGoal && !docAvailable ? (
+    <div className="rounded-3xl border border-warning/40 bg-warning/10 p-4 sm:p-5">
+      <p className="font-display text-lg font-bold">Document proof is paused</p>
+      <p className="mt-2 text-sm text-foreground/80">
+        I cannot read uploaded records right now - the verifier is not live.
+        Your stake is safe: if the pool ends before it is back, you are
+        refunded automatically. Wearable goals still verify today.
+      </p>
+    </div>
+  ) : (
     <>
       {agentBroke ? (
         <div className="rounded-3xl border border-warning/40 bg-warning/10 p-4 sm:p-5">

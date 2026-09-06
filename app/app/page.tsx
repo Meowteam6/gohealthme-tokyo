@@ -29,7 +29,7 @@ function IconChip({ children }: { children: ReactNode }) {
 const reasons = [
   {
     title: "Here now",
-    body: "Dare one friend, fund their goal, they get paid in USDC when they hit it. Verified in a sealed enclave - nobody sees the health data.",
+    body: "Dare one friend, fund their goal, they get paid in USDC when they hit it. Only the yes-or-no verdict touches the chain - their health data never does.",
     icon: <path d="M13 2 4 14h7l-1 8 9-12h-7z" />,
   },
   {
@@ -65,7 +65,7 @@ const steps = [
   },
   {
     title: "Paid the second it is proven",
-    body: "The verdict comes out of a confidential enclave - nobody ever sees your health data - and SPOTTER settles the pool on Base. Your stake comes back with a cut of the forfeited stakes, straight to your wallet. SPOTTER covers the gas and the proof-check. No human in the loop.",
+    body: "Only SPOTTER's yes-or-no verdict is written on chain - your health data never is - and SPOTTER settles the pool on Base. Your stake comes back with a cut of the forfeited stakes, straight to your wallet. SPOTTER covers the gas and the proof-check. No human in the loop.",
   },
 ];
 

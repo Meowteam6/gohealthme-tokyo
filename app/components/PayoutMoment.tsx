@@ -170,7 +170,7 @@ export default function PayoutMoment({
                 </span>
               ) : (
                 <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/12 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent-strong">
-                  Verified in the enclave · nobody saw a thing
+                  Verified · only the verdict touched the chain
                 </span>
               )}
             </div>

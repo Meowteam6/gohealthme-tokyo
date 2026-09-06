@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const EFFECTIVE_DATE = "2026-09-04";
+const EFFECTIVE_DATE = "2026-09-06";
 const CONTACT_EMAIL = "andre102599@gmail.com";
 
 /**
@@ -107,15 +107,17 @@ export default function PrivacyPage() {
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-foreground">
-            Document proof stays inside a secure enclave
+            Document proof is paused while we build the verifier
           </h2>
           <p>
-            When you verify a goal by uploading a document (a lab result, a
-            flu-shot record, a screening result), the file is sent to a
-            confidential trusted execution environment (a secure enclave) so the
-            verification model can read it. Only the signed yes-or-no verdict
-            leaves the enclave. The document itself is not written to our
-            database or to the blockchain.
+            Uploading a document (a lab result, a flu-shot record, a screening
+            result) currently ends with &quot;could not verify&quot;. Nothing is
+            stored and nothing leaves our server. We are building a confidential
+            verifier so the model can read the document without us seeing it;
+            until it is live we will not claim it. If you joined a document pool
+            and could not be verified, your stake is refunded automatically when
+            the pool&apos;s period ends. The wearable path (Junction) works today
+            and is described below.
           </p>
         </section>
 
@@ -127,15 +129,14 @@ export default function PrivacyPage() {
           <p>
             If you connect a wearable through Junction (WHOOP, Oura, Fitbit, or
             Garmin), the health summary we pull to check a streak passes through
-            our own server (hosted on Vercel) before we compute the result. It
-            does not go through the secure enclave.
+            our own server (hosted on Vercel) before we compute the result.
           </p>
           <p>
-            So the &quot;nobody ever sees your health data&quot; claim is true
-            for the document path and not for the wearable path. We do not write
-            wearable summaries to the blockchain, but our server does handle
-            them to run the check. If that matters to you, use the document
-            path instead of connecting a wearable.
+            So today our server does see the wearable summary it uses to run the
+            check. What is true without exception is that health data is never
+            written to the blockchain - only SPOTTER&apos;s yes-or-no verdict is.
+            If our server handling a summary matters to you, do not connect a
+            wearable until the confidential verifier is live.
           </p>
         </section>
 

@@ -43,6 +43,8 @@ import {
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import { useEmbeddedWallet } from "@/lib/wallet";
+import { hideDocumentPools } from "@/lib/pool-visibility";
+import { useDocumentProofAvailable } from "@/lib/useProofStatus";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 
 function PoolGrid({ pools, phase }: { pools: PoolInfo[]; phase: PoolPhase }) {
@@ -84,6 +86,7 @@ export default function PoolsPage() {
   // stays pure and every card is classified against one snapshot. The query
   // client disables focus refetches, so a polling interval keeps the phase
   // split honest while the tab sits open across a pool's period end.
+  const docAvailable = useDocumentProofAvailable();
   const poolsQuery = useQuery({
     queryKey: ["pools"],
     queryFn: async () => ({
@@ -108,8 +111,18 @@ export default function PoolsPage() {
     const payable = poolsQuery.data.pools
       .filter(poolCanPay)
       .filter((pool) => pool.initiative !== "challenge");
-    return groupPoolsByPhase(payable, poolsQuery.data.asOfSeconds);
-  }, [poolsQuery.data]);
+    // While the document verifier is off, upload-floor pools are not offered.
+    const { visible } = hideDocumentPools(payable, docAvailable);
+    return groupPoolsByPhase(visible, poolsQuery.data.asOfSeconds);
+  }, [poolsQuery.data, docAvailable]);
+  const hiddenDocCount = useMemo(() => {
+    if (poolsQuery.data === undefined || docAvailable) return 0;
+    const live = groupPoolsByPhase(
+      poolsQuery.data.pools.filter(poolCanPay),
+      poolsQuery.data.asOfSeconds,
+    ).live;
+    return hideDocumentPools(live, false).hidden.length;
+  }, [poolsQuery.data, docAvailable]);
 
   // Only expired pools need a head count: it is what separates "settlement
   // still has work to do here" from "this can never pay anyone". Live and
@@ -282,6 +295,12 @@ export default function PoolsPage() {
         <div className="space-y-8">
           <section className="space-y-3">
             <SectionLabel>Jump in now</SectionLabel>
+            {hiddenDocCount > 0 ? (
+              <p className="text-xs text-muted">
+                Document pools are paused while we build the verifier - only
+                wearable goals are open to join right now.
+              </p>
+            ) : null}
             {liveSplit.verifiable.length === 0 ? (
               grouped.live.length === 0 ? (
                 <div className="rounded-3xl border-2 border-dashed border-edge bg-secondary/40 px-5 py-8">

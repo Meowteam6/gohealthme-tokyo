@@ -11,6 +11,7 @@ import {
   type Modality,
 } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
+import { useDocumentProofAvailable } from "@/lib/useProofStatus";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import { isEconomicallyDeadConfig } from "@/lib/pool-lifecycle";
 import { resolveNewPoolId } from "@/lib/resolve-pool-id";
@@ -87,6 +88,7 @@ function CreatePoolInner() {
   // self-reported opt-in, so a pool created without touching this control
   // serializes to a byte-identical unmarked goalSpec, exactly as before.
   const [floor, setFloor] = useState<Modality>("wearable");
+  const docAvailable = useDocumentProofAvailable();
   const [acceptSelfReported, setAcceptSelfReported] = useState<boolean>(false);
   const [initiative, setInitiative] = useState<string>("");
   const [goalSpec, setGoalSpec] = useState<string>("");
@@ -108,6 +110,8 @@ function CreatePoolInner() {
   }
 
   const applyTemplate = (template: DocTemplate) => {
+    // Templates are document goals; nothing to apply while the verifier is off.
+    if (!docAvailable) return;
     setFloor("document");
     setInitiative(template.initiative);
     setGoalSpec(template.goal);
@@ -296,7 +300,9 @@ function CreatePoolInner() {
             <button
               type="button"
               onClick={() => setFloor("document")}
-              className={`rounded-xl border p-3 text-left ${
+              disabled={!docAvailable}
+              aria-disabled={!docAvailable}
+              className={`rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-60 ${
                 floor === "document"
                   ? "border-accent/50 bg-accent-deep text-accent"
                   : "border-edge bg-surface-raised text-muted hover:text-foreground"
@@ -304,7 +310,9 @@ function CreatePoolInner() {
             >
               <span className="block font-semibold">Document upload</span>
               <span className="block text-xs font-normal">
-                Verified from an uploaded record like a flu shot or lab result.
+                {docAvailable
+                  ? "Verified from an uploaded record like a flu shot or lab result."
+                  : "Paused while we build the verifier - pick a wearable goal for now."}
               </span>
             </button>
             <button
@@ -352,6 +360,7 @@ function CreatePoolInner() {
                   key={template.key}
                   type="button"
                   onClick={() => applyTemplate(template)}
+                  disabled={!docAvailable}
                   className="rounded-xl border border-accent/40 bg-accent-deep/10 px-4 py-2 text-sm font-medium text-accent hover:bg-accent-deep/30"
                 >
                   {template.label}
