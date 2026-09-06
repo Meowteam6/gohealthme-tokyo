@@ -63,7 +63,7 @@ function VerdictBody({
         className={`rounded-xl border p-3 ${
           selfReported
             ? "border-warning/40 bg-warning/10"
-            : "border-accent/40 bg-accent-deep/30"
+            : "border-accent/40 bg-accent/20"
         }`}
       >
         <p

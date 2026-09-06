@@ -231,7 +231,7 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
         // drops the connected wallet and lands on WalletSettings' signed-out
         // branch, which renders the email-first SignInPanel - so the next
         // wallet is the provisioned embedded one, with no reconnect prompts.
-        <section className="rounded-2xl border border-accent/40 bg-accent-deep/20 p-5">
+        <section className="rounded-2xl border border-accent/40 bg-accent/20 p-5">
           <h2 className="text-lg font-semibold">
             Switch to your GoHealthMe email wallet
           </h2>

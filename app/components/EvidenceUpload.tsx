@@ -608,7 +608,7 @@ function EvidenceUploadInner({
     return (
       <div className="space-y-3">
         <h3 className="text-lg font-semibold">This claim is private</h3>
-        <div className="rounded-xl border border-accent/40 bg-accent-deep/20 p-4">
+        <div className="rounded-xl border border-accent/40 bg-accent/20 p-4">
           <p className="text-sm text-foreground/80">{status.reason}</p>
         </div>
         {!authenticated || address === null ? (
@@ -675,7 +675,7 @@ function EvidenceUploadInner({
         {/* The run keeps going without a signature; only the rows are held
          *  back. Saying so beats a receipt that silently stops printing. */}
         {status.lockedReason !== null ? (
-          <div className="rounded-xl border border-accent/40 bg-accent-deep/20 p-4">
+          <div className="rounded-xl border border-accent/40 bg-accent/20 p-4">
             <p className="text-base font-semibold">
               The receipt is hidden, not stopped
             </p>
@@ -892,7 +892,7 @@ function EvidenceUploadInner({
         type="button"
         disabled={busy}
         onClick={() => inputRef.current?.click()}
-        className="flex w-full items-center justify-center rounded-xl border border-dashed border-accent/40 bg-accent-deep/10 px-5 py-6 text-center text-sm font-medium text-accent hover:bg-accent-deep/20 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex w-full items-center justify-center rounded-xl border border-dashed border-accent/40 bg-accent/10 px-5 py-6 text-center text-sm font-medium text-accent-deep hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {selected !== null
           ? `Selected: ${selected.name}`

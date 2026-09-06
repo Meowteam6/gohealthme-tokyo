@@ -24,7 +24,7 @@ export function ArcTxLink({
       href={baseTxUrl(txHash)}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-block break-all text-sm text-accent underline"
+      className="inline-block break-all text-sm text-accent-deep underline"
     >
       {label}
     </a>

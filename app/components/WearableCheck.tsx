@@ -490,7 +490,7 @@ function WearableCheckInner({
     return (
       <div className="space-y-3">
         <h3 className="text-lg font-semibold">This claim is private</h3>
-        <div className="rounded-xl border border-accent/40 bg-accent-deep/20 p-4">
+        <div className="rounded-xl border border-accent/40 bg-accent/20 p-4">
           <p className="text-sm text-foreground/80">{status.reason}</p>
         </div>
         {!authenticated || address === null ? (
@@ -544,7 +544,7 @@ function WearableCheckInner({
         {/* The run keeps going without a signature; only the rows are held
          *  back. Saying so beats a receipt that silently stops printing. */}
         {status.lockedReason !== null ? (
-          <div className="rounded-xl border border-accent/40 bg-accent-deep/20 p-4">
+          <div className="rounded-xl border border-accent/40 bg-accent/20 p-4">
             <p className="text-base font-semibold">
               The receipt is hidden, not stopped
             </p>
@@ -776,7 +776,7 @@ function WearableCheckInner({
         // connected" here would send someone to re-link a device that is
         // already linked.
         <div className="space-y-3">
-          <p className="rounded-xl border border-accent/40 bg-accent-deep/20 p-3 text-sm text-foreground/80">
+          <p className="rounded-xl border border-accent/40 bg-accent/20 p-3 text-sm text-foreground/80">
             {providerAuth}
           </p>
           <button
@@ -789,7 +789,7 @@ function WearableCheckInner({
         </div>
       ) : !connected ? (
         <div className="space-y-3">
-          <p className="rounded-xl border border-dashed border-accent/30 bg-accent-deep/20 p-3 text-sm text-accent">
+          <p className="rounded-xl border border-dashed border-accent/30 bg-accent/20 p-3 text-sm text-accent-deep">
             No wearable connected yet. Link WHOOP, Oura, Fitbit, or Garmin -
             without one, SPOTTER has nothing to verify and will not pay.
           </p>

@@ -100,7 +100,7 @@ export default function ChallengeAccept({ poolId }: { poolId: string }) {
         href={`/pools/${poolId}`}
         className={`${ONWARD_BASE} ${
           joined
-            ? "border-accent bg-accent-deep/10 text-accent-strong hover:bg-accent-deep/20"
+            ? "border-accent bg-accent/10 text-accent-strong hover:bg-accent/20"
             : "border-edge bg-secondary text-secondary-foreground hover:border-accent/50"
         }`}
       >

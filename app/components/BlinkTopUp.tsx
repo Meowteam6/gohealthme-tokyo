@@ -88,8 +88,8 @@ export default function BlinkTopUp({
 
   if (status.kind === "done") {
     return (
-      <div className="rounded-xl border border-accent/40 bg-accent-deep/40 p-4">
-        <p className="text-base font-semibold text-accent">
+      <div className="rounded-xl border border-accent/40 bg-accent/20 p-4">
+        <p className="text-base font-semibold text-accent-deep">
           Top-up confirmed. {resolvedAmount.toFixed(2)} USDC is on its way to
           your balance.
         </p>

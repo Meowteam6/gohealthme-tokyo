@@ -361,7 +361,7 @@ function CreatePoolInner() {
                   type="button"
                   onClick={() => applyTemplate(template)}
                   disabled={!docAvailable}
-                  className="rounded-xl border border-accent/40 bg-accent-deep/10 px-4 py-2 text-sm font-medium text-accent hover:bg-accent-deep/30"
+                  className="rounded-xl border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-medium text-accent-deep hover:bg-accent/20"
                 >
                   {template.label}
                 </button>
@@ -567,8 +567,8 @@ function CreatePoolInner() {
         ) : null}
 
         {status.kind === "done" ? (
-          <div className="space-y-1 rounded-xl border border-accent/40 bg-accent-deep/40 p-4">
-            <p className="text-sm font-semibold text-accent">
+          <div className="space-y-1 rounded-xl border border-accent/40 bg-accent/20 p-4">
+            <p className="text-sm font-semibold text-accent-deep">
               Pool created on Base.
             </p>
             {status.approveHash ? (

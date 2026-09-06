@@ -117,7 +117,7 @@ function DeferredNote({
   const cls =
     tone === "warning"
       ? "border-warning/40 bg-warning/10 text-warning"
-      : "border-accent/30 bg-accent-deep/20 text-accent";
+      : "border-accent/30 bg-accent/20 text-accent-deep";
   return (
     <p className={`mt-3 rounded-xl border border-dashed p-3 text-sm ${cls}`}>
       {lead} SPOTTER settles this {selfReported ? "self-reported claim " : ""}
@@ -264,7 +264,7 @@ function StreakCard({
         // Locked, not empty. Offering the connect flow here would tell someone
         // with a linked device to link it again.
         <>
-          <p className="mt-3 rounded-xl border border-accent/40 bg-accent-deep/20 p-4 text-sm text-foreground/80">
+          <p className="mt-3 rounded-xl border border-accent/40 bg-accent/20 p-4 text-sm text-foreground/80">
             {authReason}
           </p>
           <Button type="button" pop onClick={unlock} className="mt-3">

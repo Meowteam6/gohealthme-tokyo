@@ -204,7 +204,7 @@ export default async function ChallengeLandingPage({
       </div>
 
       {challenge.message !== null ? (
-        <blockquote className="rounded-2xl border border-accent/30 bg-accent-deep/20 p-5 text-center text-base italic text-foreground/90">
+        <blockquote className="rounded-2xl border border-accent/30 bg-accent/20 p-5 text-center text-base italic text-foreground/90">
           &ldquo;{challenge.message}&rdquo;
         </blockquote>
       ) : null}

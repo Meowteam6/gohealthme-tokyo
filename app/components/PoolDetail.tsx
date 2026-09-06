@@ -938,7 +938,7 @@ export default function PoolDetail({ id }: { id: string }) {
                     : `Pay the ${formatUsdc(pool.entryFee)} USDC entry fee, hit the goal during the period, and the bounty pays out the moment your result is verified.`}
               </p>
               {participantCount === 0 ? (
-                <p className="mb-4 rounded-xl border border-dashed border-accent/30 bg-accent-deep/20 p-3 text-sm text-accent">
+                <p className="mb-4 rounded-xl border border-dashed border-accent/30 bg-accent/20 p-3 text-sm text-accent-deep">
                   No one has joined yet, be the first.
                 </p>
               ) : null}

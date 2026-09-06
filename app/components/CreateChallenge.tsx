@@ -424,7 +424,7 @@ function TypePicker({
         onClick={() => onChange("self")}
         className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
           isSelf
-            ? "border-accent bg-accent-deep/10 shadow-[var(--shadow-pop)]"
+            ? "border-accent bg-accent/10 shadow-[var(--shadow-pop)]"
             : "border-edge bg-surface shadow-[var(--shadow-pop-edge)] hover:border-accent/40"
         }`}
       >
@@ -1404,8 +1404,8 @@ function CreateChallengeInner() {
           ) : null}
 
           {isDare && status.kind === "done" ? (
-            <div className="space-y-1 rounded-xl border border-accent/40 bg-accent-deep/40 p-4">
-              <p className="text-sm font-semibold text-accent">
+            <div className="space-y-1 rounded-xl border border-accent/40 bg-accent/20 p-4">
+              <p className="text-sm font-semibold text-accent-deep">
                 Reward of <Money usd={reward.trim() === "" ? "0" : reward.trim()} />{" "}
                 is in the pool.
               </p>

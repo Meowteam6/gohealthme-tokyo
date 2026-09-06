@@ -123,8 +123,8 @@ function ClaimHandleInner() {
 
   if (status.kind === "done") {
     return (
-      <div className="space-y-3 rounded-2xl border border-accent/40 bg-accent-deep/40 p-5">
-        <p className="text-base font-semibold text-accent">
+      <div className="space-y-3 rounded-2xl border border-accent/40 bg-accent/20 p-5">
+        <p className="text-base font-semibold text-accent-deep">
           Handle claimed as @{status.handle}
         </p>
         <p className="text-sm text-foreground/80">
