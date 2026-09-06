@@ -303,6 +303,18 @@ export const healthPoolsAbi = [
       { name: "amount", type: "uint256", indexed: false },
     ],
   },
+  // RefundCredited is what claimRefund() emits on a cancelled pool (and what
+  // settle() emits for an unadjudicated participant). The refund hook asserts
+  // on it for this participant and pool - never on tx success alone.
+  {
+    type: "event",
+    name: "RefundCredited",
+    inputs: [
+      { name: "poolId", type: "uint256", indexed: true },
+      { name: "participant", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
   // PoolFunded carries the funder ADDRESS (indexed) and amount only - no
   // initiative, no goalSpec, no health string - so reading it to name who
   // chipped in to a pool is redaction-safe. sponsor-data.ts aggregates the same
@@ -926,3 +938,16 @@ export function claimModalityFor(
   }
   return { ok: true, modality };
 }
+
+/** Just the RefundCredited event, for parsing receipts in isolation. */
+export const REFUND_CREDITED_ABI = [
+  {
+    type: "event",
+    name: "RefundCredited",
+    inputs: [
+      { name: "poolId", type: "uint256", indexed: true },
+      { name: "participant", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+] as const;

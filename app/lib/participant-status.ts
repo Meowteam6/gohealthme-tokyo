@@ -16,9 +16,21 @@ export interface StatusLabel {
 }
 
 export function resultLabel(
-  pool: { settled: boolean },
-  p: { resultRecorded: boolean; verdict: boolean; multiplierBps: number },
+  pool: { settled: boolean; cancelled?: boolean },
+  p: {
+    resultRecorded: boolean;
+    verdict: boolean;
+    multiplierBps: number;
+    refunded?: boolean;
+  },
 ): StatusLabel {
+  // A cancelled pool owes every joiner their stake back; claimRefund() credits
+  // it and flips `refunded`. Nothing about verification applies any more.
+  if (pool.cancelled === true) {
+    return p.refunded === true
+      ? { text: "Pool cancelled - refund claimed", tone: "muted" }
+      : { text: "Pool cancelled - claim your refund", tone: "warning" };
+  }
   if (!p.resultRecorded) {
     return pool.settled
       ? { text: "Refunded - no proof was submitted", tone: "muted" }

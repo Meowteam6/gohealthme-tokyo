@@ -25,6 +25,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import BalanceCard from "@/components/BalanceCard";
 import ClaimPayout from "@/components/ClaimPayout";
+import RefundClaim from "@/components/RefundClaim";
 import Countdown from "@/components/Countdown";
 import SignInPanel from "@/components/SignInPanel";
 import SpotterSays from "@/components/SpotterSays";
@@ -565,8 +566,8 @@ export default function DashboardContent() {
             const result = resultLabel(pool, participant);
             const settlesAt = deferredUntil(entry);
             return (
+              <div key={pool.id.toString()}>
               <Link
-                key={pool.id.toString()}
                 href={`/pools/${pool.id.toString()}`}
                 className="block rounded-3xl border border-edge bg-surface p-5 transition-colors hover:border-accent/50 sm:p-6"
               >
@@ -596,6 +597,14 @@ export default function DashboardContent() {
                   />
                 ) : null}
               </Link>
+              {pool.cancelled && !participant.refunded ? (
+                <RefundClaim
+                  poolId={pool.id}
+                  entryFee={pool.entryFee}
+                  address={address}
+                />
+              ) : null}
+            </div>
             );
           })
         )}

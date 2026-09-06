@@ -9,11 +9,23 @@ import { resultLabel } from "@/lib/participant-status";
 // so the ONLY on-chain signal for "refunded at settlement" is
 // pool.settled && !participant.resultRecorded.
 describe("resultLabel", () => {
-  const p = (over: Partial<{ resultRecorded: boolean; verdict: boolean; multiplierBps: number }>) => ({
+  const p = (over: Partial<{ resultRecorded: boolean; verdict: boolean; multiplierBps: number; refunded: boolean }>) => ({
     resultRecorded: false,
     verdict: false,
     multiplierBps: 10_000,
+    refunded: false,
     ...over,
+  });
+
+  it("tells a joiner of a cancelled pool to claim their refund, then that it is claimed", () => {
+    expect(resultLabel({ settled: true, cancelled: true }, p({}))).toEqual({
+      text: "Pool cancelled - claim your refund",
+      tone: "warning",
+    });
+    expect(resultLabel({ settled: true, cancelled: true }, p({ refunded: true }))).toEqual({
+      text: "Pool cancelled - refund claimed",
+      tone: "muted",
+    });
   });
 
   it("reads Pending verification only while the pool is still open", () => {
