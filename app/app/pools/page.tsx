@@ -43,7 +43,10 @@ import {
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { hideDocumentPools } from "@/lib/pool-visibility";
+import {
+  hideDocumentPools,
+  hideEmptyCancelledPools,
+} from "@/lib/pool-visibility";
 import { useDocumentProofAvailable } from "@/lib/useProofStatus";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 
@@ -113,7 +116,10 @@ export default function PoolsPage() {
       .filter((pool) => pool.initiative !== "challenge");
     // While the document verifier is off, upload-floor pools are not offered.
     const { visible } = hideDocumentPools(payable, docAvailable);
-    return groupPoolsByPhase(visible, poolsQuery.data.asOfSeconds);
+    return groupPoolsByPhase(
+      hideEmptyCancelledPools(visible),
+      poolsQuery.data.asOfSeconds,
+    );
   }, [poolsQuery.data, docAvailable]);
   const hiddenDocCount = useMemo(() => {
     if (poolsQuery.data === undefined || docAvailable) return 0;

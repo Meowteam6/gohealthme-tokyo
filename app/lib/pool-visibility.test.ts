@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hideDocumentPools } from "@/lib/pool-visibility";
+import { hideDocumentPools, hideEmptyCancelledPools } from "@/lib/pool-visibility";
 
 // A pool nobody can be verified on must not be offered as joinable. While the
 // document verifier is off, document-floor pools are hidden from the list (the
@@ -22,5 +22,20 @@ describe("hideDocumentPools", () => {
     const { visible, hidden } = hideDocumentPools(pools, true);
     expect(visible).toHaveLength(4);
     expect(hidden).toHaveLength(0);
+  });
+});
+
+// A cancelled pool nobody staked into is nothing to anyone; listing it under
+// "wrapped up" reads as a payout that never happened (pool 13, 2026-09-06). A
+// cancelled pool that still holds stakes stays listed so its joiners can find
+// their refund.
+describe("hideEmptyCancelledPools", () => {
+  it("drops cancelled pools with no balance and keeps everything else", () => {
+    const pools = [
+      { id: 13n, cancelled: true, balance: 0n },
+      { id: 9n, cancelled: true, balance: 2_000_000n },
+      { id: 12n, cancelled: false, balance: 0n },
+    ];
+    expect(hideEmptyCancelledPools(pools).map((p) => p.id)).toEqual([9n, 12n]);
   });
 });

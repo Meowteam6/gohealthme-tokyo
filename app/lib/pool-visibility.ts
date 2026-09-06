@@ -21,3 +21,14 @@ export function hideDocumentPools<T extends { goalSpec: string }>(
   }
   return { visible, hidden };
 }
+
+/**
+ * Drop cancelled pools that hold no stakes. Nobody has anything to claim from
+ * them, so listing them under "wrapped up" only reads as a payout that never
+ * happened. A cancelled pool with a balance still owes refunds and stays.
+ */
+export function hideEmptyCancelledPools<
+  T extends { cancelled: boolean; balance: bigint },
+>(pools: readonly T[]): T[] {
+  return pools.filter((pool) => !(pool.cancelled && pool.balance === 0n));
+}
