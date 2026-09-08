@@ -41,7 +41,9 @@ import {
   fetchProviderState,
   providerAuthReason,
   providerConnected,
+  providerAwaitingFirstSync,
   providerDownReason,
+  providerMetricUnavailable,
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import { fetchWithWalletAuth, type WalletAuthRequester } from "@/lib/client-auth";
@@ -787,6 +789,68 @@ function WearableCheckInner({
           >
             Sign and check my wearable
           </button>
+        </div>
+      ) : providerMetricUnavailable(providerState) ? (
+        // Syncing, and this device does not produce the number this goal is
+        // scored on. Offering the run button would spend SPOTTER's money on a
+        // read that cannot answer, and telling them to wait would be advice
+        // that never comes true.
+        <div className="space-y-3">
+          <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
+            <p className="text-base font-semibold text-warning">
+              Your device does not measure this goal
+            </p>
+            <p className="mt-1 text-sm text-foreground/80">
+              It is syncing fine, it just does not report the number this pool
+              is scored on. That is the hardware, not a delay, so SPOTTER is
+              not going to run a check that cannot come back with anything.
+            </p>
+            <p className="mt-2 text-sm text-foreground/80">
+              Connect a device that tracks it from your dashboard.
+            </p>
+          </div>
+          {onSwitchToDocument !== undefined ? (
+            <button
+              type="button"
+              onClick={onSwitchToDocument}
+              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent"
+            >
+              Prove it with a document instead
+            </button>
+          ) : null}
+        </div>
+      ) : providerAwaitingFirstSync(providerState) ? (
+        // Linked and working, nothing delivered yet. Running the check here
+        // would buy a read and return "0 days", which reads as a failure the
+        // user did not earn. Every new user passes through this state.
+        <div className="space-y-3">
+          <div className="rounded-xl border border-accent/30 bg-accent/15 p-4">
+            <p className="text-base font-semibold text-accent-deep">
+              Waiting on your first sync
+            </p>
+            <p className="mt-1 text-sm text-foreground/80">
+              Your device is connected and has not sent anything for this goal
+              yet. The first sync usually lands within a few minutes. SPOTTER
+              will not check this until the data is here, so nothing is charged
+              while you wait.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void providerQuery.refetch()}
+            className="w-full rounded-xl border border-edge px-5 py-3.5 text-base font-semibold text-foreground hover:border-accent/50"
+          >
+            Check again
+          </button>
+          {onSwitchToDocument !== undefined ? (
+            <button
+              type="button"
+              onClick={onSwitchToDocument}
+              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent"
+            >
+              Prove it with a document instead
+            </button>
+          ) : null}
         </div>
       ) : !connected ? (
         <div className="space-y-3">
