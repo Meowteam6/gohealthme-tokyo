@@ -84,6 +84,9 @@ beforeEach(() => {
   providerConfigured.mockReturnValue(true);
   providerById.mockImplementation((id: string) => ({
     id,
+    // The route names a provider by LABEL in user-facing copy, never by its
+    // internal id, so the stub has to carry one.
+    label: id === "whoop" ? "WHOOP" : "Junction",
     startLink: (...args: unknown[]) => startLink(...args),
   }));
   startLink.mockResolvedValue({ linkUrl: JUNCTION_LINK_URL });
@@ -153,7 +156,10 @@ describe("POST /api/wearable/link", () => {
     const res = await post({ address: USER, provider: "whoop" });
     expect(res.status).toBe(503);
     const body = (await res.json()) as { error: string };
-    expect(body.error).toContain("whoop");
+    // The label a person recognises, not the internal id, and no
+    // "on this deployment" deploy-engineer language.
+    expect(body.error).toContain("WHOOP");
+    expect(body.error).not.toContain("deployment");
     // A configuration gap must not be recorded as the wallet's choice, and no
     // link may be handed out for a path that cannot complete.
     expect(setProviderId).not.toHaveBeenCalled();

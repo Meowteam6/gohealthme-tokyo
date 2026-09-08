@@ -1022,14 +1022,15 @@ export const whoopProvider: WearableProvider = {
       .map((record) => {
         const date = dayOf(record);
         if (date === null) return null;
-        const inBedMs = record.score?.stage_summary?.total_in_bed_time_milli;
+        // Asleep hours, not time in bed. The card labels this "Sleep", and
+        // in-bed time is the larger number - it would show somebody 8.0 next
+        // to a 7-hour goal their 7.0 of actual sleep did not meet. Same
+        // measurement the verdict uses, so the card and the payout agree.
+        const hours = sleepHoursOf(record);
         return {
           date,
           score: scoreOf(record),
-          hours:
-            typeof inBedMs === "number"
-              ? Math.round((inBedMs / 3_600_000) * 10) / 10
-              : null,
+          hours: hours === null ? null : Math.round(hours * 10) / 10,
         };
       })
       .filter(

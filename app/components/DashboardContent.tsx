@@ -63,7 +63,9 @@ import { useWalletAuth } from "@/lib/useWalletAuth";
 import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
 import { resultLabel } from "@/lib/participant-status";
 import {
+  disconnectWearable,
   fetchProviderOptions,
+  isProviderId,
   PhoneLinkRequiredError,
   providerOptionsQueryKey,
   whoopReturnMessage,
@@ -337,8 +339,12 @@ function StreakCard({
   const unlock = () => {
     void (async () => {
       await requestAuth({ refresh: true });
-      await queryClient.invalidateQueries({ queryKey: ["junction-progress"] });
-      await queryClient.invalidateQueries({ queryKey: ["junction-data"] });
+      // These are the CURRENT key prefixes. They were still the old
+      // junction-* names after the routes were renamed, so signing did not
+      // refetch anything and the button silently did nothing.
+      await queryClient.invalidateQueries({ queryKey: ["wearable-progress"] });
+      await queryClient.invalidateQueries({ queryKey: ["wearable-data"] });
+      await queryClient.invalidateQueries({ queryKey: ["wearable-providers"] });
     })();
   };
 
@@ -458,6 +464,7 @@ function StreakCard({
             label="Connect / switch provider"
             secondary
           />
+          <DisconnectButton address={address} />
         </div>
       )}
     </Card>
@@ -467,7 +474,7 @@ function StreakCard({
 interface RecentData {
   connected: boolean;
   /** Which integration answered, so the card can say where the data came from. */
-  provider?: string | null;
+  provider?: WearableProviderId | null;
   sleep: Array<{ date: string; score: number | null; hours: number | null }>;
   activity: Array<{ date: string; steps: number | null }>;
 }
@@ -504,11 +511,105 @@ async function fetchRecentData(
     kind: "data",
     data: {
       connected: j.connected === true,
+      // Dropped here before, so the card below always credited Junction -
+      // including for WHOOP reads, which WHOOP's brand rules require be
+      // attributed to WHOOP.
+      provider: isProviderId(j.provider) ? j.provider : null,
       sleep: Array.isArray(j.sleep) ? j.sleep : [],
       activity: Array.isArray(j.activity) ? j.activity : [],
     },
   };
 }
+
+/**
+ * Unlinking a device.
+ *
+ * This existed as a route with no caller: a WHOOP user had no way to revoke
+ * from inside the product, while the privacy page told them they could do it
+ * from their dashboard. That is a dead end AND a false claim in a
+ * compliance-facing document.
+ *
+ * Junction owns its own link, so the route answers 409 with the page to go to.
+ * That is guidance rather than an error and renders as a calm note.
+ */
+function DisconnectButton({ address }: { address: `0x${string}` }) {
+  const requestAuth = useWalletAuth();
+  const queryClient = useQueryClient();
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={busy}
+        onClick={() => {
+          setNote(null);
+          setError(null);
+          setBusy(true);
+          void disconnectWearable(address, requestAuth)
+            .then(async (guidance) => {
+              setNote(guidance);
+              if (guidance === null) {
+                await queryClient.invalidateQueries({
+                  queryKey: ["wearable-progress"],
+                });
+                await queryClient.invalidateQueries({
+                  queryKey: ["wearable-data"],
+                });
+                await queryClient.invalidateQueries({
+                  queryKey: ["wearable-providers"],
+                });
+              }
+            })
+            .catch((err: unknown) => {
+              setError(
+                err instanceof Error
+                  ? err.message
+                  : "Could not disconnect the device.",
+              );
+            })
+            .finally(() => setBusy(false));
+        }}
+        className="mt-3"
+      >
+        {busy ? "Disconnecting" : "Disconnect this device"}
+      </Button>
+      {note !== null ? (
+        <p
+          role="status"
+          className="mt-3 rounded-xl border border-edge bg-surface p-4 text-sm text-muted"
+        >
+          {note}
+        </p>
+      ) : null}
+      {error !== null ? (
+        <div className="mt-3">
+          <ErrorNote
+            title="Could not disconnect"
+            detail={error}
+            onRetry={() => setError(null)}
+          />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Where the numbers on the card came from, named per provider.
+ *
+ * A Record rather than a ternary so a new provider is a compile error instead
+ * of a silent wrong credit, and because WHOOP's brand rules require data
+ * sourced from them to say so. Null falls back to a generic line that is true
+ * of every provider rather than guessing at one.
+ */
+const SOURCE_NOTE: Record<WearableProviderId, string> = {
+  whoop: "Data by WHOOP, pulled live.",
+  junction: "Pulled live from your linked device via Junction.",
+};
 
 /** Shows the latest few days pulled from the linked provider (demo proof). */
 function RecentDataCard({ address }: { address: `0x${string}` }) {
@@ -534,9 +635,9 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
     <Card>
       <h2 className="font-display text-lg font-semibold">Latest synced data</h2>
       <p className="mt-1 text-sm text-muted">
-        {data.provider === "whoop"
-          ? "Data by WHOOP, pulled live."
-          : "Pulled live from your linked provider via Junction."}
+        {data.provider === null || data.provider === undefined
+          ? "Pulled live from your linked device."
+          : SOURCE_NOTE[data.provider]}
       </p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {data.sleep.length > 0 && (

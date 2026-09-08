@@ -309,6 +309,13 @@ export function whoopReturnMessage(
   status: string | null,
 ): { tone: "ok" | "info" | "error"; message: string } | null {
   switch (status) {
+    case "unavailable":
+      return {
+        tone: "error",
+        message:
+          "The WHOOP connection is not switched on here yet. That is a setup " +
+          "problem on our side, not something you can retry.",
+      };
     case "connected":
       return {
         tone: "ok",
@@ -374,4 +381,51 @@ export function metricLabel(metric: WearableMetric): string {
     workouts: "workouts",
   };
   return labels[metric];
+}
+
+/**
+ * Drop this wallet's device connection.
+ *
+ * Resolves to null when it worked, or to a sentence explaining why this
+ * provider cannot be disconnected from here - Junction owns its own link, so
+ * the honest answer names its connection page rather than pretending.
+ *
+ * Never throws for the 409: that is guidance, not a failure.
+ */
+export async function disconnectWearable(
+  address: `0x${string}`,
+  requestAuth: WalletAuthRequester,
+): Promise<string | null> {
+  const sent = await fetchWithWalletAuth(
+    "/api/wearable/disconnect",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ address }),
+    },
+    requestAuth,
+  );
+
+  if (sent.response.ok) return null;
+
+  const body = (await sent.response.json().catch(() => null)) as {
+    error?: unknown;
+  } | null;
+
+  if (sent.response.status === 401) {
+    throw new Error(
+      authBlockReason(sent.auth) ??
+        "Sign with your wallet to disconnect this device.",
+    );
+  }
+
+  const reason =
+    typeof body?.error === "string" && body.error !== ""
+      ? body.error
+      : "Could not disconnect the device right now.";
+
+  // 409 means "this provider owns its own link" - a real answer with a next
+  // step in it, so it is returned rather than thrown.
+  if (sent.response.status === 409) return reason;
+  throw new Error(reason);
 }

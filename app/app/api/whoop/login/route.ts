@@ -29,10 +29,22 @@
 
 import { randomBytes } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
-import { jsonError } from "@/lib/server/http";
 import { providerConfigured } from "@/lib/server/wearable";
 import { readLinkTicket } from "@/lib/server/wearable/link-ticket";
 import { buildAuthorizeUrl } from "@/lib/server/wearable/whoop";
+
+/**
+ * This route is reached by a top-level NAVIGATION from a button, so a failure
+ * has to land the user back on a page they can use. Answering with a raw JSON
+ * error page strands somebody who just tapped "Connect WHOOP" on a screen with
+ * no navigation and deploy-engineer text on it. Same outcomes the callback
+ * uses, so the dashboard already knows how to word them.
+ */
+function backToDashboard(request: NextRequest, outcome: string): NextResponse {
+  const target = new URL("/dashboard", request.nextUrl.origin);
+  target.searchParams.set("whoop", outcome);
+  return NextResponse.redirect(target);
+}
 
 /** Scope of the nonce cookie: only the callback ever reads it. */
 export const WHOOP_NONCE_COOKIE = "whoop_oauth_nonce";
@@ -41,22 +53,16 @@ const NONCE_TTL_SECONDS = 600;
 export async function GET(request: NextRequest) {
   try {
     if (!providerConfigured("whoop")) {
-      return jsonError(
-        503,
-        "The WHOOP connection is not available on this deployment.",
-      );
+      return backToDashboard(request, "unavailable");
     }
 
     const ticket = request.nextUrl.searchParams.get("ticket");
     const address = ticket === null ? null : readLinkTicket(ticket);
     if (address === null) {
-      // Deliberately one message for missing, malformed, tampered and expired.
+      // Deliberately one outcome for missing, malformed, tampered and expired.
       // Which of the four it was tells an attacker something and the user
       // nothing: their fix is the same either way.
-      return jsonError(
-        400,
-        "This connection link is no longer valid. Start again from the dashboard.",
-      );
+      return backToDashboard(request, "expired");
     }
 
     const nonce = randomBytes(16).toString("hex");
@@ -77,6 +83,6 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (err) {
     console.error("[whoop/login] failed", err);
-    return jsonError(502, "Could not start the WHOOP connection right now");
+    return backToDashboard(request, "failed");
   }
 }

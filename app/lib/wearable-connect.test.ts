@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ClientAuth, WalletAuthRequester } from "@/lib/client-auth";
 import {
+  disconnectWearable,
   fetchProviderOptions,
   metricLabel,
   PhoneLinkRequiredError,
@@ -293,11 +294,39 @@ describe("viewerMetricsOf", () => {
   });
 });
 
+describe("disconnectWearable", () => {
+  it("resolves to null when the device was unlinked", async () => {
+    respond({ disconnected: true, provider: "whoop" });
+    await expect(disconnectWearable(ADDRESS, auth)).resolves.toBeNull();
+  });
+
+  it("returns a 409 as guidance, not as a thrown failure", async () => {
+    // Junction owns its own link, so the honest answer names its connection
+    // page. That is a real next step and must not render as an error.
+    respond(
+      { error: "Disconnecting is handled by Junction's own connection page." },
+      409,
+    );
+
+    await expect(disconnectWearable(ADDRESS, auth)).resolves.toMatch(
+      /Junction's own connection page/,
+    );
+  });
+
+  it("throws on a real failure so the caller can surface it", async () => {
+    respond({ error: "Could not disconnect the device right now" }, 502);
+    await expect(disconnectWearable(ADDRESS, auth)).rejects.toThrow(
+      /Could not disconnect/,
+    );
+  });
+});
+
 describe("whoopReturnMessage", () => {
   it("words a declined consent as a choice, not a failure", () => {
     expect(whoopReturnMessage("declined")?.tone).toBe("info");
     expect(whoopReturnMessage("connected")?.tone).toBe("ok");
     expect(whoopReturnMessage("failed")?.tone).toBe("error");
+    expect(whoopReturnMessage("unavailable")?.tone).toBe("error");
     expect(whoopReturnMessage("expired")?.tone).toBe("error");
   });
 

@@ -63,9 +63,13 @@ export async function POST(request: Request) {
     if (!providerConfigured(providerId)) {
       // A configuration gap, reported as one. Telling the user to try again
       // would be a lie: nothing they can do fixes a missing server credential.
+      // Named by label, not by internal id, and without "on this deployment",
+      // which is deploy-engineer language for somebody who just tapped a
+      // button. Still honest that waiting will not fix it.
       return jsonError(
         503,
-        `The ${providerId} connection is not available on this deployment.`,
+        `${providerById(providerId).label} cannot be connected right now. ` +
+          "This is a setup problem on our side, not something you can retry.",
       );
     }
 

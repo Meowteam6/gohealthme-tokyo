@@ -548,7 +548,7 @@ describe("getMetricProgress", () => {
 });
 
 describe("getRecent", () => {
-  it("reports hours from the score's stage summary and no step series", async () => {
+  it("reports ASLEEP hours and no step series", async () => {
     const address = nextAddress();
     await linked(address);
     vi.stubGlobal(
@@ -563,8 +563,11 @@ describe("getRecent", () => {
 
     const recent = await whoopProvider.getRecent(address, 7);
 
+    // 3.5 light + 2 slow-wave + 1.5 REM = 7h asleep. In bed was 8h; the card
+    // says "Sleep", so it must not show the larger number next to a 7-hour
+    // goal the person did not actually meet.
     expect(recent.sleep).toEqual([
-      { date: "2026-06-20", score: 88, hours: 8 },
+      { date: "2026-06-20", score: 88, hours: 7 },
     ]);
     // WHOOP measures strain, not steps. An empty series is the honest answer;
     // a row of zeros would read as a user who did not move.
