@@ -40,11 +40,33 @@ import { requireAddressSignature } from "@/lib/server/wallet-auth";
 import { setProviderId } from "@/lib/server/wearable";
 import { appleConfigured } from "@/lib/server/wearable/apple";
 import { putDays } from "@/lib/server/wearable/apple-store";
-import { PROVIDER_METRICS } from "@/lib/server/wearable/metric-vocabulary";
+import { appleProvider } from "@/lib/server/wearable/apple";
 import type { WearableMetric } from "@/lib/server/wearable/types";
 
 /** A phone syncing a week of six metrics sends 42 rows; 400 is a month of slack. */
 const MAX_DAYS = 400;
+
+/**
+ * How far back a phone may report.
+ *
+ * The app collects 30 days, so this is that plus slack for a device that has
+ * been offline. It is NOT a security boundary - a signed post is trusted by
+ * definition for a pushed provider - but it bounds the blast radius: without
+ * it, a wallet could write history for any window in the product's lifetime,
+ * including one that closed months ago and is still awaiting settlement.
+ */
+const MAX_BACKFILL_DAYS = 45;
+
+/**
+ * Metrics this route will store, taken from what the provider actually
+ * declares rather than from the whole vocabulary.
+ *
+ * The two differ: `sleep_score` is a real metric that WHOOP serves and Apple
+ * cannot, because Apple publishes no proprietary score. Accepting it here would
+ * let a phone write rows the provider will never read, and worse, make
+ * observedMetrics report a capability the gate would then act on.
+ */
+const ACCEPTED_METRICS: ReadonlySet<string> = new Set(appleProvider.metrics);
 
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -67,18 +89,24 @@ function parseDays(input: unknown): ParsedDay[] | string {
   if (input.length > MAX_DAYS) return `days must contain at most ${MAX_DAYS} entries`;
 
   // One day past today in UTC, so a phone slightly ahead of us is fine and a
-  // forged future window is not.
+  // forged future window is not. Days are the wearer's LOCAL calendar days, so
+  // a wide bound on both sides is correct: a device in Auckland can honestly
+  // report a day that has not started in UTC.
   const latest = new Date();
   latest.setUTCDate(latest.getUTCDate() + 1);
   const latestDay = latest.toISOString().slice(0, 10);
+
+  const earliest = new Date();
+  earliest.setUTCDate(earliest.getUTCDate() - MAX_BACKFILL_DAYS);
+  const earliestDay = earliest.toISOString().slice(0, 10);
 
   const out: ParsedDay[] = [];
   for (const [i, raw] of input.entries()) {
     if (typeof raw !== "object" || raw === null) return `days[${i}] must be an object`;
     const { metric, day, value } = raw as Record<string, unknown>;
 
-    if (typeof metric !== "string" || !PROVIDER_METRICS.includes(metric as WearableMetric)) {
-      return `days[${i}].metric is not a metric this app knows`;
+    if (typeof metric !== "string" || !ACCEPTED_METRICS.has(metric)) {
+      return `days[${i}].metric is not one Apple Health can report`;
     }
     if (typeof day !== "string" || !DAY_PATTERN.test(day)) {
       return `days[${i}].day must be a YYYY-MM-DD calendar day`;
@@ -88,6 +116,9 @@ function parseDays(input: unknown): ParsedDay[] | string {
     }
     if (day > latestDay) {
       return `days[${i}].day is in the future`;
+    }
+    if (day < earliestDay) {
+      return `days[${i}].day is more than ${MAX_BACKFILL_DAYS} days old`;
     }
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
       return `days[${i}].value must be a number at or above zero`;

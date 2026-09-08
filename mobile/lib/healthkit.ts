@@ -30,8 +30,9 @@
 import { aggregateSleep, type DayValue, type SleepSample } from "./sleep-aggregate";
 import {
   isHealthDataAvailable,
+  queryWorkoutSamples,
   queryCategorySamples,
-  queryStatisticsCollectionForQuantity,
+  queryStatisticsCollectionForQuantitySeparateBySource,
   requestAuthorization,
 } from "@kingstinct/react-native-healthkit";
 
@@ -127,7 +128,18 @@ async function dailySums(
   scale: (n: number) => number = (n) => n,
 ): Promise<DayValue[]> {
   const anchor = localMidnight(since);
-  const rows = await queryStatisticsCollectionForQuantity(
+
+  // SEPARATED BY SOURCE, THEN THE LARGEST TAKEN PER DAY, NOT THE SUM.
+  //
+  // Somebody wearing an Apple Watch while carrying an iPhone has both devices
+  // counting the same walk. A plain cumulative sum adds them, so an eight
+  // thousand step day reports as fifteen thousand and a steps pool pays for
+  // half the walking it asked for. Apple's own Health app deduplicates before
+  // it shows you a number; a raw statistics query does not.
+  //
+  // The largest single source is the honest reading: it is the device that saw
+  // the most of the day, and it can never exceed what one device recorded.
+  const rows = await queryStatisticsCollectionForQuantitySeparateBySource(
     identifier as never,
     ["cumulativeSum"],
     anchor,
@@ -135,15 +147,17 @@ async function dailySums(
     { unit: unit as never, filter: { date: { startDate: anchor } } },
   );
 
-  const out: DayValue[] = [];
+  const bestByDay = new Map<string, number>();
   for (const row of rows) {
     const sum = row.sumQuantity?.quantity;
     if (typeof sum !== "number" || !Number.isFinite(sum)) continue;
     const start = row.startDate;
     if (!start) continue;
-    out.push({ day: localDay(new Date(start)), value: scale(sum) });
+    const day = localDay(new Date(start));
+    const prev = bestByDay.get(day);
+    if (prev === undefined || sum > prev) bestByDay.set(day, sum);
   }
-  return out;
+  return [...bestByDay].map(([day, value]) => ({ day, value: scale(value) }));
 }
 
 /**
@@ -195,6 +209,33 @@ export interface Aggregates {
 }
 
 /**
+ * Workout sessions per local day.
+ *
+ * A count metric: a day with no workout means the person did not train, which
+ * is a real answer rather than missing data, and the server marks the whole
+ * window sourced for exactly that reason.
+ */
+async function workoutsByDay(since: Date): Promise<DayValue[]> {
+  const anchor = localMidnight(since);
+  const sessions = (await queryWorkoutSamples({
+    filter: { date: { startDate: anchor } },
+    ascending: true,
+  } as never)) as unknown as ReadonlyArray<{ startDate?: string | Date }>;
+
+  const byDay = new Map<string, number>();
+  for (const w of sessions) {
+    if (w.startDate === undefined) continue;
+    const start = new Date(w.startDate);
+    if (Number.isNaN(start.getTime())) continue;
+    // Keyed on when the workout STARTED, which is the day the person would say
+    // they trained. A run begun at 23:40 belongs to that evening.
+    const day = localDay(start);
+    byDay.set(day, (byDay.get(day) ?? 0) + 1);
+  }
+  return [...byDay].map(([day, value]) => ({ day, value }));
+}
+
+/**
  * Read the last `days` days of Apple Health and return daily aggregates.
  *
  * Everything raw is discarded before this function returns. Nothing that
@@ -209,7 +250,7 @@ export async function collectAggregates(days: number): Promise<Aggregates[]> {
   const since = new Date();
   since.setDate(since.getDate() - Math.max(1, days) - 1);
 
-  const [steps, distanceKm, activeCalories, sleep] = await Promise.all([
+  const [steps, distanceKm, activeCalories, sleep, workouts] = await Promise.all([
     dailySums("HKQuantityTypeIdentifierStepCount", "count", since),
     dailySums("HKQuantityTypeIdentifierDistanceWalkingRunning", "m", since, (m) =>
       round(m / 1000, 3),
@@ -218,6 +259,7 @@ export async function collectAggregates(days: number): Promise<Aggregates[]> {
       round(k, 1),
     ),
     sleepByNight(since),
+    workoutsByDay(since),
   ]);
 
   return [
@@ -226,5 +268,9 @@ export async function collectAggregates(days: number): Promise<Aggregates[]> {
     { metric: "active_calories", days: activeCalories },
     { metric: "sleep_hours", days: sleep.hours },
     { metric: "sleep_efficiency", days: sleep.efficiency },
+    // Declared by the provider, so it MUST be collected here. A declared metric
+    // the phone never produces makes a workouts pool look joinable and then
+    // silently have no data behind it.
+    { metric: "workouts", days: workouts },
   ].filter((a) => a.days.length > 0) as Aggregates[];
 }

@@ -30,6 +30,16 @@ vi.mock("@/lib/server/wearable/apple-store", () => ({
 }));
 vi.mock("@/lib/server/wearable/apple", () => ({
   appleConfigured: () => appleConfigured(),
+  appleProvider: {
+    metrics: [
+      "sleep_efficiency",
+      "sleep_hours",
+      "steps",
+      "active_calories",
+      "distance_km",
+      "workouts",
+    ],
+  },
 }));
 vi.mock("@/lib/server/wearable", () => ({
   setProviderId: (...args: unknown[]) => setProviderId(...args),
@@ -248,5 +258,61 @@ describe("recording the provider choice", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ stored: 1 });
+  });
+});
+
+describe("what the route will not store", () => {
+  it("refuses a metric Apple cannot report, even though the app knows it", () => {
+    // sleep_score is a real metric that WHOOP serves. Apple publishes no
+    // proprietary score, so a row under that name would be data the provider
+    // never reads, and observedMetrics would report a capability the join gate
+    // would then act on.
+    return POST(
+      post({
+        address: ADDRESS,
+        days: [{ metric: "sleep_score", day: yesterday(), value: 80 }],
+      }),
+    ).then(async (res) => {
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toContain("Apple Health can report");
+      expect(putDays).not.toHaveBeenCalled();
+    });
+  });
+
+  it("refuses a day older than the backfill bound", async () => {
+    // Not a security boundary - a signed post is trusted for a pushed provider
+    // - but it stops a wallet writing history for a window that closed months
+    // ago and is still awaiting settlement.
+    const old = new Date();
+    old.setUTCDate(old.getUTCDate() - 90);
+
+    const res = await POST(
+      post({
+        address: ADDRESS,
+        days: [
+          { metric: "steps", day: old.toISOString().slice(0, 10), value: 9000 },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/days old/);
+    expect(putDays).not.toHaveBeenCalled();
+  });
+
+  it("still accepts a day inside the backfill window", async () => {
+    const recent = new Date();
+    recent.setUTCDate(recent.getUTCDate() - 20);
+
+    const res = await POST(
+      post({
+        address: ADDRESS,
+        days: [
+          { metric: "steps", day: recent.toISOString().slice(0, 10), value: 9000 },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(200);
   });
 });
