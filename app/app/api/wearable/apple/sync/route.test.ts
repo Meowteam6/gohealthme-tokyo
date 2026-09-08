@@ -21,6 +21,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const putDays = vi.fn();
+const setProviderId = vi.fn();
 const appleConfigured = vi.fn();
 const requireAddressSignature = vi.fn();
 
@@ -29,6 +30,9 @@ vi.mock("@/lib/server/wearable/apple-store", () => ({
 }));
 vi.mock("@/lib/server/wearable/apple", () => ({
   appleConfigured: () => appleConfigured(),
+}));
+vi.mock("@/lib/server/wearable", () => ({
+  setProviderId: (...args: unknown[]) => setProviderId(...args),
 }));
 vi.mock("@/lib/server/wallet-auth", () => ({
   requireAddressSignature: (...args: unknown[]) => requireAddressSignature(...args),
@@ -59,6 +63,7 @@ beforeEach(() => {
   appleConfigured.mockReturnValue(true);
   requireAddressSignature.mockResolvedValue({ ok: true, address: ADDRESS });
   putDays.mockImplementation(async (_a: string, _m: string, rows: unknown[]) => rows.length);
+  setProviderId.mockResolvedValue(undefined);
 });
 
 describe("POST /api/wearable/apple/sync", () => {
@@ -209,5 +214,39 @@ describe("POST /api/wearable/apple/sync", () => {
 
     expect(res.status).toBe(502);
     expect(JSON.stringify(await res.json())).not.toContain("relation missing");
+  });
+});
+
+describe("recording the provider choice", () => {
+  it("records apple only once real data has landed", async () => {
+    // This is Apple's callback. The browser tap recorded nothing on purpose:
+    // nothing confirms it, and a user who reads the instructions and closes
+    // the tab must not lose a provider that was working.
+    await POST(post({ address: ADDRESS, days: ONE_DAY }));
+    expect(setProviderId).toHaveBeenCalledWith(ADDRESS, "apple");
+  });
+
+  it("does not record the choice when nothing was stored", async () => {
+    putDays.mockResolvedValue(0);
+    await POST(post({ address: ADDRESS, days: ONE_DAY }));
+    expect(setProviderId).not.toHaveBeenCalled();
+  });
+
+  it("does not record the choice on an unsigned post", async () => {
+    requireAddressSignature.mockResolvedValue({ ok: false, reason: "nope" });
+    await POST(post({ address: ADDRESS, days: ONE_DAY }));
+    expect(setProviderId).not.toHaveBeenCalled();
+  });
+
+  it("still reports the sync as stored when recording the choice fails", async () => {
+    // The numbers are already saved and the goal does not depend on which
+    // provider a dashboard prefers, so a failure here must not fail the sync
+    // and make the phone retry data it already delivered.
+    setProviderId.mockRejectedValue(new Error("redis down"));
+
+    const res = await POST(post({ address: ADDRESS, days: ONE_DAY }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ stored: 1 });
   });
 });

@@ -149,6 +149,9 @@ export const appleProvider: WearableProvider = {
   // Apple Watch plus iPhone covers the whole vocabulary. Apple is the only one
   // of the three that can verify a steps goal - a WHOOP strap has no pedometer
   // - so shrinking this list makes pools unjoinable for real people.
+  // There is no consent page: HealthKit is readable only on the device, so the
+  // link ends by handing the user to the phone and nothing here confirms it.
+  linkKind: "app",
   metrics: [
     "sleep_efficiency",
     "sleep_hours",

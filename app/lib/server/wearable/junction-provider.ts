@@ -73,6 +73,8 @@ export const junctionProvider: WearableProvider = {
   // Junction normalises across WHOOP, Oura, Fitbit and Garmin, so it can serve
   // the whole vocabulary. Whether the user's particular device reports a given
   // metric is a separate question, answered by daysWithData rather than here.
+  // Ends at a hosted consent page a browser can open.
+  linkKind: "oauth",
   metrics: [
     "sleep_score",
     "sleep_efficiency",

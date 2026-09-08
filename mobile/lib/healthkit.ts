@@ -13,10 +13,19 @@
 // on the user's own phone and nowhere else, and the server holds six numbers a
 // day that say nothing about when you slept or where you ran.
 //
-// HealthKit does the bucketing itself via queryStatisticsCollectionForQuantity,
-// anchored to UTC midnight with a one-day interval. Hand-rolling day boundaries
-// would be the classic way to disagree with the server's UTC keying and pay
-// somebody for the wrong week.
+// DAYS ARE THE WEARER'S LOCAL CALENDAR DAYS, NOT UTC.
+//
+// This is the subtle one and it decides payouts. Junction keys a night on the
+// device's own calendar_date, so a Sydney wearer who wakes at 08:30 has that
+// night on the day they woke up. Keying the same night in UTC would file it on
+// the previous day, and the same person doing the same thing would fall in
+// different buckets depending on which provider read them - and at a pool
+// window's first and last day, that is the difference between being paid and
+// not.
+//
+// So the statistics collection is anchored at LOCAL midnight and every day
+// string is formatted in local time. HealthKit does the bucketing itself from
+// that anchor, which is also why we do not hand-roll day boundaries.
 
 import {
   isHealthDataAvailable,
@@ -70,15 +79,28 @@ export async function requestPermissions(): Promise<boolean> {
   return requestAuthorization(READ_TYPES as unknown as Parameters<typeof requestAuthorization>[0]);
 }
 
-/** UTC midnight for a day, so buckets line up with the server's keying. */
-function utcMidnight(date: Date): Date {
-  return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
-  );
+/**
+ * Local midnight for a day. The anchor HealthKit buckets from, so every bucket
+ * is one of the wearer's own days rather than one of UTC's.
+ */
+function localMidnight(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
-function isoDay(date: Date): string {
-  return date.toISOString().slice(0, 10);
+/**
+ * The wearer's local calendar day as YYYY-MM-DD.
+ *
+ * Deliberately not toISOString().slice(0,10), which converts to UTC first and
+ * would shift the day for anyone east of Greenwich after their afternoon, or
+ * west of it before their morning.
+ */
+function localDay(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 /**
@@ -94,7 +116,7 @@ async function dailySums(
   since: Date,
   scale: (n: number) => number = (n) => n,
 ): Promise<DayValue[]> {
-  const anchor = utcMidnight(since);
+  const anchor = localMidnight(since);
   const rows = await queryStatisticsCollectionForQuantity(
     identifier as never,
     ["cumulativeSum"],
@@ -109,7 +131,7 @@ async function dailySums(
     if (typeof sum !== "number" || !Number.isFinite(sum)) continue;
     const start = row.startDate;
     if (!start) continue;
-    out.push({ day: isoDay(new Date(start)), value: scale(sum) });
+    out.push({ day: localDay(new Date(start)), value: scale(sum) });
   }
   return out;
 }
@@ -121,9 +143,12 @@ async function dailySums(
  * asleepDeep, asleepREM and awake. Time asleep is the sum of the asleep
  * stages; efficiency is that over time in bed.
  *
- * A night is attributed to the day it ENDS on, because a night that starts at
- * 23:40 and one that starts at 00:20 are the same night's sleep to the person
- * living it, and splitting them across two days would halve both.
+ * A night is attributed to the WEARER'S LOCAL day it ENDS on, because a night
+ * that starts at 23:40 and one that starts at 00:20 are the same night's sleep
+ * to the person living it, and splitting them across two days would halve
+ * both. Local rather than UTC so this agrees with how Junction keys the same
+ * night; a UTC key would file a Sydney wearer's 08:30 wake-up on the previous
+ * day and put the same behaviour in a different bucket per provider.
  *
  * Reported as "sleep_efficiency", NOT "sleep_score". Apple publishes no
  * proprietary 0-100 score, and the two are different measurements: efficiency
@@ -134,7 +159,7 @@ async function dailySums(
 async function sleepByNight(
   since: Date,
 ): Promise<{ hours: DayValue[]; efficiency: DayValue[] }> {
-  const anchor = utcMidnight(since);
+  const anchor = localMidnight(since);
   const samples = await queryCategorySamples(
     "HKCategoryTypeIdentifierSleepAnalysis" as never,
     { filter: { date: { startDate: anchor } }, ascending: true } as never,
@@ -158,7 +183,7 @@ async function sleepByNight(
     const ms = end - start;
     if (!Number.isFinite(ms) || ms <= 0) continue;
 
-    const night = isoDay(new Date(end));
+    const night = localDay(new Date(end));
     if (ASLEEP.has(s.value)) {
       asleepMs.set(night, (asleepMs.get(night) ?? 0) + ms);
     } else if (s.value === IN_BED) {
@@ -206,8 +231,12 @@ export interface Aggregates {
  * reading.
  */
 export async function collectAggregates(days: number): Promise<Aggregates[]> {
+  // One extra day of margin. A night whose LOCAL day is the first day of a
+  // pool window can end on the previous day in UTC, and anchoring exactly at
+  // the boundary drops it. Sending one day more costs a row and closes the
+  // hole at the edge of every window.
   const since = new Date();
-  since.setUTCDate(since.getUTCDate() - Math.max(1, days));
+  since.setDate(since.getDate() - Math.max(1, days) - 1);
 
   const [steps, distanceKm, activeCalories, sleep] = await Promise.all([
     dailySums("HKQuantityTypeIdentifierStepCount", "count", since),

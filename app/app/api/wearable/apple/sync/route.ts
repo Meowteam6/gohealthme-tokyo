@@ -37,6 +37,7 @@ import {
   safeError,
 } from "@/lib/server/http";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
+import { setProviderId } from "@/lib/server/wearable";
 import { appleConfigured } from "@/lib/server/wearable/apple";
 import { putDays } from "@/lib/server/wearable/apple-store";
 import { PROVIDER_METRICS } from "@/lib/server/wearable/metric-vocabulary";
@@ -150,6 +151,23 @@ export async function POST(request: Request) {
     let stored = 0;
     for (const [metric, rows] of byMetric) {
       stored += await putDays(owner, metric, rows);
+    }
+
+    // THIS is Apple's callback. The browser tap that started the link recorded
+    // nothing, deliberately: nothing confirms it, and a user who reads the
+    // instructions and closes the tab must not lose a working provider. Real
+    // data arriving from a phone that signed as this wallet is the first
+    // moment anything is proven, so the choice is recorded here.
+    //
+    // Failing to record must not fail the sync: the numbers are already stored
+    // and the person's goal does not depend on which provider a dashboard
+    // prefers. Logged rather than thrown.
+    if (stored > 0) {
+      try {
+        await setProviderId(owner, "apple");
+      } catch (err) {
+        console.warn("[wearable/apple/sync] provider choice not recorded", err);
+      }
     }
 
     return Response.json({ stored }, { headers: { "cache-control": "no-store" } });

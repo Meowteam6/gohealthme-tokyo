@@ -629,6 +629,10 @@ function DisconnectButton({ address }: { address: `0x${string}` }) {
 const SOURCE_NOTE: Record<WearableProviderId, string> = {
   whoop: "Data by WHOOP, pulled live.",
   junction: "Pulled live from your linked device via Junction.",
+  // Not "pulled": Apple is the one provider we cannot pull from. These numbers
+  // were computed on the phone and sent here, and saying so is also the honest
+  // way to explain why they stop updating when the app is not opened.
+  apple: "Sent from your iPhone by the GoHealthMe app.",
 };
 
 /** Shows the latest few days pulled from the linked provider (demo proof). */
