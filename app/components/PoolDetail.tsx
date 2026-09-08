@@ -18,6 +18,7 @@ import SpotterMascot from "@/components/SpotterMascot";
 import ClaimPayout from "@/components/ClaimPayout";
 import {
   Badge,
+  Button,
   Card,
   ErrorNote,
   Money,
@@ -48,6 +49,7 @@ import {
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import {
+  capabilityUnknown,
   fetchProviderOptions,
   metricLabel,
   providerOptionsQueryKey,
@@ -330,6 +332,10 @@ export default function PoolDetail({ id }: { id: string }) {
 
   // What the viewer's own device can measure. cachedOnly for the same reason
   // as the read above: opening a pool page must never fire a wallet prompt.
+  // Held while the one-tap device check is signing, so the button cannot be
+  // pressed twice into two wallet prompts.
+  const [checkingDevice, setCheckingDevice] = useState(false);
+
   const capabilityQuery = useQuery({
     queryKey: providerOptionsQueryKey(address),
     queryFn: () => {
@@ -570,6 +576,23 @@ export default function PoolDetail({ id }: { id: string }) {
     viewerMetricsOf(capabilityQuery.data),
   );
   const unsupportedForViewer = unsupportedMetric !== null && !joined;
+
+  // "We have not established what this wallet's device measures" is NOT the
+  // same as "it measures everything", and treating them alike defeated the
+  // whole gate: the client credential cache is module memory that dies with
+  // the tab, so ANY hard load of this page starts unsigned, the capability
+  // read 401s, and the join button appeared for a goal the device can never
+  // prove. It also silently reopened after the 8-minute signature TTL, since
+  // the refetch replaced a good answer with an empty one.
+  //
+  // Only for a CONNECTED wallet on a WEARABLE goal they have not joined. A
+  // logged-out visitor browsing the board is not about to stake, and a
+  // document goal does not depend on a device at all.
+  const capabilityPending =
+    address !== null &&
+    evidenceType === "wearable" &&
+    !joined &&
+    capabilityUnknown(capabilityQuery.data);
   const agentBroke = agentIsBroke(agentWalletQuery.data?.balanceUsd ?? null);
   // Wait for the restore before mounting a tab on a multi-path pool; mounting
   // the wrong one first would start a poll loop the correct tab then supersedes.
@@ -935,6 +958,48 @@ export default function PoolDetail({ id }: { id: string }) {
                     upload here - you would pass and still walk away with nothing.
                   </p>
                   <BrowsePoolsLink label="Find a pool that can pay" />
+                </div>
+              </div>
+            </section>
+          ) : capabilityPending ? (
+            <section className="rounded-3xl border border-accent/30 bg-accent/15 p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <SpotterMascot
+                  pose="watching"
+                  size="sm"
+                  className="mx-auto sm:mx-0"
+                />
+                <div className="min-w-0">
+                  <h2 className="font-display text-lg font-semibold text-accent-deep">
+                    Let me check your device first
+                  </h2>
+                  <p className="mt-1 text-sm text-foreground/80">
+                    Not every device can measure every goal, and I have not
+                    checked yours yet. Sign to let me look - nothing is charged
+                    and no transaction is sent.
+                  </p>
+                  <p className="mt-2 text-sm text-foreground/80">
+                    The {formatUsdc(pool.entryFee)} USDC entry fee is real
+                    money, so I am not selling you a spot before I know I can
+                    verify you.
+                  </p>
+                  <Button
+                    type="button"
+                    pop
+                    className="mt-3"
+                    disabled={checkingDevice}
+                    onClick={() => {
+                      setCheckingDevice(true);
+                      // The PROMPTING requester, deliberately. Browsing must
+                      // never open a wallet modal, but this is the moment
+                      // before an entry fee and the person asked for it.
+                      void requestAuth({ refresh: true })
+                        .then(() => capabilityQuery.refetch())
+                        .finally(() => setCheckingDevice(false));
+                    }}
+                  >
+                    {checkingDevice ? "Checking" : "Sign and check my device"}
+                  </Button>
                 </div>
               </div>
             </section>

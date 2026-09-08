@@ -77,7 +77,10 @@ describe("splitByVerifiability", () => {
 
 const STEPS = { goalSpec: "walk 8000 steps a day for 7 days [proof=wearable]" };
 const SLEEP = { goalSpec: "sleep score 75+ for 7 days [proof=wearable]" };
-const DOC = { goalSpec: "annual physical [proof=document]" };
+// The real document marker is [doc]; "[proof=document]" is not a marker this
+// codebase emits, so a fixture using it classifies as wearable and makes any
+// assertion about document pools pass for the wrong reason.
+const DOC = { goalSpec: "[doc] annual physical" };
 
 const WHOOP_METRICS = [
   "sleep_score",
@@ -145,5 +148,47 @@ describe("unsupportedMetricFor", () => {
   it("is null when the viewer is unknown or the goal is not wearable", () => {
     expect(unsupportedMetricFor(STEPS.goalSpec, null)).toBeNull();
     expect(unsupportedMetricFor(DOC.goalSpec, WHOOP_METRICS)).toBeNull();
+  });
+});
+
+describe("splitByVerifiability when the viewer has not been checked", () => {
+  it("holds a connected wallet's wearable pools out of the joinable group", () => {
+    // The gate's real failure mode. The client credential cache is module
+    // memory that dies with the tab, so EVERY hard load of the pool list
+    // starts unsigned and capability comes back unknown. Reading that as
+    // "fine" is what let somebody stake on a goal their device cannot prove.
+    const split = splitByVerifiability([STEPS, SLEEP, DOC], false, null, true);
+
+    expect(split.unchecked).toEqual([STEPS, SLEEP]);
+    // A document goal does not depend on a device at all.
+    expect(split.verifiable).toEqual([DOC]);
+    expect(split.unsupported).toEqual([]);
+  });
+
+  it("still shows everything to a logged-out visitor", () => {
+    // Browsing is not staking. Somebody with no wallet is not about to pay an
+    // entry fee, and hiding the board from them would be its own dead end.
+    const split = splitByVerifiability([STEPS, SLEEP], false, null, false);
+
+    expect(split.verifiable).toEqual([STEPS, SLEEP]);
+    expect(split.unchecked).toEqual([]);
+  });
+
+  it("prefers a known answer over the unchecked group", () => {
+    const split = splitByVerifiability([STEPS, SLEEP], false, WHOOP_METRICS, true);
+
+    // Capability is known, so pendingness is irrelevant.
+    expect(split.unchecked).toEqual([]);
+    expect(split.unsupported).toEqual([STEPS]);
+    expect(split.verifiable).toEqual([SLEEP]);
+  });
+
+  it("keeps an outage ahead of an unchecked viewer", () => {
+    // Nothing wearable is verifiable during an outage regardless of hardware,
+    // and that message is more useful than "sign to find out".
+    const split = splitByVerifiability([STEPS], true, null, true);
+
+    expect(split.unverifiable).toEqual([STEPS]);
+    expect(split.unchecked).toEqual([]);
   });
 });

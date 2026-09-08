@@ -67,6 +67,15 @@ export interface VerifiabilitySplit<T> {
    * they stay on that provider, and fixable only by connecting another one.
    */
   unsupported: T[];
+  /**
+   * Wearable goals we have not checked this viewer's device against yet.
+   *
+   * Distinct from all three above, and the distinction is the gate: treating
+   * "not checked" as "fine" is what let a connected wallet stake on a goal its
+   * device can never prove. The client credential cache dies with the tab, so
+   * this is the state of EVERY hard page load, not a rare one.
+   */
+  unchecked: T[];
 }
 
 /**
@@ -94,10 +103,17 @@ export function splitByVerifiability<T extends { goalSpec: string }>(
   pools: T[],
   providerDown: boolean,
   viewerMetrics: ViewerCapability = null,
+  /**
+   * True when a wallet is connected but its capability has not been read yet.
+   * Only then is `viewerMetrics === null` "we have not looked" rather than
+   * "there is nobody to look at".
+   */
+  capabilityPending = false,
 ): VerifiabilitySplit<T> {
   const verifiable: T[] = [];
   const unverifiable: T[] = [];
   const unsupported: T[] = [];
+  const unchecked: T[] = [];
 
   for (const pool of pools) {
     if (evidenceTypeOf(pool.goalSpec) !== "wearable") {
@@ -109,7 +125,11 @@ export function splitByVerifiability<T extends { goalSpec: string }>(
       continue;
     }
     if (viewerMetrics === null) {
-      verifiable.push(pool);
+      // A connected wallet we have not checked is held back from the joinable
+      // heading; a logged-out visitor still sees everything, because they are
+      // browsing rather than about to stake.
+      if (capabilityPending) unchecked.push(pool);
+      else verifiable.push(pool);
       continue;
     }
     const metric = classifyWearableGoal(pool.goalSpec).metric;
@@ -120,7 +140,7 @@ export function splitByVerifiability<T extends { goalSpec: string }>(
     verifiable.push(pool);
   }
 
-  return { verifiable, unverifiable, unsupported };
+  return { verifiable, unverifiable, unsupported, unchecked };
 }
 
 /**

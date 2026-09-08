@@ -223,6 +223,7 @@ describe("fetchProviderOptions", () => {
     await expect(fetchProviderOptions(ADDRESS, auth)).resolves.toEqual({
       providers: [],
       selected: null,
+      status: "unavailable",
     });
   });
 });
@@ -240,7 +241,7 @@ describe("viewerMetricsOf", () => {
 
   it("returns the active provider's declared metrics when nothing narrows them", () => {
     expect(
-      viewerMetricsOf({ providers: [option()], selected: "whoop" }),
+      viewerMetricsOf({ providers: [option()], selected: "whoop" , status: "known" }),
     ).toEqual(["sleep_score"]);
   });
 
@@ -257,6 +258,7 @@ describe("viewerMetricsOf", () => {
           }),
         ],
         selected: "whoop",
+        status: "known",
       }),
     ).toEqual(["steps"]);
   });
@@ -268,6 +270,7 @@ describe("viewerMetricsOf", () => {
       viewerMetricsOf({
         providers: [option({ observedMetrics: [] })],
         selected: "whoop",
+        status: "known",
       }),
     ).toEqual([]);
   });
@@ -277,18 +280,20 @@ describe("viewerMetricsOf", () => {
     // off the board, null holds nothing back.
     expect(viewerMetricsOf(undefined)).toBeNull();
     expect(
-      viewerMetricsOf({ providers: [option()], selected: null }),
+      viewerMetricsOf({ providers: [option()], selected: null , status: "known" }),
     ).toBeNull();
     expect(
       viewerMetricsOf({
         providers: [option({ connected: false })],
         selected: "whoop",
+        status: "known",
       }),
     ).toBeNull();
     expect(
       viewerMetricsOf({
         providers: [option({ configured: false })],
         selected: "whoop",
+        status: "known",
       }),
     ).toBeNull();
   });

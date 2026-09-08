@@ -43,6 +43,7 @@ import {
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import {
+  capabilityUnknown,
   fetchProviderOptions,
   providerOptionsQueryKey,
   viewerMetricsOf,
@@ -194,11 +195,16 @@ export default function PoolsPage() {
     staleTime: 60_000,
   });
   const viewerMetrics = viewerMetricsOf(capabilityQuery.data);
+  // A connected wallet whose device we have not checked. Every hard page load
+  // starts here, because the signature cache dies with the tab.
+  const capabilityPending =
+    address !== null && capabilityUnknown(capabilityQuery.data);
 
   const liveSplit = splitByVerifiability(
     grouped?.live ?? [],
     providerDown !== null,
     viewerMetrics,
+    capabilityPending,
   );
   const viewerProvider = (capabilityQuery.data?.providers ?? []).find(
     (option) => option.id === capabilityQuery.data?.selected,
@@ -369,6 +375,27 @@ export default function PoolsPage() {
                   join action there too. */}
               <div className="opacity-60">
                 <PoolGrid pools={liveSplit.unverifiable} phase="live" />
+              </div>
+            </section>
+          ) : null}
+
+          {liveSplit.unchecked.length > 0 ? (
+            <section className="space-y-3">
+              <SectionLabel>Sign to see which of these you can join</SectionLabel>
+              <p className="rounded-2xl border-2 border-accent/30 bg-accent/15 p-3 text-sm text-foreground/80">
+                Not every device measures every goal, and I have not checked
+                yours yet. Signing costs nothing and sends no transaction. Until
+                then I am not putting these under the joinable heading, because
+                the entry fee is real money.
+              </p>
+              <Link
+                href="/dashboard"
+                className={`inline-block rounded-xl border-2 border-edge font-semibold hover:border-accent/50 ${TAP_TARGET}`}
+              >
+                Check my device
+              </Link>
+              <div className="opacity-60">
+                <PoolGrid pools={liveSplit.unchecked} phase="live" />
               </div>
             </section>
           ) : null}

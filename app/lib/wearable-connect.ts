@@ -233,9 +233,27 @@ export interface ProviderOption {
   observedMetrics: WearableMetric[] | null;
 }
 
+/**
+ * Why a capability answer is missing, which is NOT the same question as what
+ * the answer is.
+ *
+ * "known"           we read it; `providers` and `selected` are the truth.
+ * "unauthenticated" a wallet IS connected and we have no signature to read
+ *                   with. The answer exists; we just have not asked.
+ * "unavailable"     nobody is signed in, or the read failed outright.
+ *
+ * The middle case used to collapse into the last one, and that defeated the
+ * join gate entirely: the client credential cache is module memory that dies
+ * with the tab, so ANY hard load of a pool page starts unsigned, the read 401s,
+ * and "capability unknown" was read as "capability fine". The gate only worked
+ * for somebody who had signed in that tab within the last eight minutes.
+ */
+export type CapabilityStatus = "known" | "unauthenticated" | "unavailable";
+
 export interface ProviderOptions {
   providers: ProviderOption[];
   selected: ProviderId | null;
+  status: CapabilityStatus;
 }
 
 /** A metric array off the wire, or null when the field is absent or unusable. */
@@ -266,7 +284,7 @@ function parseOptions(payload: unknown): ProviderOptions {
     ];
   });
   const selected = isProviderId(record.selected) ? record.selected : null;
-  return { providers, selected };
+  return { providers, selected, status: "known" };
 }
 
 /** React-query key for the provider list, so the picker is read once. */
@@ -291,10 +309,19 @@ export async function fetchProviderOptions(
       undefined,
       requestAuth,
     );
-    if (!sent.response.ok) return { providers: [], selected: null };
+    if (sent.response.status === 401) {
+      // A wallet IS connected here - the caller passed its address - and we
+      // simply have no signature to read with. Reported as its own state so a
+      // surface about to take an entry fee can ask for one instead of assuming
+      // the answer is fine.
+      return { providers: [], selected: null, status: "unauthenticated" };
+    }
+    if (!sent.response.ok) {
+      return { providers: [], selected: null, status: "unavailable" };
+    }
     return parseOptions((await sent.response.json()) as unknown);
   } catch {
-    return { providers: [], selected: null };
+    return { providers: [], selected: null, status: "unavailable" };
   }
 }
 
@@ -428,4 +455,25 @@ export async function disconnectWearable(
   // step in it, so it is returned rather than thrown.
   if (sent.response.status === 409) return reason;
   throw new Error(reason);
+}
+
+/**
+ * True when a wallet is connected and we have not established what its device
+ * can measure - unsigned, still loading, or the read failed.
+ *
+ * A surface that is about to take money must treat this as "do not know yet",
+ * never as "fine". Browsing on it is harmless; staking on it is the trap.
+ */
+export function capabilityUnknown(
+  options: ProviderOptions | undefined,
+): boolean {
+  if (options === undefined) return true;
+  return options.status !== "known" || options.selected === null;
+}
+
+/** True specifically when a signature would answer the question. */
+export function capabilityNeedsSignature(
+  options: ProviderOptions | undefined,
+): boolean {
+  return options?.status === "unauthenticated";
 }
