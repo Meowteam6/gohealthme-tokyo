@@ -197,3 +197,35 @@ describe("two sources describing the same night", () => {
     expect(hours[0]?.value).toBeCloseTo(7, 1);
   });
 });
+
+describe("naps must not carry a day", () => {
+  it("does not let a short perfect nap overwrite a broken night's efficiency", () => {
+    // Taking the max across nights let a twenty-minute nap at 100% efficiency
+    // stand in for a night the person barely slept through, and carry a
+    // sleep-efficiency pool on its own.
+    const { efficiency } = aggregateSleep([
+      // A rough night: 4h asleep in 8h of bed = 50%
+      sample(IN_BED, "2026-09-01T23:00:00", "2026-09-02T07:00:00"),
+      sample(CORE, "2026-09-01T23:00:00", "2026-09-02T01:00:00"),
+      sample(CORE, "2026-09-02T05:00:00", "2026-09-02T07:00:00"),
+      // A perfect 20-minute nap the same afternoon
+      sample(IN_BED, "2026-09-02T14:00:00", "2026-09-02T14:20:00"),
+      sample(CORE, "2026-09-02T14:00:00", "2026-09-02T14:20:00"),
+    ]);
+
+    expect(efficiency).toHaveLength(1);
+    expect(efficiency[0]?.value).toBeCloseTo(50, 0);
+    expect(efficiency[0]?.value).not.toBeCloseTo(100, 0);
+  });
+
+  it("still sums nap hours into the day's total sleep", () => {
+    // Deliberate and stated: "did you sleep seven hours today" counts the nap.
+    const { hours } = aggregateSleep([
+      sample(CORE, "2026-09-01T23:00:00", "2026-09-02T05:00:00"),
+      sample(CORE, "2026-09-02T14:00:00", "2026-09-02T15:30:00"),
+    ]);
+
+    expect(hours).toHaveLength(1);
+    expect(hours[0]?.value).toBeCloseTo(7.5, 1);
+  });
+});

@@ -93,6 +93,8 @@ function supabaseWith(rowsFor: (metric: string) => Array<{ day: string; value: n
         // probe: it asks WHICH metrics this wallet has produced, so it must
         // answer with one row per metric that has data.
         if (state.select === "metric") {
+          // The probe is window-bounded, so the stub records the bound and
+          // answers with the metrics that have rows.
           const present = SOURCE_PROBE_METRICS.filter(
             (m) => rowsFor(m).length > 0,
           ).map((metric) => ({ metric }));
@@ -480,5 +482,24 @@ describe("observedMetrics, the join gate's device truth", () => {
 
     expect(observed).toEqual(["steps"]);
     expect(observed).not.toContain("sleep_score");
+  });
+});
+
+describe("observed capability is bounded in time", () => {
+  it("asks only about recent days, not all history", async () => {
+    // Unbounded, one historical row made a metric supported for ever: someone
+    // who wore a Watch last year and retired it kept sleep as a capability, so
+    // the gate opened, the fee moved, and the truth surfaced at the claim.
+    const { calls } = supabaseWith((metric) =>
+      metric === "steps" ? [{ day: "2026-09-01", value: 9000 }] : [],
+    );
+
+    await appleProvider.observedMetrics(ADDRESS);
+
+    const probe = calls.find((c) => c.select === "metric");
+    expect(probe).toBeDefined();
+    // A lower bound was applied at all.
+    expect(probe?.start).toBeDefined();
+    expect(String(probe?.start)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

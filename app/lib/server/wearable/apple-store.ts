@@ -26,7 +26,7 @@ import type { WearableMetric } from "@/lib/server/wearable/types";
 
 const TABLE = "wearable_days";
 
-/** One device-reported day. `day` is a UTC calendar day, YYYY-MM-DD. */
+/** One device-reported day. `day` is the wearer's LOCAL calendar day. */
 export interface WearableDay {
   day: string;
   value: number;
@@ -154,9 +154,13 @@ export async function getSourcedDays(
  * tells us which metrics it computed. An iPhone with no Apple Watch produces
  * steps and distance and no sleep at all, and this is what lets the join gate
  * say so BEFORE somebody stakes on a sleep pool rather than after.
+ *
+ * `sinceISO` bounds it: a capability is what the hardware reports NOW, not what
+ * it once did.
  */
 export async function getObservedMetrics(
   address: string,
+  sinceISO: string,
 ): Promise<string[]> {
   const supabase = getSupabaseServiceRole();
   if (supabase === null) return [];
@@ -165,7 +169,19 @@ export async function getObservedMetrics(
     .from(TABLE)
     .select("metric")
     .eq("address", address.toLowerCase())
-    .eq("source", "apple");
+    .eq("source", "apple")
+    // BOUNDED IN TIME, and the bound is the whole point.
+    //
+    // Unbounded, one historical row made a metric "observed" for ever. Somebody
+    // who wore a Watch last year, then retired it, kept sleep as a supported
+    // capability: the join gate opened, the entry fee moved, and the truth only
+    // surfaced at the claim as days-with-data zero. Which is the exact
+    // learn-after-the-stake shape this probe exists to prevent.
+    //
+    // "Observed" has to mean "reported RECENTLY", over the same horizon the
+    // verdict will actually read, or the gate is answering a different question
+    // from the one that decides the payout.
+    .gte("day", sinceISO);
 
   if (error) {
     throw new Error(`wearable_days metric probe failed: ${error.message}`);

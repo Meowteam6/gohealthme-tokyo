@@ -31,6 +31,15 @@
 // as such rather than presented as platform behaviour: what gap separates two
 // sleep sessions (we use two hours), and which calendar day a night belongs to
 // (we use the day it ends, which also matches how Junction keys a night).
+//
+// WHAT NAPS DO, stated because an earlier comment here claimed the opposite.
+// A nap is its own NIGHT - the gap rule separates it - but nights ending on the
+// same local day are still summed into that day's HOURS. So a six hour night
+// plus a ninety minute nap does satisfy a "sleep 7 hours" goal. That is a
+// deliberate reading of "did you sleep seven hours today" and it errs in the
+// sleeper's favour. Efficiency does NOT work that way: it takes the LONGEST
+// night, because otherwise a short nap at perfect efficiency would carry a day
+// whose actual night was broken.
 
 /**
  * HKCategoryValueSleepAnalysis raw values.
@@ -118,7 +127,7 @@ export function aggregateSleep(
   }
 
   const hoursByDay = new Map<string, number>();
-  const effByDay = new Map<string, number>();
+  const effByDay = new Map<string, { pct: number; asleepMs: number }>();
 
   for (const night of nights) {
     // UNION, NOT SUM. Two sources can describe the same sleep: an Apple Watch
@@ -144,8 +153,16 @@ export function aggregateSleep(
     // without an efficiency value rather than given a flattering one.
     if (inBedMs > 0) {
       const pct = Math.min(100, (asleepMs / inBedMs) * 100);
+      // THE LONGEST NIGHT'S EFFICIENCY, NOT THE BEST.
+      //
+      // Taking the max let a twenty-minute nap at 100% overwrite a broken
+      // night and carry a sleep-efficiency pool on its own. Efficiency is a
+      // quality measure for a night's sleep, so the night that actually was
+      // the sleep is the one that should answer for the day.
       const prev = effByDay.get(day);
-      effByDay.set(day, prev === undefined ? pct : Math.max(prev, pct));
+      if (prev === undefined || asleepMs > prev.asleepMs) {
+        effByDay.set(day, { pct, asleepMs });
+      }
     }
   }
 
@@ -154,7 +171,7 @@ export function aggregateSleep(
       day,
       value: round(ms / 3_600_000, 2),
     })),
-    efficiency: [...effByDay].map(([day, pct]) => ({ day, value: round(pct, 1) })),
+    efficiency: [...effByDay].map(([day, e]) => ({ day, value: round(e.pct, 1) })),
   };
 }
 

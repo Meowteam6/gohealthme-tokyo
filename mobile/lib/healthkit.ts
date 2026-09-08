@@ -61,11 +61,6 @@ export type Metric =
 
 export type { DayValue } from "./sleep-aggregate";
 
-interface UnusedDayValue {
-  /** UTC calendar day, YYYY-MM-DD. Same keying the server's streak math uses. */
-  day: string;
-  value: number;
-}
 
 /**
  * Everything we ask HealthKit for, and nothing else.

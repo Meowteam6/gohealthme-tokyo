@@ -129,6 +129,16 @@ function daysInWindow(startISO: string, endISO: string): string[] {
   return out;
 }
 
+/**
+ * How far back "this device can do that" is answered over.
+ *
+ * Matches the window the phone collects, so the gate and the verdict are
+ * answering the same question. Longer and a retired Watch keeps a capability;
+ * much shorter and somebody who simply has not opened the app in a fortnight
+ * loses pools they can genuinely satisfy.
+ */
+const OBSERVED_WINDOW_DAYS = 30;
+
 /** Empty progress, used whenever the wallet has nothing to read yet. */
 const NO_PROGRESS: WearableProgress = {
   streakDays: 0,
@@ -201,9 +211,13 @@ export const appleProvider: WearableProvider = {
    * to do with the user's device. Errors are null too.
    */
   async observedMetrics(address: string): Promise<WearableMetric[] | null> {
+    // The same horizon the phone collects and the verdict reads. Asking a
+    // wider question than the payout asks would let a retired device keep a
+    // capability it can no longer deliver.
+    const since = daysBefore(isoDay(new Date()), OBSERVED_WINDOW_DAYS);
     let observed: string[];
     try {
-      observed = await getObservedMetrics(address);
+      observed = await getObservedMetrics(address, since);
     } catch {
       // Our problem, not theirs. Fall back to declared rather than hiding
       // pools because a query failed.
@@ -333,7 +347,7 @@ export const appleProvider: WearableProvider = {
 
 // --------------------------------------------------------------- date helpers
 
-/** UTC calendar day, matching streak.ts's key format. */
+/** The wearer's local calendar day, matching streak.ts's key format. */
 function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }

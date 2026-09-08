@@ -75,7 +75,7 @@ export interface SyncResult {
 
 export interface AggregateRow {
   metric: string;
-  /** UTC calendar day, YYYY-MM-DD. */
+  /** The wearer's LOCAL calendar day, YYYY-MM-DD. */
   day: string;
   value: number;
 }
