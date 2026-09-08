@@ -20,8 +20,9 @@
 // the whole integrity story for this provider.
 //
 // A future day. A pool window that has not happened yet cannot be
-// pre-satisfied. Enforced here and again by a check constraint on the table,
-// because this is the cheapest way to forge a win.
+// pre-satisfied. Enforced here and again by a check constraint on the table
+// (supabase/migrations/20260908_wearable_days.sql), because this is the
+// cheapest way to forge a win.
 //
 // An unknown metric, a negative value, or a nonsense date. All rejected before
 // anything is written, so a malformed batch fails loudly rather than storing
