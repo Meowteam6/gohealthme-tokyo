@@ -15,6 +15,22 @@
 // eight sleep days inside a seven-day window.
 //
 // So segments are stitched into nights FIRST, and a night is attributed whole.
+//
+// AND THE SECOND ONE, WHICH APPLE WILL NOT SOLVE FOR YOU
+//
+// Two sources can describe the same night: a watch plus a third-party sleep
+// app, or an iPhone's Sleep Schedule overlapping the watch's stages. Adding
+// their durations double counts, and a 7.7 hour night reading as 15.3 clears
+// any threshold a pool could sensibly set.
+//
+// HealthKit merges overlapping samples for QUANTITY types by default, which is
+// why steps need no such handling. Sleep is a CATEGORY sample and no statistics
+// query applies to it, so the overlap is merged by hand here or not at all.
+//
+// TWO THINGS APPLE DOES NOT DOCUMENT, so they are our conventions and are named
+// as such rather than presented as platform behaviour: what gap separates two
+// sleep sessions (we use two hours), and which calendar day a night belongs to
+// (we use the day it ends, which also matches how Junction keys a night).
 
 /**
  * HKCategoryValueSleepAnalysis raw values.
@@ -85,35 +101,49 @@ export function aggregateSleep(
   // So contiguous segments are stitched into one night first, and the night is
   // attributed as a whole. Any gap longer than NIGHT_GAP_MS starts a new night,
   // which also keeps an afternoon nap from being merged into the night before.
-  const nights: Array<{ asleepMs: number; inBedMs: number; end: number }> = [];
+  const nights: Array<{
+    asleep: Array<{ start: number; end: number }>;
+    inBed: Array<{ start: number; end: number }>;
+    end: number;
+  }> = [];
   for (const span of spans) {
     let night = nights[nights.length - 1];
     if (night === undefined || span.start - night.end > NIGHT_GAP_MS) {
-      night = { asleepMs: 0, inBedMs: 0, end: span.end };
+      night = { asleep: [], inBed: [], end: span.end };
       nights.push(night);
     }
     night.end = Math.max(night.end, span.end);
-    const ms = span.end - span.start;
-    if (ASLEEP.has(span.value)) night.asleepMs += ms;
-    else if (span.value === IN_BED) night.inBedMs += ms;
+    if (ASLEEP.has(span.value)) night.asleep.push(span);
+    else if (span.value === IN_BED) night.inBed.push(span);
   }
 
   const hoursByDay = new Map<string, number>();
   const effByDay = new Map<string, number>();
 
   for (const night of nights) {
-    if (night.asleepMs <= 0) continue;
+    // UNION, NOT SUM. Two sources can describe the same sleep: an Apple Watch
+    // and a third-party sleep app both recording one night, or an iPhone's
+    // Sleep Schedule overlapping the watch's stages. Adding their durations
+    // double counts, and a 7.7 hour night reading as 15.3 clears any threshold
+    // a pool could sensibly set.
+    //
+    // Unlike steps, HealthKit will NOT do this for us: statistics queries work
+    // on quantity samples only, and sleep is a category sample. So the overlap
+    // has to be merged by hand, here, or it is not merged at all.
+    const asleepMs = unionMs(night.asleep);
+    const inBedMs = unionMs(night.inBed);
+    if (asleepMs <= 0) continue;
     const day = localDay(new Date(night.end));
 
     // Two nights ending on the same local day (a very early night plus a very
     // late one) are summed, not overwritten, because the person did sleep both.
-    hoursByDay.set(day, (hoursByDay.get(day) ?? 0) + night.asleepMs);
+    hoursByDay.set(day, (hoursByDay.get(day) ?? 0) + asleepMs);
 
     // Some devices report asleep stretches and never inBed. Efficiency against
     // a missing denominator would be a fabricated 100, so such a night is left
     // without an efficiency value rather than given a flattering one.
-    if (night.inBedMs > 0) {
-      const pct = Math.min(100, (night.asleepMs / night.inBedMs) * 100);
+    if (inBedMs > 0) {
+      const pct = Math.min(100, (asleepMs / inBedMs) * 100);
       const prev = effByDay.get(day);
       effByDay.set(day, prev === undefined ? pct : Math.max(prev, pct));
     }
@@ -126,6 +156,32 @@ export function aggregateSleep(
     })),
     efficiency: [...effByDay].map(([day, pct]) => ({ day, value: round(pct, 1) })),
   };
+}
+
+/**
+ * Total time covered by a set of intervals, counting overlap once.
+ *
+ * The whole reason sleep needs this and steps does not: HealthKit merges
+ * overlapping QUANTITY samples itself, but sleep is a category sample and no
+ * statistics query applies to it.
+ */
+function unionMs(spans: ReadonlyArray<{ start: number; end: number }>): number {
+  if (spans.length === 0) return 0;
+  const sorted = [...spans].sort((a, b) => a.start - b.start);
+  let total = 0;
+  let openStart = sorted[0]!.start;
+  let openEnd = sorted[0]!.end;
+  for (let i = 1; i < sorted.length; i += 1) {
+    const s = sorted[i]!;
+    if (s.start > openEnd) {
+      total += openEnd - openStart;
+      openStart = s.start;
+      openEnd = s.end;
+    } else if (s.end > openEnd) {
+      openEnd = s.end;
+    }
+  }
+  return total + (openEnd - openStart);
 }
 
 function round(n: number, places: number): number {

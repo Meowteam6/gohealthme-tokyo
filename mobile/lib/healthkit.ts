@@ -43,7 +43,7 @@ import {
   isHealthDataAvailable,
   queryWorkoutSamples,
   queryCategorySamples,
-  queryStatisticsCollectionForQuantitySeparateBySource,
+  queryStatisticsCollectionForQuantity,
   requestAuthorization,
 } from "@kingstinct/react-native-healthkit";
 
@@ -159,17 +159,22 @@ async function dailySums(
 ): Promise<DayValue[]> {
   const anchor = localMidnight(since);
 
-  // SEPARATED BY SOURCE, THEN THE LARGEST TAKEN PER DAY, NOT THE SUM.
+  // HEALTHKIT ALREADY DEDUPLICATES. DO NOT SEPARATE BY SOURCE HERE.
   //
-  // Somebody wearing an Apple Watch while carrying an iPhone has both devices
-  // counting the same walk. A plain cumulative sum adds them, so an eight
-  // thousand step day reports as fifteen thousand and a steps pool pays for
-  // half the walking it asked for. Apple's own Health app deduplicates before
-  // it shows you a number; a raw statistics query does not.
+  // An earlier version of this file used the separate-by-source query and took
+  // the largest single source per day, on the reasoning that an Apple Watch and
+  // an iPhone both counting one walk would otherwise be summed. That reasoning
+  // was wrong, and the wrong premise was written into a comment as if it were
+  // fact, which is how it would have survived the next review.
   //
-  // The largest single source is the honest reading: it is the device that saw
-  // the most of the day, and it can never exceed what one device recorded.
-  const rows = await queryStatisticsCollectionForQuantitySeparateBySource(
+  // A statistics query merges overlapping samples from multiple sources by
+  // default; `separateBySource` is the flag that TURNS THAT OFF. So the old
+  // code disabled Apple's own deduplication and then hand-rolled a worse one:
+  // taking the largest source undercounts every day where no single device saw
+  // the whole day, and a watch spending an hour on the charger while the phone
+  // stays in a pocket is the normal case, not an edge case. That silently paid
+  // people less than they walked.
+  const rows = await queryStatisticsCollectionForQuantity(
     identifier as never,
     ["cumulativeSum"],
     anchor,
@@ -177,17 +182,16 @@ async function dailySums(
     { unit: unit as never, filter: { date: { startDate: anchor } } },
   );
 
-  const bestByDay = new Map<string, number>();
+  const out: DayValue[] = [];
   for (const row of rows) {
+    // Already HealthKit's merged value across every source for the day.
     const sum = row.sumQuantity?.quantity;
     if (typeof sum !== "number" || !Number.isFinite(sum)) continue;
     const start = row.startDate;
     if (!start) continue;
-    const day = localDay(new Date(start));
-    const prev = bestByDay.get(day);
-    if (prev === undefined || sum > prev) bestByDay.set(day, sum);
+    out.push({ day: localDay(new Date(start)), value: scale(sum) });
   }
-  return [...bestByDay].map(([day, value]) => ({ day, value: scale(value) }));
+  return out;
 }
 
 /**

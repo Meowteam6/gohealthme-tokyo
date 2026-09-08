@@ -143,3 +143,57 @@ describe("aggregateSleep", () => {
     expect(hours[0]?.value).toBeCloseTo(7, 1);
   });
 });
+
+describe("two sources describing the same night", () => {
+  it("counts overlapping sleep once, not twice", () => {
+    // Apple merges overlapping QUANTITY samples itself, but sleep is a category
+    // sample and no statistics query applies to it, so the overlap has to be
+    // merged here or it is not merged at all. An Apple Watch and a third-party
+    // sleep app both recording one night used to sum: 7.67 hours reading as
+    // 15.33, which clears any threshold a pool could sensibly set.
+    const { hours } = aggregateSleep([
+      // Watch
+      sample(CORE, "2026-09-01T23:00:00", "2026-09-02T03:00:00"),
+      sample(DEEP, "2026-09-02T03:00:00", "2026-09-02T06:40:00"),
+      // A second app describing the same night
+      sample(CORE, "2026-09-01T23:00:00", "2026-09-02T06:40:00"),
+    ]);
+
+    expect(hours).toHaveLength(1);
+    expect(hours[0]?.value).toBeCloseTo(7.67, 1);
+  });
+
+  it("still adds two genuinely separate stretches within one night", () => {
+    // Union, not max: waking at 02:00 and sleeping again at 03:00 is two real
+    // stretches and both count.
+    const { hours } = aggregateSleep([
+      sample(CORE, "2026-09-01T23:00:00", "2026-09-02T02:00:00"),
+      sample(CORE, "2026-09-02T03:00:00", "2026-09-02T06:00:00"),
+    ]);
+
+    expect(hours).toHaveLength(1);
+    expect(hours[0]?.value).toBeCloseTo(6, 1);
+  });
+
+  it("does not let a duplicated night inflate efficiency past what was slept", () => {
+    const { efficiency } = aggregateSleep([
+      sample(IN_BED, "2026-09-01T23:00:00", "2026-09-02T07:00:00"),
+      sample(IN_BED, "2026-09-01T23:00:00", "2026-09-02T07:00:00"),
+      sample(CORE, "2026-09-01T23:00:00", "2026-09-02T06:00:00"),
+      sample(CORE, "2026-09-01T23:00:00", "2026-09-02T06:00:00"),
+    ]);
+
+    // 7 asleep over 8 in bed, counted once each.
+    expect(efficiency[0]?.value).toBeCloseTo(87.5, 1);
+  });
+
+  it("merges partially overlapping stretches without losing the union", () => {
+    const { hours } = aggregateSleep([
+      sample(CORE, "2026-09-01T23:00:00", "2026-09-02T03:00:00"),
+      sample(CORE, "2026-09-02T02:00:00", "2026-09-02T06:00:00"),
+    ]);
+
+    // 23:00 to 06:00 is seven hours, not eight.
+    expect(hours[0]?.value).toBeCloseTo(7, 1);
+  });
+});
