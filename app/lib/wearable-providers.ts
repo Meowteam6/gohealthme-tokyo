@@ -14,7 +14,7 @@
 //
 // No imports, no I/O: safe in a client bundle and in a server module alike.
 
-export const PROVIDER_IDS = ["junction", "whoop"] as const;
+export const PROVIDER_IDS = ["junction", "whoop", "apple"] as const;
 
 /** Which integration backs a wallet's health data. */
 export type ProviderId = (typeof PROVIDER_IDS)[number];

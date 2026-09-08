@@ -28,7 +28,7 @@ export type ProofPath = "wearable" | "document" | "self-reported";
  * missing here lands on the document upload box over a wearable claim SPOTTER
  * has already paid for, which reads as though nothing ever happened.
  */
-const WEARABLE_SERVICES = new Set(["junction-read", "whoop-read"]);
+const WEARABLE_SERVICES = new Set(["junction-read", "whoop-read", "apple-read"]);
 /** Mirror of x402.ts's ATTESTER_READ_SERVICE and VISION_JUDGE_SERVICE. The
  *  vision judge only ever escalates a document read, so it identifies the
  *  path too. chain-read is deliberately absent: it is bought at settlement by

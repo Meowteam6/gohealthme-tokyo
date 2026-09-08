@@ -123,9 +123,14 @@ describe("wearableReadServices", () => {
     // lib/claim-restore.ts hardcodes this same set because it cannot import a
     // server module. A provider missing there sends returning users to the
     // wrong proof tab over a claim SPOTTER already paid for.
-    expect(wearableReadServices()).toEqual(["junction-read", "whoop-read"]);
+    expect(wearableReadServices()).toEqual([
+      "junction-read",
+      "whoop-read",
+      "apple-read",
+    ]);
     expect(providerById("whoop").readService).toBe("whoop-read");
     expect(providerById("junction").readService).toBe("junction-read");
+    expect(providerById("apple").readService).toBe("apple-read");
   });
 });
 

@@ -288,6 +288,14 @@ function ProviderChoice({ address }: { address: `0x${string}` }) {
       cta: "Connect WHOOP",
       reconnect: "Reconnect WHOOP",
     },
+    apple: {
+      blurb:
+        "Apple Watch and iPhone, through the GoHealthMe app. Set up on your iPhone: a browser cannot read Apple Health.",
+      // "Set up", not "Connect": the click finishes nothing here. It tells you
+      // what to do on the phone, and the connection happens there.
+      cta: "Set up Apple Health",
+      reconnect: "Set up Apple Health again",
+    },
   };
 
   return (

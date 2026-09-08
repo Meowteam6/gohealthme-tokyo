@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "GoHealthMe",
+    "slug": "gohealthme-mobile",
+    "version": "0.2.0",
+    "orientation": "portrait",
+    "scheme": "gohealthme",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "com.chuabiolabs.gohealthme",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "plugins": [
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "GoHealthMe reads your daily step, distance, energy and sleep totals to verify the goals you chose. Only the daily totals leave your iPhone, never individual readings.",
+          "NSHealthUpdateUsageDescription": false
+        }
+      ],
+      "expo-dev-client",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ]
+    ]
+  }
+}
