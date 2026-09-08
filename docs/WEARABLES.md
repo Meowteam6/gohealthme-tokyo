@@ -11,15 +11,15 @@ A pool is scored on one metric. A provider that cannot measure that metric is
 refused **at the join**, with the reason on screen, before any entry fee is
 paid. This table is the source of that behaviour.
 
-| Metric | Junction | WHOOP direct |
-|---|---|---|
-| `sleep_score` (proprietary 0-100) | yes, if the linked device produces one | yes |
-| `sleep_efficiency` (asleep / in bed) | yes | yes |
-| `sleep_hours` | yes | yes |
-| `workouts` (sessions per day) | yes | yes |
-| `steps` | yes | **no** |
-| `distance_km` | yes | **no** |
-| `active_calories` | yes | **no** |
+| Metric | Junction | WHOOP direct | Apple Health |
+|---|---|---|---|
+| `sleep_score` (proprietary 0-100) | yes, if the linked device produces one | yes | **no** |
+| `sleep_efficiency` (asleep / in bed) | yes | yes | yes, with a Watch |
+| `sleep_hours` | yes | yes | yes, with a Watch |
+| `workouts` (sessions per day) | yes | yes | yes |
+| `steps` | yes | **no** | yes |
+| `distance_km` | yes | **no** | yes |
+| `active_calories` | yes | **no** | yes |
 
 The three WHOOP gaps are physical or semantic, not scope decisions:
 
@@ -30,6 +30,22 @@ The three WHOOP gaps are physical or semantic, not scope decisions:
   metabolism, roughly 2500 kcal for an adult who did nothing. Junction's number
   is active calories, a few hundred. Reporting one as the other would clear a
   500-calorie goal every day without the user moving.
+
+Apple's one gap is the same shape:
+
+- **sleep_score** - Apple publishes no proprietary 0-100 sleep score. The app
+  computes time asleep over time in bed and reports it as `sleep_efficiency`,
+  which is what it actually is. A pool authored as "sleep score 75+" is
+  therefore unjoinable for an Apple wallet, refused at the join.
+
+Apple is the only provider that can verify a **steps** pool, which matters
+because pool 14 is live and is a steps goal.
+
+Apple's "with a Watch" rows are narrowed per wallet rather than per provider.
+An iPhone with no Apple Watch produces steps and distance and no sleep at all,
+and the join gate reads what that person's hardware has actually produced, so
+they are refused a sleep pool before staking rather than after. See
+`observedMetrics` under Per-device capability.
 
 `sleep_score` and `sleep_efficiency` are separate metrics on purpose, and
 WHOOP's own field documentation is the reason. Efficiency is "the time you
@@ -162,6 +178,74 @@ on it.
 on this deployment" (missing config) or a failure on return from WHOOP
 (`whoop=failed`). Neither is silent, and neither pretends a device was linked.
 
+## Apple Health
+
+Apple is the only **pushed** provider. HealthKit is readable only on the device
+that holds it, there is no cloud API, and there never will be, so nothing pulls
+Apple. The GoHealthMe iPhone app reads Health on device, aggregates each day
+there, and posts the daily totals.
+
+**Raw samples never leave the phone.** One number per metric per UTC calendar
+day. Heart-rate series, sleep stage timings, workout routes and GPS traces stay
+on the device permanently. This is a stronger privacy position than the pulled
+providers, where the raw samples sit in a vendor's database.
+
+### Environment
+
+**No new server variables.** Apple uses the Supabase credentials the app
+already has. If Supabase can write, the Apple path is configured.
+
+Phone side, in `mobile/.env`:
+
+| Name | Required | What it is |
+|---|---|---|
+| `EXPO_PUBLIC_API_BASE` | yes | The GoHealthMe deployment the phone posts to. A Vercel preview URL works. |
+| `EXPO_PUBLIC_DEV_SIGNER_KEY` | pilot only | Signs the wallet-auth message before the embedded wallet is wired in. A well-known zero-value test key, never funded. Remove before real users. |
+
+### The table
+
+One table, `wearable_days`, on the GoHealthMe Supabase project, already
+migrated. It is the **only** table in that database holding health data and its
+comment says so out loud; every other table there carries a deliberate "no
+health data" note.
+
+RLS on, no anon read policy, service-role write only behind an EIP-191
+signature. Check constraints mirror the metric union, reject negative values
+and reject future days, because pre-satisfying a window that has not happened
+is the cheapest possible forgery.
+
+Retention: `select public.sweep_wearable_days(120);` deletes aggregates past
+any pool window. Wire it into the same cron that sweeps due pools. Health data
+kept longer than it is useful is a liability, not a feature.
+
+### Setting it up
+
+1. Confirm Supabase env is present on the deployment. Nothing else server-side.
+2. `cd mobile && npm install`
+3. Set `EXPO_PUBLIC_API_BASE` in `mobile/.env`
+4. `npx expo prebuild --clean`
+5. Build to a device: an EAS cloud build with the paid Apple Developer account,
+   or `npx expo run:ios --device` with Xcode installed locally
+6. On the phone, enter the wallet, tap **Set up Apple Health**, allow the sheet
+7. Verify with the number on screen: it reports how many day rows the SERVER
+   stored, not how many the phone sent
+
+### Telling a real failure from the system working
+
+- **"Nothing was sent" is inconclusive by design.** iOS never tells an app what
+  was granted. No data in Health, a Watch that has not synced to the iPhone,
+  and a denied permission sheet are indistinguishable from inside the app, and
+  the copy says exactly that rather than guessing at one of them.
+- **A sleep pool refused for an iPhone-only wallet is the gate working.** That
+  person has no Watch, so there is no sleep data and never will be until they
+  get one.
+- **A sleep-score pool refused for any Apple wallet is correct.** Apple has no
+  such number.
+- **A 401 from `/api/wearable/apple/sync`** means the signing wallet does not
+  match the address in the body.
+- **A 503** means the deployment has no Supabase service-role key. Waiting does
+  not fix it.
+
 ## Who is worse off after this change
 
 Required by the product-correctness rule: state which users get a worse
@@ -177,6 +261,11 @@ experience, and what they see.
 | Any user, just linked | "Connected and has not sent anything yet" instead of a zero streak. | No, strictly better |
 | Device that reports no sleep score, on a sleep-score pool | Pool is grouped as unmeasurable and the join is withheld, before any stake. Dashboard says the device does not report a sleep score. | **Yes.** Before, efficiency was silently substituted and they were judged on an easier bar. |
 | Linked wallet whose device measures only some metrics (an iPhone with no watch, a scoreless tracker) | Only the pools their setup can actually prove are joinable. | **Yes, and deliberately.** Previously joinable, then refused at the claim. |
+| Apple user with a Watch, any goal except sleep-score | Full path, and the only way to prove a steps goal. | No, strictly better: steps pools were previously unverifiable for anyone without a Junction device |
+| Apple user, iPhone and no Watch, sleep goal | Pool grouped as unmeasurable, join withheld, reason names the missing Watch. | **Yes, and deliberately.** Previously joinable, then refused at the claim after staking. |
+| Apple user, any sleep-score pool | Refused at the join. Apple publishes no proprietary score. | **Yes.** Correct: there is no number to judge them on. |
+| Apple user who tapped Set up and never installed the app | Reads as not linked, with instructions naming the iPhone. Nothing is provisioned server-side, so no state claims a connection that does not exist. | No |
+| Apple user whose phone has not synced yet | "Has not sent anything yet", distinct from a zero and from a device that cannot measure it. | No, strictly better |
 | Any user, provider outage | Unchanged: "cannot verify right now", kept separate from the permanent case. | No |
 
 ### Per-device capability, not just per-provider
@@ -187,6 +276,19 @@ score to a wallet whose tracker has none; a phone-based provider offers sleep to
 somebody syncing steps from a handset with no watch nearby. In both cases the
 provider legitimately declares the metric and that wallet can still never
 satisfy a pool scored on it.
+
+Apple answers this exactly and for free: the phone tells us which metrics it
+computed, so the observed list is a query against our own table with no
+upstream call and no cache staleness. An iPhone with no Watch has produced
+steps and distance and no sleep, and the gate reads precisely that.
+
+Two failure modes are worth stating because either one silently takes pools
+away from somebody. A provider that returns an empty list when nothing has been
+observed yet would blank a brand-new wallet's entire board, and one that
+returns an empty list when its own query fails would narrow the gate for a
+reason that has nothing to do with the user's device. Both cases must return
+null and fall back to the declared list. Pinned by tests in
+`lib/server/wearable/apple.test.ts` and `junction-provider.test.ts`.
 
 So the gate prefers **observed** capability over declared. The provider backing
 a wallet is probed once, cached for 30 minutes, and asked only whether each
