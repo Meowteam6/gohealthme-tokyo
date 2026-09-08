@@ -144,6 +144,11 @@ const TIER_RULES: ReadonlyArray<{ prefix: string; tier: RouteTier }> = [
   // Expensive: paid upstreams and chain reads.
   { prefix: "/api/wearable/", tier: "expensive" },
   { prefix: "/api/whoop/", tier: "expensive" },
+  // /api/junction/{link,progress,data} became /api/wearable/*, but
+  // /api/junction/mobile-token is still here and still mints a bearer
+  // credential for the native app. It keeps its tier rather than silently
+  // falling through to the default when the old prefix went away.
+  { prefix: "/api/junction/", tier: "expensive" },
   { prefix: "/api/goals/match", tier: "expensive" },
   { prefix: "/api/balance", tier: "expensive" },
 ];

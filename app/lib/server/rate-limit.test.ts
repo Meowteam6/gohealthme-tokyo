@@ -41,6 +41,10 @@ describe("classifyPath", () => {
     expect(classifyPath("/api/wearable/data")).toBe("expensive");
     expect(classifyPath("/api/wearable/progress")).toBe("expensive");
     expect(classifyPath("/api/wearable/link")).toBe("expensive");
+    expect(classifyPath("/api/whoop/login")).toBe("expensive");
+    // Survived the /api/junction/* -> /api/wearable/* rename and still mints a
+    // bearer credential for the native app, so it must keep its tier.
+    expect(classifyPath("/api/junction/mobile-token")).toBe("expensive");
     expect(classifyPath("/api/goals/match")).toBe("expensive");
   });
 
