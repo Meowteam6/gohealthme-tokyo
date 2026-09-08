@@ -27,7 +27,18 @@
 // string is formatted in local time. HealthKit does the bucketing itself from
 // that anchor, which is also why we do not hand-roll day boundaries.
 
-import { aggregateSleep, type DayValue, type SleepSample } from "./sleep-aggregate";
+import {
+  aggregateSleep,
+  SLEEP_ASLEEP_CORE,
+  SLEEP_ASLEEP_DEEP,
+  SLEEP_ASLEEP_REM,
+  SLEEP_ASLEEP_UNSPECIFIED,
+  SLEEP_AWAKE,
+  SLEEP_IN_BED,
+  type DayValue,
+  type SleepSample,
+} from "./sleep-aggregate";
+import { CategoryValueSleepAnalysis } from "@kingstinct/react-native-healthkit";
 import {
   isHealthDataAvailable,
   queryWorkoutSamples,
@@ -66,6 +77,25 @@ const READ_TYPES = [
   "HKCategoryTypeIdentifierSleepAnalysis",
   "HKWorkoutTypeIdentifier",
 ] as const;
+
+// COMPILE-TIME CHECK THAT OUR SLEEP CONSTANTS ARE STILL APPLE'S.
+//
+// sleep-aggregate.ts declares the HKCategoryValueSleepAnalysis values itself so
+// it can be tested without the native SDK. That leaves two copies of one fact,
+// and a payout depends on them agreeing. The SDK's enum is generated from
+// Apple's own headers, so comparing against it here turns a renumbering into a
+// build error rather than into every sleep number quietly changing while the
+// tests, which encode the same assumption, stay green.
+type AssertEqual<A extends B, B> = true;
+const _sleepConstantsMatchApple: [
+  AssertEqual<typeof SLEEP_IN_BED, CategoryValueSleepAnalysis.inBed>,
+  AssertEqual<typeof SLEEP_ASLEEP_UNSPECIFIED, CategoryValueSleepAnalysis.asleepUnspecified>,
+  AssertEqual<typeof SLEEP_AWAKE, CategoryValueSleepAnalysis.awake>,
+  AssertEqual<typeof SLEEP_ASLEEP_CORE, CategoryValueSleepAnalysis.asleepCore>,
+  AssertEqual<typeof SLEEP_ASLEEP_DEEP, CategoryValueSleepAnalysis.asleepDeep>,
+  AssertEqual<typeof SLEEP_ASLEEP_REM, CategoryValueSleepAnalysis.asleepREM>,
+] = [true, true, true, true, true, true];
+void _sleepConstantsMatchApple;
 
 export function healthDataAvailable(): boolean {
   return isHealthDataAvailable();

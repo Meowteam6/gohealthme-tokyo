@@ -16,6 +16,31 @@
 //
 // So segments are stitched into nights FIRST, and a night is attributed whole.
 
+/**
+ * HKCategoryValueSleepAnalysis raw values.
+ *
+ * Declared here rather than imported so this module stays free of the native
+ * SDK and can be tested off a device. healthkit.ts asserts at COMPILE TIME
+ * that these equal the SDK's generated enum, which is produced from Apple's own
+ * headers - so if Apple ever renumbers them, the build breaks instead of every
+ * sleep number silently changing while eleven tests stay green.
+ */
+export const SLEEP_IN_BED = 0;
+export const SLEEP_ASLEEP_UNSPECIFIED = 1;
+export const SLEEP_AWAKE = 2;
+export const SLEEP_ASLEEP_CORE = 3;
+export const SLEEP_ASLEEP_DEEP = 4;
+export const SLEEP_ASLEEP_REM = 5;
+
+/** The stages that count as actually asleep. Awake and inBed do not. */
+const ASLEEP: ReadonlySet<number> = new Set([
+  SLEEP_ASLEEP_UNSPECIFIED,
+  SLEEP_ASLEEP_CORE,
+  SLEEP_ASLEEP_DEEP,
+  SLEEP_ASLEEP_REM,
+]);
+const IN_BED = SLEEP_IN_BED;
+
 export interface DayValue {
   /** The wearer's local calendar day, YYYY-MM-DD. */
   day: string;
@@ -36,10 +61,6 @@ export interface SleepSample {
 export function aggregateSleep(
   samples: ReadonlyArray<SleepSample>,
 ): { hours: DayValue[]; efficiency: DayValue[] } {
-  // HKCategoryValueSleepAnalysis: 0 inBed, 1 asleepUnspecified, 2 awake,
-  // 3 asleepCore, 4 asleepDeep, 5 asleepREM.
-  const ASLEEP = new Set([1, 3, 4, 5]);
-  const IN_BED = 0;
 
   const spans = samples
     .map((s) => ({
