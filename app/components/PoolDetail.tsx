@@ -1007,8 +1007,20 @@ export default function PoolDetail({ id }: { id: string }) {
                       // The PROMPTING requester, deliberately. Browsing must
                       // never open a wallet modal, but this is the moment
                       // before an entry fee and the person asked for it.
+                      // BOTH reads, not just capability. providerQuery was
+                      // left holding its cold-load auth-required result, and
+                      // providerDownReason returns null for that - so an
+                      // outage stayed invisible after signing, and the page
+                      // went on to talk about the device instead of saying
+                      // the provider was refusing us. Nothing on this page
+                      // invalidates the progress key otherwise.
                       void requestAuth({ refresh: true })
-                        .then(() => capabilityQuery.refetch())
+                        .then(() =>
+                          Promise.all([
+                            capabilityQuery.refetch(),
+                            providerQuery.refetch(),
+                          ]),
+                        )
                         .finally(() => setCheckingDevice(false));
                     }}
                   >

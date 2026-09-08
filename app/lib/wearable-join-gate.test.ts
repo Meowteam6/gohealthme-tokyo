@@ -109,4 +109,35 @@ describe("wearableJoinBlock", () => {
       wearableJoinBlock({ ...base, goalSpec: "be healthier" }),
     ).toEqual({ kind: "ok" });
   });
+
+  it("blocks a signed wallet with nothing linked - the no-provider row", () => {
+    // Five cells the sweep could not verify before its budget ran out. The
+    // mechanism is the same predicate disagreement confirmed elsewhere:
+    // viewerMetricsOf returns null for a wallet whose provider is selected but
+    // never connected, and that must not read as "measures everything".
+    const block = wearableJoinBlock({
+      ...base,
+      viewerMetrics: null,
+      needsDevice: true,
+      capabilityPending: true,
+    });
+    expect(block.kind).toBe("no-device");
+    expect(joinIsBlocked(block)).toBe(true);
+  });
+
+  it("cannot be talked into ok by an unknown provider health alone", () => {
+    // providerDown is null both when the provider is FINE and when we have not
+    // been able to ask. Null must therefore never be sufficient on its own:
+    // the capability checks below it are what actually withhold the join, and
+    // this pins that ordering so a refactor cannot make null mean healthy.
+    const block = wearableJoinBlock({
+      ...base,
+      providerDown: null,
+      viewerMetrics: null,
+      capabilityPending: true,
+      needsDevice: false,
+    });
+    expect(block.kind).toBe("unchecked");
+    expect(joinIsBlocked(block)).toBe(true);
+  });
 });
