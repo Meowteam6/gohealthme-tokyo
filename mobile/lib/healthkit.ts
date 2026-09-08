@@ -38,7 +38,10 @@ import {
   type DayValue,
   type SleepSample,
 } from "./sleep-aggregate";
-import { CategoryValueSleepAnalysis } from "@kingstinct/react-native-healthkit";
+import {
+  CategoryValueSleepAnalysis,
+  ComparisonPredicateOperator,
+} from "@kingstinct/react-native-healthkit";
 import {
   isHealthDataAvailable,
   queryWorkoutSamples,
@@ -96,6 +99,30 @@ const _sleepConstantsMatchApple: [
   AssertEqual<typeof SLEEP_ASLEEP_REM, CategoryValueSleepAnalysis.asleepREM>,
 ] = [true, true, true, true, true, true];
 void _sleepConstantsMatchApple;
+
+/**
+ * Exclude anything a human typed in, on every read.
+ *
+ * THIS IS THE FRAUD GATE, and without it the whole path is worth nothing.
+ * Apple's docs are explicit that "users can always modify their data outside
+ * your app": somebody can open the Health app, type 20,000 steps, and any
+ * integration that reads the total pays them for it. There is no signature on a
+ * HealthKit sample and no way to prove a wrist wore anything.
+ *
+ * `HKWasUserEntered` is set by whoever wrote the sample, so it is not proof of
+ * honesty, but it is what Apple gives us and it stops the trivial case: the
+ * Health app sets it on anything typed by hand.
+ *
+ * NOT `equalTo false`. The flag is YES, NO, or ABSENT, and absent is the
+ * overwhelmingly common case for a genuine watch sample. Matching on false
+ * would silently exclude almost all real data and leave only the rare sample
+ * that explicitly says NO. `notEqualTo true` keeps absent and NO, drops YES.
+ */
+const NOT_USER_ENTERED = {
+  withMetadataKey: "HKWasUserEntered",
+  operatorType: ComparisonPredicateOperator.notEqualTo,
+  value: true,
+} as const;
 
 export function healthDataAvailable(): boolean {
   return isHealthDataAvailable();
@@ -179,7 +206,10 @@ async function dailySums(
     ["cumulativeSum"],
     anchor,
     { day: 1 },
-    { unit: unit as never, filter: { date: { startDate: anchor } } },
+    {
+      unit: unit as never,
+      filter: { date: { startDate: anchor }, metadata: NOT_USER_ENTERED },
+    },
   );
 
   const out: DayValue[] = [];
@@ -220,7 +250,10 @@ async function sleepByNight(
   const anchor = localMidnight(since);
   const samples = (await queryCategorySamples(
     "HKCategoryTypeIdentifierSleepAnalysis" as never,
-    { filter: { date: { startDate: anchor } }, ascending: true } as never,
+    {
+      filter: { date: { startDate: anchor }, metadata: NOT_USER_ENTERED },
+      ascending: true,
+    } as never,
   )) as unknown as ReadonlyArray<SleepSample>;
 
   return aggregateSleep(
@@ -252,7 +285,7 @@ export interface Aggregates {
 async function workoutsByDay(since: Date): Promise<DayValue[]> {
   const anchor = localMidnight(since);
   const sessions = (await queryWorkoutSamples({
-    filter: { date: { startDate: anchor } },
+    filter: { date: { startDate: anchor }, metadata: NOT_USER_ENTERED },
     ascending: true,
   } as never)) as unknown as ReadonlyArray<{ startDate?: string | Date }>;
 
@@ -284,7 +317,16 @@ export async function collectAggregates(days: number): Promise<Aggregates[]> {
   const since = new Date();
   since.setDate(since.getDate() - Math.max(1, days) - 1);
 
-  const [steps, distanceKm, activeCalories, sleep, workouts] = await Promise.all([
+  // allSettled, NOT all. A HealthKit query throws errorDatabaseInaccessible
+  // when the device is locked, and Apple documents that as ordinary rather
+  // than exceptional. With Promise.all one locked-phone rejection loses all
+  // six metrics, so a sync that fires at the wrong moment reports nothing
+  // instead of the partial truth it actually had.
+  //
+  // A failed metric is OMITTED, never sent as zero. An absent day means "not
+  // synced" on the server and a zero means "you did not do it", and the whole
+  // verdict rests on that distinction.
+  const settled = await Promise.allSettled([
     dailySums("HKQuantityTypeIdentifierStepCount", "count", since),
     dailySums("HKQuantityTypeIdentifierDistanceWalkingRunning", "m", since, (m) =>
       round(m / 1000, 3),
@@ -295,6 +337,16 @@ export async function collectAggregates(days: number): Promise<Aggregates[]> {
     sleepByNight(since),
     workoutsByDay(since),
   ]);
+
+  const [stepsR, distanceR, energyR, sleepR, workoutsR] = settled;
+  const ok = <T,>(r: PromiseSettledResult<T> | undefined, fallback: T): T =>
+    r !== undefined && r.status === "fulfilled" ? r.value : fallback;
+
+  const steps = ok(stepsR, [] as DayValue[]);
+  const distanceKm = ok(distanceR, [] as DayValue[]);
+  const activeCalories = ok(energyR, [] as DayValue[]);
+  const sleep = ok(sleepR, { hours: [] as DayValue[], efficiency: [] as DayValue[] });
+  const workouts = ok(workoutsR, [] as DayValue[]);
 
   return [
     { metric: "steps", days: steps },
