@@ -39,6 +39,12 @@ export {
  */
 export type { WearableMetric } from "@/lib/wearable-goal";
 
+/** What a provider knows about one wallet's actual hardware. */
+export type ObservedCapability =
+  | { kind: "observed"; metrics: readonly WearableMetric[] }
+  | { kind: "declared" }
+  | { kind: "unknown" };
+
 /**
  * Per-window result for one metric.
  *
@@ -197,32 +203,30 @@ export interface WearableProvider {
   /** Recent per-day sleep and activity for the dashboard card. */
   getRecent(address: string, days: number): Promise<WearableRecent>;
   /**
-   * The metrics this WALLET's device has actually produced data for, or null
-   * when the declared list is already device-accurate.
+   * What this WALLET's device has actually produced, as a three-way answer.
    *
-   * WHY DECLARED IS NOT ALWAYS ENOUGH. `metrics` is what the integration can
-   * serve; it is not always what a given person's hardware does. Junction
-   * normalises several brands, and a tracker linked through it may report no
-   * proprietary sleep score. A phone-based provider may be syncing steps from
-   * an iPhone with no watch anywhere near it, so sleep never arrives. In both
-   * cases the provider legitimately declares the metric and this particular
-   * wallet can still never satisfy a pool scored on it.
+   * WHY NOT `WearableMetric[] | null`. It was, and null carried two meanings
+   * that need opposite handling: "nothing observed yet", where falling back to
+   * the declared list is right, and "every probe failed", where falling back
+   * offers the full declared union on no evidence at all. A Junction outage
+   * therefore handed a wallet all seven metrics including sleep_score, and the
+   * answer was cached for thirty minutes. The state that exists to prevent
+   * learn-after-the-stake was producing it.
    *
-   * Returning null means "declared is accurate for every device" - true for a
-   * single-hardware provider like WHOOP, where every strap measures the same
-   * things. Returning a list narrows the join gate to what this person's setup
-   * actually does, which is the difference between learning before the stake
-   * and learning after it.
+   *   observed  narrowed to what this wallet's hardware actually produced.
+   *   declared  the provider's declared list is accurate for this wallet -
+   *             either the hardware is uniform (every WHOOP strap is the same)
+   *             or nothing has been observed yet and there is nothing to
+   *             narrow. Permissive on purpose: a wallet that linked ten
+   *             minutes ago must not have its whole board blanked.
+   *   unknown   we could not find out. Withhold the join rather than assume,
+   *             and NEVER cache this - a cached unknown is an outage that
+   *             outlives itself.
    *
-   * CONTRACT, and getting this wrong blanks somebody's whole board: return
-   * NULL when nothing has been observed yet, never an empty array. An empty
-   * array means "this device produced none of these", which the gate honours
-   * by hiding every wearable pool. A wallet that linked ten minutes ago has
-   * observed nothing and must fall back to the declared list instead.
-   *
-   * Must be cheap enough to call on a browse surface: cache it.
+   * Must be cheap enough to call on a browse surface: cache `observed` and
+   * `declared`, never `unknown`.
    */
-  observedMetrics(address: string): Promise<WearableMetric[] | null>;
+  observedMetrics(address: string): Promise<ObservedCapability>;
   /** Forget this wallet's connection. Idempotent. */
   disconnect(address: string): Promise<void>;
 }

@@ -228,12 +228,21 @@ export interface ProviderOption {
    */
   metrics: WearableMetric[];
   /**
-   * What this WALLET's actual hardware has produced, or null when the declared
-   * list is already accurate for every device. The gate prefers this: Junction
-   * declares a sleep score even for a tracker that has none, and a phone
-   * provider declares sleep even for somebody with no watch.
+   * What this WALLET's actual hardware has produced, when we know it.
    */
   observedMetrics: WearableMetric[] | null;
+  /**
+   * How much the server could establish about this wallet's hardware.
+   *
+   *   observed  observedMetrics is the narrowed truth for this wallet.
+   *   declared  the declared list is accurate - uniform hardware, or nothing
+   *             observed yet and nothing to narrow.
+   *   unknown   we could not find out. Withholds the join. This used to be
+   *             collapsed into "declared", so a Junction outage offered a
+   *             wallet the whole declared union on no evidence, cached for
+   *             thirty minutes.
+   */
+  capability: "observed" | "declared" | "unknown";
 }
 
 /**
@@ -283,6 +292,10 @@ function parseOptions(payload: unknown): ProviderOptions {
         connected: item.connected === true,
         metrics: metricList(item.metrics) ?? [],
         observedMetrics: metricList(item.observedMetrics),
+        capability:
+          item.capability === "observed" || item.capability === "unknown"
+            ? item.capability
+            : "declared",
       },
     ];
   });
@@ -393,9 +406,12 @@ export function viewerMetricsOf(
   // A provider the wallet chose but never actually linked says nothing about
   // what will verify their claim, so it is not treated as known either.
   if (!active.connected) return null;
-  // Observed beats declared. This is the whole point: the declared list is
-  // what the integration can serve, and the gate has to answer for the device
-  // this person is actually wearing. Null means declared is already accurate.
+  // We could not establish anything about this device. Null withholds; falling
+  // back to the declared union here is what let a Junction outage offer a
+  // wallet all seven metrics on no evidence at all.
+  if (active.capability === "unknown") return null;
+  // Observed beats declared. The declared list is what the integration can
+  // serve; the gate has to answer for the device this person is wearing.
   return active.observedMetrics ?? active.metrics;
 }
 

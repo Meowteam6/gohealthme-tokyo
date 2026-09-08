@@ -150,3 +150,36 @@ export function daySeries(
     score: byDay.get(date) as number,
   }));
 }
+
+/**
+ * How many calendar days the window actually covers, up to today.
+ *
+ * For a COUNT metric a day with no record is a real zero - nobody trained on
+ * Tuesday - so every day in the window is "sourced" whether or not anything
+ * was recorded on it. Callers used to express that by asking
+ * countQualifyingDays for an empty map with an unreachable threshold, which
+ * early-returns 0 on `byDay.size === 0` and answered zero every time. That
+ * made daysWithSource permanently zero for workouts, which the progress route
+ * reads as "nothing has ever synced" - so every WHOOP wallet on a workouts
+ * pool sat on "waiting on your first sync" forever with the fee already paid.
+ *
+ * The count belongs in its own function because it is not a question about
+ * data at all: it is a question about the calendar.
+ */
+export function countDaysInWindow(
+  windowStartISO: string,
+  windowEndISO?: string,
+  now: Date = new Date(),
+): number {
+  const windowEnd =
+    windowEndISO !== undefined && utcDate(windowEndISO) < now
+      ? utcDate(windowEndISO)
+      : now;
+  const cursor = utcDate(windowStartISO);
+  let days = 0;
+  while (cursor <= windowEnd) {
+    days += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
+}

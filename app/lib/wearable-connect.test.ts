@@ -204,6 +204,7 @@ describe("fetchProviderOptions", () => {
           connected: true,
           metrics: ["sleep_score"],
           observedMetrics: null,
+          capability: "declared",
         },
         { id: "garmin", label: "Garmin", configured: true, connected: true, metrics: [] },
       ],
@@ -236,6 +237,7 @@ describe("viewerMetricsOf", () => {
     connected: true,
     metrics: ["sleep_score" as const],
     observedMetrics: null,
+    capability: "declared" as const,
     ...over,
   });
 
@@ -255,6 +257,7 @@ describe("viewerMetricsOf", () => {
           option({
             metrics: ["sleep_score", "steps"],
             observedMetrics: ["steps"],
+            capability: "observed" as const,
           }),
         ],
         selected: "whoop",
@@ -268,11 +271,25 @@ describe("viewerMetricsOf", () => {
     // these". Null is how it says "I cannot narrow"; the two differ.
     expect(
       viewerMetricsOf({
-        providers: [option({ observedMetrics: [] })],
+        providers: [option({ observedMetrics: [], capability: "observed" as const })],
         selected: "whoop",
         status: "known",
       }),
     ).toEqual([]);
+  });
+
+  it("withholds everything when the server could not establish anything", () => {
+    // The Junction-outage case. Falling back to the declared union here is
+    // what handed a wallet all seven metrics on no evidence, cached for half
+    // an hour, and the probe written to prevent learn-after-the-stake was the
+    // thing producing it.
+    expect(
+      viewerMetricsOf({
+        providers: [option({ capability: "unknown" as const })],
+        selected: "whoop",
+        status: "known",
+      }),
+    ).toBeNull();
   });
 
   it("is null - not empty - whenever the device is not actually known", () => {
@@ -355,4 +372,5 @@ describe("providerOptionsQueryKey", () => {
       providerOptionsQueryKey(null),
     );
   });
+
 });

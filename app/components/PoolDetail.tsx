@@ -577,6 +577,12 @@ export default function PoolDetail({ id }: { id: string }) {
     viewerMetricsOf(capabilityQuery.data),
   );
   const unsupportedForViewer = unsupportedMetric !== null && !joined;
+  // A participant who already joined and then switched device is in the worst
+  // position of anyone: the fee is spent and their new device cannot prove the
+  // goal. Withholding the join is meaningless for them, but saying nothing was
+  // its own lie - the claim panel reported an outage, which is neither their
+  // fault nor fixable by waiting. They get told, and told what to do.
+  const unsupportedAfterJoin = unsupportedMetric !== null && joined;
 
   // "We have not established what this wallet's device measures" is NOT the
   // same as "it measures everything", and treating them alike defeated the
@@ -792,6 +798,9 @@ export default function PoolDetail({ id }: { id: string }) {
             <Badge tone="warning">Cannot verify right now</Badge>
           ) : null}
           {unsupportedForViewer && phase === "live" ? (
+            <Badge tone="warning">Your device cannot measure this</Badge>
+          ) : null}
+          {unsupportedAfterJoin && phase === "live" ? (
             <Badge tone="warning">Your device cannot measure this</Badge>
           ) : null}
         </div>

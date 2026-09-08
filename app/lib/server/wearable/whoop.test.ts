@@ -526,6 +526,38 @@ describe("getMetricProgress", () => {
     expect(progress.qualifyingDays).toBe(2);
   });
 
+  it("reports every day in the window as sourced for workouts", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        json({
+          records: [
+            { id: "w1", end: "2026-06-16T09:00:00.000Z", score_state: "SCORED" },
+          ],
+          next_token: null,
+        }),
+      ),
+    );
+
+    const progress = await whoopProvider.getMetricProgress(
+      address,
+      "workouts",
+      1,
+      "2026-06-15",
+      "2026-06-21",
+    );
+
+    // A day with no session means nobody trained - a real zero, not missing
+    // data. daysWithSource was permanently 0 here, which the progress route
+    // reads as "nothing has ever synced", so every connected WHOOP wallet on a
+    // workouts pool sat on "waiting on your first sync" forever with the fee
+    // already paid.
+    expect(progress.daysWithSource).toBe(7);
+    expect(progress.qualifyingDays).toBe(1);
+  });
+
   it("reads workouts from the workout endpoint, not the sleep one", async () => {
     const address = nextAddress();
     await linked(address);

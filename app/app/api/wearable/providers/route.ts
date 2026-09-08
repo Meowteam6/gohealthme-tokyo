@@ -30,6 +30,7 @@ import { type NextRequest } from "next/server";
 import { isAddress } from "viem";
 import { jsonError } from "@/lib/server/http";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
+import type { ObservedCapability } from "@/lib/server/wearable";
 import {
   PROVIDER_IDS,
   providerById,
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
           configured: providerConfigured(id),
           connected: false,
           metrics: providerById(id).metrics,
+          capability: "declared",
           observedMetrics: null,
         })),
         selected: null,
@@ -81,13 +83,17 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        let observed: readonly string[] | null = null;
+        // Three-way, and the wire keeps all three. "unknown" means we could
+        // not find out, and the client must withhold rather than fall back to
+        // the declared union - that fallback is how a Junction outage handed a
+        // wallet all seven metrics on no evidence.
+        let capability: ObservedCapability = { kind: "declared" };
         if (connected && id === selected) {
           try {
-            observed = await provider.observedMetrics(address);
+            capability = await provider.observedMetrics(address);
           } catch (err) {
-            // Falls back to the declared list, which is the permissive answer.
             console.error(`[wearable/providers] ${id} probe failed`, err);
+            capability = { kind: "unknown" };
           }
         }
 
@@ -97,7 +103,9 @@ export async function GET(request: NextRequest) {
           configured,
           connected,
           metrics: provider.metrics,
-          observedMetrics: observed,
+          capability: capability.kind,
+          observedMetrics:
+            capability.kind === "observed" ? capability.metrics : null,
         };
       }),
     );

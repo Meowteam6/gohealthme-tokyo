@@ -65,7 +65,7 @@ function stubProvider(overrides: Record<string, unknown> = {}) {
   return {
     id: "junction",
     label: "Junction",
-    metrics: ["sleep_score", "sleep_efficiency", "sleep_hours"],
+    metrics: ["sleep_score", "sleep_efficiency", "sleep_hours", "steps"],
     getMetricProgress: (...args: unknown[]) => getMetricProgress(...args),
     isConnected: (...args: unknown[]) => isConnected(...args),
     getProgress: (...args: unknown[]) => getProgress(...args),
@@ -334,5 +334,33 @@ describe("GET /api/wearable/progress scoped to a pool's own metric", () => {
     // Falls back to the sleep feed rather than passing junk downstream.
     expect(getMetricProgress).not.toHaveBeenCalled();
     expect(getProgress).toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/wearable/progress on a metric the device cannot measure", () => {
+  const WINDOW = "&start=1750000000&end=1750604800";
+
+  it("says the device cannot measure it, never that we are down", async () => {
+    providerFor.mockResolvedValue(
+      stubProvider({
+        id: "whoop",
+        label: "WHOOP",
+        metrics: ["sleep_score", "sleep_hours", "workouts"],
+      }),
+    );
+    isConnected.mockResolvedValue(true);
+
+    const res = await get(`?address=${USER}&metric=steps${WINDOW}`);
+    const body = (await res.json()) as { linkState: string };
+
+    // Asked before the call rather than discovered by catching a throw. The
+    // provider refuses by throwing, the route used to flatten that into a
+    // generic 502, and the client read 502 as an OUTAGE - so somebody whose
+    // strap simply has no pedometer was told "this is on us, not on your
+    // device. Connecting one would not change it", which is false on both
+    // counts when connecting another device is exactly the fix.
+    expect(res.status).toBe(200);
+    expect(body.linkState).toBe("metric-unavailable");
+    expect(getMetricProgress).not.toHaveBeenCalled();
   });
 });

@@ -61,26 +61,40 @@ describe("junctionProvider.observedMetrics", () => {
 
     // sleep_score is declared by Junction and absent from this tracker, which
     // is the case the whole probe exists for.
-    expect(observed).not.toBeNull();
-    expect(observed).toContain("steps");
-    expect(observed).toContain("sleep_efficiency");
-    expect(observed).not.toContain("sleep_score");
+    expect(observed.kind).toBe("observed");
+    const metrics = observed.kind === "observed" ? observed.metrics : [];
+    expect(metrics).toContain("steps");
+    expect(metrics).toContain("sleep_efficiency");
+    expect(metrics).not.toContain("sleep_score");
   });
 
-  it("returns NULL, not an empty list, when nothing has been observed", async () => {
+  it("answers 'declared', not an empty list, when nothing has been observed", async () => {
     // A wallet that linked ten minutes ago has produced nothing. An empty
     // array would mean "measures none of these" and hide every wearable pool
-    // on their board; null falls back to the declared list.
+    // on their board; declared is the permissive fallback.
     onlyPresent([]);
 
-    expect(await junctionProvider.observedMetrics(nextAddress())).toBeNull();
+    expect((await junctionProvider.observedMetrics(nextAddress())).kind).toBe(
+      "declared",
+    );
   });
 
-  it("never narrows on an upstream failure", async () => {
+  it("answers 'unknown' when NO probe could answer, and does not cache it", async () => {
+    // Distinct from "observed nothing". Falling back to declared here offers
+    // the full seven-metric union on no evidence at all, which is what the
+    // probe exists to prevent - and caching it would make a Junction outage
+    // outlive itself by thirty minutes.
+    const address = nextAddress();
     getMetricProgress.mockRejectedValue(new Error("Junction returned 503"));
 
-    // A Junction hiccup must not take pools off somebody's board.
-    expect(await junctionProvider.observedMetrics(nextAddress())).toBeNull();
+    expect((await junctionProvider.observedMetrics(address)).kind).toBe(
+      "unknown",
+    );
+
+    // The recovery must be visible immediately, not after the TTL.
+    onlyPresent(["steps"]);
+    const recovered = await junctionProvider.observedMetrics(address);
+    expect(recovered.kind).toBe("observed");
   });
 
   it("survives one metric failing while the others answer", async () => {
@@ -95,7 +109,8 @@ describe("junctionProvider.observedMetrics", () => {
 
     const observed = await junctionProvider.observedMetrics(nextAddress());
 
-    expect(observed).toEqual(["sleep_hours"]);
+    // One probe threw and the others answered, so this is real evidence.
+    expect(observed).toEqual({ kind: "observed", metrics: ["sleep_hours"] });
   });
 
   it("caches per wallet so a browse surface does not re-probe", async () => {

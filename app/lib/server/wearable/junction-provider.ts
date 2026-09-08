@@ -18,6 +18,7 @@ import {
 } from "@/lib/server/junction";
 import type {
   MetricProgress,
+  ObservedCapability,
   WearableLink,
   WearableMetric,
   WearableProgress,
@@ -32,7 +33,7 @@ import type {
  * up the same session; long enough that browsing the pool list is free.
  */
 const OBSERVED_TTL_MS = 30 * 60_000;
-const observedCache = ttlCache<WearableMetric[] | null>({
+const observedCache = ttlCache<ObservedCapability>({
   ttlMs: OBSERVED_TTL_MS,
   maxEntries: 512,
 });
@@ -145,7 +146,7 @@ export const junctionProvider: WearableProvider = {
    * an upstream error returns null, which falls back to the declared list, so
    * a Junction hiccup can never take pools off somebody's board.
    */
-  async observedMetrics(address: string): Promise<WearableMetric[] | null> {
+  async observedMetrics(address: string): Promise<ObservedCapability> {
     try {
       return await observedCache.get(address.toLowerCase(), async () => {
         const today = new Date();
@@ -153,6 +154,9 @@ export const junctionProvider: WearableProvider = {
         const start = from.toISOString().slice(0, 10);
         const end = today.toISOString().slice(0, 10);
 
+        // Each probe reports whether it ANSWERED as well as what it found.
+        // A probe that threw is not evidence of absence, and treating it as
+        // one is how an outage came to look like a device with no sensors.
         const probes = await Promise.all(
           PROBED_METRICS.map(async (metric) => {
             try {
@@ -165,23 +169,36 @@ export const junctionProvider: WearableProvider = {
                 start,
                 end,
               );
-              return progress.daysWithData > 0 ? metric : null;
+              return { answered: true, metric, present: progress.daysWithData > 0 };
             } catch {
-              return null;
+              return { answered: false, metric, present: false };
             }
           }),
         );
 
-        const observed = probes.filter(
-          (metric): metric is WearableMetric => metric !== null,
-        );
-        // Nothing observed at all means the device has not synced yet, not
-        // that it measures nothing. Narrowing to an empty list would take
-        // every wearable pool off a new user's board.
-        return observed.length === 0 ? null : observed;
+        // Nothing answered: Junction is refusing us, and we know nothing about
+        // this device. Withhold rather than hand back the declared union on no
+        // evidence - and throw, so the cache never stores it.
+        if (!probes.some((probe) => probe.answered)) {
+          throw new Error("no Junction probe answered");
+        }
+
+        const observed = probes
+          .filter((probe) => probe.present)
+          .map((probe) => probe.metric);
+
+        // Answered, and this device has produced nothing in the window. That
+        // is a device that has not synced, not one that measures nothing:
+        // narrowing to an empty list would take every wearable pool off a new
+        // user's board.
+        return observed.length === 0
+          ? { kind: "declared" }
+          : { kind: "observed", metrics: observed };
       });
     } catch {
-      return null;
+      // Includes the deliberate throw above, so an all-probes-failed answer is
+      // never cached: a cached unknown is an outage that outlives itself.
+      return { kind: "unknown" };
     }
   },
 

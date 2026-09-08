@@ -43,11 +43,13 @@ import {
 import {
   baselineWeekAverage,
   bestScorePerDay,
+  countDaysInWindow,
   countQualifyingDays,
   daySeries,
 } from "@/lib/server/wearable/streak";
 import type {
   MetricProgress,
+  ObservedCapability,
   WearableLink,
   WearableMetric,
   WearableProgress,
@@ -926,17 +928,16 @@ export const whoopProvider: WearableProvider = {
       );
     }
 
+    // Every day in the window counts as sourced for a count metric: a day with
+    // no session means nobody trained, which is a real zero rather than
+    // missing data. This used to ask countQualifyingDays for an empty map,
+    // which early-returns 0 on an empty map and therefore always answered
+    // zero - so daysWithSource was permanently 0 for workouts and every
+    // connected WHOOP wallet on a workouts pool was told, forever, that its
+    // device had not synced yet.
     const sourced =
       sourceDays === null
-        ? countQualifyingDays(
-            // Every day in the window counts as sourced for a count metric.
-            new Map(),
-            Number.NEGATIVE_INFINITY,
-            0,
-            windowStartISO,
-            windowEndISO,
-            now,
-          )
+        ? countDaysInWindow(windowStartISO, windowEndISO, now)
         : 0;
 
     return {
@@ -1067,8 +1068,8 @@ export const whoopProvider: WearableProvider = {
    * that cannot count steps cannot count them for anybody. Probing would spend
    * requests against a shared 10000-a-day quota to re-learn a constant.
    */
-  async observedMetrics(): Promise<null> {
-    return null;
+  async observedMetrics(): Promise<ObservedCapability> {
+    return { kind: "declared" };
   },
 
   /**

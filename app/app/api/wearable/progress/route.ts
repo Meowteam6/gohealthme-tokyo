@@ -112,6 +112,25 @@ export async function GET(request: NextRequest) {
     // three-way distinction, from the metric-aware progress every provider
     // already implements.
     if (metric !== null && hasWindow) {
+      // Asked BEFORE the call, not discovered by catching the throw. A
+      // provider refuses an unmeasurable metric by throwing, the route used to
+      // flatten that into a generic 502, and the client read 502 as an
+      // OUTAGE - so somebody whose device simply cannot measure the goal was
+      // told "this is on us, not on your device. Connecting one would not
+      // change it", which is false on both counts when connecting another
+      // device is precisely the fix. Same check the verdict path makes.
+      if (!provider.metrics.includes(metric)) {
+        return Response.json({
+          connected: true,
+          provider: provider.id,
+          linkState: "metric-unavailable",
+          metric: `${metricLabel(metric)} · since ${windowStartISO}`,
+          streakDays: null,
+          targetDays,
+          lastSync: null,
+        });
+      }
+
       const scoped = await provider.getMetricProgress(
         address,
         metric,
