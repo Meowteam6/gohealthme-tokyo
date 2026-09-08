@@ -28,6 +28,7 @@ import { isAddress } from "viem";
 import { jsonError } from "@/lib/server/http";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
 import { providerFor } from "@/lib/server/wearable";
+import { isWearableMetric, metricLabel } from "@/lib/wearable-goal";
 
 /**
  * Upstream failures are logged with detail and answered without any. A
@@ -83,6 +84,18 @@ export async function GET(request: NextRequest) {
 
     const provider = await providerFor(address);
 
+    // WHICH METRIC THIS READ IS ABOUT.
+    //
+    // Without it the route answers about sleep, because getProgress is the
+    // sleep-streak feed. That is right for the dashboard card and wrong for a
+    // claim panel: an iPhone with no watch, or any step-only tracker, has zero
+    // sleep rows, so the answer was "your device has sent nothing" - and the
+    // claim panel hid the run button behind that, permanently, for a wallet
+    // whose steps had already synced. Entry fee paid, goal met, claim
+    // unstartable.
+    const requestedMetric = params.get("metric");
+    const metric = isWearableMetric(requestedMetric) ? requestedMetric : null;
+
     if (!(await provider.isConnected(address))) {
       return Response.json({
         connected: false,
@@ -90,6 +103,33 @@ export async function GET(request: NextRequest) {
         linkState: "not-linked",
         metric: null,
         streakDays: null,
+        targetDays,
+        lastSync: null,
+      });
+    }
+
+    // A metric-scoped read answers about THAT metric, using the same
+    // three-way distinction, from the metric-aware progress every provider
+    // already implements.
+    if (metric !== null && hasWindow) {
+      const scoped = await provider.getMetricProgress(
+        address,
+        metric,
+        threshold,
+        windowStartISO as string,
+        windowEndISO as string,
+      );
+      return Response.json({
+        connected: true,
+        provider: provider.id,
+        linkState:
+          scoped.daysWithSource === 0
+            ? "awaiting-first-sync"
+            : scoped.daysWithData === 0
+              ? "metric-unavailable"
+              : "linked",
+        metric: `${metricLabel(metric)} · since ${windowStartISO}`,
+        streakDays: scoped.qualifyingDays,
         targetDays,
         lastSync: null,
       });

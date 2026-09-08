@@ -164,6 +164,7 @@ describe("providerQueryKey", () => {
       "wearable-progress",
       "0xabc",
       "none",
+      "default",
     ]);
   });
 
@@ -172,7 +173,17 @@ describe("providerQueryKey", () => {
       "wearable-progress",
       "0xabc",
       "14",
+      "default",
     ]);
+  });
+
+  it("separates a metric-scoped read from the sleep one", () => {
+    // A sleep answer must not stand in for a steps question just because it is
+    // cached under the same address. That is how a wallet whose steps had
+    // synced was told its device had sent nothing, forever.
+    expect(providerQueryKey("0xabc", 14n, "steps")).not.toEqual(
+      providerQueryKey("0xabc", 14n),
+    );
   });
 });
 

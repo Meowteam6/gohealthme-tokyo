@@ -28,6 +28,7 @@ import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { displayGoalSpec, fetchGoalId, fetchPool } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
+import { classifyWearableGoal } from "@/lib/wearable-goal";
 import {
   deferredPeriodEndMs,
   failureModeOf,
@@ -180,17 +181,6 @@ function WearableCheckInner({
     [requestAuth],
   );
 
-  // The provider read is shared with the dashboard and the pool list through
-  // one query key: same endpoint, same parsed shape, one request per address.
-  const providerQuery = useQuery({
-    queryKey: providerQueryKey(address),
-    queryFn: () => {
-      if (address === null) throw new Error("No wallet connected.");
-      return fetchProviderState(address, providerStatusAuth);
-    },
-    enabled: address !== null,
-    retry: false,
-  });
 
   // Stop any in-flight poll loop on unmount.
   useEffect(() => {
@@ -385,6 +375,45 @@ function WearableCheckInner({
     enabled:
       status.kind === "agent" &&
       (status.runStatus === "recorded" || status.runStatus === "paid"),
+  });
+
+  // The metric THIS pool is scored on, so the readiness read is about the goal
+  // in front of the person rather than about sleep.
+  //
+  // Without it this panel asked the sleep-streak feed, and a wallet with no
+  // sleep data - a phone with no watch, a step-only tracker - came back
+  // "awaiting first sync" forever. The awaiting branch sits above the run
+  // button, so the claim could never be started, on a pool whose entry fee had
+  // already been paid and whose steps had already synced. The verdict path
+  // would have verified them; they simply could not reach it.
+  const goalMetric = classifyWearableGoal(goalSpec).metric;
+
+  // The pool's own period, which the metric-scoped read is bounded by. Not
+  // available until the pool loads, so the read waits rather than asking about
+  // sleep in the meantime and caching a wrong answer.
+  const poolWindow =
+    poolQuery.data !== undefined
+      ? {
+          periodStart: poolQuery.data.periodStart,
+          periodEnd: poolQuery.data.periodEnd,
+        }
+      : undefined;
+
+  const providerQuery = useQuery({
+    // Keyed by metric as well: a sleep answer must not stand in for a steps
+    // question just because it is cached under the same address.
+    queryKey: providerQueryKey(address, poolId, goalMetric ?? undefined),
+    queryFn: () => {
+      if (address === null) throw new Error("No wallet connected.");
+      return fetchProviderState(
+        address,
+        providerStatusAuth,
+        poolWindow,
+        goalMetric ?? undefined,
+      );
+    },
+    enabled: address !== null && poolWindow !== undefined,
+    retry: false,
   });
   const periodEndMs =
     status.kind === "agent" && status.runStatus === "recorded"

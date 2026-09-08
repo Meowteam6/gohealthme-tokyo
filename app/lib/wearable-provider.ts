@@ -220,8 +220,18 @@ export function providerAuthReason(
 export function providerQueryKey(
   address: string | null,
   poolId?: bigint,
+  metric?: string,
 ): (string | null)[] {
-  return ["wearable-progress", address, poolId?.toString() ?? "none"];
+  // The metric is part of the key. The dashboard asks about sleep and a claim
+  // panel asks about the pool's own metric; sharing one cache entry would let
+  // a sleep answer stand in for a steps question, which is how a wallet with
+  // steps synced was told to wait for a sync that had already happened.
+  return [
+    "wearable-progress",
+    address,
+    poolId?.toString() ?? "none",
+    metric ?? "default",
+  ];
 }
 
 /**
@@ -238,14 +248,23 @@ export async function fetchProviderState(
   address: `0x${string}`,
   requestAuth: WalletAuthRequester,
   window?: ProviderWindow,
+  /**
+   * The metric this read is about. Omitted, the route answers about sleep,
+   * which is right for the dashboard streak card and wrong for a claim panel
+   * on a steps pool - a wallet whose steps had synced was told its device had
+   * sent nothing, forever, because only sleep was ever asked about.
+   */
+  metric?: string,
 ): Promise<ProviderState> {
   const scope =
     window !== undefined
       ? `&start=${Number(window.periodStart)}&end=${Number(window.periodEnd)}`
       : "";
+  const forMetric =
+    metric !== undefined ? `&metric=${encodeURIComponent(metric)}` : "";
   try {
     const sent = await fetchWithWalletAuth(
-      `/api/wearable/progress?address=${address}${scope}`,
+      `/api/wearable/progress?address=${address}${scope}${forMetric}`,
       undefined,
       requestAuth,
     );

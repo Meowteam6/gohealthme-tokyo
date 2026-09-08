@@ -26,6 +26,9 @@ import {
 } from "@/lib/client-auth";
 import { isProviderId, type ProviderId } from "@/lib/wearable-providers";
 import type { WearableMetric } from "@/lib/wearable-goal";
+// Re-exported so existing callers keep importing it from here, while the
+// server routes import the same implementation from the pure module.
+export { metricLabel } from "@/lib/wearable-goal";
 
 export {
   PROVIDER_IDS,
@@ -396,19 +399,6 @@ export function viewerMetricsOf(
   return active.observedMetrics ?? active.metrics;
 }
 
-/** Plain-language name for a metric, for copy that has to say what is missing. */
-export function metricLabel(metric: WearableMetric): string {
-  const labels: Record<WearableMetric, string> = {
-    sleep_score: "sleep score",
-    sleep_efficiency: "sleep efficiency",
-    sleep_hours: "hours of sleep",
-    steps: "step count",
-    active_calories: "active calories",
-    distance_km: "distance",
-    workouts: "workouts",
-  };
-  return labels[metric];
-}
 
 /**
  * Drop this wallet's device connection.
@@ -468,7 +458,32 @@ export function capabilityUnknown(
   options: ProviderOptions | undefined,
 ): boolean {
   if (options === undefined) return true;
-  return options.status !== "known" || options.selected === null;
+  if (options.status !== "known") return true;
+  // Defined AS the absence of an answer from viewerMetricsOf, rather than
+  // re-derived from `selected`. Those two drifted apart and the gate trusted
+  // the wrong one: providerIdFor never returns null - it falls back to a
+  // default - so `selected` is set for every signed wallet, including one that
+  // has linked nothing. capabilityUnknown then said "known" while
+  // viewerMetricsOf said "null", and null plus not-pending is exactly the pair
+  // splitByVerifiability reads as "logged-out visitor, hold nothing back".
+  // A wallet with no device could join a wearable pool, pay, then link a
+  // device that cannot measure it.
+  return viewerMetricsOf(options) === null;
+}
+
+/**
+ * True when the capability is unknown because nothing is linked, rather than
+ * because we have not asked. Different problem, different next action: signing
+ * cannot help somebody who has no device.
+ */
+export function capabilityNeedsDevice(
+  options: ProviderOptions | undefined,
+): boolean {
+  return (
+    options !== undefined &&
+    options.status === "known" &&
+    viewerMetricsOf(options) === null
+  );
 }
 
 /** True specifically when a signature would answer the question. */

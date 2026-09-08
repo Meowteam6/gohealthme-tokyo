@@ -38,6 +38,37 @@ export type WearableMetric =
  * verdict fails closed and never pays - the alternative (guessing a metric)
  * pays or denies real USDC on the wrong measurement.
  */
+export const WEARABLE_METRICS: readonly WearableMetric[] = [
+  "sleep_score",
+  "sleep_efficiency",
+  "sleep_hours",
+  "steps",
+  "active_calories",
+  "distance_km",
+  "workouts",
+];
+
+export function isWearableMetric(value: unknown): value is WearableMetric {
+  return (
+    typeof value === "string" &&
+    (WEARABLE_METRICS as readonly string[]).includes(value)
+  );
+}
+
+/** Plain-language name for a metric, for copy that has to say what is missing. */
+export function metricLabel(metric: WearableMetric): string {
+  const labels: Record<WearableMetric, string> = {
+    sleep_score: "sleep score",
+    sleep_efficiency: "sleep efficiency",
+    sleep_hours: "hours of sleep",
+    steps: "step count",
+    active_calories: "active calories",
+    distance_km: "distance",
+    workouts: "workouts",
+  };
+  return labels[metric];
+}
+
 /** Days a goal needs when its text does not say. */
 export const DEFAULT_GOAL_DAYS = 7;
 /** Sleep-score threshold when a goal does not name one. */

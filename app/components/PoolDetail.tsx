@@ -49,6 +49,7 @@ import {
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import {
+  capabilityNeedsDevice,
   capabilityUnknown,
   fetchProviderOptions,
   metricLabel,
@@ -593,6 +594,9 @@ export default function PoolDetail({ id }: { id: string }) {
     evidenceType === "wearable" &&
     !joined &&
     capabilityUnknown(capabilityQuery.data);
+  // Unknown because nothing is linked, not because we have not asked. Telling
+  // this person to sign would be advice that cannot answer the question.
+  const needsDevice = capabilityNeedsDevice(capabilityQuery.data);
   const agentBroke = agentIsBroke(agentWalletQuery.data?.balanceUsd ?? null);
   // Wait for the restore before mounting a tab on a multi-path pool; mounting
   // the wrong one first would start a poll loop the correct tab then supersedes.
@@ -971,18 +975,28 @@ export default function PoolDetail({ id }: { id: string }) {
                 />
                 <div className="min-w-0">
                   <h2 className="font-display text-lg font-semibold text-accent-deep">
-                    Let me check your device first
+                    {needsDevice
+                      ? "Connect a device first"
+                      : "Let me check your device first"}
                   </h2>
                   <p className="mt-1 text-sm text-foreground/80">
-                    Not every device can measure every goal, and I have not
-                    checked yours yet. Sign to let me look - nothing is charged
-                    and no transaction is sent.
+                    {needsDevice
+                      ? "Not every device can measure every goal, and you have not linked one yet. Connect one from your dashboard and I will tell you straight away whether it can prove this goal."
+                      : "Not every device can measure every goal, and I have not checked yours yet. Sign to let me look - nothing is charged and no transaction is sent."}
                   </p>
                   <p className="mt-2 text-sm text-foreground/80">
                     The {formatUsdc(pool.entryFee)} USDC entry fee is real
                     money, so I am not selling you a spot before I know I can
                     verify you.
                   </p>
+                  {needsDevice ? (
+                    <Link
+                      href="/dashboard"
+                      className={`mt-3 inline-block rounded-xl border-2 border-edge font-semibold hover:border-accent/50 ${TAP_TARGET}`}
+                    >
+                      Connect a device
+                    </Link>
+                  ) : (
                   <Button
                     type="button"
                     pop
@@ -1000,6 +1014,7 @@ export default function PoolDetail({ id }: { id: string }) {
                   >
                     {checkingDevice ? "Checking" : "Sign and check my device"}
                   </Button>
+                  )}
                 </div>
               </div>
             </section>

@@ -30,6 +30,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const providerFor = vi.fn();
 const isConnected = vi.fn();
 const getProgress = vi.fn();
+const getMetricProgress = vi.fn();
 const requireAddressSignature = vi.fn();
 
 vi.mock("@/lib/server/wearable", () => {
@@ -65,6 +66,7 @@ function stubProvider(overrides: Record<string, unknown> = {}) {
     id: "junction",
     label: "Junction",
     metrics: ["sleep_score", "sleep_efficiency", "sleep_hours"],
+    getMetricProgress: (...args: unknown[]) => getMetricProgress(...args),
     isConnected: (...args: unknown[]) => isConnected(...args),
     getProgress: (...args: unknown[]) => getProgress(...args),
     ...overrides,
@@ -278,5 +280,59 @@ describe("GET /api/wearable/progress link states", () => {
     };
     expect(body.metric).toContain("Sleep efficiency");
     expect(body.metric).not.toContain("Sleep score");
+  });
+});
+
+describe("GET /api/wearable/progress scoped to a pool's own metric", () => {
+  const WINDOW = "&start=1750000000&end=1750604800";
+
+  it("answers about the metric asked for, not about sleep", async () => {
+    isConnected.mockResolvedValue(true);
+    getMetricProgress.mockResolvedValue({
+      qualifyingDays: 5,
+      daysWithData: 6,
+      daysWithSource: 6,
+    });
+
+    const body = (await (
+      await get(`?address=${USER}&metric=steps${WINDOW}`)
+    ).json()) as { streakDays: number; linkState: string; metric: string };
+
+    expect(getMetricProgress).toHaveBeenCalled();
+    // The sleep feed must not be consulted at all for a steps goal.
+    expect(getProgress).not.toHaveBeenCalled();
+    expect(body.streakDays).toBe(5);
+    expect(body.linkState).toBe("linked");
+    expect(body.metric).toContain("step count");
+  });
+
+  it("calls a step-only device 'linked', not 'awaiting first sync'", async () => {
+    // The defect this closes: the sleep feed returned nothing for a phone with
+    // no watch, the claim panel hid the run button behind awaiting-first-sync,
+    // and a wallet whose steps HAD synced could never start a claim on a pool
+    // whose entry fee it had already paid.
+    isConnected.mockResolvedValue(true);
+    getMetricProgress.mockResolvedValue({
+      qualifyingDays: 7,
+      daysWithData: 7,
+      daysWithSource: 7,
+    });
+
+    const body = (await (
+      await get(`?address=${USER}&metric=steps${WINDOW}`)
+    ).json()) as { linkState: string };
+
+    expect(body.linkState).toBe("linked");
+  });
+
+  it("ignores a metric name it does not recognise", async () => {
+    isConnected.mockResolvedValue(true);
+    getProgress.mockResolvedValue(FULL_PROGRESS);
+
+    await get(`?address=${USER}&metric=heartrate${WINDOW}`);
+
+    // Falls back to the sleep feed rather than passing junk downstream.
+    expect(getMetricProgress).not.toHaveBeenCalled();
+    expect(getProgress).toHaveBeenCalled();
   });
 });
