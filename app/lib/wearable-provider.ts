@@ -3,7 +3,7 @@
 // this goal be verified at all right now?
 //
 // Junction is a paid third party and its access can lapse - the API answers
-// 402 and /api/junction/progress turns that into a 502. Before this module the
+// 402 and /api/wearable/progress turns that into a 502. Before this module the
 // browser could not tell "no device linked yet" (the user can fix that) from
 // "the provider is refusing us" (the user cannot), so the UI offered a connect
 // flow that could only ever fail, forever, with no way out.
@@ -31,6 +31,8 @@ import {
  *  never cross this boundary; only counts and labels do. */
 export interface ProviderProgress {
   connected: boolean;
+  /** Which integration answered: "junction" or "whoop". Null pre-response. */
+  provider: string | null;
   metric: string | null;
   streakDays: number | null;
   targetDays: number | null;
@@ -63,6 +65,7 @@ export function parseProviderProgress(payload: unknown): ProviderProgress {
       : {};
   return {
     connected: record.connected === true,
+    provider: typeof record.provider === "string" ? record.provider : null,
     metric: typeof record.metric === "string" ? record.metric : null,
     streakDays:
       typeof record.streakDays === "number" ? record.streakDays : null,
@@ -72,8 +75,8 @@ export function parseProviderProgress(payload: unknown): ProviderProgress {
   };
 }
 
-// lib/server/junction.ts formats every upstream failure as
-// `Junction <path> returned <status>: <body>`, and the route hands that
+// Every provider module formats its upstream failures the same way -
+// `<Provider> <path> returned <status>: <body>` - and the route hands that
 // string back as { error }. Reading the upstream status out of it is what
 // lets the copy name the real cause instead of blaming the user's device.
 const UPSTREAM_STATUS = /returned (\d{3})/;
@@ -103,6 +106,13 @@ export function providerUnavailableReason(
       "is restored, so SPOTTER cannot verify a wearable goal right now."
     );
   }
+  if (upstream === "429") {
+    return (
+      "The wearable data provider is rate limiting this app right now, so " +
+      "nothing can be read from a wearable for the moment. Try the check " +
+      "again shortly."
+    );
+  }
   if (upstream === "401" || upstream === "403") {
     return (
       `The wearable data provider rejected this app's credentials (${upstream}). ` +
@@ -127,7 +137,7 @@ export const PROVIDER_SIGNATURE_REASON =
   "is charged and no transaction is sent.";
 
 /**
- * Classify one /api/junction/progress response. `auth` is the state the
+ * Classify one /api/wearable/progress response. `auth` is the state the
  * request was made under; when it is present it explains the 401 in the terms
  * the person can act on (not connected, declined, never asked).
  */
@@ -183,7 +193,7 @@ export function providerQueryKey(
   address: string | null,
   poolId?: bigint,
 ): (string | null)[] {
-  return ["junction-progress", address, poolId?.toString() ?? "none"];
+  return ["wearable-progress", address, poolId?.toString() ?? "none"];
 }
 
 /**
@@ -207,7 +217,7 @@ export async function fetchProviderState(
       : "";
   try {
     const sent = await fetchWithWalletAuth(
-      `/api/junction/progress?address=${address}${scope}`,
+      `/api/wearable/progress?address=${address}${scope}`,
       undefined,
       requestAuth,
     );

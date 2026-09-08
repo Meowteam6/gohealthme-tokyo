@@ -77,6 +77,17 @@ describe("claimProofPathOf", () => {
     expect(claimProofPathOf([plan("attester-read")])).toBe("document");
   });
 
+  it("recognises EVERY provider's wearable read, not just Junction's", () => {
+    // WEARABLE_SERVICES is a hand-maintained mirror of the readService names
+    // in lib/server/wearable, because this module ships in the client bundle
+    // and cannot import a server module. A provider missing from it drops a
+    // returning user on the document upload box over a wearable claim SPOTTER
+    // has already paid for, which reads as though nothing ever happened.
+    // wearableReadServices() in lib/server/wearable is the list to match.
+    expect(claimProofPathOf([plan("whoop-read")])).toBe("wearable");
+    expect(claimProofPathOf([plan("junction-read")])).toBe("wearable");
+  });
+
   it("treats a vision-judge escalation as the document path", () => {
     expect(
       claimProofPathOf([spend("vision-judge", "job-1:vision-judge")]),

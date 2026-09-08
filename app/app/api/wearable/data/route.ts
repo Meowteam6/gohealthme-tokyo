@@ -1,6 +1,13 @@
-// GET /api/junction/data?address=0x...&days=7
-// Recent per-day sleep + activity from the linked provider, for the dashboard
-// demo display. { connected, sleep[], activity[] }.
+// GET /api/wearable/data?address=0x...&days=7
+// Recent per-day sleep and activity from whichever provider backs this wallet,
+// for the dashboard display. { connected, provider, sleep[], activity[] }.
+//
+// Replaces /api/junction/data.
+//
+// `activity` is empty on the WHOOP path: WHOOP measures strain and does not
+// report step counts, and the app deliberately does not request the scopes
+// that would carry other metrics. That is reported as an absent series rather
+// than a row of zeros, which would read as a user who did not move.
 //
 // AUTH: the caller must prove control of `address` with a fresh wallet
 // signature (see lib/server/wallet-auth.ts for the header contract). This
@@ -8,22 +15,15 @@
 // keyed on a wallet address — a value that is public on chain and visible in
 // this app's own participant lists. Without the signature, reading a stranger's
 // health history took nothing more than copying their address out of a pool.
-// The response shape is unchanged, so the dashboard works as-is once it signs.
 
 import { type NextRequest } from "next/server";
 import { isAddress } from "viem";
-import { getRecent, isConnected } from "@/lib/server/junction";
 import { jsonError } from "@/lib/server/http";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
+import { providerFor } from "@/lib/server/wearable";
 
-/**
- * Upstream failures are logged with detail and answered without any. The
- * Junction error text carries the request path, the account state, and the
- * provider's own message; none of that belongs in a response to a caller who
- * may not even be the account holder.
- */
 function upstreamFailure(err: unknown): Response {
-  console.error("[junction/data] upstream request failed", err);
+  console.error("[wearable/data] upstream request failed", err);
   return jsonError(502, "Health data is temporarily unavailable");
 }
 
@@ -43,11 +43,18 @@ export async function GET(request: NextRequest) {
     const daysRaw = Number(params.get("days") ?? 7);
     const days = Number.isInteger(daysRaw) && daysRaw > 0 && daysRaw <= 30 ? daysRaw : 7;
 
-    if (!(await isConnected(address))) {
-      return Response.json({ connected: false, sleep: [], activity: [] });
+    const provider = await providerFor(address);
+
+    if (!(await provider.isConnected(address))) {
+      return Response.json({
+        connected: false,
+        provider: provider.id,
+        sleep: [],
+        activity: [],
+      });
     }
-    const recent = await getRecent(address, days);
-    return Response.json({ connected: true, ...recent });
+    const recent = await provider.getRecent(address, days);
+    return Response.json({ connected: true, provider: provider.id, ...recent });
   } catch (err) {
     return upstreamFailure(err);
   }

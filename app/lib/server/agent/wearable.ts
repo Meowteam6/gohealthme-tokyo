@@ -1,9 +1,10 @@
-// SPOTTER's wearable evidence source: a poll-compatible reader over Junction
-// provider data for pools whose goal is a device-verified target.
+// SPOTTER's wearable evidence source: a poll-compatible reader over whichever
+// health-data provider backs the participant, for pools whose goal is a
+// device-verified target.
 //
 // Why this exists: the run loop only understands deps.poll(ref, goalSpec) ->
 // PollResult. Document claims satisfy it with the TEE attester; wearable claims
-// have no attester - the evidence is the participant's own Junction summary
+// have no attester - the evidence is the participant's own provider summary
 // scoped to the pool period. This module CLASSIFIES the goal into the metric it
 // is actually about (steps / sleep score / sleep hours / workouts / distance /
 // calories), reads THAT metric, and derives the verdict DETERMINISTICALLY (a
@@ -16,38 +17,46 @@
 // goal was silently judged on sleep score). A connected device that has not yet
 // synced returns a low-confidence "syncing" verdict, not a paid "you failed".
 //
+// THE SAME RULE APPLIES ACROSS PROVIDERS. Junction normalises several brands
+// and can answer the whole metric vocabulary; WHOOP-direct measures sleep and
+// strain and has no step count at all. So a metric the participant's own
+// provider cannot measure ALSO fails closed, with a reason that names the
+// device rather than the person. Reading zero steps off a WHOOP would tell
+// somebody who walked 12,000 that they missed the goal, and pay them nothing.
+//
 // The claim's ref is `wearable-${periodStart}` (synthesized by the run route),
 // so the junction-read purchase dedupes to one per pool period while the derived
 // verdict tracks fresh data on every poll.
 //
 // Privacy: only the derived qualifying-day count crosses this boundary. Raw
-// wearable records stay inside junction.ts and never reach the ledger, the
-// reason step, or the chain.
+// wearable records stay inside the provider module and never reach the ledger,
+// the reason step, or the chain.
 
 import type { Address } from "viem";
-import {
-  getMetricProgress,
-  isConnected,
-  type WearableMetric,
-} from "@/lib/server/junction";
+import { providerFor, type WearableMetric } from "@/lib/server/wearable";
 import type { PollResult } from "@/lib/server/judge";
 import type { ServiceQuote } from "@/lib/server/agent/x402";
-
-export const JUNCTION_READ_SERVICE = "junction-read";
-export const JUNCTION_READ_LABEL = "wearable summary (Junction)";
-export const JUNCTION_READ_EST_USD = "0.01";
 
 export const DEFAULT_GOAL_DAYS = 7;
 /** Retained default sleep-score threshold, kept exported for compatibility. */
 export const DEFAULT_THRESHOLD = 75;
 
-/** Junction is metered under the existing API key, so the quote is always
- *  prepaid - a null url means buyLive never invents a payment reference. */
-export function junctionReadQuote(): ServiceQuote {
+/**
+ * The read SPOTTER buys before verifying a wearable claim, named for the
+ * provider that will actually serve it.
+ *
+ * Both providers are metered outside x402 - Junction under our API key, WHOOP
+ * under a free developer quota - so the quote is always prepaid, and a null
+ * url means buyLive never invents a payment reference for it.
+ */
+export async function wearableReadQuote(
+  address: string,
+): Promise<ServiceQuote> {
+  const provider = await providerFor(address);
   return {
-    service: JUNCTION_READ_SERVICE,
-    label: JUNCTION_READ_LABEL,
-    estUsd: JUNCTION_READ_EST_USD,
+    service: provider.readService,
+    label: provider.readLabel,
+    estUsd: provider.readEstUsd,
     url: null,
   };
 }
@@ -254,7 +263,25 @@ export function wearableEvidenceSource(
     }
 
     try {
-      if (!(await isConnected(window.address))) {
+      const provider = await providerFor(window.address);
+
+      // A metric this participant's device cannot measure fails closed, and
+      // says which device, so the person can act on it by linking one that can.
+      if (!provider.metrics.includes(spec.metric)) {
+        return {
+          status: "failed",
+          verdict: {
+            verified: false,
+            confidence: "low",
+            reason:
+              `This goal is measured in ${spec.label}, which ${provider.label} ` +
+              "does not report, so it could not be checked and nothing was " +
+              "paid. Connect a device that tracks it from the dashboard.",
+          },
+        };
+      }
+
+      if (!(await provider.isConnected(window.address))) {
         return {
           status: "failed",
           verdict: {
@@ -267,7 +294,7 @@ export function wearableEvidenceSource(
         };
       }
 
-      const progress = await getMetricProgress(
+      const progress = await provider.getMetricProgress(
         window.address,
         spec.metric,
         spec.threshold,
@@ -320,7 +347,7 @@ export function wearableEvidenceSource(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(
-        `[wearable] Junction read failed for ${window.address}: ${message}`,
+        `[wearable] provider read failed for ${window.address}: ${message}`,
       );
       return {
         status: "failed",

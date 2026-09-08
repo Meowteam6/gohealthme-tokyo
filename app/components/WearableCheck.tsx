@@ -27,7 +27,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { displayGoalSpec, fetchGoalId, fetchPool } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { PopupBlockedError, openJunctionConnect } from "@/lib/junction-connect";
+import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
 import {
   deferredPeriodEndMs,
   failureModeOf,
@@ -46,6 +46,7 @@ import {
 } from "@/lib/wearable-provider";
 import { fetchWithWalletAuth, type WalletAuthRequester } from "@/lib/client-auth";
 import { useWalletAuth } from "@/lib/useWalletAuth";
+
 import {
   claimScreenOf,
   claimVisibilityOf,
@@ -791,14 +792,15 @@ function WearableCheckInner({
         <div className="space-y-3">
           <p className="rounded-xl border border-dashed border-accent/30 bg-accent/20 p-3 text-sm text-accent-deep">
             No wearable connected yet. Link WHOOP, Oura, Fitbit, or Garmin -
-            without one, SPOTTER has nothing to verify and will not pay.
+            without one, SPOTTER has nothing to verify and will not pay. You
+            can pick which one from the dashboard.
           </p>
           <button
             type="button"
             onClick={() => {
               setConnectError(null);
               setConnectFallbackUrl(null);
-              void openJunctionConnect(address).catch((err: unknown) => {
+              void startWearableLink(address, requestAuth).catch((err: unknown) => {
                 if (err instanceof PopupBlockedError) {
                   // Not a failure - the URL is good, the browser just refused
                   // the auto-open. Offer a link the user taps directly.

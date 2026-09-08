@@ -1,33 +1,36 @@
-// GET /api/junction/progress?address=0x...&threshold=75&goalDays=7
+// GET /api/wearable/progress?address=0x...&threshold=75&goalDays=7
 //   optional: &start=<unixSeconds>&end=<unixSeconds>  (a pool's period window)
-// Returns the address's streak from connected Junction data:
-//   { connected, metric, streakDays, targetDays, lastSync }
+// Returns the address's streak from whichever provider backs this wallet:
+//   { connected, provider, metric, streakDays, targetDays, lastSync }
 // When start/end are given, progress is scoped to that pool period (counting
 // from the goal's start), and targetDays is the period length in days.
 // connected=false (rather than 404) when no provider is linked yet.
+//
+// Replaces /api/junction/progress. The response shape is unchanged apart from
+// the added `provider`, because a second provider must not mean a second
+// client contract - lib/wearable-provider.ts parses one shape for both.
 //
 // AUTH: the caller must prove control of `address` with a fresh wallet
 // signature (see lib/server/wallet-auth.ts for the header contract). The
 // streak, the metric label, and the last sync time are all derived from that
 // person's sleep data, and a wallet address is public — it is on chain and in
 // this app's own participant lists — so possession of one cannot be treated as
-// permission to read their health history. The response shape is unchanged, so
-// the dashboard works as-is once it signs.
+// permission to read their health history.
 
 import { type NextRequest } from "next/server";
 import { isAddress } from "viem";
-import { getProgress, isConnected } from "@/lib/server/junction";
 import { jsonError } from "@/lib/server/http";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
+import { providerFor } from "@/lib/server/wearable";
 
 /**
- * Upstream failures are logged with detail and answered without any. The
- * Junction error text carries the request path, the account state, and the
+ * Upstream failures are logged with detail and answered without any. A
+ * provider's error text carries the request path, the account state, and the
  * provider's own message; none of that belongs in a response to a caller who
  * may not even be the account holder.
  */
 function upstreamFailure(err: unknown): Response {
-  console.error("[junction/progress] upstream request failed", err);
+  console.error("[wearable/progress] upstream request failed", err);
   return jsonError(502, "Health data is temporarily unavailable");
 }
 
@@ -72,9 +75,12 @@ export async function GET(request: NextRequest) {
       ? Math.floor((endSec - startSec) / 86400) + 1
       : goalDays;
 
-    if (!(await isConnected(address))) {
+    const provider = await providerFor(address);
+
+    if (!(await provider.isConnected(address))) {
       return Response.json({
         connected: false,
+        provider: provider.id,
         metric: null,
         streakDays: null,
         targetDays,
@@ -82,7 +88,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const progress = await getProgress(
+    const progress = await provider.getProgress(
       address,
       threshold,
       goalDays,
@@ -91,6 +97,7 @@ export async function GET(request: NextRequest) {
     );
     return Response.json({
       connected: true,
+      provider: provider.id,
       metric: hasWindow
         ? `Sleep score ≥ ${threshold} · since ${windowStartISO}`
         : `Sleep score ≥ ${threshold}`,

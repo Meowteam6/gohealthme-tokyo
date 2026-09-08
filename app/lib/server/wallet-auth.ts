@@ -4,7 +4,7 @@
 // participant lists, and in the app's own UI. Several routes treated it as if
 // it were a secret and returned that address's private data to anyone who
 // typed it — per-day sleep scores and activity summaries from
-// /api/junction/*, and an Unlink capability token scoped to any user's
+// /api/wearable/*, and an Unlink capability token scoped to any user's
 // shielded address from /api/unlink/*. Knowing an address must not be the same
 // thing as being its owner, and this module is where that gap is closed.
 //
@@ -36,7 +36,7 @@
 // (ERC-1271) would need an RPC round trip per request; adding that is a
 // deliberate future change, not an accident of this one.
 //
-// USED BY: the two /api/junction/* routes, /api/social/handle, and
+// USED BY: the /api/wearable/* routes, /api/social/handle, and
 // /api/agent/run/[goalId] — where it decides who
 // may READ a claim's ledger, not who may run one. The run loop itself stays
 // unauthenticated on purpose: it is idempotent, spend-capped, and gated on the

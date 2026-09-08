@@ -12,7 +12,7 @@
 // used to look identical to one still being judged, with nothing on screen
 // saying when the money arrives - the chain already knows, so the card says it.
 //
-// The two /api/junction/* reads on this page are signature-gated: a streak and
+// The two /api/wearable/* reads on this page are signature-gated: a streak and
 // a week of sleep hours are health data, and a wallet address is public, so
 // knowing the address is not permission to read them. This is the one surface
 // where a signature prompt on load is the right call - it is the signed-in
@@ -21,7 +21,7 @@
 // try again, never an empty card that reads as "you have no wearable".
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import BalanceCard from "@/components/BalanceCard";
 import ClaimPayout from "@/components/ClaimPayout";
@@ -58,8 +58,14 @@ import {
 } from "@/lib/wearable-provider";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
-import { PopupBlockedError, openJunctionConnect } from "@/lib/junction-connect";
+import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
 import { resultLabel } from "@/lib/participant-status";
+import {
+  fetchProviderOptions,
+  providerOptionsQueryKey,
+  whoopReturnMessage,
+  type WearableProviderId,
+} from "@/lib/wearable-connect";
 import {
   authBlockReason,
   fetchWithWalletAuth,
@@ -132,10 +138,13 @@ function ConnectButton({
   address,
   label = "Connect health data",
   secondary = false,
+  provider,
 }: {
   address: `0x${string}`;
   label?: string;
   secondary?: boolean;
+  /** Link this provider specifically. Omitted, the wallet's choice is used. */
+  provider?: WearableProviderId;
 }) {
   // The failure used to go to console.error only, which made the button look
   // dead to anyone whose connect flow could not start. It is a money-adjacent
@@ -143,6 +152,7 @@ function ConnectButton({
   const [error, setError] = useState<string | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+  const requestAuth = useWalletAuth();
 
   return (
     <>
@@ -155,7 +165,7 @@ function ConnectButton({
           setError(null);
           setFallbackUrl(null);
           setOpening(true);
-          void openJunctionConnect(address)
+          void startWearableLink(address, requestAuth, provider)
             .catch((err: unknown) => {
               if (err instanceof PopupBlockedError) {
                 // The URL is good; the browser just refused the auto-open.
@@ -202,6 +212,61 @@ function ConnectButton({
         </div>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The device choice, shown only when this deployment actually offers more than
+ * one way in. With a single configured provider there is no decision to make,
+ * and a picker with one option is just a second button that says the same
+ * thing as the first.
+ *
+ * Each provider says what it can and cannot do, because the two are not
+ * interchangeable: Junction covers several brands but is a paid intermediary,
+ * and WHOOP is first-party but only WHOOP. A person choosing between them is
+ * entitled to know that before they hand over health data.
+ */
+function ProviderChoice({ address }: { address: `0x${string}` }) {
+  const requestAuth = useWalletAuth();
+  const { data } = useQuery({
+    queryKey: providerOptionsQueryKey(address),
+    queryFn: () => fetchProviderOptions(address, requestAuth),
+    staleTime: 60_000,
+  });
+
+  const offered = (data?.providers ?? []).filter((option) => option.configured);
+  if (offered.length < 2) return null;
+
+  const blurb: Record<WearableProviderId, string> = {
+    junction: "WHOOP, Oura, Fitbit or Garmin, through Junction.",
+    whoop: "WHOOP only, connected directly. Reads your sleep and nothing else.",
+  };
+
+  return (
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      {offered.map((option) => (
+        <div
+          key={option.id}
+          className="rounded-xl border border-edge p-3 text-sm"
+        >
+          <p className="font-semibold text-foreground">
+            {option.label}
+            {option.connected ? (
+              <span className="ml-2 text-xs font-normal text-accent">
+                connected
+              </span>
+            ) : null}
+          </p>
+          <p className="mt-1 text-muted">{blurb[option.id]}</p>
+          <ConnectButton
+            address={address}
+            provider={option.id}
+            label={option.connected ? `Reconnect ${option.label}` : `Connect ${option.label}`}
+            secondary
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -274,9 +339,12 @@ function StreakCard({
       ) : !providerConnected(state) ? (
         <>
           <p className="mt-3 rounded-xl border border-dashed border-edge p-4 text-sm text-muted">
-            No wearable connected yet. Link a provider (WHOOP, Oura, Fitbit,
-            Garmin…) to start tracking your streak toward your goal.
+            No wearable connected yet. Link WHOOP, Oura, Fitbit or Garmin to
+            start tracking your streak toward your goal.
           </p>
+          {/* The picker renders nothing when only one provider is configured,
+              and the plain button below is what that deployment shows. */}
+          <ProviderChoice address={address} />
           <ConnectButton address={address} />
         </>
       ) : (
@@ -324,6 +392,8 @@ function StreakCard({
 
 interface RecentData {
   connected: boolean;
+  /** Which integration answered, so the card can say where the data came from. */
+  provider?: string | null;
   sleep: Array<{ date: string; score: number | null; hours: number | null }>;
   activity: Array<{ date: string; steps: number | null }>;
 }
@@ -340,7 +410,7 @@ async function fetchRecentData(
   requestAuth: WalletAuthRequester,
 ): Promise<RecentDataResult> {
   const sent = await fetchWithWalletAuth(
-    `/api/junction/data?address=${address}`,
+    `/api/wearable/data?address=${address}`,
     undefined,
     requestAuth,
   );
@@ -370,7 +440,7 @@ async function fetchRecentData(
 function RecentDataCard({ address }: { address: `0x${string}` }) {
   const requestAuth = useWalletAuth();
   const recentQuery = useQuery({
-    queryKey: ["junction-data", address],
+    queryKey: ["wearable-data", address],
     queryFn: () => fetchRecentData(address, requestAuth),
     retry: false,
   });
@@ -390,7 +460,9 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
     <Card>
       <h2 className="font-display text-lg font-semibold">Latest synced data</h2>
       <p className="mt-1 text-sm text-muted">
-        Pulled live from your linked provider via Junction.
+        {data.provider === "whoop"
+          ? "Data by WHOOP, pulled live."
+          : "Pulled live from your linked provider via Junction."}
       </p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {data.sleep.length > 0 && (
@@ -426,6 +498,46 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
         )}
       </div>
     </Card>
+  );
+}
+
+/**
+ * What WHOOP's redirect left behind in the URL.
+ *
+ * The OAuth flow takes over the tab and drops the user back here, so without
+ * this the page would look exactly the same whether they connected, declined,
+ * or hit a failure - and a person who just clicked through a consent screen
+ * has no way to tell which. Declining is worded as the ordinary choice it is,
+ * not as an error.
+ *
+ * The parameter is cleared once shown, so a refresh or a shared URL does not
+ * replay a stale outcome.
+ */
+function WhoopReturnNote() {
+  const [note, setNote] = useState<ReturnType<typeof whoopReturnMessage>>(null);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const status = url.searchParams.get("whoop");
+    if (status === null) return;
+    setNote(whoopReturnMessage(status));
+    url.searchParams.delete("whoop");
+    window.history.replaceState(null, "", url.toString());
+  }, []);
+
+  if (note === null) return null;
+
+  const tone =
+    note.tone === "ok"
+      ? "border-accent/40 bg-accent-deep/20 text-accent"
+      : note.tone === "error"
+        ? "border-edge bg-surface text-foreground"
+        : "border-edge bg-surface text-muted";
+
+  return (
+    <p className={`rounded-xl border p-4 text-sm ${tone}`} role="status">
+      {note.message}
+    </p>
   );
 }
 
@@ -528,6 +640,9 @@ export default function DashboardContent() {
        *  value action here and renders only when the chain says money is owed. */}
       <ClaimPayout address={address} />
 
+      {/* Says what WHOOP's redirect just did, since the OAuth flow takes over
+       *  the tab and otherwise returns the user to an unchanged-looking page. */}
+      <WhoopReturnNote />
       <section className="space-y-4">
         <h2 className="font-display text-lg font-semibold">Joined pools</h2>
         {joinedQuery.isLoading ? (

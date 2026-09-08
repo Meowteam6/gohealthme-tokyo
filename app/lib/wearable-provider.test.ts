@@ -27,6 +27,7 @@ describe("parseProviderProgress", () => {
   it("reads a full payload", () => {
     expect(parseProviderProgress(OK_BODY)).toEqual({
       connected: true,
+      provider: null,
       metric: "Sleep score >= 75",
       streakDays: 4,
       targetDays: 7,
@@ -37,6 +38,7 @@ describe("parseProviderProgress", () => {
   it("defaults every field rather than trusting shapes it did not expect", () => {
     expect(parseProviderProgress(null)).toEqual({
       connected: false,
+      provider: null,
       metric: null,
       streakDays: null,
       targetDays: null,
@@ -50,11 +52,17 @@ describe("parseProviderProgress", () => {
       }),
     ).toEqual({
       connected: false,
+      provider: null,
       metric: null,
       streakDays: null,
       targetDays: null,
       lastSync: null,
     });
+  });
+
+  it("reads which provider answered, and defaults it to null", () => {
+    expect(parseProviderProgress({ provider: "whoop" }).provider).toBe("whoop");
+    expect(parseProviderProgress({ provider: 7 }).provider).toBeNull();
   });
 
   it("keeps a zero streak as a number, not a null", () => {
@@ -149,7 +157,7 @@ describe("providerConnected and providerDownReason", () => {
 describe("providerQueryKey", () => {
   it("shares one key per address when no pool window is scoped", () => {
     expect(providerQueryKey("0xabc")).toEqual([
-      "junction-progress",
+      "wearable-progress",
       "0xabc",
       "none",
     ]);
@@ -157,7 +165,7 @@ describe("providerQueryKey", () => {
 
   it("scopes to a pool when a window is used", () => {
     expect(providerQueryKey("0xabc", 14n)).toEqual([
-      "junction-progress",
+      "wearable-progress",
       "0xabc",
       "14",
     ]);

@@ -142,7 +142,8 @@ const TIER_RULES: ReadonlyArray<{ prefix: string; tier: RouteTier }> = [
   // Poll: the browser-driven claim run loop.
   { prefix: "/api/agent/run", tier: "poll" },
   // Expensive: paid upstreams and chain reads.
-  { prefix: "/api/junction/", tier: "expensive" },
+  { prefix: "/api/wearable/", tier: "expensive" },
+  { prefix: "/api/whoop/", tier: "expensive" },
   { prefix: "/api/goals/match", tier: "expensive" },
   { prefix: "/api/balance", tier: "expensive" },
 ];
