@@ -19,6 +19,7 @@ function nextAddress(): string {
 }
 
 const {
+  PROVIDER_IDS,
   availableProviders,
   providerById,
   providerConfigured,
@@ -125,5 +126,30 @@ describe("wearableReadServices", () => {
     expect(wearableReadServices()).toEqual(["junction-read", "whoop-read"]);
     expect(providerById("whoop").readService).toBe("whoop-read");
     expect(providerById("junction").readService).toBe("junction-read");
+  });
+});
+
+describe("provider contract", () => {
+  it("every registered provider declares a linkKind", () => {
+    // A provider that forgets it makes the link route's recording decision on
+    // undefined, which silently takes the app-shaped branch.
+    for (const id of PROVIDER_IDS) {
+      expect(["oauth", "app"]).toContain(providerById(id).linkKind);
+    }
+  });
+
+  it("every registered provider declares at least one metric", () => {
+    // An empty list would hide every wearable pool from that provider's users
+    // rather than failing visibly.
+    for (const id of PROVIDER_IDS) {
+      expect(providerById(id).metrics.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("every registered provider has a distinct read service name", () => {
+    // lib/claim-restore.ts maps these back to a proof tab. A duplicate would
+    // send one provider's users to another's surface.
+    const services = PROVIDER_IDS.map((id) => providerById(id).readService);
+    expect(new Set(services).size).toBe(services.length);
   });
 });

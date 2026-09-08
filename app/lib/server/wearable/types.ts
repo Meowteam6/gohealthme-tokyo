@@ -144,6 +144,25 @@ export interface WearableProvider {
    */
   readonly metrics: readonly WearableMetric[];
 
+  /**
+   * How this provider's link ENDS, declared rather than discovered.
+   *
+   * The caller has to know BEFORE it calls startLink, because when the choice
+   * of provider is recorded depends on it. An "oauth" link ends at a consent
+   * page, and the choice must be recorded first so a user who abandons that
+   * page is still pointed at the provider they picked. An "app" link confirms
+   * nothing at all - nothing is provisioned, no consent happens, and the user
+   * may never open the phone - so recording on the tap would switch a wallet
+   * with a WORKING provider to one with no data because somebody read a
+   * sentence and closed the tab. Those providers record the choice when data
+   * first arrives, which is their equivalent of a callback.
+   *
+   * MUST agree with the `kind` that startLink returns. They are two separate
+   * declarations of one fact and nothing in the type system ties them
+   * together, so the link route checks and complains.
+   */
+  readonly linkKind: WearableLink["kind"];
+
   /** Begin linking a device for this wallet. */
   startLink(address: string): Promise<WearableLink>;
   /** True once this wallet has a usable connection. Never throws for "no". */

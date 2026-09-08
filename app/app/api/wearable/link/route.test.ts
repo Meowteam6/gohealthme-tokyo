@@ -13,12 +13,20 @@ import { PROVIDER_IDS } from "@/lib/wearable-providers";
 //     unknown provider name is a 400 before anything is recorded.
 //   - a provider this deployment cannot serve is a 503, not a retry-forever
 //     500 and not a fake link URL.
-//   - THE CHOICE IS RECORDED BEFORE THE REDIRECT. setProviderId runs before the
-//     WHOOP ticket is minted and before Junction's hosted page is requested, so
-//     the callback and every later background verification read the same
-//     provider the user is about to link. A choice written only on success
-//     would leave a user who abandons the consent screen pointed at the other
-//     provider.
+//   - WHEN THE CHOICE IS RECORDED, which depends on whether anything can
+//     confirm it and is decided from the provider's declared linkKind BEFORE
+//     the link starts. Junction is oauth and has no callback of ours to land
+//     on, so it is recorded first: its hosted page cannot report back, and an
+//     unrecorded choice would leave a successful link pointing at the wrong
+//     provider. WHOOP is oauth too but owns /api/whoop/callback, which records
+//     it once tokens actually exist - so opening WHOOP's consent screen and
+//     backing out changes nothing. An app-kind link confirms nothing at all
+//     and is never recorded on the tap, or a wallet with a WORKING provider
+//     would be switched to one holding no data because somebody read a
+//     sentence and closed the tab.
+//   - THE DRIFT GUARD. linkKind and the kind startLink returns are two
+//     declarations of one fact with nothing tying them together, so a mismatch
+//     is shouted about: the choice was already acted on by then.
 //   - both link shapes: WHOOP goes through this app's own /api/whoop/login
 //     carrying a wallet-bound ticket (a top-level navigation cannot send auth
 //     headers), Junction returns the provider's own hosted linkUrl.
@@ -87,6 +95,7 @@ beforeEach(() => {
     // The route names a provider by LABEL in user-facing copy, never by its
     // internal id, so the stub has to carry one.
     label: id === "whoop" ? "WHOOP" : "Junction",
+    linkKind: "oauth",
     startLink: (...args: unknown[]) => startLink(...args),
   }));
   startLink.mockResolvedValue({ linkUrl: JUNCTION_LINK_URL });
@@ -214,6 +223,56 @@ describe("POST /api/wearable/link", () => {
     // /api/whoop/callback records the choice once tokens actually exist.
     expect(setProviderId).not.toHaveBeenCalled();
     expect(mintLinkTicket).toHaveBeenCalled();
+  });
+
+  it("does NOT record the choice for an app-kind link, which confirms nothing", async () => {
+    // Nothing is provisioned and the user may never open the phone. Recording
+    // on the tap would switch a wallet with a WORKING provider to one holding
+    // no data because somebody read a sentence and closed the tab.
+    providerById.mockImplementation(() => ({
+      id: "junction",
+      label: "A phone provider",
+      linkKind: "app",
+      startLink: (...args: unknown[]) => startLink(...args),
+    }));
+    startLink.mockResolvedValue({
+      kind: "app",
+      linkUrl: null,
+      instructions: "Open the app on your phone.",
+    });
+
+    const res = await post({ address: USER, provider: "junction" });
+
+    expect(res.status).toBe(200);
+    expect(setProviderId).not.toHaveBeenCalled();
+    // The shape passes through, or the browser tries to open a null URL.
+    const body = (await res.json()) as { kind: string; instructions: string };
+    expect(body.kind).toBe("app");
+    expect(body.instructions).toBe("Open the app on your phone.");
+  });
+
+  it("shouts when a provider's declared linkKind disagrees with what it returns", async () => {
+    // Two declarations of one fact with nothing tying them together. The
+    // choice was already recorded on the strength of the declaration, so a
+    // mismatch means it was written on a link that confirms nothing.
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    providerById.mockImplementation(() => ({
+      id: "junction",
+      label: "Junction",
+      linkKind: "oauth",
+      startLink: (...args: unknown[]) => startLink(...args),
+    }));
+    startLink.mockResolvedValue({
+      kind: "app",
+      linkUrl: null,
+      instructions: "mismatched",
+    });
+
+    await post({ address: USER, provider: "junction" });
+
+    expect(
+      logged.mock.calls.some((call) => String(call[0]).includes("linkKind")),
+    ).toBe(true);
   });
 
   it("records the choice for Junction, which has no callback of ours", async () => {

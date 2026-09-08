@@ -823,6 +823,8 @@ export const whoopProvider: WearableProvider = {
   // the request itself. Reported as zero rather than as a made-up cent: the
   // receipt is a record of money that actually moved.
   readEstUsd: "0.00",
+  // Ends at a consent page, so the choice is recorded before the redirect.
+  linkKind: "oauth",
   metrics: WHOOP_METRICS,
 
   async startLink(): Promise<WearableLink> {

@@ -88,12 +88,40 @@ export async function POST(request: Request) {
       });
     }
 
-    // Junction has no callback of ours to land on, so the choice is recorded
-    // here. Its hosted page cannot report back, and an unrecorded choice would
-    // leave a successful link pointing at the wrong provider.
-    await setProviderId(address, providerId);
+    const provider = providerById(providerId);
 
-    const link = await providerById(providerId).startLink(address);
+    // WHEN THE CHOICE IS RECORDED DEPENDS ON WHETHER ANYTHING CAN CONFIRM IT,
+    // and the provider declares which it is, so the decision is made BEFORE
+    // the link starts rather than after.
+    //
+    // An oauth link ends at a consent page: recorded first, so a user who
+    // abandons that page is still pointed where they picked. Junction in
+    // particular has no callback of ours to land on - its hosted page cannot
+    // report back, and an unrecorded choice would leave a successful link
+    // pointing at the wrong provider.
+    //
+    // An app link confirms nothing. Recording on the tap would switch a wallet
+    // with a WORKING provider to one holding no data, because somebody read a
+    // sentence and closed the tab.
+    if (provider.linkKind === "oauth") {
+      await setProviderId(address, providerId);
+    }
+
+    const link = await provider.startLink(address);
+
+    // linkKind and the returned kind are two declarations of one fact, and the
+    // branch above already acted on the first. A provider that declares
+    // "oauth" and returns "app" would have had its choice written on a link
+    // that confirms nothing - silently reintroducing the abandoned-tap bug for
+    // the NEXT provider rather than an existing one. Not recoverable here (the
+    // write already happened), so it is made loud instead of guessed at.
+    if (link.kind !== provider.linkKind) {
+      console.error(
+        `[wearable/link] ${providerId} declares linkKind ` +
+          `${provider.linkKind} but startLink returned ${link.kind}; the ` +
+          "provider choice may have been recorded on a link that confirms nothing",
+      );
+    }
     // The shape is passed through rather than flattened: a provider that can
     // only be linked on a phone (Apple Health has no web OAuth) has to reach
     // the browser as something other than "a URL to open", or the connect
