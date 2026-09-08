@@ -51,6 +51,7 @@ import {
 import { dashboardDeferredLead, type ProofTier } from "@/lib/proof-tier";
 import {
   fetchProviderState,
+  providerAwaitingFirstSync,
   providerAuthReason,
   providerConnected,
   providerDownReason,
@@ -385,6 +386,23 @@ function StreakCard({
               and the plain button below is what that deployment shows. */}
           <ProviderChoice address={address} />
           <ConnectButton address={address} />
+        </>
+      ) : providerAwaitingFirstSync(state) ? (
+        // Linked and working, with nothing delivered yet. Rendering the streak
+        // here would show a zero, which reads as "you missed every night" about
+        // somebody whose device simply has not uploaded. Every new user passes
+        // through this state.
+        <>
+          <p className="mt-3 rounded-xl border border-accent/30 bg-accent/15 p-4 text-sm text-accent-deep">
+            Your device is connected and has not sent anything yet. The first
+            sync usually lands within a few minutes. SPOTTER will not check this
+            goal until the data is here, so nothing is charged while you wait.
+          </p>
+          <ConnectButton
+            address={address}
+            label="Connect a different device"
+            secondary
+          />
         </>
       ) : (
         <div className="mt-3">

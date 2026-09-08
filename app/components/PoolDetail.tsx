@@ -328,6 +328,21 @@ export default function PoolDetail({ id }: { id: string }) {
     retry: false,
   });
 
+  // What the viewer's own device can measure. cachedOnly for the same reason
+  // as the read above: opening a pool page must never fire a wallet prompt.
+  const capabilityQuery = useQuery({
+    queryKey: providerOptionsQueryKey(address),
+    queryFn: () => {
+      if (address === null) throw new Error("No wallet connected.");
+      return fetchProviderOptions(address, (options) =>
+        requestAuth({ ...options, cachedOnly: true }),
+      );
+    },
+    enabled: address !== null,
+    retry: false,
+    staleTime: 60_000,
+  });
+
   // SPOTTER pays for verification from its own wallet. When that wallet is
   // empty, a claim started here dies at the buy step, so say so before the
   // person taps rather than after.
@@ -544,20 +559,6 @@ export default function PoolDetail({ id }: { id: string }) {
   const providerDown = providerDownReason(providerQuery.data);
   const unverifiableNow = providerDown !== null && evidenceType === "wearable";
 
-  // What the viewer's own device can measure. cachedOnly for the same reason
-  // as the read above: opening a pool page must never fire a wallet prompt.
-  const capabilityQuery = useQuery({
-    queryKey: providerOptionsQueryKey(address),
-    queryFn: () => {
-      if (address === null) throw new Error("No wallet connected.");
-      return fetchProviderOptions(address, (options) =>
-        requestAuth({ ...options, cachedOnly: true }),
-      );
-    },
-    enabled: address !== null,
-    retry: false,
-    staleTime: 60_000,
-  });
   const viewerProvider = (capabilityQuery.data?.providers ?? []).find(
     (option) => option.id === capabilityQuery.data?.selected,
   );

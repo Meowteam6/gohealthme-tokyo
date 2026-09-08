@@ -29,10 +29,25 @@ import {
 
 /** The derived, privacy-safe progress the API returns. Raw health samples
  *  never cross this boundary; only counts and labels do. */
+/**
+ * How far along the connection is.
+ *
+ * "awaiting-first-sync" is the state every new user passes through and the one
+ * that used to render as a zero streak: linked, working, and no data has
+ * arrived yet. Telling somebody they have 0 of 7 days when their device has
+ * simply not uploaded anything is a claim about their behaviour that we cannot
+ * back.
+ */
+export type ProviderLinkState =
+  | "not-linked"
+  | "awaiting-first-sync"
+  | "linked";
+
 export interface ProviderProgress {
   connected: boolean;
   /** Which integration answered: "junction" or "whoop". Null pre-response. */
   provider: string | null;
+  linkState: ProviderLinkState | null;
   metric: string | null;
   streakDays: number | null;
   targetDays: number | null;
@@ -66,6 +81,12 @@ export function parseProviderProgress(payload: unknown): ProviderProgress {
   return {
     connected: record.connected === true,
     provider: typeof record.provider === "string" ? record.provider : null,
+    linkState:
+      record.linkState === "not-linked" ||
+      record.linkState === "awaiting-first-sync" ||
+      record.linkState === "linked"
+        ? record.linkState
+        : null,
     metric: typeof record.metric === "string" ? record.metric : null,
     streakDays:
       typeof record.streakDays === "number" ? record.streakDays : null,
@@ -226,4 +247,16 @@ export async function fetchProviderState(
   } catch {
     return PROVIDER_UNREACHABLE;
   }
+}
+
+/**
+ * True when the device is linked and simply has not delivered anything yet.
+ *
+ * Callers must render this INSTEAD of a streak, never alongside one: a zero
+ * next to "connected" is read as failure, and nothing has failed.
+ */
+export function providerAwaitingFirstSync(
+  state: ProviderState | undefined,
+): boolean {
+  return state?.kind === "ok" && state.progress.linkState === "awaiting-first-sync";
 }

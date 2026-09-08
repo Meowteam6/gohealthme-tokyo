@@ -64,6 +64,7 @@ function stubProvider(overrides: Record<string, unknown> = {}) {
   return {
     id: "junction",
     label: "Junction",
+    metrics: ["sleep_score", "sleep_efficiency", "sleep_hours"],
     isConnected: (...args: unknown[]) => isConnected(...args),
     getProgress: (...args: unknown[]) => getProgress(...args),
     ...overrides,
@@ -120,6 +121,7 @@ describe("GET /api/wearable/progress", () => {
     expect(await res.json()).toEqual({
       connected: false,
       provider: "junction",
+      linkState: "not-linked",
       metric: null,
       streakDays: null,
       targetDays: 7,
@@ -137,6 +139,8 @@ describe("GET /api/wearable/progress", () => {
     expect(body).toEqual({
       connected: true,
       provider: "junction",
+      // Data has arrived, so the link is fully live - not the awaiting state.
+      linkState: "linked",
       metric: "Sleep score ≥ 75",
       streakDays: 6,
       targetDays: 7,
@@ -173,6 +177,7 @@ describe("GET /api/wearable/progress", () => {
     expect(await res.json()).toEqual({
       connected: false,
       provider: "whoop",
+      linkState: "not-linked",
       metric: null,
       streakDays: null,
       targetDays: 7,

@@ -10,6 +10,7 @@ import {
   providerConnected,
   providerDownReason,
   providerQueryKey,
+  providerAwaitingFirstSync,
   providerStateFrom,
   providerUnavailableReason,
   type ProviderState,
@@ -28,6 +29,7 @@ describe("parseProviderProgress", () => {
     expect(parseProviderProgress(OK_BODY)).toEqual({
       connected: true,
       provider: null,
+      linkState: null,
       metric: "Sleep score >= 75",
       streakDays: 4,
       targetDays: 7,
@@ -39,6 +41,7 @@ describe("parseProviderProgress", () => {
     expect(parseProviderProgress(null)).toEqual({
       connected: false,
       provider: null,
+      linkState: null,
       metric: null,
       streakDays: null,
       targetDays: null,
@@ -53,6 +56,7 @@ describe("parseProviderProgress", () => {
     ).toEqual({
       connected: false,
       provider: null,
+      linkState: null,
       metric: null,
       streakDays: null,
       targetDays: null,
@@ -169,5 +173,30 @@ describe("providerQueryKey", () => {
       "0xabc",
       "14",
     ]);
+  });
+});
+
+describe("providerAwaitingFirstSync", () => {
+  it("is true only for a linked device that has sent nothing", () => {
+    // The state every new user passes through. Rendering a streak here would
+    // show a zero, which reads as "you missed every night" about somebody
+    // whose device simply has not uploaded yet.
+    const awaiting = providerStateFrom(200, {
+      connected: true,
+      linkState: "awaiting-first-sync",
+    });
+    expect(providerAwaitingFirstSync(awaiting)).toBe(true);
+  });
+
+  it("is false once data has arrived, and while nothing is known", () => {
+    expect(
+      providerAwaitingFirstSync(
+        providerStateFrom(200, { connected: true, linkState: "linked" }),
+      ),
+    ).toBe(false);
+    expect(providerAwaitingFirstSync(undefined)).toBe(false);
+    expect(
+      providerAwaitingFirstSync(providerStateFrom(502, { error: "down" })),
+    ).toBe(false);
   });
 });
