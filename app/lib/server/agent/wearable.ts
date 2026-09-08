@@ -148,10 +148,10 @@ export function wearableEvidenceSource(
         isoDay(window.periodEnd),
       );
 
-      // Connected but nothing has synced for this period yet: sync-in-progress,
-      // NOT a missed goal. Low confidence routes this to sync guidance instead
-      // of a paid "you failed".
-      if (progress.daysWithData === 0) {
+      // Connected but nothing has arrived for this period yet:
+      // sync-in-progress, NOT a missed goal. Low confidence routes this to
+      // sync guidance instead of a paid "you failed".
+      if (progress.daysWithSource === 0) {
         return {
           status: "failed",
           verdict: {
@@ -161,6 +161,25 @@ export function wearableEvidenceSource(
               `Your wearable is connected but has not synced any ${spec.label} ` +
               "data for this period yet. Give it a few minutes to sync, then " +
               "run the check again.",
+          },
+        };
+      }
+
+      // The device HAS been syncing and simply does not report this number -
+      // a tracker with no sleep score will not grow one. Telling this person
+      // to wait a few minutes would be advice that can never come true, so it
+      // fails closed against the device rather than against them.
+      if (progress.daysWithData === 0) {
+        return {
+          status: "failed",
+          verdict: {
+            verified: false,
+            confidence: "low",
+            reason:
+              `Your wearable is syncing, but it does not report ${spec.label} ` +
+              "for this goal, so there is nothing for SPOTTER to check and " +
+              "nothing was paid. Connect a device that tracks it from the " +
+              "dashboard.",
           },
         };
       }

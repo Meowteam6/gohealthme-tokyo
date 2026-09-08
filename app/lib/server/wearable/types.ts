@@ -49,7 +49,14 @@ export type { WearableMetric } from "@/lib/wearable-goal";
  */
 export interface MetricProgress {
   qualifyingDays: number;
+  /** Days inside the window that carried a value for THIS metric. */
   daysWithData: number;
+  /**
+   * Days the device reported anything usable for, whether or not it carried
+   * this metric. Separates "has not synced yet", which waiting fixes, from
+   * "does not measure this", which waiting never fixes.
+   */
+  daysWithSource: number;
 }
 
 /**

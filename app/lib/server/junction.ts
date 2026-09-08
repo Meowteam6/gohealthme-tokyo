@@ -427,7 +427,20 @@ export type { WearableMetric } from "@/lib/wearable-goal";
  */
 export interface MetricProgress {
   qualifyingDays: number;
+  /** Days inside the window that carried a value for THIS metric. */
   daysWithData: number;
+  /**
+   * Days inside the window the device reported ANYTHING for, whether or not it
+   * carried this metric.
+   *
+   * This is what separates two states that look identical from daysWithData
+   * alone and need opposite answers. Nothing at all means the device has not
+   * synced yet and waiting fixes it. Records present but this metric absent
+   * means the device does not measure it and waiting never fixes it - a
+   * tracker with no sleep score will not grow one. Before this field, the
+   * second case was reported as "give it a few minutes to sync" forever.
+   */
+  daysWithSource: number;
 }
 
 /**
@@ -440,6 +453,8 @@ function windowDayCount(
   threshold: number,
   windowStartISO: string,
   windowEndISO?: string,
+  sourceDays?: Set<string>,
+  everyDaySourced = false,
 ): MetricProgress {
   const today = new Date();
   const winEnd =
@@ -449,6 +464,7 @@ function windowDayCount(
   const cur = new Date(`${windowStartISO}T00:00:00Z`);
   let qualifyingDays = 0;
   let daysWithData = 0;
+  let daysWithSource = 0;
   while (cur <= winEnd) {
     const key = cur.toISOString().slice(0, 10);
     const v = byDay.get(key);
@@ -456,9 +472,17 @@ function windowDayCount(
       daysWithData += 1;
       if (v >= threshold) qualifyingDays += 1;
     }
+    // No source set means the caller cannot tell the two apart, so it reports
+    // the metric's own days and the verdict falls back to the old reading.
+    if (
+      everyDaySourced ||
+      (sourceDays === undefined ? v !== undefined : sourceDays.has(key))
+    ) {
+      daysWithSource += 1;
+    }
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
-  return { qualifyingDays, daysWithData };
+  return { qualifyingDays, daysWithData, daysWithSource };
 }
 
 interface ActivityFields {
@@ -509,9 +533,27 @@ async function fetchMetricByDay(
   userId: string,
   metric: WearableMetric,
   range: string,
-): Promise<Map<string, number>> {
+): Promise<{
+  byDay: Map<string, number>;
+  sourceDays: Set<string>;
+  /**
+   * True for COUNT metrics, where a day with no record is a real zero rather
+   * than missing data. Nobody worked out on Tuesday is an answer; the sleep
+   * summary having no entry for Tuesday is not.
+   */
+  everyDaySourced: boolean;
+}> {
   const byDay = new Map<string, number>();
+  // Every day the device reported a record of the right KIND, whether or not
+  // that record carried this metric. A tracker that syncs nightly but has no
+  // sleep score lands here and not in byDay, which is what lets the verdict
+  // say "your device does not measure this" instead of "still syncing".
+  const sourceDays = new Set<string>();
+  const seen = (day: string | null): void => {
+    if (day !== null) sourceDays.add(day);
+  };
   const keepMax = (day: string | null, value: number | null): void => {
+    seen(day);
     if (day === null || value === null || !Number.isFinite(value)) return;
     const prev = byDay.get(day);
     if (prev === undefined || value > prev) byDay.set(day, value);
@@ -541,7 +583,7 @@ async function fetchMetricByDay(
         keepMax(day, typeof secs === "number" ? secs / 3600 : null);
       }
     }
-    return byDay;
+    return { byDay, sourceDays, everyDaySourced: false };
   }
 
   if (metric === "steps" || metric === "active_calories") {
@@ -558,7 +600,7 @@ async function fetchMetricByDay(
         keepMax(day, typeof cal === "number" ? cal : null);
       }
     }
-    return byDay;
+    return { byDay, sourceDays, everyDaySourced: false };
   }
 
   // distance_km and workouts both read the workouts summary: distance sums each
@@ -569,6 +611,7 @@ async function fetchMetricByDay(
   for (const w of resp.workouts ?? resp.data ?? []) {
     const day = workoutDay(w);
     if (day === null) continue;
+    seen(day);
     if (metric === "distance_km") {
       const meters = w.distance ?? w.distance_meters ?? null;
       const km = typeof meters === "number" ? meters / 1000 : 0;
@@ -577,7 +620,10 @@ async function fetchMetricByDay(
       byDay.set(day, (byDay.get(day) ?? 0) + 1);
     }
   }
-  return byDay;
+  // A day with no workout means the person did not work out, which is a
+  // verdict-worthy zero. Reporting it as missing data would tell somebody who
+  // skipped the gym that their device is still syncing.
+  return { byDay, sourceDays, everyDaySourced: true };
 }
 
 /**
@@ -597,8 +643,19 @@ export async function getMetricProgress(
   const end = new Date();
   const start = new Date(`${windowStartISO}T00:00:00Z`);
   const range = `start_date=${isoDate(start)}&end_date=${isoDate(end)}`;
-  const byDay = await fetchMetricByDay(userId, metric, range);
-  return windowDayCount(byDay, threshold, windowStartISO, windowEndISO);
+  const { byDay, sourceDays, everyDaySourced } = await fetchMetricByDay(
+    userId,
+    metric,
+    range,
+  );
+  return windowDayCount(
+    byDay,
+    threshold,
+    windowStartISO,
+    windowEndISO,
+    sourceDays,
+    everyDaySourced,
+  );
 }
 
 // ------------------------------------------------------------- recent data

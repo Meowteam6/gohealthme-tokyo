@@ -809,17 +809,43 @@ export const whoopProvider: WearableProvider = {
     const from = rfc3339(startOfDayUTC(windowStartISO));
     const to = rfc3339(now);
 
-    const byDay =
-      metric === "workouts"
-        ? await workoutsByDay(address, from, to)
-        : bestScorePerDay(
-            (await fetchSleep(address, from, to))
-              .filter(isCountable)
-              .map((record) => ({
-                day: dayOf(record),
-                value: sleepMetricValueOf(record, metric),
-              })),
-          );
+    // sourceDays is what separates "nothing has synced" from "this device
+    // does not report that number". For sleep, a night WHOOP scored without a
+    // performance percentage is a sourced day with no value for sleep_score.
+    // For workouts, every day in the window is sourced: a day with no session
+    // means the person did not train, which is a real zero.
+    let byDay: Map<string, number>;
+    let sourceDays: Set<string> | null;
+    if (metric === "workouts") {
+      byDay = await workoutsByDay(address, from, to);
+      sourceDays = null;
+    } else {
+      const records = (await fetchSleep(address, from, to)).filter(isCountable);
+      byDay = bestScorePerDay(
+        records.map((record) => ({
+          day: dayOf(record),
+          value: sleepMetricValueOf(record, metric),
+        })),
+      );
+      sourceDays = new Set(
+        records
+          .map((record) => dayOf(record))
+          .filter((day): day is string => day !== null),
+      );
+    }
+
+    const sourced =
+      sourceDays === null
+        ? countQualifyingDays(
+            // Every day in the window counts as sourced for a count metric.
+            new Map(),
+            Number.NEGATIVE_INFINITY,
+            0,
+            windowStartISO,
+            windowEndISO,
+            now,
+          )
+        : 0;
 
     return {
       qualifyingDays: countQualifyingDays(
@@ -830,9 +856,7 @@ export const whoopProvider: WearableProvider = {
         windowEndISO,
         now,
       ),
-      // Days present in the window at all, regardless of whether they met the
-      // threshold. Zero means "connected but nothing synced yet", which the
-      // caller must treat as sync-in-progress and not as a missed goal.
+      // Days that carried a value for THIS metric.
       daysWithData: countQualifyingDays(
         byDay,
         Number.NEGATIVE_INFINITY,
@@ -841,6 +865,17 @@ export const whoopProvider: WearableProvider = {
         windowEndISO,
         now,
       ),
+      daysWithSource:
+        sourceDays === null
+          ? sourced
+          : countQualifyingDays(
+              new Map([...sourceDays].map((day) => [day, 1])),
+              Number.NEGATIVE_INFINITY,
+              0,
+              windowStartISO,
+              windowEndISO,
+              now,
+            ),
     };
   },
 

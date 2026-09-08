@@ -55,8 +55,12 @@ const WINDOW = {
   periodEnd: 1_750_604_800n,
 };
 
-function metricProgress(qualifyingDays: number, daysWithData = qualifyingDays) {
-  return { qualifyingDays, daysWithData };
+function metricProgress(
+  qualifyingDays: number,
+  daysWithData = qualifyingDays,
+  daysWithSource = daysWithData,
+) {
+  return { qualifyingDays, daysWithData, daysWithSource };
 }
 
 beforeEach(() => {
@@ -309,5 +313,31 @@ describe("wearableEvidenceSource", () => {
     expect(result.status).toBe("failed");
     expect(result.verdict).toMatchObject({ verified: false, confidence: "low" });
     expect(result.verdict?.reason).toMatch(/could not be reached/);
+  });
+  it("separates a device that is still syncing from one that cannot measure it", async () => {
+    isConnected.mockResolvedValue(true);
+    // Nothing at all has arrived: waiting genuinely fixes this.
+    getMetricProgress.mockResolvedValue(metricProgress(0, 0, 0));
+    const poll = wearableEvidenceSource(WINDOW);
+
+    const syncing = await poll(
+      "wearable-1750000000",
+      "sleep score 75+ for 7 days",
+    );
+    expect(syncing.verdict?.reason).toMatch(/give it a few minutes/i);
+
+    // Six days of records arrived and none of them carried a sleep score. A
+    // tracker with no sleep score will not grow one, so "wait a few minutes"
+    // would be advice that can never come true.
+    getMetricProgress.mockResolvedValue(metricProgress(0, 0, 6));
+    const cannotMeasure = await poll(
+      "wearable-1750000000",
+      "sleep score 75+ for 7 days",
+    );
+    expect(cannotMeasure.verdict?.reason).toMatch(/does not report/i);
+    expect(cannotMeasure.verdict?.reason).not.toMatch(/few minutes/i);
+    // Neither pays, and neither blames the user.
+    expect(cannotMeasure.verdict?.verified).toBe(false);
+    expect(cannotMeasure.status).toBe("failed");
   });
 });
