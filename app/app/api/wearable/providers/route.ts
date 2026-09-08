@@ -1,5 +1,5 @@
 // GET /api/wearable/providers?address=0x...
-// { providers: [{ id, label, configured, connected }], selected }
+// { providers: [{ id, label, configured, connected, metrics }], selected }
 //
 // What the device picker renders. `address` is optional: without it the route
 // answers which providers this deployment supports at all, which is what a
@@ -9,6 +9,11 @@
 // `connected` is reported per provider so the UI can show a user who has both
 // linked which one their claims will actually use, rather than implying the
 // selected one is live when it is not.
+//
+// `metrics` is what the pool list needs. A goal measured in something the
+// viewer's device cannot produce has to be refused at the join, not at the
+// claim - by then the stake is already committed, and an honest error after
+// somebody's money has moved is a trap, not an error.
 
 import { type NextRequest } from "next/server";
 import { isAddress } from "viem";
@@ -32,6 +37,7 @@ export async function GET(request: NextRequest) {
           label: providerById(id).label,
           configured: providerConfigured(id),
           connected: false,
+          metrics: providerById(id).metrics,
         })),
         selected: null,
       });
@@ -62,7 +68,13 @@ export async function GET(request: NextRequest) {
             console.error(`[wearable/providers] ${id} status failed`, err);
           }
         }
-        return { id, label: provider.label, configured, connected };
+        return {
+          id,
+          label: provider.label,
+          configured,
+          connected,
+          metrics: provider.metrics,
+        };
       }),
     );
 

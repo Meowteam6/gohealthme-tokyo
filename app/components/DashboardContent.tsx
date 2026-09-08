@@ -62,6 +62,7 @@ import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
 import { resultLabel } from "@/lib/participant-status";
 import {
   fetchProviderOptions,
+  PhoneLinkRequiredError,
   providerOptionsQueryKey,
   whoopReturnMessage,
   type WearableProviderId,
@@ -151,6 +152,10 @@ function ConnectButton({
   // path (no wearable, no verification, no payout), so it reports.
   const [error, setError] = useState<string | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+  // A provider that can only be linked on a phone is not an error state: the
+  // user did nothing wrong and a retry cannot help. It gets its own calm panel
+  // rather than the red ErrorNote, which would read as a fault.
+  const [phoneSteps, setPhoneSteps] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
   const requestAuth = useWalletAuth();
 
@@ -164,6 +169,7 @@ function ConnectButton({
         onClick={() => {
           setError(null);
           setFallbackUrl(null);
+          setPhoneSteps(null);
           setOpening(true);
           void startWearableLink(address, requestAuth, provider)
             .catch((err: unknown) => {
@@ -172,6 +178,10 @@ function ConnectButton({
                 // Offer a link the user taps directly - a real gesture nav is
                 // never blocked.
                 setFallbackUrl(err.linkUrl);
+                return;
+              }
+              if (err instanceof PhoneLinkRequiredError) {
+                setPhoneSteps(err.instructions);
                 return;
               }
               setError(
@@ -186,6 +196,15 @@ function ConnectButton({
       >
         {opening ? "Opening the connect flow" : label}
       </Button>
+      {phoneSteps !== null ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-3 rounded-xl border border-accent/30 bg-accent/15 p-4 text-sm text-accent-deep"
+        >
+          {phoneSteps}
+        </p>
+      ) : null}
       {error !== null ? (
         <div className="mt-3">
           <ErrorNote
@@ -237,27 +256,51 @@ function ProviderChoice({ address }: { address: `0x${string}` }) {
   const offered = (data?.providers ?? []).filter((option) => option.configured);
   if (offered.length < 2) return null;
 
-  const blurb: Record<WearableProviderId, string> = {
-    junction: "WHOOP, Oura, Fitbit or Garmin, through Junction.",
-    whoop: "WHOOP only, connected directly. Reads your sleep and nothing else.",
+  // The call to action is per provider because the verbs are not the same:
+  // Junction and WHOOP connect an account here and now, while a phone-based
+  // provider only sets your wallet up and finishes on the device. Interpolating
+  // one word into "Connect X" would promise something that does not happen.
+  const copy: Record<
+    WearableProviderId,
+    { blurb: string; cta: string; reconnect: string }
+  > = {
+    junction: {
+      blurb: "WHOOP, Oura, Fitbit or Garmin, through Junction.",
+      cta: "Connect Junction",
+      reconnect: "Reconnect Junction",
+    },
+    whoop: {
+      blurb:
+        "WHOOP only, connected directly. Reads your sleep and workouts, nothing else. No step count.",
+      cta: "Connect WHOOP",
+      reconnect: "Reconnect WHOOP",
+    },
   };
 
   return (
-    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
       {offered.map((option) => (
         <div
           key={option.id}
           className="rounded-xl border border-edge p-3 text-sm"
         >
-          <div className="flex items-center gap-2">
-            <p className="font-semibold text-foreground">{option.label}</p>
+          {/* flex-wrap and min-w-0 so a longer provider name and its badge
+              stack instead of overflowing at 390px. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="min-w-0 font-semibold text-foreground">
+              {option.label}
+            </p>
             {option.connected ? <Badge tone="accent">Connected</Badge> : null}
           </div>
-          <p className="mt-1 text-muted">{blurb[option.id]}</p>
+          <p className="mt-1 text-muted">{copy[option.id].blurb}</p>
           <ConnectButton
             address={address}
             provider={option.id}
-            label={option.connected ? `Reconnect ${option.label}` : `Connect ${option.label}`}
+            label={
+              option.connected
+                ? copy[option.id].reconnect
+                : copy[option.id].cta
+            }
             secondary
           />
         </div>

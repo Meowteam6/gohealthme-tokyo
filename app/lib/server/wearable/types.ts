@@ -19,23 +19,18 @@
 // file rather than a new branch in nine call sites.
 //
 import type { WearableMetric } from "@/lib/wearable-goal";
+import type { ProviderId } from "@/lib/wearable-providers";
 
 // PRIVACY INVARIANT, INHERITED BY EVERY IMPLEMENTATION: raw health samples
 // never cross this boundary. A provider module may read whole sleep records
 // upstream; what it returns is counts, per-day scores and labels. Nothing
 // here is ever written on-chain directly.
 
-/** Which integration backs a wallet's health data. */
-export type ProviderId = "junction" | "whoop";
-
-export const PROVIDER_IDS: readonly ProviderId[] = ["junction", "whoop"];
-
-export function isProviderId(value: unknown): value is ProviderId {
-  return (
-    typeof value === "string" &&
-    (PROVIDER_IDS as readonly string[]).includes(value)
-  );
-}
+export {
+  PROVIDER_IDS,
+  isProviderId,
+  type ProviderId,
+} from "@/lib/wearable-providers";
 
 /**
  * The wearable metrics a goal can be verified against. Declared once in

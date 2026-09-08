@@ -22,6 +22,7 @@ import { errorMessage, jsonError, readJsonBody } from "@/lib/server/http";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
 import {
   isProviderId,
+  PROVIDER_IDS,
   providerById,
   providerConfigured,
   providerIdFor,
@@ -49,7 +50,10 @@ export async function POST(request: Request) {
     }
 
     if (requested !== undefined && !isProviderId(requested)) {
-      return jsonError(400, "provider must be either junction or whoop");
+      return jsonError(
+        400,
+        `provider must be one of: ${PROVIDER_IDS.join(", ")}`,
+      );
     }
 
     const providerId = isProviderId(requested)

@@ -24,9 +24,14 @@ import {
   authBlockReason,
   type WalletAuthRequester,
 } from "@/lib/client-auth";
+import { isProviderId, type ProviderId } from "@/lib/wearable-providers";
+import type { WearableMetric } from "@/lib/wearable-goal";
 
-/** The providers a deployment can offer. Mirrors lib/server/wearable/types. */
-export type WearableProviderId = "junction" | "whoop";
+export {
+  PROVIDER_IDS,
+  isProviderId,
+  type ProviderId as WearableProviderId,
+} from "@/lib/wearable-providers";
 
 /**
  * Raised when the browser blocked even the synchronous popup. Carries the real
@@ -42,9 +47,24 @@ export class PopupBlockedError extends Error {
   }
 }
 
+/**
+ * Raised when a provider can only be linked on a phone. Not an error the user
+ * caused and not something a retry fixes - Apple Health is readable only on
+ * the device that holds it - so it carries the instructions to display rather
+ * than an error message. Callers render it as guidance, never as a failure.
+ */
+export class PhoneLinkRequiredError extends Error {
+  readonly instructions: string;
+  constructor(instructions: string) {
+    super("This device is connected from the phone app, not the browser.");
+    this.name = "PhoneLinkRequiredError";
+    this.instructions = instructions;
+  }
+}
+
 /** Where the connect flow wants to send the user. */
 interface LinkTarget {
-  provider: WearableProviderId | null;
+  provider: ProviderId | null;
   /** "app" means the link is completed in a phone app, not this browser. */
   kind: "oauth" | "app";
   linkUrl: string | null;
@@ -58,7 +78,7 @@ interface LinkTarget {
 export async function fetchLinkTarget(
   address: `0x${string}`,
   requestAuth: WalletAuthRequester,
-  provider?: WearableProviderId,
+  provider?: ProviderId,
 ): Promise<LinkTarget> {
   const sent = await fetchWithWalletAuth(
     "/api/wearable/link",
@@ -104,10 +124,7 @@ export async function fetchLinkTarget(
   }
 
   return {
-    provider:
-      body?.provider === "junction" || body?.provider === "whoop"
-        ? body.provider
-        : null,
+    provider: isProviderId(body?.provider) ? body.provider : null,
     kind,
     linkUrl,
     instructions:
@@ -131,7 +148,7 @@ export async function fetchLinkTarget(
 export async function startWearableLink(
   address: `0x${string}`,
   requestAuth: WalletAuthRequester,
-  provider?: WearableProviderId,
+  provider?: ProviderId,
 ): Promise<void> {
   const popup = window.open("about:blank", "_blank");
   if (popup !== null) {
@@ -165,9 +182,9 @@ export async function startWearableLink(
       window.location.href = target.linkUrl;
       return;
     }
-    throw new Error(
+    throw new PhoneLinkRequiredError(
       target.instructions ??
-        "This device is connected from the phone app, not the browser.",
+        "Open the GoHealthMe app on your phone to finish connecting this device.",
     );
   }
 
@@ -196,17 +213,22 @@ export async function startWearableLink(
 }
 
 export interface ProviderOption {
-  id: WearableProviderId;
+  id: ProviderId;
   label: string;
   /** Whether this deployment has credentials for it. */
   configured: boolean;
   /** Whether this wallet has actually linked it. */
   connected: boolean;
+  /**
+   * What this provider can physically measure. The pool list uses it to warn
+   * about a goal this device can never verify, before the entry fee is paid.
+   */
+  metrics: WearableMetric[];
 }
 
 export interface ProviderOptions {
   providers: ProviderOption[];
-  selected: WearableProviderId | null;
+  selected: ProviderId | null;
 }
 
 function parseOptions(payload: unknown): ProviderOptions {
@@ -218,20 +240,20 @@ function parseOptions(payload: unknown): ProviderOptions {
   const providers = raw.flatMap((entry): ProviderOption[] => {
     if (typeof entry !== "object" || entry === null) return [];
     const item = entry as Record<string, unknown>;
-    if (item.id !== "junction" && item.id !== "whoop") return [];
+    if (!isProviderId(item.id)) return [];
     return [
       {
         id: item.id,
         label: typeof item.label === "string" ? item.label : item.id,
         configured: item.configured === true,
         connected: item.connected === true,
+        metrics: Array.isArray(item.metrics)
+          ? (item.metrics.filter((m) => typeof m === "string") as WearableMetric[])
+          : [],
       },
     ];
   });
-  const selected =
-    record.selected === "junction" || record.selected === "whoop"
-      ? record.selected
-      : null;
+  const selected = isProviderId(record.selected) ? record.selected : null;
   return { providers, selected };
 }
 
@@ -301,4 +323,39 @@ export function whoopReturnMessage(
     default:
       return null;
   }
+}
+
+/**
+ * What the viewer's ACTIVE provider can measure, or null when that is not
+ * known - nobody signed in, the signature is not cached, or the read failed.
+ *
+ * Null is load-bearing and must stay distinguishable from "measures nothing":
+ * callers hold nothing back on null, because taking a pool off the board on a
+ * guess about a device we have not identified is its own dead end.
+ */
+export function viewerMetricsOf(
+  options: ProviderOptions | undefined,
+): WearableMetric[] | null {
+  if (options === undefined || options.selected === null) return null;
+  const active = options.providers.find(
+    (option) => option.id === options.selected,
+  );
+  if (active === undefined || !active.configured) return null;
+  // A provider the wallet chose but never actually linked says nothing about
+  // what will verify their claim, so it is not treated as known either.
+  return active.connected ? active.metrics : null;
+}
+
+/** Plain-language name for a metric, for copy that has to say what is missing. */
+export function metricLabel(metric: WearableMetric): string {
+  const labels: Record<WearableMetric, string> = {
+    sleep_score: "sleep score",
+    sleep_efficiency: "sleep efficiency",
+    sleep_hours: "hours of sleep",
+    steps: "step count",
+    active_calories: "active calories",
+    distance_km: "distance",
+    workouts: "workouts",
+  };
+  return labels[metric];
 }

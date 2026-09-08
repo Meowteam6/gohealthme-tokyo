@@ -1,3 +1,4 @@
+import { PROVIDER_IDS } from "@/lib/wearable-providers";
 // POST /api/wearable/link starts a device connection for a wallet. Pinned here:
 //
 //   - THE SIGNATURE GATE, WHICH IS NEW. The Junction-only predecessor was
@@ -131,8 +132,10 @@ describe("POST /api/wearable/link", () => {
   it("rejects a provider name that is neither junction nor whoop", async () => {
     const res = await post({ address: USER, provider: "oura" });
     expect(res.status).toBe(400);
+    // Derived from the registry, not spelled out: the message must name every
+    // provider a deployment actually offers, including ones added later.
     expect((await res.json()).error).toBe(
-      "provider must be either junction or whoop",
+      `provider must be one of: ${PROVIDER_IDS.join(", ")}`,
     );
     expect(setProviderId).not.toHaveBeenCalled();
     expect(startLink).not.toHaveBeenCalled();

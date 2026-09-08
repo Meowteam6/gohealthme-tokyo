@@ -48,6 +48,14 @@ import {
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import {
+  fetchProviderOptions,
+  metricLabel,
+  providerOptionsQueryKey,
+  viewerMetricsOf,
+} from "@/lib/wearable-connect";
+import { unsupportedMetricFor } from "@/lib/pool-availability";
+import type { WearableMetric } from "@/lib/wearable-goal";
+import {
   BOUNTY_MODEL_LABELS,
   displayGoalSpec,
   evidenceTypeOf,
@@ -535,6 +543,32 @@ export default function PoolDetail({ id }: { id: string }) {
   // the page rather than selling a goal SPOTTER has no way to verify.
   const providerDown = providerDownReason(providerQuery.data);
   const unverifiableNow = providerDown !== null && evidenceType === "wearable";
+
+  // What the viewer's own device can measure. cachedOnly for the same reason
+  // as the read above: opening a pool page must never fire a wallet prompt.
+  const capabilityQuery = useQuery({
+    queryKey: providerOptionsQueryKey(address),
+    queryFn: () => {
+      if (address === null) throw new Error("No wallet connected.");
+      return fetchProviderOptions(address, (options) =>
+        requestAuth({ ...options, cachedOnly: true }),
+      );
+    },
+    enabled: address !== null,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const viewerProvider = (capabilityQuery.data?.providers ?? []).find(
+    (option) => option.id === capabilityQuery.data?.selected,
+  );
+  // The metric this viewer's device can never produce, or null. This is the
+  // check that has to happen HERE, before the entry fee: the same mismatch
+  // discovered at claim time is a rejection after the money has already moved.
+  const unsupportedMetric = unsupportedMetricFor(
+    pool.goalSpec,
+    viewerMetricsOf(capabilityQuery.data),
+  );
+  const unsupportedForViewer = unsupportedMetric !== null && !joined;
   const agentBroke = agentIsBroke(agentWalletQuery.data?.balanceUsd ?? null);
   // Wait for the restore before mounting a tab on a multi-path pool; mounting
   // the wrong one first would start a poll loop the correct tab then supersedes.
@@ -729,6 +763,9 @@ export default function PoolDetail({ id }: { id: string }) {
           {unverifiableNow && phase === "live" ? (
             <Badge tone="warning">Cannot verify right now</Badge>
           ) : null}
+          {unsupportedForViewer && phase === "live" ? (
+            <Badge tone="warning">Your device cannot measure this</Badge>
+          ) : null}
         </div>
         {isDocGoal ? (
           <p className="mt-3 text-sm font-semibold uppercase tracking-wide text-accent">
@@ -897,6 +934,42 @@ export default function PoolDetail({ id }: { id: string }) {
                     upload here - you would pass and still walk away with nothing.
                   </p>
                   <BrowsePoolsLink label="Find a pool that can pay" />
+                </div>
+              </div>
+            </section>
+          ) : unsupportedForViewer ? (
+            <section className="rounded-3xl border border-warning/40 bg-warning/10 p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <SpotterMascot
+                  pose="watching"
+                  size="sm"
+                  className="mx-auto sm:mx-0"
+                />
+                <div className="min-w-0">
+                  <h2 className="font-display text-lg font-semibold text-warning">
+                    Your {viewerProvider?.label ?? "device"} cannot measure this
+                    one
+                  </h2>
+                  <p className="mt-1 text-sm text-foreground/80">
+                    This goal is measured in{" "}
+                    {metricLabel(unsupportedMetric as WearableMetric)}, and{" "}
+                    {viewerProvider?.label ?? "your connected device"} does not
+                    report it. That is the hardware, not an outage, so it will
+                    not start working later.
+                  </p>
+                  <p className="mt-2 text-sm text-foreground/80">
+                    The {formatUsdc(pool.entryFee)} USDC entry fee is real
+                    money, so I am not going to sell you a spot for a goal I
+                    could never verify for you. Connect a device that tracks{" "}
+                    {metricLabel(unsupportedMetric as WearableMetric)} and this
+                    pool opens up.
+                  </p>
+                  <Link
+                    href="/dashboard"
+                    className={`mt-3 inline-block rounded-xl border-2 border-edge font-semibold hover:border-accent/50 ${TAP_TARGET}`}
+                  >
+                    Change your device
+                  </Link>
                 </div>
               </div>
             </section>

@@ -42,6 +42,11 @@ import {
   providerDownReason,
   providerQueryKey,
 } from "@/lib/wearable-provider";
+import {
+  fetchProviderOptions,
+  providerOptionsQueryKey,
+  viewerMetricsOf,
+} from "@/lib/wearable-connect";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import {
   hideDocumentPools,
@@ -173,9 +178,30 @@ export default function PoolsPage() {
   });
   const providerDown = providerDownReason(providerQuery.data);
 
+  // What the viewer's own device can measure. Same cachedOnly rule: browsing
+  // is not a request to unlock anything, so an unsigned reader simply stays
+  // "not known" and nothing is held back on a guess.
+  const capabilityQuery = useQuery({
+    queryKey: providerOptionsQueryKey(address),
+    queryFn: () => {
+      if (address === null) throw new Error("No wallet connected.");
+      return fetchProviderOptions(address, (options) =>
+        requestAuth({ ...options, cachedOnly: true }),
+      );
+    },
+    enabled: address !== null,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const viewerMetrics = viewerMetricsOf(capabilityQuery.data);
+
   const liveSplit = splitByVerifiability(
     grouped?.live ?? [],
     providerDown !== null,
+    viewerMetrics,
+  );
+  const viewerProvider = (capabilityQuery.data?.providers ?? []).find(
+    (option) => option.id === capabilityQuery.data?.selected,
   );
   const expiredSplit = splitExpiredPools(
     grouped?.expired ?? [],
@@ -343,6 +369,33 @@ export default function PoolsPage() {
                   join action there too. */}
               <div className="opacity-60">
                 <PoolGrid pools={liveSplit.unverifiable} phase="live" />
+              </div>
+            </section>
+          ) : null}
+
+          {liveSplit.unsupported.length > 0 ? (
+            <section className="space-y-3">
+              <SectionLabel tone="warning">
+                Your device cannot measure these
+              </SectionLabel>
+              <p className="rounded-2xl border-2 border-warning/40 bg-warning/10 p-3 text-sm text-foreground/80">
+                {viewerProvider !== undefined
+                  ? `${viewerProvider.label} does not report what these goals measure, so SPOTTER could never verify them for you.`
+                  : "Your connected device does not report what these goals measure, so SPOTTER could never verify them for you."}{" "}
+                This is a limit of the hardware, not an outage, so waiting will
+                not change it. Connect another provider from your dashboard to
+                take these on.
+              </p>
+              <Link
+                href="/dashboard"
+                className={`inline-block rounded-xl border-2 border-edge font-semibold hover:border-accent/50 ${TAP_TARGET}`}
+              >
+                Change your device
+              </Link>
+              {/* Dimmed and out of the joinable group, but still readable: a
+                  pool you cannot prove is still worth knowing exists. */}
+              <div className="opacity-60">
+                <PoolGrid pools={liveSplit.unsupported} phase="live" />
               </div>
             </section>
           ) : null}
