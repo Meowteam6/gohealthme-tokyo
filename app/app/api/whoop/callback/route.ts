@@ -5,12 +5,15 @@
 //
 // This route is reached by a redirect from WHOOP, so every check it can make
 // is made on what the redirect carries:
-//   - `state` must match the httpOnly nonce cookie this browser was given at
-//     /api/whoop/login. That is the CSRF check: without it, an attacker could
-//     feed their own authorization code to a logged-in victim's browser and
-//     bind their WHOOP account to the victim's wallet.
-//   - the address comes out of `state`, which was built from a signed link
-//     ticket. It is never read from a query param.
+//   - `state` must match the nonce half of the httpOnly cookie this browser
+//     was given at /api/whoop/login. That is the CSRF check: without it, an
+//     attacker could feed their own authorization code to a logged-in victim's
+//     browser and bind their WHOOP account to the victim's wallet.
+//   - the address is read ONLY from that cookie, never from `state` and never
+//     from a query param. `state` is echoed back through a URL the caller can
+//     retype, so an address carried there is caller-controlled by the time it
+//     arrives; the cookie is httpOnly and holds the address that
+//     readLinkTicket verified at /login.
 //
 // Failures land the user back on the dashboard with a reason in the URL rather
 // than on a JSON error page: they came from a normal in-app click and the way
@@ -53,16 +56,23 @@ export async function GET(request: NextRequest) {
       return backToDashboard(request, { whoop: "failed" });
     }
 
-    const separator = state.indexOf(":");
-    const nonce = separator === -1 ? "" : state.slice(0, separator);
-    const address = separator === -1 ? "" : state.slice(separator + 1);
+    const cookie = request.cookies.get(WHOOP_NONCE_COOKIE)?.value;
+    if (cookie === undefined) {
+      console.warn("[whoop/callback] no OAuth cookie on this browser");
+      return backToDashboard(request, { whoop: "expired" });
+    }
+
+    const separator = cookie.indexOf(":");
+    const nonce = separator === -1 ? "" : cookie.slice(0, separator);
+    const address = separator === -1 ? "" : cookie.slice(separator + 1);
     if (nonce === "" || !isAddress(address)) {
-      console.warn("[whoop/callback] malformed OAuth state");
+      console.warn("[whoop/callback] malformed OAuth cookie");
       return backToDashboard(request, { whoop: "failed" });
     }
 
-    const cookieNonce = request.cookies.get(WHOOP_NONCE_COOKIE)?.value;
-    if (cookieNonce === undefined || cookieNonce !== nonce) {
+    // The ONLY thing taken from `state`. Anything else read from it would be
+    // attacker-supplied.
+    if (state !== nonce) {
       console.warn("[whoop/callback] OAuth state did not match the nonce cookie");
       return backToDashboard(request, { whoop: "expired" });
     }
