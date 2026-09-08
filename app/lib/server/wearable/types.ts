@@ -177,6 +177,33 @@ export interface WearableProvider {
   ): Promise<WearableProgress>;
   /** Recent per-day sleep and activity for the dashboard card. */
   getRecent(address: string, days: number): Promise<WearableRecent>;
+  /**
+   * The metrics this WALLET's device has actually produced data for, or null
+   * when the declared list is already device-accurate.
+   *
+   * WHY DECLARED IS NOT ALWAYS ENOUGH. `metrics` is what the integration can
+   * serve; it is not always what a given person's hardware does. Junction
+   * normalises several brands, and a tracker linked through it may report no
+   * proprietary sleep score. A phone-based provider may be syncing steps from
+   * an iPhone with no watch anywhere near it, so sleep never arrives. In both
+   * cases the provider legitimately declares the metric and this particular
+   * wallet can still never satisfy a pool scored on it.
+   *
+   * Returning null means "declared is accurate for every device" - true for a
+   * single-hardware provider like WHOOP, where every strap measures the same
+   * things. Returning a list narrows the join gate to what this person's setup
+   * actually does, which is the difference between learning before the stake
+   * and learning after it.
+   *
+   * CONTRACT, and getting this wrong blanks somebody's whole board: return
+   * NULL when nothing has been observed yet, never an empty array. An empty
+   * array means "this device produced none of these", which the gate honours
+   * by hiding every wearable pool. A wallet that linked ten minutes ago has
+   * observed nothing and must fall back to the declared list instead.
+   *
+   * Must be cheap enough to call on a browse surface: cache it.
+   */
+  observedMetrics(address: string): Promise<WearableMetric[] | null>;
   /** Forget this wallet's connection. Idempotent. */
   disconnect(address: string): Promise<void>;
 }

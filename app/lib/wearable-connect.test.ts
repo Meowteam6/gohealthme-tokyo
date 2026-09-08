@@ -196,7 +196,14 @@ describe("fetchProviderOptions", () => {
   it("drops an unknown provider id without losing the rest of the picker", async () => {
     respond({
       providers: [
-        { id: "whoop", label: "WHOOP", configured: true, connected: true, metrics: ["sleep_score"] },
+        {
+          id: "whoop",
+          label: "WHOOP",
+          configured: true,
+          connected: true,
+          metrics: ["sleep_score"],
+          observedMetrics: null,
+        },
         { id: "garmin", label: "Garmin", configured: true, connected: true, metrics: [] },
       ],
       selected: "whoop",
@@ -226,13 +233,42 @@ describe("viewerMetricsOf", () => {
     configured: true,
     connected: true,
     metrics: ["sleep_score" as const],
+    observedMetrics: null,
     ...over,
   });
 
-  it("returns the active provider's metrics", () => {
+  it("returns the active provider's declared metrics when nothing narrows them", () => {
     expect(
       viewerMetricsOf({ providers: [option()], selected: "whoop" }),
     ).toEqual(["sleep_score"]);
+  });
+
+  it("prefers what the wallet's own device actually produced", () => {
+    // The case this exists for: the integration declares sleep_score, and this
+    // person's tracker has never produced one. Trusting the declared list
+    // would invite them to stake on a pool they can never satisfy.
+    expect(
+      viewerMetricsOf({
+        providers: [
+          option({
+            metrics: ["sleep_score", "steps"],
+            observedMetrics: ["steps"],
+          }),
+        ],
+        selected: "whoop",
+      }),
+    ).toEqual(["steps"]);
+  });
+
+  it("treats an observed empty list as narrowing to nothing, not as unknown", () => {
+    // A provider that returns [] is saying "this device produced none of
+    // these". Null is how it says "I cannot narrow"; the two differ.
+    expect(
+      viewerMetricsOf({
+        providers: [option({ observedMetrics: [] })],
+        selected: "whoop",
+      }),
+    ).toEqual([]);
   });
 
   it("is null - not empty - whenever the device is not actually known", () => {

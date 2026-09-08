@@ -953,6 +953,18 @@ export const whoopProvider: WearableProvider = {
   },
 
   /**
+   * Null: WHOOP's declared list is already device-accurate.
+   *
+   * Every WHOOP strap is the same hardware, so there is no per-wallet variation
+   * to discover - a WHOOP that reports sleep reports it for everybody, and one
+   * that cannot count steps cannot count them for anybody. Probing would spend
+   * requests against a shared 10000-a-day quota to re-learn a constant.
+   */
+  async observedMetrics(): Promise<null> {
+    return null;
+  },
+
+  /**
    * Drop the connection. WHOOP's revoke endpoint is called first so the grant
    * is actually gone on their side, but a failure there does not stop the
    * local record being deleted: leaving a token we can no longer honour would

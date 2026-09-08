@@ -220,15 +220,28 @@ export interface ProviderOption {
   /** Whether this wallet has actually linked it. */
   connected: boolean;
   /**
-   * What this provider can physically measure. The pool list uses it to warn
-   * about a goal this device can never verify, before the entry fee is paid.
+   * What this INTEGRATION can measure. Used to describe the provider in the
+   * picker, so a person choosing between them can see the difference.
    */
   metrics: WearableMetric[];
+  /**
+   * What this WALLET's actual hardware has produced, or null when the declared
+   * list is already accurate for every device. The gate prefers this: Junction
+   * declares a sleep score even for a tracker that has none, and a phone
+   * provider declares sleep even for somebody with no watch.
+   */
+  observedMetrics: WearableMetric[] | null;
 }
 
 export interface ProviderOptions {
   providers: ProviderOption[];
   selected: ProviderId | null;
+}
+
+/** A metric array off the wire, or null when the field is absent or unusable. */
+function metricList(value: unknown): WearableMetric[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.filter((m): m is WearableMetric => typeof m === "string");
 }
 
 function parseOptions(payload: unknown): ProviderOptions {
@@ -247,9 +260,8 @@ function parseOptions(payload: unknown): ProviderOptions {
         label: typeof item.label === "string" ? item.label : item.id,
         configured: item.configured === true,
         connected: item.connected === true,
-        metrics: Array.isArray(item.metrics)
-          ? (item.metrics.filter((m) => typeof m === "string") as WearableMetric[])
-          : [],
+        metrics: metricList(item.metrics) ?? [],
+        observedMetrics: metricList(item.observedMetrics),
       },
     ];
   });
@@ -343,7 +355,11 @@ export function viewerMetricsOf(
   if (active === undefined || !active.configured) return null;
   // A provider the wallet chose but never actually linked says nothing about
   // what will verify their claim, so it is not treated as known either.
-  return active.connected ? active.metrics : null;
+  if (!active.connected) return null;
+  // Observed beats declared. This is the whole point: the declared list is
+  // what the integration can serve, and the gate has to answer for the device
+  // this person is actually wearing. Null means declared is already accurate.
+  return active.observedMetrics ?? active.metrics;
 }
 
 /** Plain-language name for a metric, for copy that has to say what is missing. */

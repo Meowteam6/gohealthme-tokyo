@@ -1,5 +1,6 @@
 // GET /api/wearable/providers?address=0x...
-// { providers: [{ id, label, configured, connected, metrics }], selected }
+// { providers: [{ id, label, configured, connected, metrics, observedMetrics }],
+//   selected }
 //
 // What the device picker renders. `address` is optional: without it the route
 // answers which providers this deployment supports at all, which is what a
@@ -10,10 +11,20 @@
 // linked which one their claims will actually use, rather than implying the
 // selected one is live when it is not.
 //
-// `metrics` is what the pool list needs. A goal measured in something the
-// viewer's device cannot produce has to be refused at the join, not at the
-// claim - by then the stake is already committed, and an honest error after
-// somebody's money has moved is a trap, not an error.
+// `metrics` is what the INTEGRATION can serve. `observedMetrics` is what this
+// wallet's actual hardware has produced, and it is the one the gate prefers.
+//
+// The two differ in the cases that matter. Junction fronts several brands, so
+// it declares a proprietary sleep score even for a wallet whose tracker has
+// none. A phone-based provider declares sleep even for somebody syncing steps
+// from an iPhone with no watch. Both wallets would otherwise be invited to
+// stake on a goal their setup can never satisfy, and would learn at the claim -
+// after the money moved, which is a trap rather than an error.
+//
+// Probed only for the provider actually backing this wallet, and only when it
+// is connected: a browse surface must not pay for a probe of a provider nobody
+// is using. Null narrows nothing, so an upstream hiccup can never take pools
+// off somebody's board.
 
 import { type NextRequest } from "next/server";
 import { isAddress } from "viem";
@@ -38,6 +49,7 @@ export async function GET(request: NextRequest) {
           configured: providerConfigured(id),
           connected: false,
           metrics: providerById(id).metrics,
+          observedMetrics: null,
         })),
         selected: null,
       });
@@ -68,12 +80,24 @@ export async function GET(request: NextRequest) {
             console.error(`[wearable/providers] ${id} status failed`, err);
           }
         }
+
+        let observed: readonly string[] | null = null;
+        if (connected && id === selected) {
+          try {
+            observed = await provider.observedMetrics(address);
+          } catch (err) {
+            // Falls back to the declared list, which is the permissive answer.
+            console.error(`[wearable/providers] ${id} probe failed`, err);
+          }
+        }
+
         return {
           id,
           label: provider.label,
           configured,
           connected,
           metrics: provider.metrics,
+          observedMetrics: observed,
         };
       }),
     );

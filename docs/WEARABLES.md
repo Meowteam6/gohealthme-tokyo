@@ -159,18 +159,32 @@ experience, and what they see.
 | WHOOP user, sleep or workout goal | Full path, same as Junction. | No |
 | WHOOP user, steps or distance goal | Pool grouped under "your device cannot measure these", join withheld, reason given, one tap to change device. | **Yes, and deliberately.** They could previously join and would have been refused at the claim, after staking. |
 | Any user, just linked | "Connected and has not sent anything yet" instead of a zero streak. | No, strictly better |
-| Device that reports no sleep score, on a sleep-score pool | Dashboard says the device does not report a sleep score; the claim says the same and pays nothing. | **Yes.** Before, efficiency was silently substituted and they were judged on an easier bar. |
+| Device that reports no sleep score, on a sleep-score pool | Pool is grouped as unmeasurable and the join is withheld, before any stake. Dashboard says the device does not report a sleep score. | **Yes.** Before, efficiency was silently substituted and they were judged on an easier bar. |
+| Linked wallet whose device measures only some metrics (an iPhone with no watch, a scoreless tracker) | Only the pools their setup can actually prove are joinable. | **Yes, and deliberately.** Previously joinable, then refused at the claim. |
 | Any user, provider outage | Unchanged: "cannot verify right now", kept separate from the permanent case. | No |
 
-### Known residual
+### Per-device capability, not just per-provider
 
-**Junction declares `sleep_score` at the provider level, but an individual
-linked device may not produce one.** The join gate reads provider capability,
-not per-device capability, so a Junction user on a scoreless tracker can still
-join a sleep-score pool. They are no longer judged on a substituted number and
-both the dashboard and the claim now say the device does not report it, but that
-message arrives after the stake rather than before it.
+A provider's declared metric list is the union of what its brands can do. It is
+not always what a given person is wearing. Junction offers a proprietary sleep
+score to a wallet whose tracker has none; a phone-based provider offers sleep to
+somebody syncing steps from a handset with no watch nearby. In both cases the
+provider legitimately declares the metric and that wallet can still never
+satisfy a pool scored on it.
 
-Closing it fully means mapping each Junction device slug to its capabilities,
-which needs data we have not verified. It is the one place where the "surface it
-at the join" rule is not yet met.
+So the gate prefers **observed** capability over declared. The provider backing
+a wallet is probed once, cached for 30 minutes, and asked only whether each
+number EXISTS for that wallet - not whether it was any good. The narrowed list
+is what the pool list and pool page gate on.
+
+Two safeguards, because getting this wrong would hide somebody's whole board:
+
+- A wallet that has observed **nothing** narrows to nothing at all. A person who
+  linked ten minutes ago falls back to the declared list rather than being told
+  their brand-new device measures none of these.
+- An upstream failure narrows nothing. A provider hiccup can never take pools
+  off the board.
+
+WHOOP is not probed: every strap is the same hardware, so its declared list is
+already device-accurate and probing would spend requests against a shared daily
+quota to re-learn a constant.
