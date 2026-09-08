@@ -520,6 +520,13 @@ function WhoopReturnNote() {
     const url = new URL(window.location.href);
     const status = url.searchParams.get("whoop");
     if (status === null) return;
+    // Reading the URL is the "subscribe to an external system" case the rule
+    // exempts, and it is genuinely once-per-mount: the parameter is consumed
+    // and removed in the same tick, so there is no cascade to guard against.
+    // A lazy useState initializer cannot be used instead - it would run during
+    // the server render, where there is no window, and then disagree with the
+    // client on first paint.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setNote(whoopReturnMessage(status));
     url.searchParams.delete("whoop");
     window.history.replaceState(null, "", url.toString());

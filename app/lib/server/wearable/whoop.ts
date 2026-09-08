@@ -586,7 +586,7 @@ async function scoresByDay(
   return bestScorePerDay(
     records
       .filter(isCountable)
-      .map((record) => ({ day: dayOf(record), score: scoreOf(record) })),
+      .map((record) => ({ day: dayOf(record), value: scoreOf(record) })),
   );
 }
 
@@ -708,7 +708,7 @@ export const whoopProvider: WearableProvider = {
         .filter(isCountable)
         .map((record) => ({
           day: dayOf(record),
-          score: metricValueOf(record, metric),
+          value: metricValueOf(record, metric),
         })),
     );
 

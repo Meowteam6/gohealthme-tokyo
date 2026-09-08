@@ -20,7 +20,13 @@
 // the shape-tolerance; they hand this module a map and get the payout numbers
 // back.
 
-/** Best score per calendar day, keyed YYYY-MM-DD. */
+/**
+ * Best value per calendar day, keyed YYYY-MM-DD.
+ *
+ * "Value", not "score": the metric is whatever the goal names - a sleep score,
+ * hours slept, or a step count. Nothing here interprets the unit, which is why
+ * one implementation serves every metric.
+ */
 export type ScoresByDay = ReadonlyMap<string, number>;
 
 /** Days used for the comeback multiplier's baseline: 8-14 back. */
@@ -36,25 +42,25 @@ function utcDate(isoDay: string): Date {
 }
 
 /**
- * Fold raw per-record scores into one best score per calendar day.
+ * Fold raw per-record values into one best value per calendar day.
  *
- * "Best" rather than "latest" because a night can be reported more than once
- * (a correction, or an overlapping record) and taking the higher score is the
+ * "Best" rather than "latest" because a day can be reported more than once (a
+ * correction, or an overlapping record) and taking the higher value is the
  * reading that does not punish a user for their device re-reporting.
  */
 export function bestScorePerDay(
-  records: Iterable<{ day: string | null; score: number | null }>,
+  records: Iterable<{ day: string | null; value: number | null }>,
 ): Map<string, number> {
   const byDay = new Map<string, number>();
-  for (const { day, score } of records) {
-    if (day === null || score === null) continue;
+  for (const { day, value } of records) {
+    if (day === null || value === null) continue;
     const previous = byDay.get(day);
-    if (previous === undefined || score > previous) byDay.set(day, score);
+    if (previous === undefined || value > previous) byDay.set(day, value);
   }
   return byDay;
 }
 
-/** The scored days present, newest first. */
+/** The days with a value present, newest first. */
 export function scoredDaysNewestFirst(byDay: ScoresByDay): string[] {
   return Array.from(byDay.keys()).sort().reverse();
 }
@@ -68,7 +74,7 @@ export function scoredDaysNewestFirst(byDay: ScoresByDay): string[] {
  * scored night are checked, which is the rolling-streak reading used outside a
  * pool context.
  *
- * A day counts when its best score is at or above `threshold`. Days are
+ * A day counts when its best value is at or above `threshold`. Days are
  * counted, never required to be consecutive.
  */
 export function countQualifyingDays(

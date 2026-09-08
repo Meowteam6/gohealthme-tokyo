@@ -23,9 +23,9 @@ function map(entries: Record<string, number>): Map<string, number> {
 describe("bestScorePerDay", () => {
   it("keeps the highest score when a day is reported more than once", () => {
     const byDay = bestScorePerDay([
-      { day: "2026-06-20", score: 71 },
-      { day: "2026-06-20", score: 88 },
-      { day: "2026-06-21", score: 64 },
+      { day: "2026-06-20", value: 71 },
+      { day: "2026-06-20", value: 88 },
+      { day: "2026-06-21", value: 64 },
     ]);
     // A corrected or overlapping record must not punish the user.
     expect(byDay.get("2026-06-20")).toBe(88);
@@ -34,9 +34,9 @@ describe("bestScorePerDay", () => {
 
   it("drops records with no day or no score rather than scoring them zero", () => {
     const byDay = bestScorePerDay([
-      { day: null, score: 90 },
-      { day: "2026-06-20", score: null },
-      { day: "2026-06-21", score: 80 },
+      { day: null, value: 90 },
+      { day: "2026-06-20", value: null },
+      { day: "2026-06-21", value: 80 },
     ]);
     expect([...byDay.keys()]).toEqual(["2026-06-21"]);
   });
