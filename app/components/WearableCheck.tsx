@@ -855,9 +855,9 @@ function WearableCheckInner({
       ) : !connected ? (
         <div className="space-y-3">
           <p className="rounded-xl border border-dashed border-accent/30 bg-accent/20 p-3 text-sm text-accent-deep">
-            No wearable connected yet. Link WHOOP, Oura, Fitbit, or Garmin -
-            without one, SPOTTER has nothing to verify and will not pay. You
-            can pick which one from the dashboard.
+            No wearable connected yet - without one, SPOTTER has nothing to
+            verify and will not pay. You can pick which device from the
+            dashboard.
           </p>
           <button
             type="button"

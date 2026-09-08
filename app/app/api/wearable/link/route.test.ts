@@ -204,11 +204,26 @@ describe("POST /api/wearable/link", () => {
     expect(startLink).not.toHaveBeenCalled();
   });
 
-  it("records the choice BEFORE minting the WHOOP redirect ticket", async () => {
+  it("does NOT switch the wallet's provider when starting the WHOOP flow", async () => {
     await post({ address: USER, provider: "whoop" });
-    expect(setProviderId).toHaveBeenCalledWith(USER, "whoop");
+
+    // Writing the choice here means a user who opens WHOOP's consent screen
+    // and backs out has silently switched providers: their working Junction
+    // connection stops backing their claims and the dashboard tells them to
+    // connect a device they already have. Abandoning a flow changes nothing;
+    // /api/whoop/callback records the choice once tokens actually exist.
+    expect(setProviderId).not.toHaveBeenCalled();
+    expect(mintLinkTicket).toHaveBeenCalled();
+  });
+
+  it("records the choice for Junction, which has no callback of ours", async () => {
+    await post({ address: USER, provider: "junction" });
+
+    // Junction's hosted page cannot report back, so an unrecorded choice would
+    // leave a successful link pointing at the wrong provider.
+    expect(setProviderId).toHaveBeenCalledWith(USER, "junction");
     expect(setProviderId.mock.invocationCallOrder[0]).toBeLessThan(
-      mintLinkTicket.mock.invocationCallOrder[0],
+      startLink.mock.invocationCallOrder[0],
     );
   });
 
@@ -219,7 +234,6 @@ describe("POST /api/wearable/link", () => {
     const body = (await res.json()) as { provider: string; linkUrl: string };
     expect(body.provider).toBe("whoop");
     expect(body.linkUrl.startsWith("/api/whoop/login?ticket=")).toBe(true);
-    expect(setProviderId).toHaveBeenCalledWith(USER, "whoop");
   });
 
   it("maps an upstream failure to a generic 502 and logs the real cause", async () => {

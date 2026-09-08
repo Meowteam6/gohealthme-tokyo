@@ -251,14 +251,23 @@ function ConnectButton({
  */
 function ProviderChoice({ address }: { address: `0x${string}` }) {
   const requestAuth = useWalletAuth();
-  const { data } = useQuery({
+  const { data, isPending } = useQuery({
     queryKey: providerOptionsQueryKey(address),
     queryFn: () => fetchProviderOptions(address, requestAuth),
     staleTime: 60_000,
   });
 
   const offered = (data?.providers ?? []).filter((option) => option.configured);
-  if (offered.length < 2) return null;
+
+  // While the read is in flight `offered` is empty, and painting the single
+  // button here would swap one affordance for two a moment later.
+  if (isPending) return <Skeleton className="mt-3 h-24" />;
+
+  // One provider is not a choice, and a picker with one option is just a
+  // second button saying what the first one says. The plain button IS this
+  // branch - rendering it separately alongside the picker is what produced
+  // three connect buttons on a two-provider deployment.
+  if (offered.length < 2) return <ConnectButton address={address} />;
 
   // The call to action is per provider because the verbs are not the same:
   // Junction and WHOOP connect an account here and now, while a phone-based
@@ -286,7 +295,9 @@ function ProviderChoice({ address }: { address: `0x${string}` }) {
       {offered.map((option) => (
         <div
           key={option.id}
-          className="rounded-xl border border-edge p-3 text-sm"
+          // bg-surface: without a fill the card's dot-grid shows through the
+          // option boxes and they read as holes rather than choices.
+          className="rounded-xl border border-edge bg-surface p-3 text-sm"
         >
           {/* flex-wrap and min-w-0 so a longer provider name and its badge
               stack instead of overflowing at 390px. */}
@@ -386,13 +397,14 @@ function StreakCard({
       ) : !providerConnected(state) ? (
         <>
           <p className="mt-3 rounded-xl border border-dashed border-edge p-4 text-sm text-muted">
-            No wearable connected yet. Link WHOOP, Oura, Fitbit or Garmin to
-            start tracking your streak toward your goal.
+            No wearable connected yet. Connect one to start tracking your
+            streak toward your goal.
           </p>
-          {/* The picker renders nothing when only one provider is configured,
-              and the plain button below is what that deployment shows. */}
+          {/* Owns the connect affordance in both shapes: the picker when this
+              deployment offers a choice, a single button when it does not.
+              Naming brands here instead would promise Oura and Garmin on a
+              deployment that only has WHOOP configured. */}
           <ProviderChoice address={address} />
-          <ConnectButton address={address} />
         </>
       ) : providerMetricUnavailable(state) ? (
         // Syncing, but this device does not produce a sleep score. A delay

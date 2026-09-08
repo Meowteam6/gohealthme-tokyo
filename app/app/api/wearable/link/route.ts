@@ -73,13 +73,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Recorded BEFORE the redirect, so the callback and every later background
-    // verification read the same provider the user is about to link. A choice
-    // written only on success would leave a user who abandons the consent
-    // screen pointed at the other provider.
-    await setProviderId(address, providerId);
-
     if (providerId === "whoop") {
+      // NOT recorded here. WHOOP's flow has a callback that records the choice
+      // only once tokens are actually stored, and writing it up front means a
+      // user who opens WHOOP's consent screen and backs out has silently
+      // switched providers: their working Junction connection stops backing
+      // their claims and the dashboard tells them to connect a device they
+      // already have. Abandoning a flow must change nothing.
       const ticket = mintLinkTicket(address);
       return Response.json({
         provider: providerId,
@@ -87,6 +87,11 @@ export async function POST(request: Request) {
         linkUrl: `/api/whoop/login?ticket=${encodeURIComponent(ticket)}`,
       });
     }
+
+    // Junction has no callback of ours to land on, so the choice is recorded
+    // here. Its hosted page cannot report back, and an unrecorded choice would
+    // leave a successful link pointing at the wrong provider.
+    await setProviderId(address, providerId);
 
     const link = await providerById(providerId).startLink(address);
     // The shape is passed through rather than flattened: a provider that can
