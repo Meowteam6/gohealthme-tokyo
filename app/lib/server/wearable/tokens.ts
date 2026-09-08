@@ -60,10 +60,18 @@ const ALGORITHM = "aes-256-gcm";
 const IV_BYTES = 12;
 const KEY_BYTES = 32;
 
-/** How long one refresh may hold a wallet's token lock. */
-const REFRESH_LOCK_TTL_MS = 15_000;
+/**
+ * How long one refresh may hold a wallet's token lock.
+ *
+ * Must exceed the upstream request timeout it is protecting, with margin. It
+ * was 15s, exactly equal to the WHOOP timeout: a refresh that took the full
+ * budget lost the lock at the instant it was writing, so a second caller could
+ * acquire it and spend the same rotating refresh token. That is the precise
+ * race this lock exists to prevent, and the TTL made it reachable.
+ */
+const REFRESH_LOCK_TTL_MS = 45_000;
 /** How long a caller waits for that lock before failing loudly. */
-const REFRESH_LOCK_WAIT_MS = 20_000;
+const REFRESH_LOCK_WAIT_MS = 50_000;
 
 function storeKey(provider: ProviderId, address: string): string {
   return `wearable-tokens:${provider}:${address.toLowerCase()}`;

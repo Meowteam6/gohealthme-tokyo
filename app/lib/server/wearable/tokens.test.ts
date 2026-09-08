@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readJson } from "@/lib/server/store";
+import { randomUUID } from "crypto";
 
 // OAuth refresh tokens ARE the user's health data as far as an attacker is
 // concerned, so what is pinned here is the security posture, not the plumbing:
@@ -12,10 +13,15 @@ const KEY = Buffer.alloc(32, 7).toString("base64");
 // Each test uses a distinct address: the file-backed store persists across
 // tests in one process, and a shared address would let one test see another's
 // record.
+// Salted per RUN, not just per test. The file-backed store under DATA_DIR
+// survives between vitest runs, so a counter that restarts at zero hands the
+// next run addresses the previous one already wrote token records for - and a
+// "never linked" assertion then reads the last run's data and fails.
+const RUN_SALT = randomUUID().replace(/-/g, "").slice(0, 12);
 let counter = 0;
 function nextAddress(): string {
   counter += 1;
-  return `0x${counter.toString(16).padStart(40, "0")}`;
+  return `0x${RUN_SALT}${counter.toString(16).padStart(28, "0")}`;
 }
 
 const TOKENS = {

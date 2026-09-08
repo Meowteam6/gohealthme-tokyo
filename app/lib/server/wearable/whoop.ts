@@ -83,8 +83,22 @@ const SCOPES = "read:sleep read:workout offline";
 
 /** WHOOP's page size ceiling for collection endpoints. */
 const PAGE_LIMIT = 25;
-/** Two pages of 25 nights covers the 21-day lookback with room to spare. */
-const MAX_PAGES = 2;
+/**
+ * Pages walked before a read gives up.
+ *
+ * This was 2, which capped a read at 50 records. That is not "room to spare"
+ * for a 21-day lookback: the sleep collection returns NAPS as well as nights
+ * and this module filters them afterwards, so a napper burns the budget on
+ * records that never count, and a 30-day pool period exceeds it outright.
+ * Silently stopping there UNDERCOUNTS qualifying days, which underpays a
+ * claim - the failure mode that has to be impossible.
+ *
+ * Six pages is 150 records, comfortably past a 30-day window of nights and
+ * naps, and still bounded so one wallet cannot walk a collection forever
+ * against a rate limit shared by every user of this app. Exhausting it is
+ * logged rather than passed off as a complete read.
+ */
+const MAX_PAGES = 6;
 /** Lookback for progress reads with no explicit window, in days. */
 const DEFAULT_LOOKBACK_DAYS = 21;
 
@@ -220,6 +234,28 @@ async function requestToken(
 }
 
 function tokensFrom(data: TokenResponse): Omit<StoredTokens, "updatedAt"> {
+  // Without a refresh token the connection dies silently an hour later, on a
+  // cron nobody is watching, and the user is told their wearable is not
+  // connected with no way to understand why. WHOOP omits it when the `offline`
+  // scope was not granted, so this is a real configuration outcome and not a
+  // theoretical one. Fail now, while somebody is still looking at the screen.
+  if (
+    typeof data.refresh_token !== "string" ||
+    data.refresh_token.trim() === ""
+  ) {
+    throw new WhoopReauthorizationRequired(
+      "WHOOP returned no refresh token, so the connection would stop working " +
+        "within the hour. The offline scope has to be granted.",
+    );
+  }
+  if (
+    typeof data.access_token !== "string" ||
+    data.access_token.trim() === ""
+  ) {
+    throw new WhoopReauthorizationRequired(
+      "WHOOP returned no access token.",
+    );
+  }
   return {
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
@@ -511,6 +547,8 @@ interface SleepRecord {
   id?: string | number;
   start?: string;
   end?: string;
+  /** e.g. "-05:00". Used to key a night to the wearer's own calendar day. */
+  timezone_offset?: string | null;
   nap?: boolean;
   score_state?: string;
   score?: {
@@ -519,6 +557,10 @@ interface SleepRecord {
     stage_summary?: {
       total_in_bed_time_milli?: number | null;
       total_awake_time_milli?: number | null;
+      total_no_data_time_milli?: number | null;
+      total_light_sleep_time_milli?: number | null;
+      total_slow_wave_sleep_time_milli?: number | null;
+      total_rem_sleep_time_milli?: number | null;
     } | null;
   } | null;
 }
@@ -551,14 +593,37 @@ function efficiencyOf(record: SleepRecord): number | null {
 }
 
 /**
- * The calendar day a night belongs to: the day the sleep ENDED. A night that
- * starts at 23:40 on the 3rd and ends at 07:10 on the 4th is the 4th's sleep,
- * which is how a person reads their own week and how Junction assigns it.
+ * The calendar day a night belongs to: the LOCAL day the sleep ENDED. A night
+ * that starts at 23:40 on the 3rd and ends at 07:10 on the 4th is the 4th's
+ * sleep, which is how a person reads their own week.
+ *
+ * Local, not UTC. Junction keys on `calendar_date`, which its providers report
+ * in the wearer's own timezone. Slicing WHOOP's UTC `end` instead would put a
+ * 07:10 wake-up in New York on the same day, but a 23:30 Sydney bedtime or an
+ * early US-morning wake on the WRONG day - so the same night would land in
+ * different buckets depending on which provider read it, and a pool window
+ * boundary would pay one user and not the other. WHOOP ships
+ * `timezone_offset` on every record precisely so this can be got right.
  */
 function dayOf(record: SleepRecord): string | null {
-  return typeof record.end === "string" && record.end.length >= 10
-    ? record.end.slice(0, 10)
-    : null;
+  if (typeof record.end !== "string" || record.end.length < 10) return null;
+  const ended = Date.parse(record.end);
+  if (Number.isNaN(ended)) return record.end.slice(0, 10);
+  const offsetMs = parseOffsetMs(record.timezone_offset);
+  return new Date(ended + offsetMs).toISOString().slice(0, 10);
+}
+
+/**
+ * WHOOP's `timezone_offset` as milliseconds, e.g. "-05:00" -> -18000000.
+ * An absent or unparseable offset means UTC, which is the old behaviour and
+ * the only safe assumption when the record does not say.
+ */
+function parseOffsetMs(offset: string | null | undefined): number {
+  if (typeof offset !== "string") return 0;
+  const match = /^([+-])(\d{2}):?(\d{2})$/.exec(offset.trim());
+  if (match === null) return 0;
+  const sign = match[1] === "-" ? -1 : 1;
+  return sign * (Number(match[2]) * 3_600_000 + Number(match[3]) * 60_000);
 }
 
 /** Only a scored main sleep counts. Naps and pending scores are skipped. */
@@ -595,10 +660,19 @@ async function fetchPaged<TRecord, TPage extends { records?: TRecord[]; next_tok
     const pageRecords = data.records ?? [];
     records.push(...pageRecords);
     if (pageRecords.length === 0) break;
-    if (data.next_token === undefined || data.next_token === null) break;
+    if (data.next_token === undefined || data.next_token === null) {
+      return records;
+    }
     nextToken = data.next_token;
   }
 
+  // Fell out of the loop with a next_token still outstanding: the window holds
+  // more than we read, so the count derived from it may be low. Never silent -
+  // an undercount underpays somebody.
+  console.warn(
+    `[whoop] ${path} still had pages after ${MAX_PAGES}; the read for ` +
+      `${address.toLowerCase()} may be incomplete`,
+  );
   return records;
 }
 
@@ -630,11 +704,21 @@ function startOfDayUTC(isoDay: string): Date {
  * opposite of what a sleep-hours goal is asking for.
  */
 function sleepHoursOf(record: SleepRecord): number | null {
-  const inBed = record.score?.stage_summary?.total_in_bed_time_milli;
-  if (typeof inBed !== "number") return null;
-  const awake = record.score?.stage_summary?.total_awake_time_milli;
-  const asleep = inBed - (typeof awake === "number" ? awake : 0);
-  return asleep > 0 ? asleep / 3_600_000 : 0;
+  const stages = record.score?.stage_summary;
+  if (stages === undefined || stages === null) return null;
+  // Summed from the sleep stages rather than derived from time in bed, because
+  // in-bed time minus awake time still counts total_no_data_time_milli - the
+  // stretch the strap recorded nothing for - as sleep. On a night the device
+  // lost contact that inflates the hours a payout is decided on. Light + slow
+  // wave + REM is the time WHOOP actually observed the person asleep.
+  const light = stages.total_light_sleep_time_milli;
+  const deep = stages.total_slow_wave_sleep_time_milli;
+  const rem = stages.total_rem_sleep_time_milli;
+  const parts = [light, deep, rem].filter(
+    (part): part is number => typeof part === "number",
+  );
+  if (parts.length === 0) return null;
+  return parts.reduce((sum, part) => sum + part, 0) / 3_600_000;
 }
 
 /**
@@ -792,7 +876,14 @@ export const whoopProvider: WearableProvider = {
     }
 
     const now = new Date();
-    const from = rfc3339(startOfDayUTC(windowStartISO));
+    // One day of margin before the window. Nights are keyed to the wearer's
+    // LOCAL calendar day, so a night whose local day is the window's first day
+    // can have a UTC end timestamp on the day before it - anywhere east of
+    // Greenwich. Anchoring the fetch exactly at the window start drops that
+    // night and undercounts the first day of every pool for those users.
+    const from = rfc3339(
+      new Date(startOfDayUTC(windowStartISO).getTime() - 86_400_000),
+    );
     const to = rfc3339(now);
 
     // sourceDays is what separates "nothing has synced" from "this device

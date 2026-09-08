@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readTokens, writeTokens } from "@/lib/server/wearable/tokens";
+import { randomUUID } from "crypto";
 
 // The WHOOP client, pinned against the two things that are genuinely hard
 // about a direct OAuth integration and the one thing the product depends on:
@@ -14,10 +15,15 @@ import { readTokens, writeTokens } from "@/lib/server/wearable/tokens";
 
 const KEY = Buffer.alloc(32, 5).toString("base64");
 
+// Salted per RUN, not just per test. The file-backed store under DATA_DIR
+// survives between vitest runs, so a counter that restarts at zero hands the
+// next run addresses the previous one already wrote token records for - and a
+// "never linked" assertion then reads the last run's data and fails.
+const RUN_SALT = randomUUID().replace(/-/g, "").slice(0, 12);
 let counter = 0;
 function nextAddress(): string {
   counter += 1;
-  return `0x${(0xa0000 + counter).toString(16).padStart(40, "0")}`;
+  return `0x${RUN_SALT}${counter.toString(16).padStart(28, "0")}`;
 }
 
 const { whoopProvider, buildAuthorizeUrl, exchangeCode, whoopConfigured } =
@@ -57,7 +63,14 @@ function sleepRecord(
     score: {
       sleep_performance_percentage: performance,
       sleep_efficiency_percentage: 90,
-      stage_summary: { total_in_bed_time_milli: 28_800_000 },
+      stage_summary: {
+        total_in_bed_time_milli: 28_800_000,
+        total_awake_time_milli: 1_800_000,
+        total_no_data_time_milli: 1_800_000,
+        total_light_sleep_time_milli: 12_600_000,
+        total_slow_wave_sleep_time_milli: 7_200_000,
+        total_rem_sleep_time_milli: 5_400_000,
+      },
     },
     ...extra,
   };
@@ -585,5 +598,94 @@ describe("disconnect", () => {
     // Keeping a token we can no longer honour would strand the user as
     // permanently "connected" with every read failing.
     expect(await readTokens("whoop", address)).toBeNull();
+  });
+});
+
+describe("day attribution", () => {
+  it("keys a night to the wearer's LOCAL day, not the UTC one", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        json({
+          records: [
+            // 22:30 UTC on the 20th is 08:30 on the 21st in Sydney. Junction
+            // keys on the device's own calendar_date, so slicing the UTC
+            // timestamp would put this night in a different bucket from the
+            // one the other provider uses - and a pool boundary would pay one
+            // user and not the other for the same night.
+            {
+              ...sleepRecord("2026-06-20T22:30:00.000Z", 88),
+              timezone_offset: "+10:00",
+            },
+          ],
+          next_token: null,
+        }),
+      ),
+    );
+
+    const progress = await whoopProvider.getProgress(address, 75, 7);
+
+    expect(progress.days[0]?.date).toBe("2026-06-21");
+  });
+
+  it("falls back to UTC when a record carries no offset", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        json({
+          records: [sleepRecord("2026-06-20T07:00:00.000Z", 88)],
+          next_token: null,
+        }),
+      ),
+    );
+
+    const progress = await whoopProvider.getProgress(address, 75, 7);
+
+    expect(progress.days[0]?.date).toBe("2026-06-20");
+  });
+});
+
+describe("pagination", () => {
+  it("never reports an incomplete read as a complete one", async () => {
+    const address = nextAddress();
+    await linked(address);
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Always another page: the walk is bounded, and the bound must be loud.
+    // A fresh Response per call - a body can only be read once.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          json({
+            records: [sleepRecord("2026-06-20T07:00:00.000Z", 88)],
+            next_token: "more",
+          }),
+        ),
+      ),
+    );
+
+    await whoopProvider.getProgress(address, 75, 7);
+
+    // An undercount underpays a claim, so a truncated read is never silent.
+    expect(
+      warned.mock.calls.some((call) => String(call[0]).includes("incomplete")),
+    ).toBe(true);
+  });
+});
+
+describe("exchangeCode validation", () => {
+  it("refuses a token response with no refresh token", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(json(tokenBody({ refresh_token: "" }))),
+    );
+
+    // Storing it would work for an hour and then die on a cron nobody watches,
+    // telling the user their wearable is simply not connected.
+    await expect(exchangeCode("code")).rejects.toThrow(/offline scope/);
   });
 });

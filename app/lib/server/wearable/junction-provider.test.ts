@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { randomUUID } from "crypto";
 
 // The capability probe. It exists because Junction's declared metric list is
 // the UNION of what several brands can do: it offers a proprietary sleep score
@@ -22,10 +23,15 @@ const { junctionProvider } = await import(
 
 // The probe caches per wallet, so every test needs its own address or it reads
 // the previous test's answer.
+// Salted per RUN, not just per test. The file-backed store under DATA_DIR
+// survives between vitest runs, so a counter that restarts at zero hands the
+// next run addresses the previous one already wrote token records for - and a
+// "never linked" assertion then reads the last run's data and fails.
+const RUN_SALT = randomUUID().replace(/-/g, "").slice(0, 12);
 let counter = 0;
 function nextAddress(): string {
   counter += 1;
-  return `0x${(0xc0000 + counter).toString(16).padStart(40, "0")}`;
+  return `0x${RUN_SALT}${counter.toString(16).padStart(28, "0")}`;
 }
 
 /** Answer as though only `present` produced any data. */

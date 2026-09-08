@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { randomUUID } from "crypto";
 
 // Which provider serves a wallet decides which health data backs its payouts,
 // and SPOTTER resolves it from a cron long after the browser is gone. The rule
@@ -6,10 +7,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // that provider is still configured, so pulling a credential degrades to
 // "connect a device" rather than throwing a missing-env error at every read.
 
+// Salted per RUN, not just per test. The file-backed store under DATA_DIR
+// survives between vitest runs, so a counter that restarts at zero hands the
+// next run addresses the previous one already wrote token records for - and a
+// "never linked" assertion then reads the last run's data and fails.
+const RUN_SALT = randomUUID().replace(/-/g, "").slice(0, 12);
 let counter = 0;
 function nextAddress(): string {
   counter += 1;
-  return `0x${(0xb0000 + counter).toString(16).padStart(40, "0")}`;
+  return `0x${RUN_SALT}${counter.toString(16).padStart(28, "0")}`;
 }
 
 const {
