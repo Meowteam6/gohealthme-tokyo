@@ -633,6 +633,29 @@ describe("day attribution", () => {
     expect(progress.days[0]?.date).toBe("2026-06-21");
   });
 
+  it("treats a 'Z' offset as UTC, which WHOOP documents it may send", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        json({
+          records: [
+            {
+              ...sleepRecord("2026-06-20T07:00:00.000Z", 88),
+              timezone_offset: "Z",
+            },
+          ],
+          next_token: null,
+        }),
+      ),
+    );
+
+    const progress = await whoopProvider.getProgress(address, 75, 7);
+
+    expect(progress.days[0]?.date).toBe("2026-06-20");
+  });
+
   it("falls back to UTC when a record carries no offset", async () => {
     const address = nextAddress();
     await linked(address);

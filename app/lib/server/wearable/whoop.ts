@@ -575,11 +575,17 @@ interface SleepPage {
  * that corresponds to Junction's sleep score, so a pool threshold means the
  * same thing on both paths.
  *
- * It does NOT fall back to efficiency. Efficiency is a different measurement
- * on the same 0-100 scale - asleep over in-bed, typically 85-95 - and
- * substituting it would hold this user to a materially easier bar than a user
- * whose device reported a real score, for the same stake and the same payout.
- * A night WHOOP did not score is an unscored night, reported as missing data.
+ * It does NOT fall back to efficiency, and WHOOP's own field descriptions are
+ * why. Performance is "the time a user is asleep over the amount of sleep the
+ * user needed"; efficiency is "the time you spend in bed that you are actually
+ * asleep". Different denominators entirely - sleep NEEDED versus time IN BED -
+ * so they are not two estimates of one quantity, and substituting one for the
+ * other holds this user to a materially different bar for the same stake.
+ *
+ * WHOOP also documents that performance "may not be reported if WHOOP does not
+ * have enough data about a user yet to calculate Sleep Need", so a scored night
+ * carrying no performance percentage is a real and expected case rather than a
+ * glitch to paper over. It is reported as missing data.
  */
 function scoreOf(record: SleepRecord): number | null {
   const performance = record.score?.sleep_performance_percentage;
@@ -620,7 +626,14 @@ function dayOf(record: SleepRecord): string | null {
  */
 function parseOffsetMs(offset: string | null | undefined): number {
   if (typeof offset !== "string") return 0;
-  const match = /^([+-])(\d{2}):?(\d{2})$/.exec(offset.trim());
+  const value = offset.trim();
+  // WHOOP documents this field as "'+hh:mm', '-hh:mm', or 'Z'", so Z is a
+  // value it really sends and it means UTC. The regex does not match it; it
+  // used to reach the same zero through the unparseable fallback, which was
+  // the right answer for the wrong reason and would have stopped being right
+  // the moment somebody changed that fallback.
+  if (value === "Z" || value === "z") return 0;
+  const match = /^([+-])(\d{2}):?(\d{2})$/.exec(value);
   if (match === null) return 0;
   const sign = match[1] === "-" ? -1 : 1;
   return sign * (Number(match[2]) * 3_600_000 + Number(match[3]) * 60_000);

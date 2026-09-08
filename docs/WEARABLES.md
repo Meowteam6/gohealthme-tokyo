@@ -31,10 +31,26 @@ The three WHOOP gaps are physical or semantic, not scope decisions:
   is active calories, a few hundred. Reporting one as the other would clear a
   500-calorie goal every day without the user moving.
 
-`sleep_score` and `sleep_efficiency` are separate metrics on purpose. Both are
-0-100 and they measure different things: efficiency runs 85-95 for an ordinary
-sleeper, a proprietary score runs materially lower. A pool authored as "sleep
-score 75+" and one authored as "sleep efficiency 90+" are different goals.
+`sleep_score` and `sleep_efficiency` are separate metrics on purpose, and
+WHOOP's own field documentation is the reason. Efficiency is "the time you
+spend in bed that you are actually asleep"; WHOOP's performance percentage is
+"the time a user is asleep over the amount of sleep the user needed". Different
+denominators - time in bed versus sleep needed - so they are not two estimates
+of one quantity. A pool authored as "sleep score 75+" and one authored as
+"sleep efficiency 90+" are different goals.
+
+WHOOP also documents that its performance percentage "may not be reported if
+WHOOP does not have enough data about a user yet to calculate Sleep Need", so a
+scored night with no score is expected rather than broken. It reports as missing
+data and never as a zero.
+
+**One honesty caveat worth knowing.** `sleep_score` is not strictly comparable
+ACROSS providers. WHOOP's number is sleep-versus-need; another brand reached
+through Junction reports its own proprietary formula. Both are 0-100 quality
+scores and that is the closest thing to a common unit available, but a pool
+threshold does not mean identically the same thing to two people on different
+brands. This is a limit of the vendors, not of the code, and it is stated here
+rather than hidden.
 
 ## Environment variables
 
