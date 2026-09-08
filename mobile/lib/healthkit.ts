@@ -27,6 +27,7 @@
 // string is formatted in local time. HealthKit does the bucketing itself from
 // that anchor, which is also why we do not hand-roll day boundaries.
 
+import { aggregateSleep, type DayValue, type SleepSample } from "./sleep-aggregate";
 import {
   isHealthDataAvailable,
   queryCategorySamples,
@@ -43,7 +44,9 @@ export type Metric =
   | "distance_km"
   | "workouts";
 
-export interface DayValue {
+export type { DayValue } from "./sleep-aggregate";
+
+interface UnusedDayValue {
   /** UTC calendar day, YYYY-MM-DD. Same keying the server's streak math uses. */
   day: string;
   value: number;
@@ -83,6 +86,13 @@ export async function requestPermissions(): Promise<boolean> {
  * Local midnight for a day. The anchor HealthKit buckets from, so every bucket
  * is one of the wearer's own days rather than one of UTC's.
  */
+/**
+ * A gap longer than this ends a night. Two hours is long enough to survive a
+ * trip to the bathroom or a stretch the watch simply did not record, and short
+ * enough that an afternoon nap is its own event rather than part of last night.
+ */
+const NIGHT_GAP_MS = 2 * 60 * 60 * 1000;
+
 function localMidnight(date: Date): Date {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -160,57 +170,18 @@ async function sleepByNight(
   since: Date,
 ): Promise<{ hours: DayValue[]; efficiency: DayValue[] }> {
   const anchor = localMidnight(since);
-  const samples = await queryCategorySamples(
+  const samples = (await queryCategorySamples(
     "HKCategoryTypeIdentifierSleepAnalysis" as never,
     { filter: { date: { startDate: anchor } }, ascending: true } as never,
+  )) as unknown as ReadonlyArray<SleepSample>;
+
+  return aggregateSleep(
+    samples.map((s) => ({
+      value: s.value,
+      startDate: s.startDate,
+      endDate: s.endDate,
+    })),
   );
-
-  // HKCategoryValueSleepAnalysis: 0 inBed, 1 asleepUnspecified, 2 awake,
-  // 3 asleepCore, 4 asleepDeep, 5 asleepREM.
-  const ASLEEP = new Set([1, 3, 4, 5]);
-  const IN_BED = 0;
-
-  const asleepMs = new Map<string, number>();
-  const inBedMs = new Map<string, number>();
-
-  for (const s of samples as unknown as ReadonlyArray<{
-    value: number;
-    startDate: string | Date;
-    endDate: string | Date;
-  }>) {
-    const start = new Date(s.startDate).getTime();
-    const end = new Date(s.endDate).getTime();
-    const ms = end - start;
-    if (!Number.isFinite(ms) || ms <= 0) continue;
-
-    const night = localDay(new Date(end));
-    if (ASLEEP.has(s.value)) {
-      asleepMs.set(night, (asleepMs.get(night) ?? 0) + ms);
-    } else if (s.value === IN_BED) {
-      inBedMs.set(night, (inBedMs.get(night) ?? 0) + ms);
-    }
-  }
-
-  const hours: DayValue[] = [];
-  const efficiency: DayValue[] = [];
-
-  for (const [night, ms] of asleepMs) {
-    hours.push({ day: night, value: round(ms / 3_600_000, 2) });
-
-    // Some devices report only asleep stretches and never inBed. Efficiency
-    // against a missing denominator would be a fabricated 100, so the night is
-    // simply left without an efficiency value rather than given a flattering
-    // one.
-    const bed = inBedMs.get(night);
-    if (typeof bed === "number" && bed > 0) {
-      efficiency.push({
-        day: night,
-        value: round(Math.min(100, (ms / bed) * 100), 1),
-      });
-    }
-  }
-
-  return { hours, efficiency };
 }
 
 function round(n: number, places: number): number {
