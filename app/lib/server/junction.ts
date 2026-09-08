@@ -267,6 +267,13 @@ export interface JunctionProgress {
   baselineWeekAvg: number | null;
   /** Per-day scores used, newest first. */
   days: Array<{ date: string; score: number }>;
+  /**
+   * Nights the device reported at all, scored or not. `days` is empty and this
+   * is non-zero for a tracker that syncs faithfully and produces no sleep
+   * score - which must read as "does not measure this", never as "still
+   * syncing", because waiting will not change it.
+   */
+  nightsReported: number;
 }
 
 interface SleepRecord {
@@ -351,6 +358,11 @@ export async function getProgress(
     if (prev === undefined || score > prev) byDay.set(key, score);
   }
 
+  // Nights the device reported, whether or not they carried a score.
+  const nightsReported = new Set(
+    records.map((rec) => dayKey(rec)).filter((day) => day !== null),
+  ).size;
+
   const dates = Array.from(byDay.keys()).sort().reverse(); // newest first
   if (dates.length === 0) {
     return {
@@ -359,6 +371,7 @@ export async function getProgress(
       qualified: false,
       baselineWeekAvg: null,
       days: [],
+      nightsReported,
     };
   }
 
@@ -408,6 +421,7 @@ export async function getProgress(
     qualified: streakDays >= goalDays,
     baselineWeekAvg,
     days: dates.map((d) => ({ date: d, score: byDay.get(d) as number })),
+    nightsReported,
   };
 }
 

@@ -92,6 +92,7 @@ export const junctionProvider: WearableProvider = {
       streakDays: progress.streakDays,
       baselineWeekAvg: progress.baselineWeekAvg,
       days: progress.days,
+      nightsReported: progress.nightsReported,
     };
   },
 

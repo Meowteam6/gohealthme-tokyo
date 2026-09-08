@@ -52,6 +52,7 @@ import { dashboardDeferredLead, type ProofTier } from "@/lib/proof-tier";
 import {
   fetchProviderState,
   providerAwaitingFirstSync,
+  providerMetricUnavailable,
   providerAuthReason,
   providerConnected,
   providerDownReason,
@@ -386,6 +387,22 @@ function StreakCard({
               and the plain button below is what that deployment shows. */}
           <ProviderChoice address={address} />
           <ConnectButton address={address} />
+        </>
+      ) : providerMetricUnavailable(state) ? (
+        // Syncing, but this device does not produce a sleep score. A delay
+        // message here would be advice that can never come true.
+        <>
+          <p className="mt-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm text-foreground/80">
+            Your device is syncing, and it does not report a sleep score, so
+            there is no streak to show here. That is the hardware, not a delay.
+            Connect a device that scores your sleep and this fills in.
+          </p>
+          <ProviderChoice address={address} />
+          <ConnectButton
+            address={address}
+            label="Connect a different device"
+            secondary
+          />
         </>
       ) : providerAwaitingFirstSync(state) ? (
         // Linked and working, with nothing delivered yet. Rendering the streak

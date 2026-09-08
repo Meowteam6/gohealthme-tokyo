@@ -41,6 +41,12 @@ import {
 export type ProviderLinkState =
   | "not-linked"
   | "awaiting-first-sync"
+  /**
+   * Syncing faithfully, and this device simply does not produce the number the
+   * card is about. Telling this person to wait a few minutes would be advice
+   * that can never come true.
+   */
+  | "metric-unavailable"
   | "linked";
 
 export interface ProviderProgress {
@@ -84,6 +90,7 @@ export function parseProviderProgress(payload: unknown): ProviderProgress {
     linkState:
       record.linkState === "not-linked" ||
       record.linkState === "awaiting-first-sync" ||
+      record.linkState === "metric-unavailable" ||
       record.linkState === "linked"
         ? record.linkState
         : null,
@@ -259,4 +266,14 @@ export function providerAwaitingFirstSync(
   state: ProviderState | undefined,
 ): boolean {
   return state?.kind === "ok" && state.progress.linkState === "awaiting-first-sync";
+}
+
+/**
+ * True when the device is syncing and does not produce the number this card is
+ * about. Rendered as a permanent limit with a way out, never as a delay.
+ */
+export function providerMetricUnavailable(
+  state: ProviderState | undefined,
+): boolean {
+  return state?.kind === "ok" && state.progress.linkState === "metric-unavailable";
 }

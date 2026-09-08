@@ -74,6 +74,7 @@ function stubProvider(overrides: Record<string, unknown> = {}) {
 // A full internal progress object. The route must forward only a slice of it;
 // the rest (raw scores, baseline, the day array) must never reach the client.
 const FULL_PROGRESS = {
+  nightsReported: 7,
   streakDays: 6,
   lastNight: 88,
   qualified: false,
@@ -224,5 +225,58 @@ describe("GET /api/wearable/progress", () => {
     expect(consoleError).toHaveBeenCalledOnce();
     expect(String(consoleError.mock.calls[0])).toContain("402");
     consoleError.mockRestore();
+  });
+});
+
+describe("GET /api/wearable/progress link states", () => {
+  it("calls nothing-reported awaiting-first-sync, not a zero streak", async () => {
+    isConnected.mockResolvedValue(true);
+    getProgress.mockResolvedValue({
+      streakDays: 0,
+      baselineWeekAvg: null,
+      days: [],
+      nightsReported: 0,
+    });
+
+    const body = (await (await get(`?address=${USER}`)).json()) as {
+      linkState: string;
+    };
+    expect(body.linkState).toBe("awaiting-first-sync");
+  });
+
+  it("calls reported-but-unscored metric-unavailable, so nobody is told to wait", async () => {
+    isConnected.mockResolvedValue(true);
+    // Seven nights arrived and none carried a score: this device does not
+    // produce one, and it never will.
+    getProgress.mockResolvedValue({
+      streakDays: 0,
+      baselineWeekAvg: null,
+      days: [],
+      nightsReported: 7,
+    });
+
+    const body = (await (await get(`?address=${USER}`)).json()) as {
+      linkState: string;
+    };
+    expect(body.linkState).toBe("metric-unavailable");
+  });
+
+  it("names the number the provider actually produces", async () => {
+    providerFor.mockResolvedValue(
+      stubProvider({
+        id: "apple",
+        label: "Apple Health",
+        // No proprietary score, so its 92 must not be called a sleep score.
+        metrics: ["sleep_efficiency", "sleep_hours"],
+      }),
+    );
+    isConnected.mockResolvedValue(true);
+    getProgress.mockResolvedValue(FULL_PROGRESS);
+
+    const body = (await (await get(`?address=${USER}`)).json()) as {
+      metric: string;
+    };
+    expect(body.metric).toContain("Sleep efficiency");
+    expect(body.metric).not.toContain("Sleep score");
   });
 });

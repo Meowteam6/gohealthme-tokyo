@@ -74,6 +74,12 @@ export interface WearableProgress {
   baselineWeekAvg: number | null;
   /** Per-day scores actually used, newest first. Never leaves the server. */
   days: Array<{ date: string; score: number }>;
+  /**
+   * Nights the device reported at all, scored or not. Lets the dashboard tell
+   * "nothing has synced yet" from "this device does not produce that number" -
+   * the first resolves by waiting and the second never does.
+   */
+  nightsReported: number;
 }
 
 /** Recent per-day data for the dashboard card. Display only. */

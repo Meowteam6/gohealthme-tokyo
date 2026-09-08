@@ -899,7 +899,18 @@ export const whoopProvider: WearableProvider = {
     );
     const from = start < baselineReach ? start : baselineReach;
 
-    const byDay = await scoresByDay(address, rfc3339(from), rfc3339(now));
+    const records = (
+      await fetchSleep(address, rfc3339(from), rfc3339(now))
+    ).filter(isCountable);
+    const byDay = bestScorePerDay(
+      records.map((record) => ({
+        day: dayOf(record),
+        value: scoreOf(record),
+      })),
+    );
+    const nightsReported = new Set(
+      records.map((record) => dayOf(record)).filter((day) => day !== null),
+    ).size;
 
     return {
       streakDays: countQualifyingDays(
@@ -912,6 +923,7 @@ export const whoopProvider: WearableProvider = {
       ),
       baselineWeekAvg: baselineWeekAverage(byDay),
       days: daySeries(byDay),
+      nightsReported,
     };
   },
 

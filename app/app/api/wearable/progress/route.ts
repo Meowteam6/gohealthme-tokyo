@@ -102,10 +102,15 @@ export async function GET(request: NextRequest) {
       windowStartISO,
       windowEndISO,
     );
-    // No scored day anywhere in the lookback means the device is linked and
-    // has not delivered anything yet, not that the user slept badly every
-    // night. The two must never render the same way.
-    const awaitingFirstSync = progress.days.length === 0;
+    // Three different situations hide behind an empty day list, and they need
+    // different answers:
+    //   nothing reported at all  -> the device has not synced yet; waiting works
+    //   nights reported, none scored -> the device does not produce this number;
+    //                                   waiting never works
+    //   days present             -> normal
+    const noScoredDays = progress.days.length === 0;
+    const awaitingFirstSync = noScoredDays && progress.nightsReported === 0;
+    const deviceCannotMeasure = noScoredDays && progress.nightsReported > 0;
 
     // Name the number this provider actually produces. A device that reports
     // sleep efficiency and not a proprietary score must not have its 92 called
@@ -119,7 +124,11 @@ export async function GET(request: NextRequest) {
     return Response.json({
       connected: true,
       provider: provider.id,
-      linkState: awaitingFirstSync ? "awaiting-first-sync" : "linked",
+      linkState: awaitingFirstSync
+        ? "awaiting-first-sync"
+        : deviceCannotMeasure
+          ? "metric-unavailable"
+          : "linked",
       metric: hasWindow
         ? `${scoreLabel} ≥ ${threshold} · since ${windowStartISO}`
         : `${scoreLabel} ≥ ${threshold}`,
