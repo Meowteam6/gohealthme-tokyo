@@ -94,15 +94,18 @@ describe("whoopConfigured", () => {
 });
 
 describe("buildAuthorizeUrl", () => {
-  it("asks only for sleep and offline - least privilege is the privacy claim", () => {
+  it("asks for exactly the scopes the declared metrics need", () => {
     const url = new URL(buildAuthorizeUrl("nonce:0xabc"));
     expect(url.origin + url.pathname).toBe(
       "https://api.prod.whoop.com/oauth/oauth2/auth",
     );
-    // Recovery, workout, cycle and body-measurement are deliberately absent:
-    // the product verifies sleep, so asking for more would be data the app
-    // never reads.
-    expect(url.searchParams.get("scope")).toBe("read:sleep offline");
+    // Sleep and workouts are both verifiable goals, so both are requested.
+    // read:cycles is absent because cycle energy is TOTAL expenditure and
+    // cannot honestly answer an active-calories goal; body measurement and
+    // profile are absent because no goal is measured against them.
+    expect(url.searchParams.get("scope")).toBe(
+      "read:sleep read:workout offline",
+    );
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("client_id")).toBe("client-id");
     expect(url.searchParams.get("state")).toBe("nonce:0xabc");
@@ -382,6 +385,152 @@ describe("getProgress", () => {
     expect(
       (fetchMock.mock.calls[0] as [string, RequestInit])[1].cache,
     ).toBe("no-store");
+  });
+});
+
+describe("getMetricProgress", () => {
+  it("refuses a metric a WHOOP strap physically cannot measure", async () => {
+    const address = nextAddress();
+    await linked(address);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Steps, daily distance and active calories are all refused, each for a
+    // stated reason. Answering zero would tell somebody who walked 12,000
+    // steps they missed the goal.
+    const refused = ["steps", "distance_km", "active_calories"] as const;
+    for (const metric of refused) {
+      await expect(
+        whoopProvider.getMetricProgress(
+          address,
+          metric,
+          100,
+          "2026-06-15",
+          "2026-06-21",
+        ),
+      ).rejects.toThrow(/cannot measure/);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("declares only what it can honestly answer", () => {
+    expect([...whoopProvider.metrics].sort()).toEqual([
+      "sleep_efficiency",
+      "sleep_hours",
+      "sleep_score",
+      "workouts",
+    ]);
+  });
+
+  it("serves sleep_efficiency from the efficiency field, not the score", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        json({
+          records: [
+            // Performance 40 would fail a 90 bar; efficiency 93 passes it.
+            // The two must not be interchangeable.
+            sleepRecord("2026-06-20T07:00:00.000Z", 40),
+          ],
+          next_token: null,
+        }),
+      ),
+    );
+
+    const progress = await whoopProvider.getMetricProgress(
+      address,
+      "sleep_efficiency",
+      90,
+      "2026-06-15",
+      "2026-06-21",
+    );
+
+    expect(progress.qualifyingDays).toBe(1);
+    expect(progress.daysWithData).toBe(1);
+  });
+
+  it("never substitutes efficiency for a missing sleep score", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        json({
+          records: [
+            // WHOOP scored the night but produced no performance percentage.
+            // Efficiency is 90 and must NOT stand in for it: that would hold
+            // this user to a materially easier bar for the same stake.
+            sleepRecord("2026-06-20T07:00:00.000Z", null),
+          ],
+          next_token: null,
+        }),
+      ),
+    );
+
+    const progress = await whoopProvider.getMetricProgress(
+      address,
+      "sleep_score",
+      75,
+      "2026-06-15",
+      "2026-06-21",
+    );
+
+    expect(progress.qualifyingDays).toBe(0);
+    // An unscored night is MISSING DATA, not a failure - so it reads as
+    // sync-in-progress rather than a paid "you missed it".
+    expect(progress.daysWithData).toBe(0);
+  });
+
+  it("counts workout sessions per day, unscored sessions included", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        json({
+          records: [
+            { id: "w1", end: "2026-06-16T09:00:00.000Z", score_state: "SCORED" },
+            { id: "w2", end: "2026-06-16T18:00:00.000Z", score_state: "SCORED" },
+            // The session happening is the evidence, not its score.
+            { id: "w3", end: "2026-06-18T09:00:00.000Z", score_state: "UNSCORABLE" },
+          ],
+          next_token: null,
+        }),
+      ),
+    );
+
+    const progress = await whoopProvider.getMetricProgress(
+      address,
+      "workouts",
+      1,
+      "2026-06-15",
+      "2026-06-21",
+    );
+
+    // Two qualifying days, not three sessions: the goal is days with a workout.
+    expect(progress.qualifyingDays).toBe(2);
+  });
+
+  it("reads workouts from the workout endpoint, not the sleep one", async () => {
+    const address = nextAddress();
+    await linked(address);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(json({ records: [], next_token: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await whoopProvider.getMetricProgress(
+      address,
+      "workouts",
+      1,
+      "2026-06-15",
+      "2026-06-21",
+    );
+
+    const url = new URL((fetchMock.mock.calls[0] as [string])[0]);
+    expect(url.pathname).toBe("/developer/v2/activity/workout");
   });
 });
 

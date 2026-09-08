@@ -18,6 +18,8 @@
 // Keeping that contract in one place is what makes a second provider a new
 // file rather than a new branch in nine call sites.
 //
+import type { WearableMetric } from "@/lib/wearable-goal";
+
 // PRIVACY INVARIANT, INHERITED BY EVERY IMPLEMENTATION: raw health samples
 // never cross this boundary. A provider module may read whole sleep records
 // upstream; what it returns is counts, per-day scores and labels. Nothing
@@ -36,18 +38,11 @@ export function isProviderId(value: unknown): value is ProviderId {
 }
 
 /**
- * The wearable metrics a goal can be verified against.
- *
- * Mirrors lib/server/junction.ts's WearableMetric: a steps goal is judged on
- * steps and a sleep goal on sleep, never one silently on the other.
+ * The wearable metrics a goal can be verified against. Declared once in
+ * lib/wearable-goal.ts, which the browser can also import - the pool list has
+ * to know what a goal measures to warn about a mismatch before the stake.
  */
-export type WearableMetric =
-  | "sleep_score"
-  | "sleep_hours"
-  | "steps"
-  | "active_calories"
-  | "distance_km"
-  | "workouts";
+export type { WearableMetric } from "@/lib/wearable-goal";
 
 /**
  * Per-window result for one metric.

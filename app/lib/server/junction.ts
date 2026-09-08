@@ -20,6 +20,7 @@
 // 800ms poll cost three HTTP round-trips instead of one.
 
 import { requireEnv, optionalEnv } from "@/lib/server/env";
+import type { WearableMetric } from "@/lib/wearable-goal";
 import { ttlCache } from "@/lib/server/arc-client";
 import { isRetryableExternalError, withRetry } from "@/lib/server/retry";
 
@@ -289,8 +290,22 @@ function dayKey(rec: SleepRecord): string | null {
   return null;
 }
 
+/**
+ * The night's proprietary sleep score, or null when the device does not
+ * report one.
+ *
+ * Deliberately NOT falling back to efficiency: see the note on WearableMetric.
+ * A night with no score is an unscored night, which the caller reports as
+ * missing data rather than as a failure - it must never be dressed up as a
+ * number the device never produced.
+ */
 function recScore(rec: SleepRecord): number | null {
-  const v = rec.score ?? rec.efficiency ?? rec.sleep_efficiency;
+  return typeof rec.score === "number" ? rec.score : null;
+}
+
+/** The night's sleep efficiency percentage, or null when absent. */
+function recEfficiency(rec: SleepRecord): number | null {
+  const v = rec.efficiency ?? rec.sleep_efficiency;
   return typeof v === "number" ? v : null;
 }
 
@@ -403,13 +418,7 @@ export async function getProgress(
  * specific Junction/Vital summary and a per-day field, so a steps goal is
  * judged on steps and a sleep goal on sleep - never one silently on the other.
  */
-export type WearableMetric =
-  | "sleep_score"
-  | "sleep_hours"
-  | "steps"
-  | "active_calories"
-  | "distance_km"
-  | "workouts";
+export type { WearableMetric } from "@/lib/wearable-goal";
 
 /**
  * Per-window result for one metric. daysWithData === 0 means "connected but
@@ -508,12 +517,18 @@ async function fetchMetricByDay(
     if (prev === undefined || value > prev) byDay.set(day, value);
   };
 
-  if (metric === "sleep_score" || metric === "sleep_hours") {
+  if (
+    metric === "sleep_score" ||
+    metric === "sleep_efficiency" ||
+    metric === "sleep_hours"
+  ) {
     const resp = await jx<SleepResponse>(`/v2/summary/sleep/${userId}?${range}`);
     for (const rec of resp.sleep ?? resp.data ?? []) {
       const day = dayKey(rec);
       if (metric === "sleep_score") {
         keepMax(day, recScore(rec));
+      } else if (metric === "sleep_efficiency") {
+        keepMax(day, recEfficiency(rec));
       } else {
         const r = rec as SleepRecord & {
           total_sleep_seconds?: number;

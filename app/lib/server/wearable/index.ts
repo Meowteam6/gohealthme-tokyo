@@ -52,8 +52,18 @@ function storeKey(address: string): string {
  * refusing every write would look like an outage.
  */
 export function providerConfigured(id: ProviderId): boolean {
-  if (id === "junction") return junctionConfigured();
-  return whoopConfigured() && tokenStorageConfigured();
+  // Exhaustive by construction. The previous if/else returned WHOOP's answer
+  // for every id that was not junction, so registering a third provider would
+  // have silently reported it as configured whenever WHOOP was - a wrong
+  // answer that only shows up as an unexplained failure at link time. A record
+  // keyed on ProviderId cannot compile once a provider is added without one.
+  const checks: Record<ProviderId, () => boolean> = {
+    junction: junctionConfigured,
+    // WHOOP additionally needs somewhere safe to put per-user OAuth tokens;
+    // without the key it is not available, rather than available-and-refusing.
+    whoop: () => whoopConfigured() && tokenStorageConfigured(),
+  };
+  return checks[id]();
 }
 
 /** Every provider that could serve a link request, in preference order. */

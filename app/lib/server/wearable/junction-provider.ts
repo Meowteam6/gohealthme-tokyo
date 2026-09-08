@@ -41,6 +41,7 @@ export const junctionProvider: WearableProvider = {
   // metric is a separate question, answered by daysWithData rather than here.
   metrics: [
     "sleep_score",
+    "sleep_efficiency",
     "sleep_hours",
     "steps",
     "active_calories",

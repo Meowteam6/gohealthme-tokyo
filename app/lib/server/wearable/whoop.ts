@@ -60,14 +60,26 @@ const TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
 const API_BASE = "https://api.prod.whoop.com/developer";
 
 /**
- * Least privilege: the product verifies sleep streaks, so it asks for sleep
- * and nothing else. `offline` is what makes WHOOP issue a refresh token, which
- * is required because verification runs on a cron long after the user has left
- * the browser. Recovery, workout, cycle and body-measurement scopes are
- * deliberately NOT requested - asking for data the app never reads is the
- * cheapest way to lose a privacy claim that the whole product rests on.
+ * What the app asks WHOOP for, and why it is not narrower.
+ *
+ * The first version asked for sleep alone, on a least-privilege argument. That
+ * was the wrong call: every metric a provider declines is a pool its users
+ * cannot join, and declining workouts and calories was a scope decision, not a
+ * physical limit. A user who is told "your device cannot verify this" about
+ * something their device measures perfectly well is being failed by us, not by
+ * their strap.
+ *
+ * The privacy claim survives, and it is now a stronger one because it is about
+ * behaviour rather than about the grant: a read only ever calls the endpoint
+ * the pool's own metric requires, so a sleep pool reads sleep and nothing
+ * else. Body measurement and profile scopes stay unrequested - nothing in the
+ * product measures a goal against them. read:cycles is also unrequested: see
+ * WHOOP_METRICS for why cycle energy cannot honestly answer a calories goal.
+ *
+ * `offline` is what makes WHOOP issue a refresh token, required because
+ * verification runs on a cron long after the user has left the browser.
  */
-const SCOPES = "read:sleep offline";
+const SCOPES = "read:sleep read:workout offline";
 
 /** WHOOP's page size ceiling for collection endpoints. */
 const PAGE_LIMIT = 25;
@@ -517,14 +529,23 @@ interface SleepPage {
 }
 
 /**
- * The night's score. WHOOP's sleep performance percentage is the number that
- * corresponds to Junction's sleep score, so a pool threshold means the same
- * thing on both paths. Efficiency is the documented fallback for a record that
- * WHOOP scored without a performance percentage.
+ * The night's sleep score. WHOOP's sleep performance percentage is the number
+ * that corresponds to Junction's sleep score, so a pool threshold means the
+ * same thing on both paths.
+ *
+ * It does NOT fall back to efficiency. Efficiency is a different measurement
+ * on the same 0-100 scale - asleep over in-bed, typically 85-95 - and
+ * substituting it would hold this user to a materially easier bar than a user
+ * whose device reported a real score, for the same stake and the same payout.
+ * A night WHOOP did not score is an unscored night, reported as missing data.
  */
 function scoreOf(record: SleepRecord): number | null {
   const performance = record.score?.sleep_performance_percentage;
-  if (typeof performance === "number") return performance;
+  return typeof performance === "number" ? performance : null;
+}
+
+/** The night's sleep efficiency percentage, or null when absent. */
+function efficiencyOf(record: SleepRecord): number | null {
   const efficiency = record.score?.sleep_efficiency_percentage;
   return typeof efficiency === "number" ? efficiency : null;
 }
@@ -545,12 +566,21 @@ function isCountable(record: SleepRecord): boolean {
   return record.nap !== true && record.score_state === "SCORED";
 }
 
-async function fetchSleep(
+/**
+ * Walk a WHOOP collection endpoint. Every one of them pages the same way:
+ * start/end/limit in, { records, next_token } out, 25 records a page.
+ *
+ * Bounded by MAX_PAGES rather than draining the collection, because the rate
+ * limit is 10000 requests a DAY across every user of this app. An unbounded
+ * walk on one wallet is an outage for everyone else.
+ */
+async function fetchPaged<TRecord, TPage extends { records?: TRecord[]; next_token?: string | null }>(
   address: string,
+  path: string,
   startISO: string,
   endISO: string,
-): Promise<SleepRecord[]> {
-  const records: SleepRecord[] = [];
+): Promise<TRecord[]> {
+  const records: TRecord[] = [];
   let nextToken: string | undefined;
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
@@ -561,19 +591,28 @@ async function fetchSleep(
     });
     if (nextToken !== undefined) params.set("nextToken", nextToken);
 
-    const data = await whoopGet<SleepPage>(
-      address,
-      "/v2/activity/sleep",
-      params,
-    );
-    const page_records = data.records ?? [];
-    records.push(...page_records);
-    if (page_records.length === 0) break;
+    const data = await whoopGet<TPage>(address, path, params);
+    const pageRecords = data.records ?? [];
+    records.push(...pageRecords);
+    if (pageRecords.length === 0) break;
     if (data.next_token === undefined || data.next_token === null) break;
     nextToken = data.next_token;
   }
 
   return records;
+}
+
+function fetchSleep(
+  address: string,
+  startISO: string,
+  endISO: string,
+): Promise<SleepRecord[]> {
+  return fetchPaged<SleepRecord, SleepPage>(
+    address,
+    "/v2/activity/sleep",
+    startISO,
+    endISO,
+  );
 }
 
 /** Best score per calendar day over a window, from live WHOOP data only. */
@@ -613,22 +652,91 @@ function sleepHoursOf(record: SleepRecord): number | null {
 }
 
 /**
- * WHOOP measures sleep and strain. It has NO step count, no distance, and this
- * app does not request the workout scope, so those goals cannot be verified on
- * this path at all.
+ * What a WHOOP strap can honestly answer.
  *
- * Declared rather than discovered: a steps read that quietly returned zero
- * would tell somebody who walked 12,000 steps that they missed their goal and
- * pay them nothing, which is worse than refusing to answer.
+ * Declared rather than discovered: a read that quietly returned zero for a
+ * metric the device cannot measure would tell somebody who walked 12,000 steps
+ * that they missed their goal and pay them nothing. The pool list uses this
+ * list to refuse the mismatch before anyone stakes.
+ *
+ * WHAT IS DELIBERATELY ABSENT, AND WHY - each of these is a semantic limit, not
+ * a scope we were too lazy to request:
+ *
+ *   steps           A WHOOP strap has no pedometer. There is no number to read.
+ *
+ *   distance_km     Workouts carry `score.distance_meter`, so a recorded run
+ *                   would answer. Daily walking distance would not, because
+ *                   nothing outside a recorded workout is measured. Serving it
+ *                   would pass a runner and silently fail a walker on the same
+ *                   goal, which is worse than declining it.
+ *
+ *   active_calories WHOOP reports `kilojoule` on the cycle, and that is TOTAL
+ *                   energy expenditure including basal metabolism - roughly
+ *                   2500 kcal a day for an adult who did nothing. Junction's
+ *                   number is ACTIVE calories, a few hundred. Reporting one as
+ *                   the other would clear a 500-calorie goal every day of the
+ *                   week without the user moving. This is the same defect as
+ *                   substituting sleep efficiency for a sleep score, and it is
+ *                   refused for the same reason.
  */
-const WHOOP_METRICS: readonly WearableMetric[] = ["sleep_score", "sleep_hours"];
+const WHOOP_METRICS: readonly WearableMetric[] = [
+  "sleep_score",
+  "sleep_efficiency",
+  "sleep_hours",
+  "workouts",
+];
 
-/** The per-day value for a metric WHOOP can actually serve. */
-function metricValueOf(
+/** The per-day value for a sleep metric WHOOP can actually serve. */
+function sleepMetricValueOf(
   record: SleepRecord,
   metric: WearableMetric,
 ): number | null {
-  return metric === "sleep_hours" ? sleepHoursOf(record) : scoreOf(record);
+  if (metric === "sleep_hours") return sleepHoursOf(record);
+  if (metric === "sleep_efficiency") return efficiencyOf(record);
+  return scoreOf(record);
+}
+
+interface WorkoutRecord {
+  start?: string;
+  end?: string;
+  score_state?: string;
+}
+
+interface WorkoutPage {
+  records?: WorkoutRecord[];
+  next_token?: string | null;
+}
+
+/**
+ * Workouts per calendar day, counted the way Junction counts them: a session
+ * belongs to the day it ended, and the day's value is how many happened. A
+ * "work out 4 times this week" goal is then a threshold of 1 over 4 qualifying
+ * days, identical on both providers.
+ *
+ * Unscored sessions still count. Unlike sleep, the score is not the evidence
+ * here - the session happening is, and WHOOP records the session either way.
+ */
+async function workoutsByDay(
+  address: string,
+  startISO: string,
+  endISO: string,
+): Promise<Map<string, number>> {
+  const records = await fetchPaged<WorkoutRecord, WorkoutPage>(
+    address,
+    "/v2/activity/workout",
+    startISO,
+    endISO,
+  );
+  const byDay = new Map<string, number>();
+  for (const record of records) {
+    const day =
+      typeof record.end === "string" && record.end.length >= 10
+        ? record.end.slice(0, 10)
+        : null;
+    if (day === null) continue;
+    byDay.set(day, (byDay.get(day) ?? 0) + 1);
+  }
+  return byDay;
 }
 
 // ---------------------------------------------------------------- the provider
@@ -692,25 +800,26 @@ export const whoopProvider: WearableProvider = {
   ): Promise<MetricProgress> {
     if (!WHOOP_METRICS.includes(metric)) {
       throw new WhoopMetricUnsupported(
-        `WHOOP cannot measure ${metric}. It reports sleep and strain, not ` +
-          "step counts or distance.",
+        `WHOOP cannot measure ${metric}. A WHOOP strap reports sleep and ` +
+          "workouts, not step counts or daily distance.",
       );
     }
 
     const now = new Date();
-    const records = await fetchSleep(
-      address,
-      rfc3339(startOfDayUTC(windowStartISO)),
-      rfc3339(now),
-    );
-    const byDay = bestScorePerDay(
-      records
-        .filter(isCountable)
-        .map((record) => ({
-          day: dayOf(record),
-          value: metricValueOf(record, metric),
-        })),
-    );
+    const from = rfc3339(startOfDayUTC(windowStartISO));
+    const to = rfc3339(now);
+
+    const byDay =
+      metric === "workouts"
+        ? await workoutsByDay(address, from, to)
+        : bestScorePerDay(
+            (await fetchSleep(address, from, to))
+              .filter(isCountable)
+              .map((record) => ({
+                day: dayOf(record),
+                value: sleepMetricValueOf(record, metric),
+              })),
+          );
 
     return {
       qualifyingDays: countQualifyingDays(
