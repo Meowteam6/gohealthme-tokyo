@@ -249,14 +249,10 @@ function ProviderChoice({ address }: { address: `0x${string}` }) {
           key={option.id}
           className="rounded-xl border border-edge p-3 text-sm"
         >
-          <p className="font-semibold text-foreground">
-            {option.label}
-            {option.connected ? (
-              <span className="ml-2 text-xs font-normal text-accent">
-                connected
-              </span>
-            ) : null}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-foreground">{option.label}</p>
+            {option.connected ? <Badge tone="accent">Connected</Badge> : null}
+          </div>
           <p className="mt-1 text-muted">{blurb[option.id]}</p>
           <ConnectButton
             address={address}
@@ -534,12 +530,20 @@ function WhoopReturnNote() {
 
   if (note === null) return null;
 
+  // A failed connection is an error and renders as one, through the same
+  // ErrorNote every other failure on this page uses. Inventing a second error
+  // style here would make the same severity look like two different things.
+  if (note.tone === "error") {
+    return <ErrorNote title="WHOOP was not connected" detail={note.message} />;
+  }
+
+  // Light emerald tint with deep-emerald text, not a translucent dark box:
+  // bg-accent-deep at low opacity renders as sage grey on the cream theme and
+  // puts bright emerald text near 1.6:1 contrast on it.
   const tone =
     note.tone === "ok"
-      ? "border-accent/40 bg-accent-deep/20 text-accent"
-      : note.tone === "error"
-        ? "border-edge bg-surface text-foreground"
-        : "border-edge bg-surface text-muted";
+      ? "border-accent/30 bg-accent/15 text-accent-deep"
+      : "border-edge bg-surface text-muted";
 
   return (
     <p className={`rounded-xl border p-4 text-sm ${tone}`} role="status">
