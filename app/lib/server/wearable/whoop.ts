@@ -615,20 +615,6 @@ function fetchSleep(
   );
 }
 
-/** Best score per calendar day over a window, from live WHOOP data only. */
-async function scoresByDay(
-  address: string,
-  startISO: string,
-  endISO: string,
-): Promise<Map<string, number>> {
-  const records = await fetchSleep(address, startISO, endISO);
-  return bestScorePerDay(
-    records
-      .filter(isCountable)
-      .map((record) => ({ day: dayOf(record), value: scoreOf(record) })),
-  );
-}
-
 function rfc3339(date: Date): string {
   return date.toISOString();
 }
