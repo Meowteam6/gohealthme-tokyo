@@ -57,6 +57,7 @@ import {
   viewerMetricsOf,
 } from "@/lib/wearable-connect";
 import { unsupportedMetricFor } from "@/lib/pool-availability";
+import { wearableJoinBlock } from "@/lib/wearable-join-gate";
 import type { WearableMetric } from "@/lib/wearable-goal";
 import {
   BOUNTY_MODEL_LABELS,
@@ -560,49 +561,51 @@ export default function PoolDetail({ id }: { id: string }) {
   // participants until settlement runs.
   const phase = poolPhase(pool, asOfSeconds);
 
-  // A wearable goal with the provider refusing us cannot be checked at all.
-  // The entry fee is real money paid up front, so the join action comes off
-  // the page rather than selling a goal SPOTTER has no way to verify.
+  // ONE decision, made in lib/wearable-join-gate.ts, shared with the challenge
+  // link. This page used to run its own chain in its own order, and the order
+  // was wrong: the not-yet-checked branch pre-empted both the unsupported and
+  // the outage branches, so a full provider outage rendered "connect a device
+  // first, you have not linked one yet" to a wallet that had Junction linked.
+  // Two surfaces deciding the same thing differently is precisely what that
+  // module's header says it exists to prevent, and this page was the surface
+  // still doing it.
+  //
+  // The kinds are mutually exclusive by construction, so the JSX below can no
+  // longer disagree with the gate about precedence however it is ordered.
   const providerDown = providerDownReason(providerQuery.data);
-  const unverifiableNow = providerDown !== null && evidenceType === "wearable";
-
   const viewerProvider = (capabilityQuery.data?.providers ?? []).find(
     (option) => option.id === capabilityQuery.data?.selected,
   );
-  // The metric this viewer's device can never produce, or null. This is the
-  // check that has to happen HERE, before the entry fee: the same mismatch
-  // discovered at claim time is a rejection after the money has already moved.
-  const unsupportedMetric = unsupportedMetricFor(
-    pool.goalSpec,
-    viewerMetricsOf(capabilityQuery.data),
-  );
-  const unsupportedForViewer = unsupportedMetric !== null && !joined;
-  // A participant who already joined and then switched device is in the worst
-  // position of anyone: the fee is spent and their new device cannot prove the
-  // goal. Withholding the join is meaningless for them, but saying nothing was
-  // its own lie - the claim panel reported an outage, which is neither their
-  // fault nor fixable by waiting. They get told, and told what to do.
-  const unsupportedAfterJoin = unsupportedMetric !== null && joined;
+  const viewerMetrics = viewerMetricsOf(capabilityQuery.data);
 
-  // "We have not established what this wallet's device measures" is NOT the
-  // same as "it measures everything", and treating them alike defeated the
-  // whole gate: the client credential cache is module memory that dies with
-  // the tab, so ANY hard load of this page starts unsigned, the capability
-  // read 401s, and the join button appeared for a goal the device can never
-  // prove. It also silently reopened after the 8-minute signature TTL, since
-  // the refetch replaced a good answer with an empty one.
-  //
-  // Only for a CONNECTED wallet on a WEARABLE goal they have not joined. A
-  // logged-out visitor browsing the board is not about to stake, and a
-  // document goal does not depend on a device at all.
+  const joinBlock = wearableJoinBlock({
+    goalSpec: pool.goalSpec,
+    address,
+    joined,
+    providerDown,
+    viewerMetrics,
+    capabilityPending:
+      address !== null && capabilityUnknown(capabilityQuery.data),
+    needsDevice: capabilityNeedsDevice(capabilityQuery.data),
+  });
+
+  const unverifiableNow = joinBlock.kind === "outage";
+  const unsupportedForViewer = joinBlock.kind === "unsupported";
+  const unsupportedMetric =
+    joinBlock.kind === "unsupported" ? joinBlock.metric : null;
   const capabilityPending =
-    address !== null &&
-    evidenceType === "wearable" &&
-    !joined &&
-    capabilityUnknown(capabilityQuery.data);
-  // Unknown because nothing is linked, not because we have not asked. Telling
-  // this person to sign would be advice that cannot answer the question.
-  const needsDevice = capabilityNeedsDevice(capabilityQuery.data);
+    joinBlock.kind === "unchecked" || joinBlock.kind === "no-device";
+  const needsDevice = joinBlock.kind === "no-device";
+
+  // A participant who ALREADY joined and then switched device is in the worst
+  // position of anyone: the fee is spent and their new device cannot prove the
+  // goal. The gate deliberately passes them - withholding a join they already
+  // made protects nothing - so the mismatch is computed separately here, and
+  // they are told rather than left reading an outage message that is neither
+  // their fault nor fixable by waiting.
+  const unsupportedAfterJoin =
+    joined && unsupportedMetricFor(pool.goalSpec, viewerMetrics) !== null;
+
   const agentBroke = agentIsBroke(agentWalletQuery.data?.balanceUsd ?? null);
   // Wait for the restore before mounting a tab on a multi-path pool; mounting
   // the wrong one first would start a poll loop the correct tab then supersedes.
