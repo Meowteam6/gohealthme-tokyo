@@ -19,7 +19,22 @@ import { useQuery } from "@tanstack/react-query";
 import JoinPool from "@/components/JoinPool";
 import { fetchParticipant, fetchPool, formatUsdc } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { Money, Skeleton } from "@/components/ui";
+import { useWalletAuth } from "@/lib/useWalletAuth";
+import { Money, Skeleton, TAP_TARGET } from "@/components/ui";
+import {
+  fetchProviderState,
+  providerDownReason,
+  providerQueryKey,
+} from "@/lib/wearable-provider";
+import {
+  capabilityNeedsDevice,
+  capabilityUnknown,
+  fetchProviderOptions,
+  metricLabel,
+  providerOptionsQueryKey,
+  viewerMetricsOf,
+} from "@/lib/wearable-connect";
+import { wearableJoinBlock } from "@/lib/wearable-join-gate";
 
 // A full-width Next Link dressed as the shared candy control. Emerald-tinted
 // once you are in (the go-get-paid onward step), tan and secondary before that
@@ -30,6 +45,7 @@ const ONWARD_BASE =
 
 export default function ChallengeAccept({ poolId }: { poolId: string }) {
   const { address } = useEmbeddedWallet();
+  const requestAuth = useWalletAuth();
 
   let poolIdBig: bigint | null;
   try {
@@ -66,6 +82,45 @@ export default function ChallengeAccept({ poolId }: { poolId: string }) {
 
   const joined = participantQuery.data?.joined === true;
 
+  // The same two reads the pool page makes, and the same cachedOnly rule:
+  // opening a challenge link must not fire a wallet prompt. Unknown capability
+  // withholds the accept rather than assuming it is fine, which is the whole
+  // point - this surface used to mount JoinPool with no check at all.
+  const providerQuery = useQuery({
+    queryKey: providerQueryKey(address),
+    queryFn: () => {
+      if (address === null) throw new Error("No wallet connected.");
+      return fetchProviderState(address, (options) =>
+        requestAuth({ ...options, cachedOnly: true }),
+      );
+    },
+    enabled: address !== null,
+    retry: false,
+  });
+  const capabilityQuery = useQuery({
+    queryKey: providerOptionsQueryKey(address),
+    queryFn: () => {
+      if (address === null) throw new Error("No wallet connected.");
+      return fetchProviderOptions(address, (options) =>
+        requestAuth({ ...options, cachedOnly: true }),
+      );
+    },
+    enabled: address !== null,
+    retry: false,
+    staleTime: 60_000,
+  });
+
+  const joinBlock = wearableJoinBlock({
+    goalSpec: poolQuery.data?.goalSpec ?? "",
+    address,
+    joined,
+    providerDown: providerDownReason(providerQuery.data),
+    viewerMetrics: viewerMetricsOf(capabilityQuery.data),
+    capabilityPending:
+      address !== null && capabilityUnknown(capabilityQuery.data),
+    needsDevice: capabilityNeedsDevice(capabilityQuery.data),
+  });
+
   if (poolIdBig === null) return null;
 
   const entryFee = poolQuery.data?.entryFee ?? null;
@@ -80,7 +135,43 @@ export default function ChallengeAccept({ poolId }: { poolId: string }) {
         </p>
       ) : null}
 
-      {entryFee !== null ? (
+      {joinBlock.kind !== "ok" ? (
+        // The share link is probably the commonest way anyone reaches a pool,
+        // and it mounted JoinPool with no device check at all - so every limit
+        // the pool page surfaces before the stake was bypassed here. Same
+        // decision as the pool page, made in lib/wearable-join-gate.ts so the
+        // two surfaces cannot drift apart again.
+        <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
+          <p className="text-sm font-semibold text-warning">
+            {joinBlock.kind === "outage"
+              ? "I cannot check this goal right now"
+              : joinBlock.kind === "unsupported"
+                ? "Your device cannot measure this one"
+                : joinBlock.kind === "no-device"
+                  ? "Connect a device first"
+                  : "Let me check your device first"}
+          </p>
+          <p className="mt-1 text-sm text-foreground/80">
+            {joinBlock.kind === "outage"
+              ? joinBlock.reason
+              : joinBlock.kind === "unsupported"
+                ? `This challenge is measured in ${metricLabel(joinBlock.metric)}, which your connected device does not report. That is the hardware, not a delay.`
+                : joinBlock.kind === "no-device"
+                  ? "You have not linked a device yet, so there is nothing for SPOTTER to verify. Connect one and this opens up."
+                  : "Not every device can measure every goal and I have not checked yours yet. Open your dashboard and I will look."}
+          </p>
+          <p className="mt-2 text-sm text-foreground/80">
+            The lock-in is real money, so I am not taking it for a goal I might
+            not be able to verify for you.
+          </p>
+          <Link
+            href="/dashboard"
+            className={`mt-3 inline-block rounded-xl border-2 border-edge font-semibold hover:border-accent/50 ${TAP_TARGET}`}
+          >
+            {joinBlock.kind === "outage" ? "Go to my dashboard" : "Check my device"}
+          </Link>
+        </div>
+      ) : entryFee !== null ? (
         <JoinPool poolId={poolIdBig} entryFee={entryFee} alreadyJoined={joined} />
       ) : poolQuery.isError ? (
         // Never fall back to a zero fee - that would send a join that reverts on
