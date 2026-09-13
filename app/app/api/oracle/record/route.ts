@@ -11,7 +11,7 @@
 
 import { timingSafeEqual } from "crypto";
 import { isAddress, type Address, type Hex } from "viem";
-import { getProgress, isConnected } from "@/lib/server/junction";
+import { providerFor } from "@/lib/server/wearable";
 import { participantJoined } from "@/lib/server/pools";
 import { deriveMultiplierBps, recordResult } from "@/lib/server/oracle";
 import { recordVerdict, VERDICT_FACETS } from "@/lib/server/verdict";
@@ -66,15 +66,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const connected = await isConnected(address);
+    const provider = await providerFor(address);
+    const connected = await provider.isConnected(address);
     if (!connected) {
       return jsonError(
         404,
-        `No health-data provider connected for ${address}. Connect via POST /api/junction/link.`,
+        `No health-data provider connected for ${address}. Connect via POST /api/wearable/link.`,
       );
     }
 
-    const progress = await getProgress(address, threshold, goalDays);
+    const progress = await provider.getProgress(address, threshold, goalDays);
     const verdict = progress.streakDays >= goalDays;
     const multiplierBps = deriveMultiplierBps(progress.baselineWeekAvg);
 
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
           // A streak threshold check against provider data is deterministic, not
           // a probabilistic judgement.
           "high",
-          `junction:${address}:${progress.streakDays}d`,
+          `${provider.id}:${address}:${progress.streakDays}d`,
           // Wearable evidence — NOT AI-attested. Must not claim a TEE inference
           // that never happened.
           VERDICT_FACETS.wearable,

@@ -9,9 +9,9 @@
 // reads as though nothing ever happened.
 //
 // The ledger already records which path ran. The cheap read SPOTTER buys is
-// the Junction summary for a wearable claim and the TEE attester read for a
-// document claim, and the plan names that service before any money moves, so
-// the answer survives even a claim that died at the buy step.
+// the participant's provider summary for a wearable claim and the TEE attester
+// read for a document claim, and the plan names that service before any money
+// moves, so the answer survives even a claim that died at the buy step.
 //
 // The service names are mirrored here rather than imported: their definitions
 // live in server modules that must stay out of the client bundle - the same
@@ -22,8 +22,13 @@ import { authBlockReason, type ClientAuth } from "@/lib/client-auth";
 
 export type ProofPath = "wearable" | "document" | "self-reported";
 
-/** Mirror of wearable.ts's JUNCTION_READ_SERVICE. */
-const WEARABLE_SERVICES = new Set(["junction-read"]);
+/**
+ * Mirror of every provider's readService in lib/server/wearable. One entry per
+ * provider, and BOTH must be listed: a WHOOP user whose service name is
+ * missing here lands on the document upload box over a wearable claim SPOTTER
+ * has already paid for, which reads as though nothing ever happened.
+ */
+const WEARABLE_SERVICES = new Set(["junction-read", "whoop-read"]);
 /** Mirror of x402.ts's ATTESTER_READ_SERVICE and VISION_JUDGE_SERVICE. The
  *  vision judge only ever escalates a document read, so it identifies the
  *  path too. chain-read is deliberately absent: it is bought at settlement by

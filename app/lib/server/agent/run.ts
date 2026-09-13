@@ -77,7 +77,7 @@ import {
   releaseDailySpend,
   reserveDailySpend,
 } from "@/lib/server/agent/budget";
-import { junctionReadQuote } from "@/lib/server/agent/wearable";
+import { wearableReadQuote } from "@/lib/server/agent/wearable";
 import type {
   EscalationContext,
   ReasonFn,
@@ -827,12 +827,13 @@ async function runClaimUnlocked(
   }
 
   // The cheap read depends on the evidence: documents buy the TEE attester
-  // read, wearables buy the Junction summary. Same plan-then-buy shape.
+  // read, wearables buy the participant's provider summary. Same plan-then-buy
+  // shape, and the wearable quote names whichever provider backs that wallet.
   let cheapQuote: ServiceQuote | null = null;
   const getCheapQuote = async () => {
     cheapQuote ??=
       input.evidenceKind === "wearable"
-        ? junctionReadQuote()
+        ? await wearableReadQuote(input.address)
         : await deps.buy.quoteAttesterRead();
     return cheapQuote;
   };

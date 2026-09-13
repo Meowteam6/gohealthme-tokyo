@@ -38,9 +38,13 @@ describe("classifyPath", () => {
   });
 
   it("treats paid upstreams and chain reads as expensive", () => {
-    expect(classifyPath("/api/junction/data")).toBe("expensive");
-    expect(classifyPath("/api/junction/progress")).toBe("expensive");
-    expect(classifyPath("/api/junction/link")).toBe("expensive");
+    expect(classifyPath("/api/wearable/data")).toBe("expensive");
+    expect(classifyPath("/api/wearable/progress")).toBe("expensive");
+    expect(classifyPath("/api/wearable/link")).toBe("expensive");
+    expect(classifyPath("/api/whoop/login")).toBe("expensive");
+    // Survived the /api/junction/* -> /api/wearable/* rename and still mints a
+    // bearer credential for the native app, so it must keep its tier.
+    expect(classifyPath("/api/junction/mobile-token")).toBe("expensive");
     expect(classifyPath("/api/goals/match")).toBe("expensive");
   });
 
@@ -186,7 +190,7 @@ describe("verifiedAddressBucket", () => {
   it("ignores the query string entirely", async () => {
     // ?address= is caller-supplied and unproven; it must never name a bucket.
     const request = new Request(
-      `https://x/api/junction/data?address=${VICTIM.address}`,
+      `https://x/api/wearable/data?address=${VICTIM.address}`,
     );
 
     expect(await verifiedAddressBucket(request, NOW)).toBeNull();

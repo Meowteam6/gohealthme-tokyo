@@ -85,7 +85,9 @@ Next.js (frontend + API routes) with embedded wallets (Dynamic; originally Privy
 
 ## Open items / next steps
 
-1. WHOOP creds (Nikki): add WHOOP_CLIENT_ID + WHOOP_CLIENT_SECRET to `app/.env.local` -> the full live
+1. WHOOP creds (Nikki): WHOOP_CLIENT_ID + WHOOP_CLIENT_SECRET, PLUS WHOOP_REDIRECT_URI and
+   WEARABLE_TOKEN_KEY (see docs/WEARABLES.md - the token key is required and has no fallback)
+   in `app/.env.local` -> the full live
    happy path (real wearable data -> oracle -> settle) works end to end.
 2. Chainlink CLI auth: `cre workflow simulate` (v1.20) needs `cre login` or a CRE_API_KEY. Login email
    codes were not arriving; resolve via Andrej/Chainlink booth (he hands out keys) OR try CLI v1.19.0
@@ -389,6 +391,20 @@ funding once covers local + prod.
   `depositWithApproval` handles) and `settle()` awaits `.wait()` but ignores the result status — so a
   failed deposit is swallowed and the transfer hits an empty shield. Fix = use `depositWithApproval` +
   check terminal status. Until then, keep a standing shielded balance.
+
+> [!warning] SUPERSEDED as of the WHOOP-direct work. Junction is no longer the
+> only path and the routes below have moved. Read `docs/WEARABLES.md` for the
+> current picture: it is the operator runbook and it covers both providers,
+> every environment variable, the WHOOP app registration and its 10-member
+> approval cap, and what each provider can and cannot verify.
+>
+> What changed: `/api/junction/{link,data,progress}` are now
+> `/api/wearable/{link,progress,data}` and are provider-neutral. WHOOP can be
+> connected directly as well as through Junction, which needs
+> `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `WHOOP_REDIRECT_URI` and
+> `WEARABLE_TOKEN_KEY` - four variables, not the two named earlier in this
+> file. A pool whose metric the wallet's device cannot measure is now refused
+> before the entry fee rather than at the claim.
 
 ## Wearables = Junction (not raw WHOOP OAuth)
 Health data links via **Junction Link** (WHOOP/Oura/Fitbit/Garmin) — `/api/junction/{link,data,progress}`,

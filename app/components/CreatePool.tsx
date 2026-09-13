@@ -12,6 +12,7 @@ import {
 } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useDocumentProofAvailable } from "@/lib/useProofStatus";
+import AuthorCapabilityNotice from "@/components/AuthorCapabilityNotice";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import { isEconomicallyDeadConfig } from "@/lib/pool-lifecycle";
 import { resolveNewPoolId } from "@/lib/resolve-pool-id";
@@ -403,6 +404,9 @@ function CreatePoolInner() {
             rows={3}
             className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
           />
+          {floor === "wearable" ? (
+            <AuthorCapabilityNotice goalSpec={goalSpec} noun="pool" />
+          ) : null}
           <span className="mt-1 block text-xs text-muted">
             {floor === "document"
               ? "Describe what participants must upload. Saved as a document goal so the right verifier and badge are used."

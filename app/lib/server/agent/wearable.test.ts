@@ -7,18 +7,45 @@ import type { Address } from "viem";
 // fail-closed "unmappable" case), the verdict shapes (not connected /
 // unmappable / connected-but-not-synced / met / short / outage), and that the
 // read is routed on the classified metric scoped to the pool window - so a
-// steps goal is never judged on sleep.
+// steps goal is never judged on sleep. Also pinned: a metric the
+// participant's OWN provider cannot measure fails closed too - WHOOP has no
+// step count, and reading zero would tell somebody who walked 12,000 steps
+// that they missed the goal.
 
 const isConnected = vi.fn();
 const getMetricProgress = vi.fn();
+const providerFor = vi.fn();
 
-vi.mock("@/lib/server/junction", () => ({
-  isConnected: (...args: unknown[]) => isConnected(...args),
-  getMetricProgress: (...args: unknown[]) => getMetricProgress(...args),
+vi.mock("@/lib/server/wearable", () => ({
+  providerFor: (...args: unknown[]) => providerFor(...args),
 }));
 
-const { wearableEvidenceSource, classifyWearableGoal, junctionReadQuote } =
+const { wearableEvidenceSource, classifyWearableGoal, wearableReadQuote } =
   await import("@/lib/server/agent/wearable");
+
+const ALL_METRICS = [
+  "sleep_score",
+  "sleep_hours",
+  "steps",
+  "active_calories",
+  "distance_km",
+  "workouts",
+];
+
+/** A stub provider standing in for whichever integration backs the wallet. */
+function stubProvider(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "junction",
+    label: "Junction",
+    readService: "junction-read",
+    readLabel: "wearable summary (Junction)",
+    readEstUsd: "0.01",
+    metrics: ALL_METRICS,
+    isConnected: (...args: unknown[]) => isConnected(...args),
+    getMetricProgress: (...args: unknown[]) => getMetricProgress(...args),
+    ...overrides,
+  };
+}
 
 const USER = "0x1111111111111111111111111111111111111111" as Address;
 // 2025-06-15T15:06:40Z .. 2025-06-22T15:06:40Z
@@ -28,17 +55,22 @@ const WINDOW = {
   periodEnd: 1_750_604_800n,
 };
 
-function metricProgress(qualifyingDays: number, daysWithData = qualifyingDays) {
-  return { qualifyingDays, daysWithData };
+function metricProgress(
+  qualifyingDays: number,
+  daysWithData = qualifyingDays,
+  daysWithSource = daysWithData,
+) {
+  return { qualifyingDays, daysWithData, daysWithSource };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  providerFor.mockResolvedValue(stubProvider());
 });
 
-describe("junctionReadQuote", () => {
-  it("always quotes prepaid - Junction is metered, never an invented payment", () => {
-    expect(junctionReadQuote()).toEqual({
+describe("wearableReadQuote", () => {
+  it("quotes the provider that backs the wallet, always prepaid", async () => {
+    expect(await wearableReadQuote(USER)).toEqual({
       service: "junction-read",
       label: "wearable summary (Junction)",
       estUsd: "0.01",
@@ -219,6 +251,56 @@ describe("wearableEvidenceSource", () => {
     expect(result.verdict?.reason).toContain("3 of 7");
   });
 
+  it("fails closed when the wallet's own provider cannot measure the metric", async () => {
+    // WHOOP reports sleep and strain and has no step count at all. Reading
+    // zero steps would tell somebody who walked 12,000 that they missed the
+    // goal and pay them nothing, so the verdict names the device instead.
+    providerFor.mockResolvedValue(
+      stubProvider({
+        id: "whoop",
+        label: "WHOOP",
+        readService: "whoop-read",
+        metrics: ["sleep_score", "sleep_hours"],
+      }),
+    );
+    const poll = wearableEvidenceSource(WINDOW);
+
+    const result = await poll(
+      "wearable-1750000000",
+      "walk 8000 steps a day for a week",
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.verdict).toMatchObject({ verified: false, confidence: "low" });
+    expect(result.verdict?.reason).toContain("WHOOP");
+    expect(result.verdict?.reason).toContain("steps");
+    // Never even asked: the device cannot answer, so no read is bought.
+    expect(isConnected).not.toHaveBeenCalled();
+    expect(getMetricProgress).not.toHaveBeenCalled();
+  });
+
+  it("still serves a sleep goal on a WHOOP-backed wallet", async () => {
+    providerFor.mockResolvedValue(
+      stubProvider({
+        id: "whoop",
+        label: "WHOOP",
+        readService: "whoop-read",
+        metrics: ["sleep_score", "sleep_hours"],
+      }),
+    );
+    isConnected.mockResolvedValue(true);
+    getMetricProgress.mockResolvedValue(metricProgress(7));
+    const poll = wearableEvidenceSource(WINDOW);
+
+    const result = await poll(
+      "wearable-1750000000",
+      "sleep score 75+ for 7 days",
+    );
+
+    expect(result.status).toBe("completed");
+    expect(result.verdict).toMatchObject({ verified: true, confidence: "high" });
+  });
+
   it("resolves a Junction outage to a failed unverified verdict, never a throw", async () => {
     isConnected.mockRejectedValue(new Error("Junction /v2/user returned 503"));
     const poll = wearableEvidenceSource(WINDOW);
@@ -231,5 +313,31 @@ describe("wearableEvidenceSource", () => {
     expect(result.status).toBe("failed");
     expect(result.verdict).toMatchObject({ verified: false, confidence: "low" });
     expect(result.verdict?.reason).toMatch(/could not be reached/);
+  });
+  it("separates a device that is still syncing from one that cannot measure it", async () => {
+    isConnected.mockResolvedValue(true);
+    // Nothing at all has arrived: waiting genuinely fixes this.
+    getMetricProgress.mockResolvedValue(metricProgress(0, 0, 0));
+    const poll = wearableEvidenceSource(WINDOW);
+
+    const syncing = await poll(
+      "wearable-1750000000",
+      "sleep score 75+ for 7 days",
+    );
+    expect(syncing.verdict?.reason).toMatch(/give it a few minutes/i);
+
+    // Six days of records arrived and none of them carried a sleep score. A
+    // tracker with no sleep score will not grow one, so "wait a few minutes"
+    // would be advice that can never come true.
+    getMetricProgress.mockResolvedValue(metricProgress(0, 0, 6));
+    const cannotMeasure = await poll(
+      "wearable-1750000000",
+      "sleep score 75+ for 7 days",
+    );
+    expect(cannotMeasure.verdict?.reason).toMatch(/does not report/i);
+    expect(cannotMeasure.verdict?.reason).not.toMatch(/few minutes/i);
+    // Neither pays, and neither blames the user.
+    expect(cannotMeasure.verdict?.verified).toBe(false);
+    expect(cannotMeasure.status).toBe("failed");
   });
 });

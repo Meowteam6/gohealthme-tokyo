@@ -10,6 +10,7 @@ import {
   providerConnected,
   providerDownReason,
   providerQueryKey,
+  providerAwaitingFirstSync,
   providerStateFrom,
   providerUnavailableReason,
   type ProviderState,
@@ -27,6 +28,8 @@ describe("parseProviderProgress", () => {
   it("reads a full payload", () => {
     expect(parseProviderProgress(OK_BODY)).toEqual({
       connected: true,
+      provider: null,
+      linkState: null,
       metric: "Sleep score >= 75",
       streakDays: 4,
       targetDays: 7,
@@ -37,6 +40,8 @@ describe("parseProviderProgress", () => {
   it("defaults every field rather than trusting shapes it did not expect", () => {
     expect(parseProviderProgress(null)).toEqual({
       connected: false,
+      provider: null,
+      linkState: null,
       metric: null,
       streakDays: null,
       targetDays: null,
@@ -50,11 +55,18 @@ describe("parseProviderProgress", () => {
       }),
     ).toEqual({
       connected: false,
+      provider: null,
+      linkState: null,
       metric: null,
       streakDays: null,
       targetDays: null,
       lastSync: null,
     });
+  });
+
+  it("reads which provider answered, and defaults it to null", () => {
+    expect(parseProviderProgress({ provider: "whoop" }).provider).toBe("whoop");
+    expect(parseProviderProgress({ provider: 7 }).provider).toBeNull();
   });
 
   it("keeps a zero streak as a number, not a null", () => {
@@ -149,17 +161,53 @@ describe("providerConnected and providerDownReason", () => {
 describe("providerQueryKey", () => {
   it("shares one key per address when no pool window is scoped", () => {
     expect(providerQueryKey("0xabc")).toEqual([
-      "junction-progress",
+      "wearable-progress",
       "0xabc",
       "none",
+      "default",
     ]);
   });
 
   it("scopes to a pool when a window is used", () => {
     expect(providerQueryKey("0xabc", 14n)).toEqual([
-      "junction-progress",
+      "wearable-progress",
       "0xabc",
       "14",
+      "default",
     ]);
+  });
+
+  it("separates a metric-scoped read from the sleep one", () => {
+    // A sleep answer must not stand in for a steps question just because it is
+    // cached under the same address. That is how a wallet whose steps had
+    // synced was told its device had sent nothing, forever.
+    expect(providerQueryKey("0xabc", 14n, "steps")).not.toEqual(
+      providerQueryKey("0xabc", 14n),
+    );
+  });
+});
+
+describe("providerAwaitingFirstSync", () => {
+  it("is true only for a linked device that has sent nothing", () => {
+    // The state every new user passes through. Rendering a streak here would
+    // show a zero, which reads as "you missed every night" about somebody
+    // whose device simply has not uploaded yet.
+    const awaiting = providerStateFrom(200, {
+      connected: true,
+      linkState: "awaiting-first-sync",
+    });
+    expect(providerAwaitingFirstSync(awaiting)).toBe(true);
+  });
+
+  it("is false once data has arrived, and while nothing is known", () => {
+    expect(
+      providerAwaitingFirstSync(
+        providerStateFrom(200, { connected: true, linkState: "linked" }),
+      ),
+    ).toBe(false);
+    expect(providerAwaitingFirstSync(undefined)).toBe(false);
+    expect(
+      providerAwaitingFirstSync(providerStateFrom(502, { error: "down" })),
+    ).toBe(false);
   });
 });

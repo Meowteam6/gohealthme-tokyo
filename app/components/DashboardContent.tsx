@@ -12,7 +12,7 @@
 // used to look identical to one still being judged, with nothing on screen
 // saying when the money arrives - the chain already knows, so the card says it.
 //
-// The two /api/junction/* reads on this page are signature-gated: a streak and
+// The two /api/wearable/* reads on this page are signature-gated: a streak and
 // a week of sleep hours are health data, and a wallet address is public, so
 // knowing the address is not permission to read them. This is the one surface
 // where a signature prompt on load is the right call - it is the signed-in
@@ -21,7 +21,7 @@
 // try again, never an empty card that reads as "you have no wearable".
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import BalanceCard from "@/components/BalanceCard";
 import ClaimPayout from "@/components/ClaimPayout";
@@ -51,6 +51,8 @@ import {
 import { dashboardDeferredLead, type ProofTier } from "@/lib/proof-tier";
 import {
   fetchProviderState,
+  providerAwaitingFirstSync,
+  providerMetricUnavailable,
   providerAuthReason,
   providerConnected,
   providerDownReason,
@@ -58,8 +60,17 @@ import {
 } from "@/lib/wearable-provider";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
-import { PopupBlockedError, openJunctionConnect } from "@/lib/junction-connect";
+import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
 import { resultLabel } from "@/lib/participant-status";
+import {
+  disconnectWearable,
+  fetchProviderOptions,
+  isProviderId,
+  PhoneLinkRequiredError,
+  providerOptionsQueryKey,
+  whoopReturnMessage,
+  type WearableProviderId,
+} from "@/lib/wearable-connect";
 import {
   authBlockReason,
   fetchWithWalletAuth,
@@ -132,17 +143,25 @@ function ConnectButton({
   address,
   label = "Connect health data",
   secondary = false,
+  provider,
 }: {
   address: `0x${string}`;
   label?: string;
   secondary?: boolean;
+  /** Link this provider specifically. Omitted, the wallet's choice is used. */
+  provider?: WearableProviderId;
 }) {
   // The failure used to go to console.error only, which made the button look
   // dead to anyone whose connect flow could not start. It is a money-adjacent
   // path (no wearable, no verification, no payout), so it reports.
   const [error, setError] = useState<string | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+  // A provider that can only be linked on a phone is not an error state: the
+  // user did nothing wrong and a retry cannot help. It gets its own calm panel
+  // rather than the red ErrorNote, which would read as a fault.
+  const [phoneSteps, setPhoneSteps] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+  const requestAuth = useWalletAuth();
 
   return (
     <>
@@ -154,14 +173,19 @@ function ConnectButton({
         onClick={() => {
           setError(null);
           setFallbackUrl(null);
+          setPhoneSteps(null);
           setOpening(true);
-          void openJunctionConnect(address)
+          void startWearableLink(address, requestAuth, provider)
             .catch((err: unknown) => {
               if (err instanceof PopupBlockedError) {
                 // The URL is good; the browser just refused the auto-open.
                 // Offer a link the user taps directly - a real gesture nav is
                 // never blocked.
                 setFallbackUrl(err.linkUrl);
+                return;
+              }
+              if (err instanceof PhoneLinkRequiredError) {
+                setPhoneSteps(err.instructions);
                 return;
               }
               setError(
@@ -176,6 +200,15 @@ function ConnectButton({
       >
         {opening ? "Opening the connect flow" : label}
       </Button>
+      {phoneSteps !== null ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-3 rounded-xl border border-accent/30 bg-accent/15 p-4 text-sm text-accent-deep"
+        >
+          {phoneSteps}
+        </p>
+      ) : null}
       {error !== null ? (
         <div className="mt-3">
           <ErrorNote
@@ -205,6 +238,92 @@ function ConnectButton({
   );
 }
 
+/**
+ * The device choice, shown only when this deployment actually offers more than
+ * one way in. With a single configured provider there is no decision to make,
+ * and a picker with one option is just a second button that says the same
+ * thing as the first.
+ *
+ * Each provider says what it can and cannot do, because the two are not
+ * interchangeable: Junction covers several brands but is a paid intermediary,
+ * and WHOOP is first-party but only WHOOP. A person choosing between them is
+ * entitled to know that before they hand over health data.
+ */
+function ProviderChoice({ address }: { address: `0x${string}` }) {
+  const requestAuth = useWalletAuth();
+  const { data, isPending } = useQuery({
+    queryKey: providerOptionsQueryKey(address),
+    queryFn: () => fetchProviderOptions(address, requestAuth),
+    staleTime: 60_000,
+  });
+
+  const offered = (data?.providers ?? []).filter((option) => option.configured);
+
+  // While the read is in flight `offered` is empty, and painting the single
+  // button here would swap one affordance for two a moment later.
+  if (isPending) return <Skeleton className="mt-3 h-24" />;
+
+  // One provider is not a choice, and a picker with one option is just a
+  // second button saying what the first one says. The plain button IS this
+  // branch - rendering it separately alongside the picker is what produced
+  // three connect buttons on a two-provider deployment.
+  if (offered.length < 2) return <ConnectButton address={address} />;
+
+  // The call to action is per provider because the verbs are not the same:
+  // Junction and WHOOP connect an account here and now, while a phone-based
+  // provider only sets your wallet up and finishes on the device. Interpolating
+  // one word into "Connect X" would promise something that does not happen.
+  const copy: Record<
+    WearableProviderId,
+    { blurb: string; cta: string; reconnect: string }
+  > = {
+    junction: {
+      blurb: "WHOOP, Oura, Fitbit or Garmin, through Junction.",
+      cta: "Connect Junction",
+      reconnect: "Reconnect Junction",
+    },
+    whoop: {
+      blurb:
+        "WHOOP only, connected directly. Reads your sleep and workouts, nothing else. No step count.",
+      cta: "Connect WHOOP",
+      reconnect: "Reconnect WHOOP",
+    },
+  };
+
+  return (
+    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      {offered.map((option) => (
+        <div
+          key={option.id}
+          // bg-surface: without a fill the card's dot-grid shows through the
+          // option boxes and they read as holes rather than choices.
+          className="rounded-xl border border-edge bg-surface p-3 text-sm"
+        >
+          {/* flex-wrap and min-w-0 so a longer provider name and its badge
+              stack instead of overflowing at 390px. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="min-w-0 font-semibold text-foreground">
+              {option.label}
+            </p>
+            {option.connected ? <Badge tone="accent">Connected</Badge> : null}
+          </div>
+          <p className="mt-1 text-muted">{copy[option.id].blurb}</p>
+          <ConnectButton
+            address={address}
+            provider={option.id}
+            label={
+              option.connected
+                ? copy[option.id].reconnect
+                : copy[option.id].cta
+            }
+            secondary
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StreakCard({
   address,
   pool,
@@ -231,8 +350,12 @@ function StreakCard({
   const unlock = () => {
     void (async () => {
       await requestAuth({ refresh: true });
-      await queryClient.invalidateQueries({ queryKey: ["junction-progress"] });
-      await queryClient.invalidateQueries({ queryKey: ["junction-data"] });
+      // These are the CURRENT key prefixes. They were still the old
+      // junction-* names after the routes were renamed, so signing did not
+      // refetch anything and the button silently did nothing.
+      await queryClient.invalidateQueries({ queryKey: ["wearable-progress"] });
+      await queryClient.invalidateQueries({ queryKey: ["wearable-data"] });
+      await queryClient.invalidateQueries({ queryKey: ["wearable-providers"] });
     })();
   };
 
@@ -274,10 +397,47 @@ function StreakCard({
       ) : !providerConnected(state) ? (
         <>
           <p className="mt-3 rounded-xl border border-dashed border-edge p-4 text-sm text-muted">
-            No wearable connected yet. Link a provider (WHOOP, Oura, Fitbit,
-            Garmin…) to start tracking your streak toward your goal.
+            No wearable connected yet. Connect one to start tracking your
+            streak toward your goal.
           </p>
-          <ConnectButton address={address} />
+          {/* Owns the connect affordance in both shapes: the picker when this
+              deployment offers a choice, a single button when it does not.
+              Naming brands here instead would promise Oura and Garmin on a
+              deployment that only has WHOOP configured. */}
+          <ProviderChoice address={address} />
+        </>
+      ) : providerMetricUnavailable(state) ? (
+        // Syncing, but this device does not produce a sleep score. A delay
+        // message here would be advice that can never come true.
+        <>
+          <p className="mt-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm text-foreground/80">
+            Your device is syncing, and it does not report a sleep score, so
+            there is no streak to show here. That is the hardware, not a delay.
+            Connect a device that scores your sleep and this fills in.
+          </p>
+          <ProviderChoice address={address} />
+          <ConnectButton
+            address={address}
+            label="Connect a different device"
+            secondary
+          />
+        </>
+      ) : providerAwaitingFirstSync(state) ? (
+        // Linked and working, with nothing delivered yet. Rendering the streak
+        // here would show a zero, which reads as "you missed every night" about
+        // somebody whose device simply has not uploaded. Every new user passes
+        // through this state.
+        <>
+          <p className="mt-3 rounded-xl border border-accent/30 bg-accent/15 p-4 text-sm text-accent-deep">
+            Your device is connected and has not sent anything yet. The first
+            sync usually lands within a few minutes. SPOTTER will not check this
+            goal until the data is here, so nothing is charged while you wait.
+          </p>
+          <ConnectButton
+            address={address}
+            label="Connect a different device"
+            secondary
+          />
         </>
       ) : (
         <div className="mt-3">
@@ -316,6 +476,7 @@ function StreakCard({
             label="Connect / switch provider"
             secondary
           />
+          <DisconnectButton address={address} />
         </div>
       )}
     </Card>
@@ -324,6 +485,8 @@ function StreakCard({
 
 interface RecentData {
   connected: boolean;
+  /** Which integration answered, so the card can say where the data came from. */
+  provider?: WearableProviderId | null;
   sleep: Array<{ date: string; score: number | null; hours: number | null }>;
   activity: Array<{ date: string; steps: number | null }>;
 }
@@ -340,7 +503,7 @@ async function fetchRecentData(
   requestAuth: WalletAuthRequester,
 ): Promise<RecentDataResult> {
   const sent = await fetchWithWalletAuth(
-    `/api/junction/data?address=${address}`,
+    `/api/wearable/data?address=${address}`,
     undefined,
     requestAuth,
   );
@@ -360,17 +523,111 @@ async function fetchRecentData(
     kind: "data",
     data: {
       connected: j.connected === true,
+      // Dropped here before, so the card below always credited Junction -
+      // including for WHOOP reads, which WHOOP's brand rules require be
+      // attributed to WHOOP.
+      provider: isProviderId(j.provider) ? j.provider : null,
       sleep: Array.isArray(j.sleep) ? j.sleep : [],
       activity: Array.isArray(j.activity) ? j.activity : [],
     },
   };
 }
 
+/**
+ * Unlinking a device.
+ *
+ * This existed as a route with no caller: a WHOOP user had no way to revoke
+ * from inside the product, while the privacy page told them they could do it
+ * from their dashboard. That is a dead end AND a false claim in a
+ * compliance-facing document.
+ *
+ * Junction owns its own link, so the route answers 409 with the page to go to.
+ * That is guidance rather than an error and renders as a calm note.
+ */
+function DisconnectButton({ address }: { address: `0x${string}` }) {
+  const requestAuth = useWalletAuth();
+  const queryClient = useQueryClient();
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={busy}
+        onClick={() => {
+          setNote(null);
+          setError(null);
+          setBusy(true);
+          void disconnectWearable(address, requestAuth)
+            .then(async (guidance) => {
+              setNote(guidance);
+              if (guidance === null) {
+                await queryClient.invalidateQueries({
+                  queryKey: ["wearable-progress"],
+                });
+                await queryClient.invalidateQueries({
+                  queryKey: ["wearable-data"],
+                });
+                await queryClient.invalidateQueries({
+                  queryKey: ["wearable-providers"],
+                });
+              }
+            })
+            .catch((err: unknown) => {
+              setError(
+                err instanceof Error
+                  ? err.message
+                  : "Could not disconnect the device.",
+              );
+            })
+            .finally(() => setBusy(false));
+        }}
+        className="mt-3"
+      >
+        {busy ? "Disconnecting" : "Disconnect this device"}
+      </Button>
+      {note !== null ? (
+        <p
+          role="status"
+          className="mt-3 rounded-xl border border-edge bg-surface p-4 text-sm text-muted"
+        >
+          {note}
+        </p>
+      ) : null}
+      {error !== null ? (
+        <div className="mt-3">
+          <ErrorNote
+            title="Could not disconnect"
+            detail={error}
+            onRetry={() => setError(null)}
+          />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Where the numbers on the card came from, named per provider.
+ *
+ * A Record rather than a ternary so a new provider is a compile error instead
+ * of a silent wrong credit, and because WHOOP's brand rules require data
+ * sourced from them to say so. Null falls back to a generic line that is true
+ * of every provider rather than guessing at one.
+ */
+const SOURCE_NOTE: Record<WearableProviderId, string> = {
+  whoop: "Data by WHOOP, pulled live.",
+  junction: "Pulled live from your linked device via Junction.",
+};
+
 /** Shows the latest few days pulled from the linked provider (demo proof). */
 function RecentDataCard({ address }: { address: `0x${string}` }) {
   const requestAuth = useWalletAuth();
   const recentQuery = useQuery({
-    queryKey: ["junction-data", address],
+    queryKey: ["wearable-data", address],
     queryFn: () => fetchRecentData(address, requestAuth),
     retry: false,
   });
@@ -390,7 +647,9 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
     <Card>
       <h2 className="font-display text-lg font-semibold">Latest synced data</h2>
       <p className="mt-1 text-sm text-muted">
-        Pulled live from your linked provider via Junction.
+        {data.provider === null || data.provider === undefined
+          ? "Pulled live from your linked device."
+          : SOURCE_NOTE[data.provider]}
       </p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {data.sleep.length > 0 && (
@@ -426,6 +685,61 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
         )}
       </div>
     </Card>
+  );
+}
+
+/**
+ * What WHOOP's redirect left behind in the URL.
+ *
+ * The OAuth flow takes over the tab and drops the user back here, so without
+ * this the page would look exactly the same whether they connected, declined,
+ * or hit a failure - and a person who just clicked through a consent screen
+ * has no way to tell which. Declining is worded as the ordinary choice it is,
+ * not as an error.
+ *
+ * The parameter is cleared once shown, so a refresh or a shared URL does not
+ * replay a stale outcome.
+ */
+function WhoopReturnNote() {
+  const [note, setNote] = useState<ReturnType<typeof whoopReturnMessage>>(null);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const status = url.searchParams.get("whoop");
+    if (status === null) return;
+    // Reading the URL is the "subscribe to an external system" case the rule
+    // exempts, and it is genuinely once-per-mount: the parameter is consumed
+    // and removed in the same tick, so there is no cascade to guard against.
+    // A lazy useState initializer cannot be used instead - it would run during
+    // the server render, where there is no window, and then disagree with the
+    // client on first paint.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNote(whoopReturnMessage(status));
+    url.searchParams.delete("whoop");
+    window.history.replaceState(null, "", url.toString());
+  }, []);
+
+  if (note === null) return null;
+
+  // A failed connection is an error and renders as one, through the same
+  // ErrorNote every other failure on this page uses. Inventing a second error
+  // style here would make the same severity look like two different things.
+  if (note.tone === "error") {
+    return <ErrorNote title="WHOOP was not connected" detail={note.message} />;
+  }
+
+  // Light emerald tint with deep-emerald text, not a translucent dark box:
+  // bg-accent-deep at low opacity renders as sage grey on the cream theme and
+  // puts bright emerald text near 1.6:1 contrast on it.
+  const tone =
+    note.tone === "ok"
+      ? "border-accent/30 bg-accent/15 text-accent-deep"
+      : "border-edge bg-surface text-muted";
+
+  return (
+    <p className={`rounded-xl border p-4 text-sm ${tone}`} role="status">
+      {note.message}
+    </p>
   );
 }
 
@@ -528,6 +842,9 @@ export default function DashboardContent() {
        *  value action here and renders only when the chain says money is owed. */}
       <ClaimPayout address={address} />
 
+      {/* Says what WHOOP's redirect just did, since the OAuth flow takes over
+       *  the tab and otherwise returns the user to an unchanged-looking page. */}
+      <WhoopReturnNote />
       <section className="space-y-4">
         <h2 className="font-display text-lg font-semibold">Joined pools</h2>
         {joinedQuery.isLoading ? (

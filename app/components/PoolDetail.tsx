@@ -18,6 +18,7 @@ import SpotterMascot from "@/components/SpotterMascot";
 import ClaimPayout from "@/components/ClaimPayout";
 import {
   Badge,
+  Button,
   Card,
   ErrorNote,
   Money,
@@ -47,6 +48,17 @@ import {
   providerDownReason,
   providerQueryKey,
 } from "@/lib/wearable-provider";
+import {
+  capabilityNeedsDevice,
+  capabilityUnknown,
+  fetchProviderOptions,
+  metricLabel,
+  providerOptionsQueryKey,
+  viewerMetricsOf,
+} from "@/lib/wearable-connect";
+import { unsupportedMetricFor } from "@/lib/pool-availability";
+import { wearableJoinBlock } from "@/lib/wearable-join-gate";
+import type { WearableMetric } from "@/lib/wearable-goal";
 import {
   BOUNTY_MODEL_LABELS,
   displayGoalSpec,
@@ -320,6 +332,25 @@ export default function PoolDetail({ id }: { id: string }) {
     retry: false,
   });
 
+  // What the viewer's own device can measure. cachedOnly for the same reason
+  // as the read above: opening a pool page must never fire a wallet prompt.
+  // Held while the one-tap device check is signing, so the button cannot be
+  // pressed twice into two wallet prompts.
+  const [checkingDevice, setCheckingDevice] = useState(false);
+
+  const capabilityQuery = useQuery({
+    queryKey: providerOptionsQueryKey(address),
+    queryFn: () => {
+      if (address === null) throw new Error("No wallet connected.");
+      return fetchProviderOptions(address, (options) =>
+        requestAuth({ ...options, cachedOnly: true }),
+      );
+    },
+    enabled: address !== null,
+    retry: false,
+    staleTime: 60_000,
+  });
+
   // SPOTTER pays for verification from its own wallet. When that wallet is
   // empty, a claim started here dies at the buy step, so say so before the
   // person taps rather than after.
@@ -530,11 +561,51 @@ export default function PoolDetail({ id }: { id: string }) {
   // participants until settlement runs.
   const phase = poolPhase(pool, asOfSeconds);
 
-  // A wearable goal with the provider refusing us cannot be checked at all.
-  // The entry fee is real money paid up front, so the join action comes off
-  // the page rather than selling a goal SPOTTER has no way to verify.
+  // ONE decision, made in lib/wearable-join-gate.ts, shared with the challenge
+  // link. This page used to run its own chain in its own order, and the order
+  // was wrong: the not-yet-checked branch pre-empted both the unsupported and
+  // the outage branches, so a full provider outage rendered "connect a device
+  // first, you have not linked one yet" to a wallet that had Junction linked.
+  // Two surfaces deciding the same thing differently is precisely what that
+  // module's header says it exists to prevent, and this page was the surface
+  // still doing it.
+  //
+  // The kinds are mutually exclusive by construction, so the JSX below can no
+  // longer disagree with the gate about precedence however it is ordered.
   const providerDown = providerDownReason(providerQuery.data);
-  const unverifiableNow = providerDown !== null && evidenceType === "wearable";
+  const viewerProvider = (capabilityQuery.data?.providers ?? []).find(
+    (option) => option.id === capabilityQuery.data?.selected,
+  );
+  const viewerMetrics = viewerMetricsOf(capabilityQuery.data);
+
+  const joinBlock = wearableJoinBlock({
+    goalSpec: pool.goalSpec,
+    address,
+    joined,
+    providerDown,
+    viewerMetrics,
+    capabilityPending:
+      address !== null && capabilityUnknown(capabilityQuery.data),
+    needsDevice: capabilityNeedsDevice(capabilityQuery.data),
+  });
+
+  const unverifiableNow = joinBlock.kind === "outage";
+  const unsupportedForViewer = joinBlock.kind === "unsupported";
+  const unsupportedMetric =
+    joinBlock.kind === "unsupported" ? joinBlock.metric : null;
+  const capabilityPending =
+    joinBlock.kind === "unchecked" || joinBlock.kind === "no-device";
+  const needsDevice = joinBlock.kind === "no-device";
+
+  // A participant who ALREADY joined and then switched device is in the worst
+  // position of anyone: the fee is spent and their new device cannot prove the
+  // goal. The gate deliberately passes them - withholding a join they already
+  // made protects nothing - so the mismatch is computed separately here, and
+  // they are told rather than left reading an outage message that is neither
+  // their fault nor fixable by waiting.
+  const unsupportedAfterJoin =
+    joined && unsupportedMetricFor(pool.goalSpec, viewerMetrics) !== null;
+
   const agentBroke = agentIsBroke(agentWalletQuery.data?.balanceUsd ?? null);
   // Wait for the restore before mounting a tab on a multi-path pool; mounting
   // the wrong one first would start a poll loop the correct tab then supersedes.
@@ -729,6 +800,12 @@ export default function PoolDetail({ id }: { id: string }) {
           {unverifiableNow && phase === "live" ? (
             <Badge tone="warning">Cannot verify right now</Badge>
           ) : null}
+          {unsupportedForViewer && phase === "live" ? (
+            <Badge tone="warning">Your device cannot measure this</Badge>
+          ) : null}
+          {unsupportedAfterJoin && phase === "live" ? (
+            <Badge tone="warning">Your device cannot measure this</Badge>
+          ) : null}
         </div>
         {isDocGoal ? (
           <p className="mt-3 text-sm font-semibold uppercase tracking-wide text-accent">
@@ -897,6 +974,107 @@ export default function PoolDetail({ id }: { id: string }) {
                     upload here - you would pass and still walk away with nothing.
                   </p>
                   <BrowsePoolsLink label="Find a pool that can pay" />
+                </div>
+              </div>
+            </section>
+          ) : capabilityPending ? (
+            <section className="rounded-3xl border border-accent/30 bg-accent/15 p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <SpotterMascot
+                  pose="watching"
+                  size="sm"
+                  className="mx-auto sm:mx-0"
+                />
+                <div className="min-w-0">
+                  <h2 className="font-display text-lg font-semibold text-accent-deep">
+                    {needsDevice
+                      ? "Connect a device first"
+                      : "Let me check your device first"}
+                  </h2>
+                  <p className="mt-1 text-sm text-foreground/80">
+                    {needsDevice
+                      ? "Not every device can measure every goal, and you have not linked one yet. Connect one from your dashboard and I will tell you straight away whether it can prove this goal."
+                      : "Not every device can measure every goal, and I have not checked yours yet. Sign to let me look - nothing is charged and no transaction is sent."}
+                  </p>
+                  <p className="mt-2 text-sm text-foreground/80">
+                    The {formatUsdc(pool.entryFee)} USDC entry fee is real
+                    money, so I am not selling you a spot before I know I can
+                    verify you.
+                  </p>
+                  {needsDevice ? (
+                    <Link
+                      href="/dashboard"
+                      className={`mt-3 inline-block rounded-xl border-2 border-edge font-semibold hover:border-accent/50 ${TAP_TARGET}`}
+                    >
+                      Connect a device
+                    </Link>
+                  ) : (
+                  <Button
+                    type="button"
+                    pop
+                    className="mt-3"
+                    disabled={checkingDevice}
+                    onClick={() => {
+                      setCheckingDevice(true);
+                      // The PROMPTING requester, deliberately. Browsing must
+                      // never open a wallet modal, but this is the moment
+                      // before an entry fee and the person asked for it.
+                      // BOTH reads, not just capability. providerQuery was
+                      // left holding its cold-load auth-required result, and
+                      // providerDownReason returns null for that - so an
+                      // outage stayed invisible after signing, and the page
+                      // went on to talk about the device instead of saying
+                      // the provider was refusing us. Nothing on this page
+                      // invalidates the progress key otherwise.
+                      void requestAuth({ refresh: true })
+                        .then(() =>
+                          Promise.all([
+                            capabilityQuery.refetch(),
+                            providerQuery.refetch(),
+                          ]),
+                        )
+                        .finally(() => setCheckingDevice(false));
+                    }}
+                  >
+                    {checkingDevice ? "Checking" : "Sign and check my device"}
+                  </Button>
+                  )}
+                </div>
+              </div>
+            </section>
+          ) : unsupportedForViewer ? (
+            <section className="rounded-3xl border border-warning/40 bg-warning/10 p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                <SpotterMascot
+                  pose="watching"
+                  size="sm"
+                  className="mx-auto sm:mx-0"
+                />
+                <div className="min-w-0">
+                  <h2 className="font-display text-lg font-semibold text-warning">
+                    Your {viewerProvider?.label ?? "device"} cannot measure this
+                    one
+                  </h2>
+                  <p className="mt-1 text-sm text-foreground/80">
+                    This goal is measured in{" "}
+                    {metricLabel(unsupportedMetric as WearableMetric)}, and{" "}
+                    {viewerProvider?.label ?? "your connected device"} does not
+                    report it. That is the hardware, not an outage, so it will
+                    not start working later.
+                  </p>
+                  <p className="mt-2 text-sm text-foreground/80">
+                    The {formatUsdc(pool.entryFee)} USDC entry fee is real
+                    money, so I am not going to sell you a spot for a goal I
+                    could never verify for you. Connect a device that tracks{" "}
+                    {metricLabel(unsupportedMetric as WearableMetric)} and this
+                    pool opens up.
+                  </p>
+                  <Link
+                    href="/dashboard"
+                    className={`mt-3 inline-block rounded-xl border-2 border-edge font-semibold hover:border-accent/50 ${TAP_TARGET}`}
+                  >
+                    Change your device
+                  </Link>
                 </div>
               </div>
             </section>

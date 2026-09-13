@@ -127,9 +127,21 @@ export default function PrivacyPage() {
             about it
           </h2>
           <p>
-            If you connect a wearable through Junction (WHOOP, Oura, Fitbit, or
-            Garmin), the health summary we pull to check a streak passes through
-            our own server (hosted on Vercel) before we compute the result.
+            There are two ways to connect a device, and they differ in who holds
+            what. Through Junction (WHOOP, Oura, Fitbit, or Garmin), Junction
+            holds your connection and we hold only an API key. Connecting WHOOP
+            directly instead means WHOOP gives us an access token for your
+            account, which we store encrypted and use only to read the metric
+            your pool is measured on. Either way, the health summary we pull to
+            check a streak passes through our own server (hosted on Vercel)
+            before we compute the result.
+          </p>
+          <p>
+            If you connect WHOOP directly we ask for the narrowest access that
+            can answer a goal: your sleep and your workouts, nothing else. You
+            can disconnect at any time from your dashboard, which revokes our
+            access at WHOOP and deletes the stored token. You can also revoke it
+            yourself inside the WHOOP app.
           </p>
           <p>
             So today our server does see the wearable summary it uses to run the
@@ -174,7 +186,12 @@ export default function PrivacyPage() {
               receives your wallet address or health data.
             </li>
             <li>Base Sepolia - the public blockchain where pools settle</li>
-            <li>Junction - wearable summaries, only if you connect a device</li>
+            <li>Junction - wearable summaries, only if you connect a device through Junction</li>
+            <li>
+              WHOOP - sleep and workout summaries, only if you connect WHOOP
+              directly. We hold an encrypted access token for your WHOOP account
+              until you disconnect.
+            </li>
           </ul>
         </section>
 

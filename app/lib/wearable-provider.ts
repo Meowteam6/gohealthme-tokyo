@@ -3,7 +3,7 @@
 // this goal be verified at all right now?
 //
 // Junction is a paid third party and its access can lapse - the API answers
-// 402 and /api/junction/progress turns that into a 502. Before this module the
+// 402 and /api/wearable/progress turns that into a 502. Before this module the
 // browser could not tell "no device linked yet" (the user can fix that) from
 // "the provider is refusing us" (the user cannot), so the UI offered a connect
 // flow that could only ever fail, forever, with no way out.
@@ -29,8 +29,31 @@ import {
 
 /** The derived, privacy-safe progress the API returns. Raw health samples
  *  never cross this boundary; only counts and labels do. */
+/**
+ * How far along the connection is.
+ *
+ * "awaiting-first-sync" is the state every new user passes through and the one
+ * that used to render as a zero streak: linked, working, and no data has
+ * arrived yet. Telling somebody they have 0 of 7 days when their device has
+ * simply not uploaded anything is a claim about their behaviour that we cannot
+ * back.
+ */
+export type ProviderLinkState =
+  | "not-linked"
+  | "awaiting-first-sync"
+  /**
+   * Syncing faithfully, and this device simply does not produce the number the
+   * card is about. Telling this person to wait a few minutes would be advice
+   * that can never come true.
+   */
+  | "metric-unavailable"
+  | "linked";
+
 export interface ProviderProgress {
   connected: boolean;
+  /** Which integration answered: "junction" or "whoop". Null pre-response. */
+  provider: string | null;
+  linkState: ProviderLinkState | null;
   metric: string | null;
   streakDays: number | null;
   targetDays: number | null;
@@ -63,6 +86,14 @@ export function parseProviderProgress(payload: unknown): ProviderProgress {
       : {};
   return {
     connected: record.connected === true,
+    provider: typeof record.provider === "string" ? record.provider : null,
+    linkState:
+      record.linkState === "not-linked" ||
+      record.linkState === "awaiting-first-sync" ||
+      record.linkState === "metric-unavailable" ||
+      record.linkState === "linked"
+        ? record.linkState
+        : null,
     metric: typeof record.metric === "string" ? record.metric : null,
     streakDays:
       typeof record.streakDays === "number" ? record.streakDays : null,
@@ -72,8 +103,8 @@ export function parseProviderProgress(payload: unknown): ProviderProgress {
   };
 }
 
-// lib/server/junction.ts formats every upstream failure as
-// `Junction <path> returned <status>: <body>`, and the route hands that
+// Every provider module formats its upstream failures the same way -
+// `<Provider> <path> returned <status>: <body>` - and the route hands that
 // string back as { error }. Reading the upstream status out of it is what
 // lets the copy name the real cause instead of blaming the user's device.
 const UPSTREAM_STATUS = /returned (\d{3})/;
@@ -103,6 +134,13 @@ export function providerUnavailableReason(
       "is restored, so SPOTTER cannot verify a wearable goal right now."
     );
   }
+  if (upstream === "429") {
+    return (
+      "The wearable data provider is rate limiting this app right now, so " +
+      "nothing can be read from a wearable for the moment. Try the check " +
+      "again shortly."
+    );
+  }
   if (upstream === "401" || upstream === "403") {
     return (
       `The wearable data provider rejected this app's credentials (${upstream}). ` +
@@ -127,7 +165,7 @@ export const PROVIDER_SIGNATURE_REASON =
   "is charged and no transaction is sent.";
 
 /**
- * Classify one /api/junction/progress response. `auth` is the state the
+ * Classify one /api/wearable/progress response. `auth` is the state the
  * request was made under; when it is present it explains the 401 in the terms
  * the person can act on (not connected, declined, never asked).
  */
@@ -182,8 +220,18 @@ export function providerAuthReason(
 export function providerQueryKey(
   address: string | null,
   poolId?: bigint,
+  metric?: string,
 ): (string | null)[] {
-  return ["junction-progress", address, poolId?.toString() ?? "none"];
+  // The metric is part of the key. The dashboard asks about sleep and a claim
+  // panel asks about the pool's own metric; sharing one cache entry would let
+  // a sleep answer stand in for a steps question, which is how a wallet with
+  // steps synced was told to wait for a sync that had already happened.
+  return [
+    "wearable-progress",
+    address,
+    poolId?.toString() ?? "none",
+    metric ?? "default",
+  ];
 }
 
 /**
@@ -200,14 +248,23 @@ export async function fetchProviderState(
   address: `0x${string}`,
   requestAuth: WalletAuthRequester,
   window?: ProviderWindow,
+  /**
+   * The metric this read is about. Omitted, the route answers about sleep,
+   * which is right for the dashboard streak card and wrong for a claim panel
+   * on a steps pool - a wallet whose steps had synced was told its device had
+   * sent nothing, forever, because only sleep was ever asked about.
+   */
+  metric?: string,
 ): Promise<ProviderState> {
   const scope =
     window !== undefined
       ? `&start=${Number(window.periodStart)}&end=${Number(window.periodEnd)}`
       : "";
+  const forMetric =
+    metric !== undefined ? `&metric=${encodeURIComponent(metric)}` : "";
   try {
     const sent = await fetchWithWalletAuth(
-      `/api/junction/progress?address=${address}${scope}`,
+      `/api/wearable/progress?address=${address}${scope}${forMetric}`,
       undefined,
       requestAuth,
     );
@@ -216,4 +273,26 @@ export async function fetchProviderState(
   } catch {
     return PROVIDER_UNREACHABLE;
   }
+}
+
+/**
+ * True when the device is linked and simply has not delivered anything yet.
+ *
+ * Callers must render this INSTEAD of a streak, never alongside one: a zero
+ * next to "connected" is read as failure, and nothing has failed.
+ */
+export function providerAwaitingFirstSync(
+  state: ProviderState | undefined,
+): boolean {
+  return state?.kind === "ok" && state.progress.linkState === "awaiting-first-sync";
+}
+
+/**
+ * True when the device is syncing and does not produce the number this card is
+ * about. Rendered as a permanent limit with a way out, never as a delay.
+ */
+export function providerMetricUnavailable(
+  state: ProviderState | undefined,
+): boolean {
+  return state?.kind === "ok" && state.progress.linkState === "metric-unavailable";
 }

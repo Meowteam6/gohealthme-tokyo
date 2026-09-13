@@ -11,11 +11,24 @@
 //    entry fee is real money, paid up front, for a goal SPOTTER has no way to
 //    check.
 //
-// Both take their inputs from live sources (participant counts read off the
-// chain, provider health read off the junction route); nothing here is
-// hard-coded to a pool id.
+// 3. A wearable goal cannot be verified by a device that does not measure it,
+//    ever. A WHOOP strap has no pedometer, so a WHOOP-backed wallet can no
+//    more complete a steps pool than it can during an outage - except that
+//    this one will never resolve. Before this, such a wallet could browse the
+//    pool, stake USDC, and only discover the mismatch when SPOTTER failed the
+//    claim. A rejection after the money has moved is a trap, not an error.
+//
+// (2) and (3) are DELIBERATELY separate outcomes. An outage is temporary and
+// the answer is to wait; an unmeasurable metric is permanent and the answer is
+// to connect a different device. Collapsing them would tell somebody to come
+// back later for a goal their strap will never be able to prove.
+//
+// All three take their inputs from live sources (participant counts read off
+// the chain, provider health and provider capabilities read off the wearable
+// routes); nothing here is hard-coded to a pool id or a provider.
 
 import { evidenceTypeOf } from "@/lib/contract";
+import { classifyWearableGoal, type WearableMetric } from "@/lib/wearable-goal";
 
 export interface ExpiredSplit<T> {
   /** Ended with participants on record - settlement still has work to do. */
@@ -47,26 +60,105 @@ export function splitExpiredPools<T>(
 
 export interface VerifiabilitySplit<T> {
   verifiable: T[];
-  /** Goals SPOTTER currently has no way to check. Do not invite entry fees. */
+  /** Goals SPOTTER cannot check RIGHT NOW. Temporary. Do not invite entry fees. */
   unverifiable: T[];
+  /**
+   * Goals this viewer's own device can NEVER measure. Permanent for as long as
+   * they stay on that provider, and fixable only by connecting another one.
+   */
+  unsupported: T[];
+  /**
+   * Wearable goals we have not checked this viewer's device against yet.
+   *
+   * Distinct from all three above, and the distinction is the gate: treating
+   * "not checked" as "fine" is what let a connected wallet stake on a goal its
+   * device can never prove. The client credential cache dies with the tab, so
+   * this is the state of EVERY hard page load, not a rare one.
+   */
+  unchecked: T[];
 }
 
 /**
- * Split pools by whether their goal can be verified right now. Only wearable
- * goals depend on the outside provider; document goals run through the TEE
- * attester and are unaffected. When the provider is up - or its state is not
- * known yet - nothing is held back.
+ * What the viewer's linked device can measure, or null when it is not known -
+ * nobody signed in, the read is still in flight, or it failed.
+ */
+export type ViewerCapability = readonly WearableMetric[] | null;
+
+/**
+ * Split pools by whether their goal can be verified, for THIS viewer, right
+ * now. Only wearable goals depend on a device; document goals run through the
+ * TEE attester and are unaffected.
+ *
+ * The outage check comes first and stays global: while the provider is
+ * refusing us, nothing wearable is verifiable regardless of hardware.
+ *
+ * The capability check is per viewer. `viewerMetrics` of null holds NOTHING
+ * back: a page must not take a pool off the board on a guess about a device it
+ * has not identified, and a logged-out visitor browsing what is on offer is
+ * not about to stake anything. A goal whose metric cannot be classified at all
+ * is also left alone here - it fails closed later, at the claim, where the
+ * verdict can say so precisely.
  */
 export function splitByVerifiability<T extends { goalSpec: string }>(
   pools: T[],
   providerDown: boolean,
+  viewerMetrics: ViewerCapability = null,
+  /**
+   * True when a wallet is connected but its capability has not been read yet.
+   * Only then is `viewerMetrics === null` "we have not looked" rather than
+   * "there is nobody to look at".
+   */
+  capabilityPending = false,
 ): VerifiabilitySplit<T> {
-  if (!providerDown) return { verifiable: [...pools], unverifiable: [] };
   const verifiable: T[] = [];
   const unverifiable: T[] = [];
+  const unsupported: T[] = [];
+  const unchecked: T[] = [];
+
   for (const pool of pools) {
-    if (evidenceTypeOf(pool.goalSpec) === "wearable") unverifiable.push(pool);
-    else verifiable.push(pool);
+    if (evidenceTypeOf(pool.goalSpec) !== "wearable") {
+      verifiable.push(pool);
+      continue;
+    }
+    if (providerDown) {
+      unverifiable.push(pool);
+      continue;
+    }
+    if (viewerMetrics === null) {
+      // A connected wallet we have not checked is held back from the joinable
+      // heading; a logged-out visitor still sees everything, because they are
+      // browsing rather than about to stake.
+      if (capabilityPending) unchecked.push(pool);
+      else verifiable.push(pool);
+      continue;
+    }
+    const metric = classifyWearableGoal(pool.goalSpec).metric;
+    if (metric !== null && !viewerMetrics.includes(metric)) {
+      unsupported.push(pool);
+      continue;
+    }
+    verifiable.push(pool);
   }
-  return { verifiable, unverifiable };
+
+  return { verifiable, unverifiable, unsupported, unchecked };
+}
+
+/**
+ * Why this viewer's device cannot prove this pool, or null when it can (or
+ * when there is nothing to say yet). Used by the pool page, which shows one
+ * goal rather than a list.
+ *
+ * Deliberately returns the METRIC and not a sentence: the copy lives in the
+ * component next to the button it disables, where it can also name the
+ * provider and offer the way out.
+ */
+export function unsupportedMetricFor(
+  goalSpec: string,
+  viewerMetrics: ViewerCapability,
+): WearableMetric | null {
+  if (viewerMetrics === null) return null;
+  if (evidenceTypeOf(goalSpec) !== "wearable") return null;
+  const metric = classifyWearableGoal(goalSpec).metric;
+  if (metric === null) return null;
+  return viewerMetrics.includes(metric) ? null : metric;
 }

@@ -27,7 +27,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { displayGoalSpec, fetchGoalId, fetchPool } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { PopupBlockedError, openJunctionConnect } from "@/lib/junction-connect";
+import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
+import { classifyWearableGoal } from "@/lib/wearable-goal";
 import {
   deferredPeriodEndMs,
   failureModeOf,
@@ -41,11 +42,14 @@ import {
   fetchProviderState,
   providerAuthReason,
   providerConnected,
+  providerAwaitingFirstSync,
   providerDownReason,
+  providerMetricUnavailable,
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import { fetchWithWalletAuth, type WalletAuthRequester } from "@/lib/client-auth";
 import { useWalletAuth } from "@/lib/useWalletAuth";
+
 import {
   claimScreenOf,
   claimVisibilityOf,
@@ -177,17 +181,6 @@ function WearableCheckInner({
     [requestAuth],
   );
 
-  // The provider read is shared with the dashboard and the pool list through
-  // one query key: same endpoint, same parsed shape, one request per address.
-  const providerQuery = useQuery({
-    queryKey: providerQueryKey(address),
-    queryFn: () => {
-      if (address === null) throw new Error("No wallet connected.");
-      return fetchProviderState(address, providerStatusAuth);
-    },
-    enabled: address !== null,
-    retry: false,
-  });
 
   // Stop any in-flight poll loop on unmount.
   useEffect(() => {
@@ -382,6 +375,45 @@ function WearableCheckInner({
     enabled:
       status.kind === "agent" &&
       (status.runStatus === "recorded" || status.runStatus === "paid"),
+  });
+
+  // The metric THIS pool is scored on, so the readiness read is about the goal
+  // in front of the person rather than about sleep.
+  //
+  // Without it this panel asked the sleep-streak feed, and a wallet with no
+  // sleep data - a phone with no watch, a step-only tracker - came back
+  // "awaiting first sync" forever. The awaiting branch sits above the run
+  // button, so the claim could never be started, on a pool whose entry fee had
+  // already been paid and whose steps had already synced. The verdict path
+  // would have verified them; they simply could not reach it.
+  const goalMetric = classifyWearableGoal(goalSpec).metric;
+
+  // The pool's own period, which the metric-scoped read is bounded by. Not
+  // available until the pool loads, so the read waits rather than asking about
+  // sleep in the meantime and caching a wrong answer.
+  const poolWindow =
+    poolQuery.data !== undefined
+      ? {
+          periodStart: poolQuery.data.periodStart,
+          periodEnd: poolQuery.data.periodEnd,
+        }
+      : undefined;
+
+  const providerQuery = useQuery({
+    // Keyed by metric as well: a sleep answer must not stand in for a steps
+    // question just because it is cached under the same address.
+    queryKey: providerQueryKey(address, poolId, goalMetric ?? undefined),
+    queryFn: () => {
+      if (address === null) throw new Error("No wallet connected.");
+      return fetchProviderState(
+        address,
+        providerStatusAuth,
+        poolWindow,
+        goalMetric ?? undefined,
+      );
+    },
+    enabled: address !== null && poolWindow !== undefined,
+    retry: false,
   });
   const periodEndMs =
     status.kind === "agent" && status.runStatus === "recorded"
@@ -787,18 +819,81 @@ function WearableCheckInner({
             Sign and check my wearable
           </button>
         </div>
+      ) : providerMetricUnavailable(providerState) ? (
+        // Syncing, and this device does not produce the number this goal is
+        // scored on. Offering the run button would spend SPOTTER's money on a
+        // read that cannot answer, and telling them to wait would be advice
+        // that never comes true.
+        <div className="space-y-3">
+          <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
+            <p className="text-base font-semibold text-warning">
+              Your device does not measure this goal
+            </p>
+            <p className="mt-1 text-sm text-foreground/80">
+              It is syncing fine, it just does not report the number this pool
+              is scored on. That is the hardware, not a delay, so SPOTTER is
+              not going to run a check that cannot come back with anything.
+            </p>
+            <p className="mt-2 text-sm text-foreground/80">
+              Connect a device that tracks it from your dashboard.
+            </p>
+          </div>
+          {onSwitchToDocument !== undefined ? (
+            <button
+              type="button"
+              onClick={onSwitchToDocument}
+              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent"
+            >
+              Prove it with a document instead
+            </button>
+          ) : null}
+        </div>
+      ) : providerAwaitingFirstSync(providerState) ? (
+        // Linked and working, nothing delivered yet. Running the check here
+        // would buy a read and return "0 days", which reads as a failure the
+        // user did not earn. Every new user passes through this state.
+        <div className="space-y-3">
+          <div className="rounded-xl border border-accent/30 bg-accent/15 p-4">
+            <p className="text-base font-semibold text-accent-deep">
+              Waiting on your first sync
+            </p>
+            <p className="mt-1 text-sm text-foreground/80">
+              Your device is connected and has not sent anything for this goal
+              yet. The first sync usually lands within a few minutes. SPOTTER
+              will not check this until the data is here, so nothing is charged
+              while you wait.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void providerQuery.refetch()}
+            className="w-full rounded-xl border border-edge px-5 py-3.5 text-base font-semibold text-foreground hover:border-accent/50"
+          >
+            Check again
+          </button>
+          {onSwitchToDocument !== undefined ? (
+            <button
+              type="button"
+              onClick={onSwitchToDocument}
+              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent"
+            >
+              Prove it with a document instead
+            </button>
+          ) : null}
+        </div>
       ) : !connected ? (
         <div className="space-y-3">
           <p className="rounded-xl border border-dashed border-accent/30 bg-accent/20 p-3 text-sm text-accent-deep">
-            No wearable connected yet. Link WHOOP, Oura, Fitbit, or Garmin -
-            without one, SPOTTER has nothing to verify and will not pay.
+            No wearable connected yet - without one, SPOTTER has nothing to
+            verify and will not pay. You can pick which device from the
+            dashboard.
           </p>
           <button
             type="button"
             onClick={() => {
               setConnectError(null);
               setConnectFallbackUrl(null);
-              void openJunctionConnect(address).catch((err: unknown) => {
+              void startWearableLink(address, requestAuth).catch((err: unknown) => {
                 if (err instanceof PopupBlockedError) {
                   // Not a failure - the URL is good, the browser just refused
                   // the auto-open. Offer a link the user taps directly.
