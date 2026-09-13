@@ -48,7 +48,7 @@ vi.mock("@/lib/server/wearable", () => {
   // isProviderId/PROVIDER_IDS keep their real behaviour: the route's 400 for
   // an unknown provider name IS this predicate, so stubbing it would test
   // nothing. They are pure functions over a two-element union.
-  const PROVIDER_IDS = ["junction", "whoop"] as const;
+  const PROVIDER_IDS = ["junction", "whoop", "apple"] as const;
   return {
     PROVIDER_IDS,
     isProviderId: (value: unknown) =>
@@ -141,7 +141,7 @@ describe("POST /api/wearable/link", () => {
     expect(startLink).not.toHaveBeenCalled();
   });
 
-  it("rejects a provider name that is neither junction nor whoop", async () => {
+  it("rejects a provider name that is not a registered provider", async () => {
     const res = await post({ address: USER, provider: "oura" });
     expect(res.status).toBe(400);
     // Derived from the registry, not spelled out: the message must name every

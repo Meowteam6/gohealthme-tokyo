@@ -288,6 +288,14 @@ function ProviderChoice({ address }: { address: `0x${string}` }) {
       cta: "Connect WHOOP",
       reconnect: "Reconnect WHOOP",
     },
+    apple: {
+      blurb:
+        "Apple Watch and iPhone, through the GoHealthMe app. Set up on your iPhone: a browser cannot read Apple Health.",
+      // "Set up", not "Connect": the click finishes nothing here. It tells you
+      // what to do on the phone, and the connection happens there.
+      cta: "Set up Apple Health",
+      reconnect: "Set up Apple Health again",
+    },
   };
 
   return (
@@ -621,6 +629,10 @@ function DisconnectButton({ address }: { address: `0x${string}` }) {
 const SOURCE_NOTE: Record<WearableProviderId, string> = {
   whoop: "Data by WHOOP, pulled live.",
   junction: "Pulled live from your linked device via Junction.",
+  // Not "pulled": Apple is the one provider we cannot pull from. These numbers
+  // were computed on the phone and sent here, and saying so is also the honest
+  // way to explain why they stop updating when the app is not opened.
+  apple: "Sent from your iPhone by the GoHealthMe app.",
 };
 
 /** Shows the latest few days pulled from the linked provider (demo proof). */

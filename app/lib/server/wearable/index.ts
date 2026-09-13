@@ -20,6 +20,10 @@
 
 import { readJson, writeJson } from "@/lib/server/store";
 import {
+  appleConfigured,
+  appleProvider,
+} from "@/lib/server/wearable/apple";
+import {
   junctionConfigured,
   junctionProvider,
 } from "@/lib/server/wearable/junction-provider";
@@ -37,6 +41,7 @@ export * from "@/lib/server/wearable/types";
 const PROVIDERS: Record<ProviderId, WearableProvider> = {
   junction: junctionProvider,
   whoop: whoopProvider,
+  apple: appleProvider,
 };
 
 function storeKey(address: string): string {
@@ -62,6 +67,9 @@ export function providerConfigured(id: ProviderId): boolean {
     // WHOOP additionally needs somewhere safe to put per-user OAuth tokens;
     // without the key it is not available, rather than available-and-refusing.
     whoop: () => whoopConfigured() && tokenStorageConfigured(),
+    // Apple holds no per-wallet credential: the phone pushes daily aggregates
+    // into our own table, so there is nothing to encrypt at rest.
+    apple: appleConfigured,
   };
   return checks[id]();
 }
