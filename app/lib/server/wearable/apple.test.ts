@@ -424,7 +424,7 @@ describe("getProgress", () => {
 });
 
 describe("observedMetrics, the join gate's device truth", () => {
-  it("returns only what this wallet's hardware actually produced", async () => {
+  it("returns observed, narrowed to what this wallet's hardware produced", async () => {
     // The case this exists for: an iPhone with no Apple Watch. Steps and
     // distance arrive, sleep never does. The gate must know that BEFORE the
     // person stakes on a sleep pool.
@@ -436,24 +436,26 @@ describe("observedMetrics, the join gate's device truth", () => {
 
     const observed = await appleProvider.observedMetrics(ADDRESS);
 
-    expect(observed).not.toBeNull();
-    expect([...(observed ?? [])].sort()).toEqual(["distance_km", "steps"]);
+    expect(observed.kind).toBe("observed");
+    if (observed.kind !== "observed") throw new Error("expected observed");
+    expect([...observed.metrics].sort()).toEqual(["distance_km", "steps"]);
   });
 
-  it("returns NULL, not an empty array, when nothing has synced yet", async () => {
+  it("returns DECLARED, never an empty observed list, when nothing has synced", async () => {
     // Getting this wrong blanks somebody's whole board on day one. An empty
     // array means "this device produced none of these" and the gate honours it
     // by hiding every wearable pool; a wallet that linked ten minutes ago has
     // observed nothing and must fall back to the declared list.
     supabaseWith(() => []);
 
-    const observed = await appleProvider.observedMetrics(ADDRESS);
-
-    expect(observed).toBeNull();
-    expect(observed).not.toEqual([]);
+    // An empty observed list would blank the whole board of a wallet that
+    // linked ten minutes ago. Declared is permissive on purpose.
+    expect(await appleProvider.observedMetrics(ADDRESS)).toEqual({
+      kind: "declared",
+    });
   });
 
-  it("returns NULL when the query fails, rather than narrowing the gate", async () => {
+  it("returns UNKNOWN when the query fails, never declared", async () => {
     // Taking pools away because OUR database was unreachable punishes the user
     // for something that has nothing to do with their device.
     getSupabaseServiceRole.mockReturnValue({
@@ -466,7 +468,13 @@ describe("observedMetrics, the join gate's device truth", () => {
       }),
     });
 
-    await expect(appleProvider.observedMetrics(ADDRESS)).resolves.toBeNull();
+    // Not declared: our database was unreachable, so we learned nothing.
+    // Falling back to the declared list would hand this wallet every metric
+    // Apple serves on no evidence, which is how a transient outage becomes
+    // somebody staking on a goal their phone cannot prove.
+    await expect(appleProvider.observedMetrics(ADDRESS)).resolves.toEqual({
+      kind: "unknown",
+    });
   });
 
   it("ignores a stored metric this provider no longer declares", async () => {
@@ -480,8 +488,7 @@ describe("observedMetrics, the join gate's device truth", () => {
 
     const observed = await appleProvider.observedMetrics(ADDRESS);
 
-    expect(observed).toEqual(["steps"]);
-    expect(observed).not.toContain("sleep_score");
+    expect(observed).toEqual({ kind: "observed", metrics: ["steps"] });
   });
 });
 
@@ -501,5 +508,40 @@ describe("observed capability is bounded in time", () => {
     // A lower bound was applied at all.
     expect(probe?.start).toBeDefined();
     expect(String(probe?.start)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("declared versus unknown, the distinction that stops an outage from staking someone", () => {
+  it("returns declared when rows exist but name only retired metrics", async () => {
+    // Not "we learned nothing": this is a device whose only recent output is a
+    // metric we no longer serve. Declared is the honest answer; an empty
+    // observed list would hide every pool from them.
+    supabaseWith((metric) =>
+      metric === "sleep_score" ? [{ day: "2026-09-01", value: 80 }] : [],
+    );
+
+    expect(await appleProvider.observedMetrics(ADDRESS)).toEqual({
+      kind: "declared",
+    });
+  });
+
+  it("never answers declared for a failure, which would widen the gate on no evidence", async () => {
+    getSupabaseServiceRole.mockReturnValue({
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              gte: () =>
+                Promise.resolve({ data: null, error: { message: "down" } }),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const result = await appleProvider.observedMetrics(ADDRESS);
+
+    expect(result.kind).toBe("unknown");
+    expect(result.kind).not.toBe("declared");
   });
 });

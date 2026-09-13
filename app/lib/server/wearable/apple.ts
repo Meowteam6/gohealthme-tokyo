@@ -59,6 +59,7 @@ import {
 } from "@/lib/server/wearable/streak";
 import type {
   MetricProgress,
+  ObservedCapability,
   WearableLink,
   WearableMetric,
   WearableProgress,
@@ -210,26 +211,40 @@ export const appleProvider: WearableProvider = {
    * database was unreachable takes pools away for a reason that has nothing
    * to do with the user's device. Errors are null too.
    */
-  async observedMetrics(address: string): Promise<WearableMetric[] | null> {
+  async observedMetrics(address: string): Promise<ObservedCapability> {
     // The same horizon the phone collects and the verdict reads. Asking a
     // wider question than the payout asks would let a retired device keep a
     // capability it can no longer deliver.
     const since = daysBefore(isoDay(new Date()), OBSERVED_WINDOW_DAYS);
+
     let observed: string[];
     try {
       observed = await getObservedMetrics(address, since);
     } catch {
-      // Our problem, not theirs. Fall back to declared rather than hiding
-      // pools because a query failed.
-      return null;
+      // UNKNOWN, not declared. Our database was unreachable, so we found out
+      // nothing. Falling back to the declared list here would hand a wallet
+      // every metric Apple can serve on no evidence, which is how a transient
+      // outage becomes somebody staking on a goal their phone cannot prove.
+      return { kind: "unknown" };
     }
-    if (observed.length === 0) return null;
+
+    // DECLARED, not observed-with-an-empty-list. Nothing has arrived yet, so
+    // there is nothing to narrow, and an empty observed list would blank the
+    // whole board of a wallet that linked ten minutes ago.
+    if (observed.length === 0) return { kind: "declared" };
 
     // Intersect with what this provider declares, so a row written by an older
     // build under a retired metric name cannot widen the gate.
     const declared = new Set<string>(appleProvider.metrics);
     const seen = observed.filter((m) => declared.has(m)) as WearableMetric[];
-    return seen.length === 0 ? null : seen;
+
+    // Rows exist but none of them name a metric Apple still serves. That is
+    // not "we learned nothing", it is a device whose only recent output is a
+    // metric we retired, so declared is the honest answer rather than an empty
+    // observed list that would hide every pool.
+    if (seen.length === 0) return { kind: "declared" };
+
+    return { kind: "observed", metrics: seen };
   },
 
   async getMetricProgress(
