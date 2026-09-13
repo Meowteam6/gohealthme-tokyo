@@ -101,6 +101,21 @@ export default defineConfig({
         // why it must be the ONE --require here.
         NODE_OPTIONS: `--require ${path.join(__dirname, "e2e", "support", "hermetic.cjs")}`,
 
+        // --- the closed-beta gate, OFF for the suite.
+        //
+        // AccessGate replaces the whole page with "GoHealthMe is invite-only
+        // right now" for any wallet not on the allowlist, and lib/server/access
+        // enforces the same thing server-side. The suite drives functional
+        // flows with a throwaway wallet that is on nobody's list, so with the
+        // gate on, /agent rendered the invite screen and AgentFeed never
+        // mounted - which surfaced as a missing "Recent claims" heading and
+        // read like a console bug rather than a gate.
+        //
+        // The gate itself is covered by its own unit tests over
+        // lib/server/access; this flag only stops it standing in front of
+        // every other flow.
+        NEXT_PUBLIC_ACCESS_GATE_DISABLED: "1",
+
         // --- contract wiring. Deployment addresses are not secrets; these two
         // are made up and only ever passed to the mock RPC as call arguments.
         HEALTH_POOLS_ADDRESS,
