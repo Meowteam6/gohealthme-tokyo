@@ -374,7 +374,9 @@ function WearableCheckInner({
     // Shares PoolDetail's cache key, so this is usually served without a fetch.
     enabled:
       status.kind === "agent" &&
-      (status.runStatus === "recorded" || status.runStatus === "paid"),
+      (status.runStatus === "recorded" ||
+        status.runStatus === "paid" ||
+        status.runStatus === "no-pay"),
   });
 
   // The metric THIS pool is scored on, so the readiness read is about the goal
@@ -554,6 +556,9 @@ function WearableCheckInner({
   if (status.kind === "agent") {
     const failureMode =
       status.runStatus === "no-pay" ? failureModeOf(status.ledger) : null;
+    // The contract records a late pass until the pool settles, so a miss is final only then.
+    const poolClosed =
+      poolQuery.data?.settled === true || poolQuery.data?.cancelled === true;
     const paid = status.ledger.find(
       (e) => e.kind === "settle" && e.status === "settled",
     );
@@ -656,7 +661,26 @@ function WearableCheckInner({
           </div>
         ) : null}
 
-        {failureMode === "goal-missed" ? (
+        {failureMode === "goal-missed" && !poolClosed ? (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-edge bg-surface-raised p-4">
+              <p className="text-base font-semibold">Not there yet.</p>
+              <p className="mt-1 text-sm text-foreground/80">
+                The wearable data was read fine and the goal is not met so far.
+                Days inside the pool period still count if they sync before the
+                pool settles, so check again after your next sync.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStatus({ kind: "idle" })}
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+            >
+              Check again
+            </button>
+          </div>
+        ) : null}
+        {failureMode === "goal-missed" && poolClosed ? (
           <div className="rounded-xl border border-edge bg-surface-raised p-4">
             <p className="text-base font-semibold">Not paid.</p>
             <p className="mt-1 text-sm text-foreground/80">
