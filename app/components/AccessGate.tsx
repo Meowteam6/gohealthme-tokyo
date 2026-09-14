@@ -16,6 +16,7 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useAccess } from "@/lib/useAccess";
 import { ErrorNote, TAP_TARGET } from "@/components/ui";
@@ -105,13 +106,27 @@ export default function AccessGate({ children }: { children: ReactNode }) {
             automatically.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={login}
-          className={`rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-strong hover:bg-accent/15 ${TAP_TARGET}`}
-        >
-          Sign in to request access
-        </button>
+        {DYNAMIC_CONFIGURED ? (
+          <button
+            type="button"
+            onClick={login}
+            className={`rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-strong hover:bg-accent/15 ${TAP_TARGET}`}
+          >
+            Sign in to request access
+          </button>
+        ) : (
+          // DYNAMIC_CONFIGURED is false when NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID
+          // is unset, which also means authenticated can never become true, so
+          // this branch renders forever. Without this guard the button above
+          // rendered anyway and did nothing on tap - live-looking, permanently
+          // dead. lib/wallet.ts already documents the same flag deciding which
+          // useEmbeddedWallet implementation loads; this is the one caller of
+          // login() in this file that had not checked it.
+          <p className="text-sm text-muted">
+            Sign-in is not configured. Set
+            NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable it.
+          </p>
+        )}
       </GateShell>
     );
   }
