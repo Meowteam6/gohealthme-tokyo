@@ -712,7 +712,7 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
  * The parameter is cleared once shown, so a refresh or a shared URL does not
  * replay a stale outcome.
  */
-function WhoopReturnNote() {
+function WhoopReturnNote({ liveConnected }: { liveConnected: boolean | null }) {
   const [note, setNote] = useState<ReturnType<typeof whoopReturnMessage>>(null);
 
   useEffect(() => {
@@ -732,6 +732,19 @@ function WhoopReturnNote() {
   }, []);
 
   if (note === null) return null;
+
+  // The redirect that sets this URL param is a hop through WHOOP's own
+  // domain, and by the time it lands back here the session on THIS tab may
+  // no longer be the wallet that started the flow - a stale param left over
+  // from a previous sign-in, a link reopened after switching accounts, or
+  // (as happened once in testing) a connect driven outside a live session
+  // entirely. A leftover "connected" is not proof that the CURRENT wallet is
+  // connected, and saying "your sleep now backs your claims" to whoever
+  // happens to be signed in when that param is read would misstate whose
+  // claims are actually backed. liveConnected is the dashboard's own
+  // provider-status query for the address on screen right now; the
+  // reassuring "ok" variant renders only when that query agrees.
+  if (note.tone === "ok" && liveConnected !== true) return null;
 
   // A failed connection is an error and renders as one, through the same
   // ErrorNote every other failure on this page uses. Inventing a second error
@@ -856,7 +869,11 @@ export default function DashboardContent() {
 
       {/* Says what WHOOP's redirect just did, since the OAuth flow takes over
        *  the tab and otherwise returns the user to an unchanged-looking page. */}
-      <WhoopReturnNote />
+      <WhoopReturnNote
+        liveConnected={
+          connectionQuery.data === undefined ? null : wearableConnected
+        }
+      />
       <section className="space-y-4">
         <h2 className="font-display text-lg font-semibold">Joined pools</h2>
         {joinedQuery.isLoading ? (
