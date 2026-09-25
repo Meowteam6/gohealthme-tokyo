@@ -36,7 +36,7 @@ import {
 // body: no env names reach a player.
 const PAUSED_MESSAGE =
   "Payouts are paused on this build while the World ID check is being set up. Nothing moved.";
-import { NOT_ENABLED_MESSAGE } from "@/app/api/agent/approval/request/route";
+import { APPROVAL_NOT_ENABLED_MESSAGE as NOT_ENABLED_MESSAGE } from "@/lib/server/agent/approval-messages";
 
 export async function POST(request: Request) {
   const cid = newCorrelationId("approval-complete");

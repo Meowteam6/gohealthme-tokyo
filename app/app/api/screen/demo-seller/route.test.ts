@@ -12,9 +12,8 @@ afterEach(() => {
 
 describe("GET /api/screen/demo-seller", () => {
   it("answers 402 with a PAYMENT-REQUIRED header the batching client can read", async () => {
-    const { GET, DEFAULT_DEMO_SELLER_PAYTO } = await import(
-      "@/app/api/screen/demo-seller/route"
-    );
+    const { GET } = await import("@/app/api/screen/demo-seller/route");
+    const { DEFAULT_DEMO_SELLER_PAYTO } = await import("@/lib/server/screening/demo-seller");
     const res = await GET(new Request("http://localhost/api/screen/demo-seller"));
     expect(res.status).toBe(402);
 
@@ -42,7 +41,7 @@ describe("GET /api/screen/demo-seller", () => {
   it("lets X402_DEMO_SELLER_PAYTO choose the payee and ignores a malformed one", async () => {
     vi.stubEnv("X402_DEMO_SELLER_PAYTO", "0x2222222222222222222222222222222222222222");
     const { demoSellerPayTo, DEFAULT_DEMO_SELLER_PAYTO } = await import(
-      "@/app/api/screen/demo-seller/route"
+      "@/lib/server/screening/demo-seller"
     );
     expect(demoSellerPayTo()).toBe("0x2222222222222222222222222222222222222222");
     vi.stubEnv("X402_DEMO_SELLER_PAYTO", "not-an-address");

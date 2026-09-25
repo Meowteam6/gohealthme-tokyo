@@ -17,6 +17,7 @@
 // `world` (app id, server-signed rp_context, environment) is present only in
 // world mode. The signing key never leaves the server.
 
+import { APPROVAL_NOT_ENABLED_MESSAGE as NOT_ENABLED_MESSAGE } from "@/lib/server/agent/approval-messages";
 import { isClaimOwner, claimParticipantOf } from "@/lib/server/agent/claim-access";
 import { readLedger } from "@/lib/server/agent/ledger";
 import { requestApproval } from "@/lib/server/agent/approval";
@@ -40,9 +41,6 @@ const PAUSED_MESSAGE =
   "Payouts are paused on this build while the World ID check is being set up. Nothing moved.";
 
 const GOAL_ID_RE = /^0x[0-9a-fA-F]{64}$/;
-
-export const NOT_ENABLED_MESSAGE =
-  "Human confirmation is not enabled on this deployment (WORLD_APPROVAL_MODE is unset).";
 
 export async function POST(request: Request) {
   const cid = newCorrelationId("approval-request");

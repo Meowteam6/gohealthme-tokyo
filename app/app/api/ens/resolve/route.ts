@@ -18,7 +18,7 @@ import { jsonError, newCorrelationId, safeError } from "@/lib/server/http";
 export const dynamic = "force-dynamic";
 
 /** One request resolves at most this many addresses. */
-export const RESOLVE_BATCH_MAX = 50;
+const RESOLVE_BATCH_MAX = 50;
 
 export async function GET(request: Request) {
   const cid = newCorrelationId("ens-resolve");
