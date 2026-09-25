@@ -47,6 +47,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { parseUsdc, withDocMarker, withProofPolicy } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
@@ -55,6 +56,12 @@ import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import ShareChallenge from "@/components/ShareChallenge";
 import SignInGate from "@/components/SignInGate";
 import { resolveNewPoolId } from "@/lib/resolve-pool-id";
+import {
+  fetchChallengesHealth,
+  runDareFlow,
+  type FundedDare,
+  type MintResult,
+} from "@/lib/challenge-flow";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { authBlockReason, fetchWithWalletAuth } from "@/lib/client-auth";
 import {
@@ -135,7 +142,18 @@ type Phase =
   | { kind: "selfDone"; poolId: string }
   // A dare is funded and its person-aimed link is minted.
   | { kind: "dareDone"; url: string; poolId: string }
-  | { kind: "error"; message: string };
+  // Nothing moved: a preflight refusal or a pre-deposit failure.
+  | { kind: "error"; title: string; message: string }
+  // The reward LANDED on chain but the link did not mint. The funded pool is
+  // held in `funded` state so the only action left is a link-only retry.
+  | { kind: "linkError"; message: string };
+
+/** The invite framing captured at funding time, so a link-only retry sends
+ *  what the challenger paid for even if the form is edited afterwards. */
+interface DareInvite {
+  message: string | null;
+  targetHandle: string | null;
+}
 
 // ------------------------------------------------------------------ SPOTTER mood
 // The amount picker's live reaction. Ported from the golden design's
@@ -695,8 +713,28 @@ function CreateChallengeInner() {
   const [recipientMode, setRecipientMode] = useState<"handle" | "link">("handle");
   const [formError, setFormError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  // A dare whose reward has landed. While set, the main button only retries
+  // the link; it can never deposit into a second pool.
+  const [funded, setFunded] = useState<FundedDare | null>(null);
+  const [fundedInvite, setFundedInvite] = useState<DareInvite | null>(null);
 
   const isDare = variant === "dare";
+
+  // Can this build mint a dare link at all? Asked up front so an unready build
+  // says so before the challenger fills anything in; runDareFlow asks again
+  // right before the deposit, which is the check that actually gates money.
+  const healthQuery = useQuery({
+    queryKey: ["challenges-health"],
+    queryFn: () => fetchChallengesHealth(),
+    enabled: isDare,
+    staleTime: 30_000,
+    retry: 1,
+  });
+  const daresOff =
+    isDare && healthQuery.data !== undefined && !healthQuery.data.ok
+      ? healthQuery.data.message
+      : null;
+  const checkingDares = isDare && healthQuery.isLoading;
 
   // Switch variants and keep a sensible headline number so the preview never
   // reads $0 the instant you toggle. Seeds a dare reward and a dare lock-in the
@@ -739,6 +777,8 @@ function CreateChallengeInner() {
   const clearForm = () => {
     reset();
     setPhase({ kind: "idle" });
+    setFunded(null);
+    setFundedInvite(null);
     setGoal("");
     setStake("10");
     setReward("");
@@ -750,6 +790,12 @@ function CreateChallengeInner() {
   };
 
   const submit = async () => {
+    // A funded dare only ever retries its link. This is the guard that keeps a
+    // second tap from creating and funding a second pool.
+    if (isDare && funded !== null && fundedInvite !== null) {
+      await finishDare(funded, fundedInvite);
+      return;
+    }
     setFormError(null);
     setPhase({ kind: "idle" });
 
@@ -841,6 +887,10 @@ function CreateChallengeInner() {
   // joining. Inviting friends to stake alongside happens from the pool page too.
   const submitSelf = async (stakeUsdc: bigint) => {
     const { periodStart, periodEnd } = periodBounds();
+    // Only a landed createPool can leave a pool behind. A throw before it is
+    // already on status (the hook's ErrorNote); a throw after it is the pool
+    // lookup, and the pool exists, so point at where it is listed.
+    let created = false;
     try {
       const depositHash = await runUsdcDeposit(0n, {
         functionName: "createPool",
@@ -854,28 +904,142 @@ function CreateChallengeInner() {
           0n,
         ],
       });
+      created = true;
       const poolId = await resolveNewPoolId(depositHash);
       setPhase({ kind: "selfDone", poolId: poolId.toString() });
     } catch {
-      // useUsdcDeposit already captured any error into status; surface there.
-      if (status.kind !== "error") {
+      if (created) {
         setPhase({
           kind: "error",
-          message: "Could not create your commitment. Try again.",
+          title: "Your commitment was created",
+          message:
+            "Nothing left your wallet, but we could not open it yet. Find it under My challenges and stake from there.",
         });
       }
     }
   };
 
-  // DARE A FRIEND: seed the reward at creation, then mint the person-aimed link.
+  // Mint the person-aimed link for a pool that already exists. Signed, and
+  // never throws on a refusal: every failure comes back as a message for the
+  // retry note.
+  const mintLink = async (
+    poolId: bigint,
+    invite: DareInvite,
+  ): Promise<MintResult> => {
+    if (address === null) {
+      return {
+        ok: false,
+        message: "Your wallet disconnected before the link could be signed.",
+      };
+    }
+    const sent = await fetchWithWalletAuth(
+      "/api/challenges",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          address,
+          poolId: poolId.toString(),
+          targetHandle: invite.targetHandle,
+          message: invite.message,
+        }),
+      },
+      requestAuth,
+    );
+    if (!sent.response.ok) {
+      if (sent.auth.kind !== "ok") {
+        return {
+          ok: false,
+          message:
+            authBlockReason(sent.auth) ??
+            "Sign with your wallet to send this challenge.",
+        };
+      }
+      const body = (await sent.response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      return {
+        ok: false,
+        message: body.error ?? "Could not create the challenge link.",
+      };
+    }
+    const body = (await sent.response.json().catch(() => ({}))) as {
+      challenge?: { inviteToken?: string };
+    };
+    const token = body.challenge?.inviteToken;
+    return typeof token === "string" && token !== ""
+      ? { ok: true, token }
+      : { ok: false, message: "The link came back empty." };
+  };
+
+  // Drive the dare from wherever it stands: a fresh dare (preflight, deposit,
+  // link) when `from` is null, a link-only retry when it is a funded pool.
+  const driveDare = async (
+    from: FundedDare | null,
+    invite: DareInvite,
+    deposit: () => Promise<`0x${string}`>,
+  ) => {
+    const result = await runDareFlow(
+      {
+        checkHealth: () => fetchChallengesHealth(),
+        deposit,
+        resolvePoolId: (hash) => resolveNewPoolId(hash),
+        mintLink: (poolId) => mintLink(poolId, invite),
+        onFunded: (next) => {
+          setFunded(next);
+          setFundedInvite(invite);
+        },
+        onLinking: () => setPhase({ kind: "linking" }),
+      },
+      from,
+    );
+    switch (result.kind) {
+      case "unavailable":
+        setPhase({
+          kind: "error",
+          title: "Dares are not live here yet",
+          message: result.message,
+        });
+        return;
+      case "depositFailed":
+        // Nothing moved. The hook's status note already says why; the phase
+        // stays idle so no "reward is up" copy can render.
+        setPhase({ kind: "idle" });
+        return;
+      case "linkFailed":
+        setPhase({ kind: "linkError", message: result.message });
+        return;
+      case "done": {
+        const origin =
+          typeof window === "undefined" ? "" : window.location.origin;
+        setFunded(null);
+        setFundedInvite(null);
+        setPhase({
+          kind: "dareDone",
+          url: challengeShareUrl(origin, result.token),
+          poolId: result.poolId.toString(),
+        });
+      }
+    }
+  };
+
+  // Link-only retry for a dare whose reward already landed.
+  const finishDare = (from: FundedDare, invite: DareInvite) =>
+    driveDare(from, invite, () => {
+      // Unreachable by construction (runDareFlow skips the deposit when `from`
+      // is set); failing loudly beats ever funding a second pool.
+      throw new Error("A funded dare never deposits again.");
+    });
+
+  // DARE A FRIEND: preflight, seed the reward at creation, then mint the link.
   const submitDare = async (
     stakeUsdc: bigint,
     rewardUsdc: bigint,
-    invite: { message: string | null; targetHandle: string | null },
+    invite: DareInvite,
   ) => {
     const { periodStart, periodEnd } = periodBounds();
-    try {
-      const depositHash = await runUsdcDeposit(rewardUsdc, {
+    await driveDare(null, invite, () =>
+      runUsdcDeposit(rewardUsdc, {
         functionName: "createPool",
         args: [
           CHALLENGE_INITIATIVE,
@@ -886,88 +1050,8 @@ function CreateChallengeInner() {
           CHALLENGE_BOUNTY_MODEL,
           rewardUsdc,
         ],
-      });
-
-      // The pool is funded on-chain. Now mint the shareable, person-aimed link.
-      setPhase({ kind: "linking" });
-      const poolId = await resolveNewPoolId(depositHash);
-
-      if (address === null) {
-        setPhase({
-          kind: "error",
-          message: "Your wallet disconnected before the link could be signed.",
-        });
-        return;
-      }
-
-      const sent = await fetchWithWalletAuth(
-        "/api/challenges",
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            address,
-            poolId: poolId.toString(),
-            targetHandle: invite.targetHandle,
-            message: invite.message,
-          }),
-        },
-        requestAuth,
-      );
-
-      if (!sent.response.ok) {
-        if (sent.auth.kind !== "ok") {
-          setPhase({
-            kind: "error",
-            message:
-              authBlockReason(sent.auth) ??
-              "Sign with your wallet to send this challenge.",
-          });
-          return;
-        }
-        const body = (await sent.response.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        // The pool is already funded and live; the link write is what failed.
-        // Point the challenger at their pool so the money is never stranded.
-        setPhase({
-          kind: "error",
-          message:
-            (body.error ?? "Could not create the challenge link.") +
-            ` Your pool is live at /pools/${poolId.toString()} - you can still share that.`,
-        });
-        return;
-      }
-
-      const body = (await sent.response.json()) as {
-        challenge?: { inviteToken?: string };
-        sharePath?: string;
-      };
-      const token = body.challenge?.inviteToken;
-      if (typeof token !== "string" || token === "") {
-        setPhase({
-          kind: "error",
-          message: "The challenge was created but its link came back empty.",
-        });
-        return;
-      }
-      const origin =
-        typeof window === "undefined" ? "" : window.location.origin;
-      setPhase({
-        kind: "dareDone",
-        url: challengeShareUrl(origin, token),
-        poolId: poolId.toString(),
-      });
-    } catch {
-      // useUsdcDeposit already captured any deposit error into status; surface
-      // there. A post-deposit throw lands as a generic link error.
-      if (status.kind !== "error") {
-        setPhase({
-          kind: "error",
-          message: "Could not finish creating the challenge. Try again.",
-        });
-      }
-    }
+      }),
+    );
   };
 
   if (phase.kind === "selfDone") {
@@ -1075,6 +1159,13 @@ function CreateChallengeInner() {
   }
 
   const linking = phase.kind === "linking";
+  // The reward already landed: the button now only mints the link.
+  const retryingLink = isDare && funded !== null;
+  // Dares are refused before any money moves when the link store is not ready.
+  const dareBlocked =
+    isDare && !retryingLink && (daresOff !== null || checkingDares);
+  const fundedPoolId =
+    funded !== null && funded.poolId !== null ? funded.poolId.toString() : null;
   const primaryLabel =
     status.kind === "approving"
       ? "Approving USDC..."
@@ -1086,9 +1177,13 @@ function CreateChallengeInner() {
           ? "Minting the link..."
           : !authenticated
             ? "Sign in to start"
-            : isDare
-              ? "Send the dare"
-              : "Stake on it";
+            : retryingLink
+              ? "Retry the link"
+              : isDare
+                ? checkingDares
+                  ? "Checking dares are live..."
+                  : "Send the dare"
+                : "Stake on it";
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -1361,7 +1456,7 @@ function CreateChallengeInner() {
                 type="button"
                 variant={isDare ? "coral" : "primary"}
                 pop
-                disabled={!ready || busy || linking}
+                disabled={!ready || busy || linking || dareBlocked}
                 onClick={() => {
                   if (!authenticated) {
                     openSignIn();
@@ -1374,6 +1469,7 @@ function CreateChallengeInner() {
                 {primaryLabel}
                 {status.kind === "idle" &&
                 !linking &&
+                !dareBlocked &&
                 authenticated &&
                 !busy ? (
                   <IconArrow className="h-5 w-5" />
@@ -1407,6 +1503,23 @@ function CreateChallengeInner() {
             </div>
           ) : null}
 
+          {daresOff !== null && !retryingLink ? (
+            <div
+              role="status"
+              className="space-y-2 rounded-xl border border-edge bg-surface-raised p-4 text-sm"
+            >
+              <p className="font-semibold">Dares are not live here yet</p>
+              <p className="text-foreground/80">{daresOff}</p>
+              <button
+                type="button"
+                onClick={() => selectVariant("self")}
+                className="font-semibold text-accent-strong underline underline-offset-2"
+              >
+                Stake on yourself instead
+              </button>
+            </div>
+          ) : null}
+
           {isDare && status.kind === "done" ? (
             <div className="space-y-1 rounded-xl border border-accent/40 bg-accent/20 p-4">
               <p className="text-sm font-semibold text-accent-deep">
@@ -1425,7 +1538,7 @@ function CreateChallengeInner() {
             />
           ) : null}
 
-          {status.kind === "error" ? (
+          {status.kind === "error" && !retryingLink ? (
             <ErrorNote
               title={
                 isDare
@@ -1439,14 +1552,34 @@ function CreateChallengeInner() {
 
           {phase.kind === "error" ? (
             <ErrorNote
-              title={
-                isDare
-                  ? "The reward is up, but the link did not send"
-                  : "Could not create your commitment"
-              }
+              title={phase.title}
               detail={phase.message}
               onRetry={() => setPhase({ kind: "idle" })}
             />
+          ) : null}
+
+          {phase.kind === "linkError" ? (
+            <div
+              role="alert"
+              className="space-y-2 rounded-xl border border-danger/40 bg-danger/10 p-4"
+            >
+              <p className="text-base font-semibold text-danger">
+                The reward is up, but the link did not send
+              </p>
+              <p className="text-sm text-foreground/80">{phase.message}</p>
+              <p className="text-sm text-foreground/80">
+                Your reward is safe in the pool. Tap Retry the link - it only
+                mints the link and will not charge you again.
+              </p>
+              {fundedPoolId !== null ? (
+                <Link
+                  href={`/pools/${fundedPoolId}`}
+                  className="inline-block text-sm font-semibold text-accent-strong underline underline-offset-2"
+                >
+                  See your pool
+                </Link>
+              ) : null}
+            </div>
           ) : null}
 
           <p className="px-1 text-center text-[11px] leading-snug text-muted">
