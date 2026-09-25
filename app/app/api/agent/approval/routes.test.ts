@@ -125,7 +125,10 @@ describe("POST /api/agent/approval/request", () => {
     signer = { ok: true, address: USER };
     const response = await requestRoute(post("/api/agent/approval/request", { goalId: GOAL }));
     expect(response.status).toBe(503);
-    expect(((await response.json()) as { error: string }).error).toMatch(/WORLD_/);
+    const error = ((await response.json()) as { error: string }).error;
+    // Player copy only: the missing setting goes to the server log.
+    expect(error).toMatch(/paused/i);
+    expect(error).not.toMatch(/WORLD_|NEXT_PUBLIC|env/);
   });
 });
 
@@ -285,6 +288,51 @@ describe("GET /api/agent/approval/status", () => {
       new Request(`http://localhost/api/agent/approval/status?goalId=${GOAL}`),
     );
     expect(await response.json()).toEqual({ status: "none", mode: "mock" });
+  });
+
+  it("answers off when the human step is not switched on", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "");
+    const { statusRoute } = await load();
+    const response = await statusRoute(
+      new Request(`http://localhost/api/agent/approval/status?goalId=${GOAL}`),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "none", mode: "off" });
+  });
+
+  it("reports misconfigured, not off, when the mode value is bad", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "wrld");
+    const { statusRoute } = await load();
+    const response = await statusRoute(
+      new Request(`http://localhost/api/agent/approval/status?goalId=${GOAL}`),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.mode).toBe("misconfigured");
+    expect(JSON.stringify(body)).not.toMatch(/WORLD_|wrld/);
+  });
+
+  it("reports misconfigured when world mode is on without its credentials", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "world");
+    vi.stubEnv("NEXT_PUBLIC_WORLD_APP_ID", "");
+    vi.stubEnv("WORLD_RP_ID", "");
+    vi.stubEnv("WORLD_SIGNING_KEY", "");
+    const { statusRoute } = await load();
+    const response = await statusRoute(
+      new Request(`http://localhost/api/agent/approval/status?goalId=${GOAL}`),
+    );
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as { mode: string }).mode).toBe("misconfigured");
+  });
+
+  it("reports misconfigured when mock is set on a production deployment", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    vi.stubEnv("VERCEL_ENV", "production");
+    const { statusRoute } = await load();
+    const response = await statusRoute(
+      new Request(`http://localhost/api/agent/approval/status?goalId=${GOAL}`),
+    );
+    expect(((await response.json()) as { mode: string }).mode).toBe("misconfigured");
   });
 
   it("validates the goalId", async () => {

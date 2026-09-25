@@ -11,15 +11,17 @@
 //   { status: "none" | "pending" | "approved" | "declined" | "expired" |
 //             "cancelled", mode, requestId?, expiresAt?, provider?, mocked?,
 //     attempt? }
+//
+// mode is "off" | "mock" | "world" | "misconfigured". "misconfigured" means
+// the human step is switched on but SPOTTER cannot run it (a bad mode value,
+// mock refused on production, or live World credentials missing): the gate
+// throws at record time, so no win can pay. The join reads this and shows a
+// "payouts paused" lock before any stake, instead of reading the old 503 as
+// "the step is off". The reason goes to the server log, never the body.
 
 import { readApproval } from "@/lib/server/agent/approval";
-import { approvalMode } from "@/lib/server/agent/approval-provider";
-import {
-  errorMessage,
-  jsonError,
-  newCorrelationId,
-  safeError,
-} from "@/lib/server/http";
+import { approvalModeStatus } from "@/lib/server/agent/approval-mode-status";
+import { jsonError, newCorrelationId, safeError } from "@/lib/server/http";
 
 const GOAL_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 
@@ -31,13 +33,7 @@ export async function GET(request: Request) {
       return jsonError(400, "goalId must be a 0x-prefixed bytes32 hex string");
     }
 
-    let mode: ReturnType<typeof approvalMode>;
-    try {
-      mode = approvalMode();
-    } catch (err) {
-      console.error(`[${cid}] ${errorMessage(err)}`);
-      return jsonError(503, "Human confirmation is misconfigured on this deployment.");
-    }
+    const mode = approvalModeStatus(cid);
 
     const record = await readApproval(goalId);
     if (record === null) return Response.json({ status: "none", mode });

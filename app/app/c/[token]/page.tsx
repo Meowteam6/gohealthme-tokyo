@@ -14,8 +14,11 @@ import {
 } from "@/lib/contract";
 import { darePot, isBackerView, type DarePot } from "@/lib/challenges";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
+import { needsDocumentVerifier } from "@/lib/game/lobby";
+import { approvalModeStatus } from "@/lib/server/agent/approval-mode-status";
 import { getChallengeByToken } from "@/lib/server/challenges";
 import { fetchPoolFunding, type PoolFunding } from "@/lib/server/pool-funders";
+import { documentProofStatus } from "@/lib/server/proof-status";
 import {
   getProfileByAddress,
   resolveProfiles,
@@ -114,13 +117,22 @@ export default async function ChallengeLandingPage({
   let pool: PoolInfo;
   let phase: ReturnType<typeof poolPhase>;
   let canPay: boolean;
+  let uploadProof: boolean;
   try {
     pool = await fetchPool(poolIdBig);
     canPay = poolCanPay(pool);
     phase = poolPhase(pool, nowUnixSeconds());
+    uploadProof = needsDocumentVerifier(pool.goalSpec);
   } catch {
     return <InvalidLink />;
   }
+
+  // Checked on the server, from the same facts the judge and the approval gate
+  // decide on: a dare nobody can be verified on, or one whose win could not
+  // pay, takes no more money from anyone. The accept control shows the same
+  // limit as a lock (lib/game/lobby.ts); this stops the chip-in and the rally.
+  const verifierOff = uploadProof && !documentProofStatus().available;
+  const payoutsPaused = approvalModeStatus("challenge-page") === "misconfigured";
 
   // Resolve the challenger to a handle when they have claimed one; otherwise
   // show the truncated address. This is public identity, never a health label.
@@ -163,8 +175,10 @@ export default async function ChallengeLandingPage({
   }
 
   // Friends can grow the pot and rally more friends only while the challenge is
-  // live and can actually pay. The same gate the accept block uses.
-  const canGrow = phase === "live" && canPay;
+  // live, can actually pay, and can be checked and paid on this build. The
+  // same gate the accept block uses.
+  const paused = verifierOff || payoutsPaused;
+  const canGrow = phase === "live" && canPay && !paused;
 
   const headline =
     pot.seed !== null && pot.seed > 0n
@@ -301,6 +315,12 @@ export default async function ChallengeLandingPage({
           />
           {rally}
         </>
+      ) : phase === "live" && canPay && paused ? (
+        <p className="rounded-xl border-2 border-foreground/15 bg-surface-raised p-4 text-sm">
+          Chipping in is paused too. I am not taking anyone&apos;s money for a
+          dare I cannot {verifierOff ? "check" : "pay out"} right now. Nothing has
+          been charged.
+        </p>
       ) : null}
     </div>
   );

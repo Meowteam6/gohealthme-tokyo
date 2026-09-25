@@ -33,6 +33,12 @@ import {
   safeError,
 } from "@/lib/server/http";
 
+// Player copy for a human step that is on but cannot run here. The cause (which
+// setting is wrong) goes to the server log with the correlation id, never the
+// body: no env names reach a player.
+const PAUSED_MESSAGE =
+  "Payouts are paused on this build while the World ID check is being set up. Nothing moved.";
+
 const GOAL_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 
 export const NOT_ENABLED_MESSAGE =
@@ -62,7 +68,7 @@ export async function POST(request: Request) {
       mode = approvalMode();
     } catch (err) {
       console.error(`[${cid}] ${errorMessage(err)}`);
-      return jsonError(503, "Human confirmation is misconfigured on this deployment.");
+      return jsonError(503, PAUSED_MESSAGE);
     }
     if (mode === "off") return jsonError(409, NOT_ENABLED_MESSAGE);
 
@@ -98,7 +104,7 @@ export async function POST(request: Request) {
       console.error(`[${cid}] ${errorMessage(err)}`);
       return jsonError(
         503,
-        "World ID for Agents is not configured on this deployment; a WORLD_* variable is missing.",
+        PAUSED_MESSAGE,
       );
     }
 

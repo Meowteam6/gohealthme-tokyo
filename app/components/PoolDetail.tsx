@@ -36,9 +36,10 @@ import {
   type LedgerEntry,
   type RunStatus,
 } from "@/lib/agent-receipt";
-import { runSlotOf } from "@/lib/game/lobby";
+import { needsDocumentVerifier, runSlotOf } from "@/lib/game/lobby";
 import { formatRunClock, runClock } from "@/lib/game/tally";
 import { useCharacter } from "@/lib/game/useCharacter";
+import { useJoinChecks } from "@/lib/game/useJoinChecks";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
 import { fetchWithWalletAuth } from "@/lib/client-auth";
 import { useWalletAuth } from "@/lib/useWalletAuth";
@@ -193,6 +194,7 @@ export default function PoolDetail({ id }: { id: string }) {
   const { address } = useEmbeddedWallet();
   const requestAuth = useWalletAuth();
   const character = useCharacter();
+  const checks = useJoinChecks(character);
   const now = useNowSeconds();
   // Wearable pools offer two proof paths, but only one may be mounted at a
   // time: WearableCheck and EvidenceUpload both drive SPOTTER's run loop for
@@ -542,9 +544,10 @@ export default function PoolDetail({ id }: { id: string }) {
   });
 
   // The run's one decision, shared with the lobby and the dare link
-  // (lib/game/lobby.ts): the join gate above, plus World proof-of-human when
-  // that lane is on for this build. A limit is a lock with its fix, here,
-  // before any stake.
+  // (lib/game/lobby.ts): the join gate above, plus World proof-of-human, the
+  // closed-beta list, the document checker and the payout rule. A limit is a
+  // lock with its fix, here, before any stake; a read still loading holds the
+  // stake and a failed one locks it behind a retry.
   const slot = runSlotOf({
     phase: poolPhase(pool, asOfSeconds),
     cancelled: pool.cancelled,
@@ -552,10 +555,19 @@ export default function PoolDetail({ id }: { id: string }) {
     joined,
     address,
     joinBlock,
-    humanRequired: character.worldLane === "on",
-    humanVerified: character.character?.human === "verified",
+    worldLane: checks.worldLane,
+    humanVerified: checks.humanVerified,
+    gate: checks.gate,
+    needsDocumentVerifier: needsDocumentVerifier(pool.goalSpec),
+    verifier: checks.verifier,
+    payouts: checks.payouts,
     deviceLabel: viewerProvider?.label ?? null,
   });
+  // Nobody tops up a run that cannot be checked or whose win could not pay on
+  // this build, and nobody tops one up on a guess while that is unknown.
+  const fundingPaused =
+    (needsDocumentVerifier(pool.goalSpec) && checks.verifier !== "available") ||
+    checks.payouts !== "ready";
   const unverifiableNow = joinBlock.kind === "outage";
   const unsupportedForViewer = joinBlock.kind === "unsupported";
 
@@ -816,15 +828,27 @@ export default function PoolDetail({ id }: { id: string }) {
               </p>
               <BrowsePoolsLink label="Back to the lobby" />
             </section>
-          ) : address !== null && character.worldLane === "loading" ? (
-            // Prove-human mode is not known yet: hold the stake rather than
-            // offer it and take it back a moment later.
+          ) : address !== null && !joined && participantQuery.isError ? (
+            // Unknown whether this wallet is already in: never offer a join
+            // that could revert ALREADY_JOINED after the wallet prompt.
+            <ErrorNote
+              title="I could not check whether you are in this run"
+              detail="Nothing changed on your side."
+              onRetry={() => {
+                void participantQuery.refetch();
+              }}
+            />
+          ) : slot.kind === "checking" ||
+            (address !== null && participantQuery.isLoading) ? (
+            // A read the join depends on has not answered yet: hold the stake
+            // rather than offer it and take it back a moment later.
             <Skeleton className="h-40" />
           ) : slot.kind === "locked" ? (
             <LockPanel
               lock={slot.lock}
               returnTo={`/pools/${id}`}
               onCheckSensor={character.checkSensor}
+              onRetry={checks.retry}
             />
           ) : slot.kind === "playable" ? (
             <section className="rounded-xl border-2 border-foreground bg-surface p-4 sm:p-6">
@@ -917,7 +941,7 @@ export default function PoolDetail({ id }: { id: string }) {
         </Card>
       )}
 
-      {phase !== "settled" && canPay ? (
+      {phase !== "settled" && canPay && !fundingPaused ? (
         isChallenge ? (
           // A challenge pool's top-up must carry the sweep disclosure: miss the
           // goal and sweep() returns the whole pot to the challenger, not

@@ -44,6 +44,7 @@ describe("lane payload parsers", () => {
   it("reads whether the payout confirmation is on", () => {
     expect(parseApprovalMode({ status: "none", mode: "world" })).toBe("world");
     expect(parseApprovalMode({ status: "none", mode: "off" })).toBe("off");
+    expect(parseApprovalMode({ status: "none", mode: "misconfigured" })).toBe("misconfigured");
     expect(parseApprovalMode({ status: "none" })).toBeNull();
   });
   it("parses the approval status", () => {

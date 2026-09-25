@@ -36,8 +36,9 @@ import {
 } from "@/lib/wearable-connect";
 import { wearableJoinBlock } from "@/lib/wearable-join-gate";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
-import { runSlotOf } from "@/lib/game/lobby";
+import { needsDocumentVerifier, runSlotOf } from "@/lib/game/lobby";
 import { useCharacter } from "@/lib/game/useCharacter";
+import { useJoinChecks } from "@/lib/game/useJoinChecks";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
 
 export default function ChallengeAccept({
@@ -49,6 +50,7 @@ export default function ChallengeAccept({
   returnTo: string;
 }) {
   const view = useCharacter();
+  const checks = useJoinChecks(view);
   const { address } = view;
   const requestAuth = useWalletAuth();
   const now = useNowSeconds();
@@ -126,12 +128,26 @@ export default function ChallengeAccept({
       </div>
     );
   }
+  if (address !== null && participantQuery.isError) {
+    // Unknown whether this wallet is already in: never offer a join that
+    // could revert ALREADY_JOINED after the wallet prompt.
+    return (
+      <div className="space-y-2">
+        <p className="text-sm">I could not check whether you are already in this dare.</p>
+        <button
+          type="button"
+          onClick={() => void participantQuery.refetch()}
+          className={`-ml-4 font-semibold text-accent underline underline-offset-2 ${TAP_TARGET}`}
+        >
+          Check again
+        </button>
+      </div>
+    );
+  }
   if (
     poolQuery.data === undefined ||
     now === null ||
-    (address !== null && participantQuery.isLoading) ||
-    // Prove-human mode not known yet: hold the stake, never offer it early.
-    (address !== null && view.worldLane === "loading")
+    (address !== null && participantQuery.isLoading)
   ) {
     return <Skeleton className="h-12 w-full rounded-lg" />;
   }
@@ -156,8 +172,15 @@ export default function ChallengeAccept({
       capabilityPending: address !== null && capabilityUnknown(capabilityQuery.data),
       needsDevice: capabilityNeedsDevice(capabilityQuery.data),
     }),
-    humanRequired: view.worldLane === "on",
-    humanVerified: view.character?.human === "verified",
+    // World, the closed-beta list (this path is public, so AccessGate never
+    // ran), the document checker and the payout rule: loading holds the
+    // stake, a failed read locks it behind a retry.
+    worldLane: checks.worldLane,
+    humanVerified: checks.humanVerified,
+    gate: checks.gate,
+    needsDocumentVerifier: needsDocumentVerifier(pool.goalSpec),
+    verifier: checks.verifier,
+    payouts: checks.payouts,
     deviceLabel,
   });
 
@@ -171,9 +194,16 @@ export default function ChallengeAccept({
           You are in. Go to your run
         </Link>
       );
+    case "checking":
+      return <Skeleton className="h-12 w-full rounded-lg" />;
     case "locked":
       return (
-        <LockPanel lock={slot.lock} returnTo={returnTo} onCheckSensor={view.checkSensor} />
+        <LockPanel
+          lock={slot.lock}
+          returnTo={returnTo}
+          onCheckSensor={view.checkSensor}
+          onRetry={checks.retry}
+        />
       );
     case "closed":
       return (

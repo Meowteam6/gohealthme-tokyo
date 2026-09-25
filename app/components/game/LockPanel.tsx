@@ -13,6 +13,7 @@ export default function LockPanel({
   lock,
   returnTo,
   onCheckSensor,
+  onRetry,
   compact = false,
 }: {
   lock: RunLock;
@@ -20,6 +21,8 @@ export default function LockPanel({
   returnTo: string;
   /** Runs the one-tap sensor check. Absent where no check can run. */
   onCheckSensor?: () => Promise<boolean>;
+  /** Re-reads a failed join check. Absent where no retry can run. */
+  onRetry?: () => void;
   compact?: boolean;
 }) {
   const copy = lockCopy(lock, returnTo);
@@ -47,6 +50,18 @@ export default function LockPanel({
         >
           {fix.label}
         </Link>
+      ) : fix.kind === "retry" ? (
+        onRetry !== undefined ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className={`mt-3 rounded-lg border-2 border-foreground bg-surface font-semibold text-foreground hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${TAP_TARGET}`}
+          >
+            {fix.label}
+          </button>
+        ) : (
+          <p className="mt-2 text-xs text-muted">Reload the page to check again.</p>
+        )
       ) : fix.kind === "check-sensor" && onCheckSensor !== undefined ? (
         <div className="mt-3">
           <button
