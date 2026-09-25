@@ -70,7 +70,12 @@ const POLL_INTERVAL_MS = 800;
 const MAX_POLLS = 375;
 
 /** Run statuses that end the polling loop. "recorded" also stops it: the pool
- *  period has not ended, and SPOTTER settles the moment it does. */
+ *  period has not ended, and SPOTTER settles the moment it does.
+ *
+ *  World ID for Agents: a declined, expired or cancelled confirmation ends the
+ *  loop too (nothing more happens without a new ask). "awaiting-approval" does
+ *  NOT: the loop's next poll after the player says yes is what records the
+ *  result (docs/WORLD.md, step 4), so it keeps polling while the ask is open. */
 const TERMINAL: RunStatus[] = [
   "paid",
   "no-pay",
@@ -78,6 +83,9 @@ const TERMINAL: RunStatus[] = [
   "blocked",
   "recorded",
   "error",
+  "approval-declined",
+  "approval-expired",
+  "approval-cancelled",
 ];
 
 interface RunResponse {
@@ -342,7 +350,11 @@ function WearableCheckInner({
         screenRef.current = claimScreenOf(ledger);
         const runStatus = runStatusFromLedger(ledger) ?? "verifying";
         setStatus({ kind: "agent", runStatus, ledger, lockedReason: null });
-        if (runStatus === "verifying") void pollRun(goalId);
+        // A run waiting on the player's World ID OK resumes too: the poll after
+        // the approval lands is what records the result.
+        if (runStatus === "verifying" || runStatus === "awaiting-approval") {
+          void pollRun(goalId);
+        }
       } catch (err) {
         // Restore is a read-only convenience; a failed read must not block a
         // fresh run. Logged so it is never silent.

@@ -18,11 +18,14 @@ import {
   type LedgerEntry,
   type RunStatus,
 } from "@/lib/agent-receipt";
-import type { ApprovalStatus } from "@/lib/game/lanes";
-
-/** What the World ID for Agents step reported, as the Verdict reads it.
- *  "unavailable" means the lane is not on this build: the step is skipped. */
-export type ApprovalState = ApprovalStatus | "unavailable" | "cancelled";
+/** What the approval card reported in this session. It is fresher than the
+ *  ledger read it came from, and only until the ledger moves on. */
+export interface LocalApproval {
+  outcome: "approved" | "declined" | "expired" | "cancelled";
+  /** Ledger length when the card reported. Once the ledger grows (a new
+   *  request row, the record row) the ledger is the truth again. */
+  ledgerLength: number;
+}
 
 export type StopReason = "budget" | "not-in-run" | "service" | "error";
 
@@ -31,8 +34,10 @@ export type VerdictScreen =
   | { kind: "none" }
   /** SPOTTER is reading the data. */
   | { kind: "checking" }
-  /** SPOTTER decided to pay and needs the player to confirm it is them. */
+  /** SPOTTER decided to pay and is waiting on the player's World ID OK. */
   | { kind: "confirm-human" }
+  /** The player confirmed; SPOTTER is recording the result. */
+  | { kind: "confirmed" }
   | { kind: "approval-failed"; outcome: "declined" | "expired" | "cancelled" }
   /** Verified, and the payout waits on the period end or on settlement. */
   | { kind: "banked"; selfReported: boolean }
@@ -54,9 +59,7 @@ export interface VerdictInput {
   refunded: boolean;
   runStatus: RunStatus | null;
   ledger: LedgerEntry[] | null;
-  approval: ApprovalState;
-  /** What the approval card reported in this session, newer than the poll. */
-  localApproval: "approved" | "declined" | "expired" | "cancelled" | null;
+  localApproval: LocalApproval | null;
 }
 
 /** True when SPOTTER's current attempt decided to pay. */
@@ -69,14 +72,11 @@ function selfReportedOf(ledger: LedgerEntry[] | null): boolean {
   return ledger?.some((e) => e.kind === "verdict" && e.selfReported === true) === true;
 }
 
-function effectiveApproval(input: VerdictInput): ApprovalState {
-  if (input.approval === "unavailable") return "unavailable";
-  // The card's own callback is fresher than the poll it came from; a new
-  // pending request from the server supersedes a stale local failure.
-  if (input.localApproval !== null && input.approval !== "pending") {
-    return input.localApproval;
-  }
-  return input.approval;
+/** The card's report, while the ledger has not moved past it. */
+function freshLocal(input: VerdictInput): LocalApproval["outcome"] | null {
+  if (input.localApproval === null) return null;
+  const length = input.ledger?.length ?? 0;
+  return length <= input.localApproval.ledgerLength ? input.localApproval.outcome : null;
 }
 
 export function verdictScreenOf(input: VerdictInput): VerdictScreen {
@@ -85,6 +85,7 @@ export function verdictScreenOf(input: VerdictInput): VerdictScreen {
 
   const ledger = input.ledger;
   const selfReported = selfReportedOf(ledger);
+  const local = freshLocal(input);
 
   if (input.runStatus === "paid" && ledger !== null) {
     const settled = ledger.find(
@@ -105,23 +106,24 @@ export function verdictScreenOf(input: VerdictInput): VerdictScreen {
   switch (input.runStatus) {
     case null:
       return { kind: "none" };
-    case "verifying": {
-      if (!payDecidedOf(ledger)) return { kind: "checking" };
-      const approval = effectiveApproval(input);
-      switch (approval) {
-        case "unavailable":
-        case "approved":
-          return { kind: "banked", selfReported };
-        case "declined":
-        case "expired":
-        case "cancelled":
-          return { kind: "approval-failed", outcome: approval };
-        case "none":
-        case "pending":
-          return { kind: "confirm-human" };
+    case "verifying":
+      // An approved row falls through to "verifying" while the record lands.
+      if (local === "approved" || approvedOnLedger(ledger)) return { kind: "confirmed" };
+      return { kind: "checking" };
+    // World ID for Agents: SPOTTER asked the player to confirm (ledger rows
+    // written by the world-agents lane, read by lib/agent-receipt.ts).
+    case "awaiting-approval":
+      if (local === "approved") return { kind: "confirmed" };
+      if (local === "declined" || local === "expired" || local === "cancelled") {
+        return { kind: "approval-failed", outcome: local };
       }
-      break;
-    }
+      return { kind: "confirm-human" };
+    case "approval-declined":
+      return { kind: "approval-failed", outcome: "declined" };
+    case "approval-expired":
+      return { kind: "approval-failed", outcome: "expired" };
+    case "approval-cancelled":
+      return { kind: "approval-failed", outcome: "cancelled" };
     case "recorded":
       return { kind: "banked", selfReported };
     case "no-pay": {
@@ -138,6 +140,16 @@ export function verdictScreenOf(input: VerdictInput): VerdictScreen {
       return { kind: "stopped", reason: "error" };
   }
   return { kind: "checking" };
+}
+
+function approvedOnLedger(ledger: LedgerEntry[] | null): boolean {
+  if (ledger === null) return false;
+  for (let i = ledger.length - 1; i >= 0; i--) {
+    const e = ledger[i];
+    if (e.kind === "record") return false;
+    if (e.kind === "approval") return e.status === "approved";
+  }
+  return false;
 }
 
 export interface VerdictCopy {
@@ -165,18 +177,27 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
     case "confirm-human":
       return {
         headline: "Confirm it is you",
-        body: "The numbers check out. Before any USDC moves, prove the person collecting is the person who played.",
+        body: "The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. No confirmation, no payout.",
         pose: "watching",
+      };
+    case "confirmed":
+      return {
+        headline: "Confirmed",
+        body: "You confirmed it is you. SPOTTER is recording your result on chain now, and the payout follows when the run allows.",
+        pose: "thumbsup",
       };
     case "approval-failed":
       return {
-        headline: "Run failed, ask again",
+        headline:
+          screen.outcome === "cancelled"
+            ? "Run closed before you confirmed"
+            : "Run failed, ask again",
         body:
           screen.outcome === "expired"
-            ? "The confirmation timed out, so nothing was paid. Your verified result is still here. Ask again and finish it this time."
+            ? "The confirmation window closed before you answered, so nothing moved. Ask again below and finish it this time."
             : screen.outcome === "declined"
-              ? "The confirmation did not go through, so nothing was paid. Your verified result is still here. Ask again when you are ready."
-              : "You closed the confirmation, so nothing was paid. Your verified result is still here. Ask again when you are ready.",
+              ? "You said no, so nothing moved. If that was a mistake, ask again below."
+              : "The run settled before you confirmed, so nothing moved and there is nothing left to ask. Your stake comes back through the pool's refund at settle.",
         pose: "facepalm",
       };
     case "banked":

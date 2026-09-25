@@ -68,7 +68,6 @@ function screenFor(
     refunded: false,
     runStatus: ledger === null ? null : runStatusFromLedger(ledger),
     ledger,
-    approval: "none",
     localApproval: null,
     ...overrides,
   });
@@ -89,42 +88,70 @@ describe("verdictScreenOf", () => {
     expect(payDecidedOf([spend])).toBe(false);
   });
 
-  it("asks the player to confirm it is them once SPOTTER decided to pay", () => {
-    const ledger = [spend, verdict(true), reason("pay")];
-    expect(payDecidedOf(ledger)).toBe(true);
-    expect(screenFor(ledger, { approval: "none" })).toEqual({ kind: "confirm-human" });
-    expect(screenFor(ledger, { approval: "pending" })).toEqual({ kind: "confirm-human" });
+  function approval(
+    status: "requested" | "approved" | "declined" | "expired" | "cancelled",
+  ): LedgerEntry {
+    return {
+      kind: "approval",
+      at: AT,
+      status,
+      requestId: "req-1",
+      action: "settle:0x01:1",
+      provider: "mock",
+    } as LedgerEntry;
+  }
+  const decided = [spend, verdict(true), reason("pay")];
+
+  it("keeps checking after a pay decision until SPOTTER asks", () => {
+    expect(payDecidedOf(decided)).toBe(true);
+    expect(screenFor(decided)).toEqual({ kind: "checking" });
   });
 
-  it("skips the confirmation when World for Agents is not on this build", () => {
-    const ledger = [spend, verdict(true), reason("pay")];
-    expect(screenFor(ledger, { approval: "unavailable" })).toEqual({
-      kind: "banked",
-      selfReported: false,
-    });
+  it("asks the player to confirm it is them when the run awaits approval", () => {
+    const ledger = [...decided, approval("requested")];
+    expect(runStatusFromLedger(ledger)).toBe("awaiting-approval");
+    expect(screenFor(ledger)).toEqual({ kind: "confirm-human" });
   });
 
-  it("maps declined, expired and cancelled approvals to run failed, ask again", () => {
-    const ledger = [spend, verdict(true), reason("pay")];
-    expect(screenFor(ledger, { approval: "declined" })).toEqual({
+  it("maps declined, expired and cancelled approvals to their own screens", () => {
+    expect(screenFor([...decided, approval("requested"), approval("declined")])).toEqual({
       kind: "approval-failed",
       outcome: "declined",
     });
-    expect(screenFor(ledger, { approval: "expired" })).toEqual({
+    expect(screenFor([...decided, approval("requested"), approval("expired")])).toEqual({
       kind: "approval-failed",
       outcome: "expired",
     });
-    expect(screenFor(ledger, { approval: "none", localApproval: "cancelled" })).toEqual({
+    expect(screenFor([...decided, approval("requested"), approval("cancelled")])).toEqual({
       kind: "approval-failed",
       outcome: "cancelled",
     });
   });
 
-  it("lets a fresh pending request supersede a stale local failure (ask again)", () => {
-    const ledger = [spend, verdict(true), reason("pay")];
-    expect(screenFor(ledger, { approval: "pending", localApproval: "expired" })).toEqual({
-      kind: "confirm-human",
-    });
+  it("shows confirmed while the record lands after an approval", () => {
+    const ledger = [...decided, approval("requested"), approval("approved")];
+    expect(runStatusFromLedger(ledger)).toBe("verifying");
+    expect(screenFor(ledger)).toEqual({ kind: "confirmed" });
+  });
+
+  it("trusts the card's report only until the ledger moves on (ask again)", () => {
+    const asked = [...decided, approval("requested")];
+    expect(
+      screenFor(asked, { localApproval: { outcome: "declined", ledgerLength: asked.length } }),
+    ).toEqual({ kind: "approval-failed", outcome: "declined" });
+    // A new request row after "ask again": the ledger is the truth again.
+    const again = [...asked, approval("declined"), approval("requested")];
+    expect(
+      screenFor(again, { localApproval: { outcome: "declined", ledgerLength: asked.length } }),
+    ).toEqual({ kind: "confirm-human" });
+  });
+
+  it("never pays or banks on an approval alone", () => {
+    for (const status of ["requested", "declined", "expired", "cancelled"] as const) {
+      const kind = screenFor([...decided, approval(status)]).kind;
+      expect(kind).not.toBe("won");
+      expect(kind).not.toBe("banked");
+    }
   });
 
   it("banks a verified, deferred result and never calls it won", () => {
@@ -208,6 +235,7 @@ describe("verdictCopy", () => {
   const screens: VerdictScreen[] = [
     { kind: "checking" },
     { kind: "confirm-human" },
+    { kind: "confirmed" },
     { kind: "approval-failed", outcome: "declined" },
     { kind: "approval-failed", outcome: "expired" },
     { kind: "approval-failed", outcome: "cancelled" },
@@ -234,6 +262,12 @@ describe("verdictCopy", () => {
         /NEXT_PUBLIC|unexpected response|Stopped before payout|odds|wager|bet\b|!/,
       );
     }
+  });
+
+  it("offers no retry once the run settled before the confirmation", () => {
+    const copy = verdictCopy({ kind: "approval-failed", outcome: "cancelled" });
+    expect(copy?.headline).toBe("Run closed before you confirmed");
+    expect(copy?.body).not.toMatch(/ask again/i);
   });
 
   it("uses the words the game loop promised", () => {

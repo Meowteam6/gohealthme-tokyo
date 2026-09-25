@@ -23,12 +23,12 @@ import SpotterSays from "@/components/SpotterSays";
 import { toUsd2, type LedgerEntry, type RunStatus } from "@/lib/agent-receipt";
 import { claimStepIndex, claimStepOf, type ClaimStep } from "@/lib/claim-rail";
 import { fetchGoalId, type PoolInfo } from "@/lib/contract";
-import { parseApprovalStatus, parseScreening, type ScreeningStatus } from "@/lib/game/lanes";
+import { parseScreening, type ScreeningStatus } from "@/lib/game/lanes";
 import { useLaneProbe } from "@/lib/game/useLaneProbe";
 import {
   verdictCopy,
   verdictScreenOf,
-  type ApprovalState,
+  type LocalApproval,
   type VerdictScreen,
 } from "@/lib/game/verdict";
 
@@ -86,7 +86,7 @@ export interface VerdictStageProps {
   screen: VerdictScreen;
   goalId: string | null;
   screening: VerdictScreening;
-  onApproval: (outcome: ApprovalOutcome | "retry") => void;
+  onApproval: (outcome: ApprovalOutcome) => void;
 }
 
 /** The approval and screening reads, plus the screen they produce. */
@@ -98,8 +98,11 @@ export function useVerdict(input: {
   refunded: boolean;
   runStatus: RunStatus | null;
   ledger: LedgerEntry[] | null;
+  /** Called when the card reports the human said yes, so the page can wake
+   *  the run loop that records the result (docs/WORLD.md step 4). */
+  onApproved?: () => void;
 }) {
-  const [local, setLocal] = useState<ApprovalOutcome | "retry" | null>(null);
+  const [local, setLocal] = useState<LocalApproval | null>(null);
   const goalQuery = useQuery({
     queryKey: ["goal-id", input.pool?.id.toString() ?? null, input.address],
     queryFn: () => {
@@ -114,29 +117,12 @@ export function useVerdict(input: {
   const goalId = goalQuery.data ?? null;
   const goalParam = goalId !== null ? encodeURIComponent(goalId) : null;
 
-  const approval = useLaneProbe(
-    ["approval", goalId],
-    goalParam !== null ? `/api/agent/approval/status?goalId=${goalParam}` : null,
-    parseApprovalStatus,
-    { refetchInterval: input.runStatus === "verifying" ? 3_000 : false },
-  );
   const screening = useLaneProbe(
     ["screening", goalId],
     goalParam !== null ? `/api/screen/status?goalId=${goalParam}` : null,
     parseScreening,
     { refetchInterval: input.runStatus === "recorded" || input.runStatus === "verifying" ? 5_000 : false },
   );
-
-  // A lane that is not on this build means the step is skipped, never that the
-  // run is stuck: "unavailable" routes a pay decision straight to banked.
-  const approvalState: ApprovalState =
-    local === "retry"
-      ? "pending"
-      : approval.lane === "on"
-        ? (approval.value ?? "none")
-        : approval.lane === "loading"
-          ? "none"
-          : "unavailable";
 
   const screen: VerdictScreen =
     input.pool === null
@@ -148,8 +134,7 @@ export function useVerdict(input: {
     refunded: input.refunded,
     runStatus: input.runStatus,
     ledger: input.ledger,
-    approval: approvalState,
-    localApproval: local === "retry" ? null : local,
+    localApproval: local,
   });
 
   return {
@@ -158,9 +143,9 @@ export function useVerdict(input: {
     screening: (screening.lane === "on" && screening.value !== null
       ? screening.value
       : { status: "unconfigured", reason: null }) as VerdictScreening,
-    onApproval: (outcome: ApprovalOutcome | "retry") => {
-      setLocal(outcome);
-      approval.refetch();
+    onApproval: (outcome: ApprovalOutcome) => {
+      setLocal({ outcome, ledgerLength: input.ledger?.length ?? 0 });
+      if (outcome === "approved") input.onApproved?.();
     },
   };
 }
@@ -178,7 +163,6 @@ export default function VerdictStage({
   screening,
   onApproval,
 }: VerdictStageProps) {
-  const [attempt, setAttempt] = useState(0);
   const copy = verdictCopy(screen);
   if (copy === null) return null;
 
@@ -192,7 +176,15 @@ export default function VerdictStage({
       className="overflow-hidden rounded-xl border-2 border-foreground bg-surface"
     >
       <div className="space-y-4 p-4 sm:p-6">
-        <RunPath step={screen.kind === "confirm-human" || screen.kind === "approval-failed" ? "verdict" : step} />
+        <RunPath
+          step={
+            screen.kind === "confirm-human" ||
+            screen.kind === "approval-failed" ||
+            screen.kind === "confirmed"
+              ? "verdict"
+              : step
+          }
+        />
         <div aria-live="polite">
           <h2
             id="verdict-headline"
@@ -220,27 +212,17 @@ export default function VerdictStage({
           <SpotterSays surface="evidence" state="verifying" pose={copy.pose} say={spotterLineFor(screen)} />
         )}
 
-        {screen.kind === "confirm-human" && goalId !== null ? (
+        {/* One card, one position, for the ask and its three refusals: it owns
+            the countdown, the fresh verification, and "Ask again" (none after
+            the run settled), so it must not remount between those screens. */}
+        {(screen.kind === "confirm-human" || screen.kind === "approval-failed") &&
+        goalId !== null ? (
           <HumanApprovalCard
-            key={attempt}
             goalId={goalId}
             poolId={pool.id.toString()}
             address={address}
-            onResult={(outcome) => onApproval(outcome)}
+            onResult={onApproval}
           />
-        ) : null}
-
-        {screen.kind === "approval-failed" ? (
-          <button
-            type="button"
-            onClick={() => {
-              setAttempt((n) => n + 1);
-              onApproval("retry");
-            }}
-            className="inline-flex min-h-12 items-center rounded-lg bg-accent px-5 font-semibold text-white shadow-[var(--shadow-pop)] hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-          >
-            Ask again
-          </button>
         ) : null}
 
         {showScreening ? (
@@ -280,6 +262,8 @@ function spotterLineFor(screen: VerdictScreen): string {
       return "Reading your nights. I buy the proof, I make the call.";
     case "confirm-human":
       return "Numbers check out. Now show me it is really you before I move a cent.";
+    case "confirmed":
+      return "That is you. Writing it down, then the money moves.";
     case "approval-failed":
       return "Nothing moved. Your result is still here when you are.";
     case "banked":
