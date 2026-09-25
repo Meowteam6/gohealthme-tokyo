@@ -37,6 +37,8 @@
     "@upstash/redis": "^1.38.0",
     "@vercel/analytics": "^2.0.1",
     "@wagmi/core": "^2.22.1",
+    "@worldcoin/idkit": "^4.3.0",
+    "@worldcoin/idkit-core": "^4.3.0",
     "@x402/core": "^2.24.0",
     "@x402/evm": "^2.24.0",
     "@x402/svm": "^2.24.0",
