@@ -122,7 +122,9 @@ async function readError(
 }
 
 export default function HumanApprovalCard(props: HumanApprovalCardProps) {
-  const { goalId, address, onResult } = props;
+  // props.address is not used as the proof signal any more: the server hands
+  // back `signal` (`<goalId>:<attempt>`), which binds the proof to the payout.
+  const { goalId, onResult } = props;
   const requestAuth = useWalletAuth();
   const [state, setState] = useState<CardState>({ kind: "asking" });
   const [now, setNow] = useState(() => Date.now());
@@ -369,7 +371,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     const { request } = state;
     setState({ kind: "verifying", request });
     const result = await complete(request, {
-      proof: mockApprovalProof(request.action),
+      proof: mockApprovalProof(request.action, request.signal),
     });
     if (!mounted.current || result.ok) return;
     if (result.fatal) {
@@ -565,7 +567,6 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
               open={widgetOpen}
               onOpenChange={setWidgetOpen}
               request={world}
-              address={address}
               onVerify={verifyWorld}
               onSuccess={() => setWidgetOpen(false)}
               onError={(message) =>

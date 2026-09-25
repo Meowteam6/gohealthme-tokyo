@@ -20,7 +20,10 @@ export interface OpenApprovalRequest {
   expiresAt: string;
   status: "pending" | ApprovalOutcome;
   attempt: number;
+  /** The static World action, `settle` unless the server overrides it. */
   action: string;
+  /** `<goalId>:<attempt>`: the IDKit signal, binding the proof to this payout. */
+  signal: string;
   provider: ApprovalProviderName;
   mocked: boolean;
   world?: {
@@ -44,14 +47,19 @@ export interface ApprovalStatusResponse {
   expiresAt?: string;
 }
 
-/** The event-mode proof: bound to the action the server issued, carrying no
- *  identity. The server refuses any other shape. Never production. */
-export function mockApprovalProof(action: string): {
+/** The event-mode proof: bound to the action and the payout signal the
+ *  server issued, carrying no identity. The server refuses any other shape.
+ *  Never production. */
+export function mockApprovalProof(
+  action: string,
+  signal: string,
+): {
   kind: typeof CLIENT_MOCK_PROOF_KIND;
   action: string;
+  signal: string;
   approve: true;
 } {
-  return { kind: CLIENT_MOCK_PROOF_KIND, action, approve: true };
+  return { kind: CLIENT_MOCK_PROOF_KIND, action, signal, approve: true };
 }
 
 /** Whole seconds left before `expiresAt`, never negative. */
@@ -76,6 +84,7 @@ export function parseOpenRequest(value: unknown): OpenApprovalRequest | null {
     typeof v.requestId !== "string" ||
     typeof v.expiresAt !== "string" ||
     typeof v.action !== "string" ||
+    typeof v.signal !== "string" ||
     typeof v.attempt !== "number" ||
     (v.provider !== "mock" && v.provider !== "world") ||
     typeof v.mocked !== "boolean" ||
@@ -96,6 +105,7 @@ export function parseOpenRequest(value: unknown): OpenApprovalRequest | null {
     status: v.status,
     attempt: v.attempt,
     action: v.action,
+    signal: v.signal,
     provider: v.provider,
     mocked: v.mocked,
     ...(world === undefined ? {} : { world }),

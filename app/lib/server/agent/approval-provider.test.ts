@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { hashSignal } from "@worldcoin/idkit-core/hashing";
 
 // The provider seam is what lets the World booth answer be a config swap.
 // Pinned here: the mode switch fails loudly on a typo, the mock provider is
@@ -7,7 +8,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // forwards the proof intact, and refuses everything World refuses.
 
 const ADDRESS = "0x1111111111111111111111111111111111111111";
-const ACTION = "settle:0xabc:1";
+// The static, Portal-registered action; the payout rides in the signal.
+const ACTION = "settle";
+const SIGNAL = "0xabc:1";
 
 async function load() {
   vi.resetModules();
@@ -64,37 +67,48 @@ describe("mock provider (event mode)", () => {
     const { mockNullifier } = await load();
     const a = mockNullifier(ADDRESS, ACTION);
     const b = mockNullifier(ADDRESS.toUpperCase().replace("0X", "0x"), ACTION);
-    const c = mockNullifier(ADDRESS, "settle:0xabc:2");
+    const c = mockNullifier(ADDRESS, "prove-human");
     expect(a).toMatch(/^0x[0-9a-f]{64}$/);
     expect(a).toBe(b);
     expect(a).not.toBe(c);
   });
 
-  it("accepts only a mocked proof bound to the requested action that approves", async () => {
+  it("accepts only a mocked proof bound to the requested action and payout that approves", async () => {
     const { mockApprovalProvider, MOCK_PROOF_KIND, mockNullifier } = await load();
     const provider = mockApprovalProvider();
     const ok = await provider.verify({
       action: ACTION,
+      signal: SIGNAL,
       address: ADDRESS,
-      proof: { kind: MOCK_PROOF_KIND, action: ACTION, approve: true },
+      proof: { kind: MOCK_PROOF_KIND, action: ACTION, signal: SIGNAL, approve: true },
     });
     expect(ok).toEqual({ ok: true, nullifier: mockNullifier(ADDRESS, ACTION) });
 
     const wrongAction = await provider.verify({
       action: ACTION,
+      signal: SIGNAL,
       address: ADDRESS,
-      proof: { kind: MOCK_PROOF_KIND, action: "settle:0xabc:2", approve: true },
+      proof: { kind: MOCK_PROOF_KIND, action: "prove-human", signal: SIGNAL, approve: true },
     });
     expect(wrongAction).toMatchObject({ ok: false, reason: /different request/ });
 
+    const otherPayout = await provider.verify({
+      action: ACTION,
+      signal: SIGNAL,
+      address: ADDRESS,
+      proof: { kind: MOCK_PROOF_KIND, action: ACTION, signal: "0xabc:2", approve: true },
+    });
+    expect(otherPayout).toMatchObject({ ok: false, reason: /different payout/ });
+
     const notMock = await provider.verify({
       action: ACTION,
+      signal: SIGNAL,
       address: ADDRESS,
       proof: { protocol_version: "4.0", action: ACTION, responses: [] },
     });
     expect(notMock).toMatchObject({ ok: false });
 
-    const none = await provider.verify({ action: ACTION, address: ADDRESS, proof: null });
+    const none = await provider.verify({ action: ACTION, signal: SIGNAL, address: ADDRESS, proof: null });
     expect(none).toMatchObject({ ok: false, reason: /no proof/ });
   });
 });
@@ -130,7 +144,9 @@ describe("world provider", () => {
     nonce: "0xnonce",
     action: ACTION,
     environment: "production",
-    responses: [{ identifier: "orb", nullifier: "0xff", proof: [] }],
+    responses: [
+      { identifier: "orb", nullifier: "0xff", signal_hash: hashSignal(SIGNAL), proof: [] },
+    ],
   };
 
   it("signs the rp_context on the server with the action and ttl, and hands the browser only public fields", async () => {
@@ -163,7 +179,7 @@ describe("world provider", () => {
   it("forwards the proof intact to /verify/{rp_id} with the environment pinned from config", async () => {
     const fetchImpl = fetchReplying(200, { success: true, nullifier: "255" });
     const p = await provider(fetchImpl);
-    const outcome = await p.verify({ action: ACTION, address: ADDRESS, proof: goodProof });
+    const outcome = await p.verify({ action: ACTION, signal: SIGNAL, address: ADDRESS, proof: goodProof });
     expect(outcome).toEqual({ ok: true, nullifier: "0xff" });
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://verify.example/api/v4/verify/rp_test");
@@ -178,10 +194,41 @@ describe("world provider", () => {
     const p = await provider(fetchImpl);
     const outcome = await p.verify({
       action: ACTION,
+      signal: SIGNAL,
       address: ADDRESS,
-      proof: { ...goodProof, action: "settle:0xabc:9" },
+      proof: { ...goodProof, action: "prove-human" },
     });
     expect(outcome).toMatchObject({ ok: false, reason: /different request/ });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("refuses a proof whose signal names another payout before calling World", async () => {
+    const fetchImpl = fetchReplying(200, { success: true, nullifier: "255" });
+    const p = await provider(fetchImpl);
+    // A genuine proof for goal 0xabc attempt 1, replayed at attempt 2.
+    const outcome = await p.verify({
+      action: ACTION,
+      signal: "0xabc:2",
+      address: ADDRESS,
+      proof: goodProof,
+    });
+    expect(outcome).toMatchObject({ ok: false, reason: /different payout/ });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("refuses a proof with no signal_hash: it is not bound to any payout", async () => {
+    const fetchImpl = fetchReplying(200, { success: true, nullifier: "255" });
+    const p = await provider(fetchImpl);
+    const outcome = await p.verify({
+      action: ACTION,
+      signal: SIGNAL,
+      address: ADDRESS,
+      proof: {
+        ...goodProof,
+        responses: [{ identifier: "orb", nullifier: "0xff", proof: [] }],
+      },
+    });
+    expect(outcome).toMatchObject({ ok: false, reason: /not bound to a payout/ });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -189,7 +236,7 @@ describe("world provider", () => {
     const p = await provider(
       fetchReplying(400, { success: false, code: "all_verifications_failed" }),
     );
-    const outcome = await p.verify({ action: ACTION, address: ADDRESS, proof: goodProof });
+    const outcome = await p.verify({ action: ACTION, signal: SIGNAL, address: ADDRESS, proof: goodProof });
     expect(outcome).toEqual({
       ok: false,
       reason: "World did not accept the proof (all_verifications_failed)",
@@ -201,7 +248,7 @@ describe("world provider", () => {
       throw new Error("ECONNRESET");
     });
     const p = await provider(fetchImpl as unknown as typeof fetch);
-    const outcome = await p.verify({ action: ACTION, address: ADDRESS, proof: goodProof });
+    const outcome = await p.verify({ action: ACTION, signal: SIGNAL, address: ADDRESS, proof: goodProof });
     expect(outcome).toMatchObject({ ok: false, reason: /could not be reached/ });
   });
 

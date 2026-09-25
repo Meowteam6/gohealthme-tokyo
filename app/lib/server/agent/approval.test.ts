@@ -48,10 +48,12 @@ describe("requestApproval", () => {
       poolId: "7",
       address: USER,
       attempt: 1,
-      action: approvalAction(GOAL, 1),
+      action: "settle",
+      signal: `${GOAL}:1`,
       provider: "mock",
       status: "pending",
     });
+    expect(approvalAction()).toBe("settle");
     expect(Date.parse(result.record.expiresAt) - T0).toBe(90_000);
     expect(result.challenge).toEqual({ provider: "mock", mocked: true });
     const rows = await readLedger(GOAL);
@@ -71,6 +73,21 @@ describe("requestApproval", () => {
     expect(second.created).toBe(false);
     expect(second.record.requestId).toBe(first.record.requestId);
     expect(await readLedger(GOAL)).toHaveLength(1);
+  });
+
+  it("uses the static Portal action, overridable by WORLD_APPROVAL_ACTION", async () => {
+    vi.stubEnv("WORLD_APPROVAL_ACTION", "settle-staging");
+    const { requestApproval, mockApprovalProvider } = await load();
+    const { record } = await requestApproval({
+      goalId: GOAL,
+      poolId: 7n,
+      address: USER,
+      provider: mockApprovalProvider(),
+      askedBy: "spotter",
+      nowMs: T0,
+    });
+    expect(record.action).toBe("settle-staging");
+    expect(record.signal).toBe(`${GOAL}:1`);
   });
 
   it("honours WORLD_APPROVAL_TTL_S within bounds", async () => {
@@ -96,7 +113,12 @@ describe("completeApproval", () => {
       askedBy: "spotter",
       nowMs: T0,
     });
-    const proof = { kind: mod.MOCK_PROOF_KIND, action: record.action, approve: true };
+    const proof = {
+      kind: mod.MOCK_PROOF_KIND,
+      action: record.action,
+      signal: record.signal,
+      approve: true,
+    };
     return { ...mod, provider, record, proof };
   }
 
@@ -181,7 +203,7 @@ describe("completeApproval", () => {
     const outcome = await completeApproval({
       requestId: record.requestId,
       address: USER,
-      decision: { decision: "approve", proof: { ...proof, action: "settle:x:9" } },
+      decision: { decision: "approve", proof: { ...proof, action: "prove-human" } },
       provider,
       nowMs: T0 + 1_000,
     });
@@ -220,15 +242,73 @@ describe("completeApproval", () => {
     expect(stale).toMatchObject({ status: "superseded", record: { requestId: again.record.requestId } });
   });
 
-  it("consumes a nullifier once: a proof whose nullifier was already spent is refused", async () => {
-    const { completeApproval, provider, record, proof, mockNullifier, readApproval } = await opened();
-    const store = await import("@/lib/server/store");
-    // Somebody already spent this human's consent for this action (say, a
-    // replayed request on a sibling lambda that won the race).
-    await store.setNx(
-      `agent-approval-nullifier:${record.action}:${mockNullifier(USER, record.action)}`,
-      "apr_elsewhere",
+  it("refuses a proof made for another payout (cross-payout replay) and stays pending", async () => {
+    const { completeApproval, provider, record, proof, readApproval } = await opened();
+    const otherGoal = "0x" + "cd".repeat(32);
+    for (const signal of [`${otherGoal}:1`, `${GOAL}:2`]) {
+      const outcome = await completeApproval({
+        requestId: record.requestId,
+        address: USER,
+        decision: { decision: "approve", proof: { ...proof, signal } },
+        provider,
+        nowMs: T0 + 1_000,
+      });
+      expect(outcome).toMatchObject({ status: "rejected", reason: /different payout/ });
+    }
+    expect((await readApproval(GOAL, T0 + 1_000))?.status).toBe("pending");
+  });
+
+  it("lets the same human confirm a new payout: the nullifier is scoped to goal and attempt", async () => {
+    const { completeApproval, requestApproval, provider, record, proof, readApproval } = await opened();
+    await completeApproval({ requestId: record.requestId, address: USER, decision: { decision: "approve", proof }, provider, nowMs: T0 + 1_000 });
+    const otherGoal = "0x" + "cd".repeat(32);
+    const next = await requestApproval({ goalId: otherGoal, poolId: 8n, address: USER, provider, askedBy: "spotter", nowMs: T0 + 2_000 });
+    expect(next.record.action).toBe(record.action);
+    const outcome = await completeApproval({
+      requestId: next.record.requestId,
+      address: USER,
+      decision: {
+        decision: "approve",
+        proof: { ...proof, signal: next.record.signal },
+      },
+      provider,
+      nowMs: T0 + 3_000,
+    });
+    expect(outcome.status).toBe("approved");
+    // Same human, same static action: same nullifier on both payouts.
+    expect((await readApproval(otherGoal, T0 + 3_000))?.nullifier).toBe(
+      (await readApproval(GOAL, T0 + 3_000))?.nullifier,
     );
+  });
+
+  it("lets the same human confirm a re-ask after a decline (attempt 2)", async () => {
+    const { completeApproval, requestApproval, provider, record, proof } = await opened();
+    await completeApproval({ requestId: record.requestId, address: USER, decision: { decision: "decline" }, provider, nowMs: T0 + 1_000 });
+    const again = await requestApproval({ goalId: GOAL, poolId: 7n, address: USER, provider, askedBy: "human", nowMs: T0 + 2_000 });
+    expect(again.record.signal).toBe(`${GOAL}:2`);
+    // The attempt-1 proof is refused; a fresh one for attempt 2 approves.
+    const stale = await completeApproval({ requestId: again.record.requestId, address: USER, decision: { decision: "approve", proof }, provider, nowMs: T0 + 3_000 });
+    expect(stale).toMatchObject({ status: "rejected", reason: /different payout/ });
+    const fresh = await completeApproval({
+      requestId: again.record.requestId,
+      address: USER,
+      decision: { decision: "approve", proof: { ...proof, signal: again.record.signal } },
+      provider,
+      nowMs: T0 + 4_000,
+    });
+    expect(fresh.status).toBe("approved");
+  });
+
+  it("consumes a nullifier once per payout: a replayed proof for the same payout is refused", async () => {
+    const { completeApproval, provider, record, proof, mockNullifier, readApproval, approvalNullifierKey } = await opened();
+    const store = await import("@/lib/server/store");
+    // Somebody already spent this human's consent for this payout (say, a
+    // replayed request on a sibling lambda that won the race).
+    const key = approvalNullifierKey(record, mockNullifier(USER, record.action));
+    expect(key).toBe(
+      `agent-approval-nullifier:settle:${GOAL}:1:${mockNullifier(USER, record.action)}`,
+    );
+    await store.setNx(key, "apr_elsewhere");
     const reuse = await completeApproval({
       requestId: record.requestId,
       address: USER,
@@ -273,21 +353,22 @@ describe("expiry", () => {
     const outcome = await mod.completeApproval({
       requestId: record.requestId,
       address: USER,
-      decision: { decision: "approve", proof: { kind: mod.MOCK_PROOF_KIND, action: record.action, approve: true } },
+      decision: { decision: "approve", proof: { kind: mod.MOCK_PROOF_KIND, action: record.action, signal: record.signal, approve: true } },
       provider,
       nowMs: T0 + 100_000,
     });
     expect(outcome.status).toBe("expired");
   });
 
-  it("a re-ask after expiry opens attempt 2 with a new action", async () => {
+  it("a re-ask after expiry opens attempt 2: same static action, a new signal", async () => {
     const mod = await load();
     const provider = mod.mockApprovalProvider();
     const first = await mod.requestApproval({ goalId: GOAL, poolId: 7n, address: USER, provider, askedBy: "spotter", nowMs: T0 });
     const second = await mod.requestApproval({ goalId: GOAL, poolId: 7n, address: USER, provider, askedBy: "human", nowMs: T0 + 100_000 });
     expect(second.created).toBe(true);
     expect(second.record.attempt).toBe(2);
-    expect(second.record.action).not.toBe(first.record.action);
+    expect(second.record.action).toBe(first.record.action);
+    expect(second.record.signal).not.toBe(first.record.signal);
     const rows = await mod.readLedger(GOAL);
     expect(rows.map((r) => (r.kind === "approval" ? r.status : r.kind))).toEqual([
       "requested",
@@ -349,7 +430,7 @@ describe("approvalGate", () => {
     await mod.completeApproval({
       requestId: again.record.requestId,
       address: USER,
-      decision: { decision: "approve", proof: { kind: mod.MOCK_PROOF_KIND, action: again.record.action, approve: true } },
+      decision: { decision: "approve", proof: { kind: mod.MOCK_PROOF_KIND, action: again.record.action, signal: again.record.signal, approve: true } },
       provider,
       nowMs: T0 + 5_000,
     });
@@ -390,7 +471,7 @@ describe("approvalGate", () => {
     await mod.completeApproval({
       requestId: asked.record.requestId,
       address: USER,
-      decision: { decision: "approve", proof: { kind: mod.MOCK_PROOF_KIND, action: asked.record.action, approve: true } },
+      decision: { decision: "approve", proof: { kind: mod.MOCK_PROOF_KIND, action: asked.record.action, signal: asked.record.signal, approve: true } },
       provider,
       nowMs: T0 + 1_000,
     });

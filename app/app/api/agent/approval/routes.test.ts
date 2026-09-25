@@ -188,11 +188,14 @@ describe("the complete journey", () => {
       requestId: string;
       expiresAt: string;
       action: string;
+      signal: string;
       provider: string;
       mocked: boolean;
       world?: unknown;
     };
     expect(request.provider).toBe("mock");
+    expect(request.action).toBe("settle");
+    expect(request.signal).toBe(`${GOAL.toLowerCase()}:1`);
     expect(request.mocked).toBe(true);
     expect(request.world).toBeUndefined();
     expect(Date.parse(request.expiresAt) - Date.now()).toBeLessThanOrEqual(90_000);
@@ -205,7 +208,7 @@ describe("the complete journey", () => {
     const done = await completeRoute(
       post("/api/agent/approval/complete", {
         requestId: request.requestId,
-        proof: { kind: MOCK_PROOF_KIND, action: request.action, approve: true },
+        proof: { kind: MOCK_PROOF_KIND, action: request.action, signal: request.signal, approve: true },
       }),
     );
     expect(done.status).toBe(200);
@@ -229,7 +232,7 @@ describe("the complete journey", () => {
     signer = { ok: true, address: USER };
     const request = (await (
       await requestRoute(post("/api/agent/approval/request", { goalId: GOAL }))
-    ).json()) as { requestId: string; action: string };
+    ).json()) as { requestId: string; action: string; signal: string };
 
     const declined = await completeRoute(
       post("/api/agent/approval/complete", { requestId: request.requestId, decline: true }),
@@ -238,7 +241,7 @@ describe("the complete journey", () => {
     const late = await completeRoute(
       post("/api/agent/approval/complete", {
         requestId: request.requestId,
-        proof: { kind: MOCK_PROOF_KIND, action: request.action, approve: true },
+        proof: { kind: MOCK_PROOF_KIND, action: request.action, signal: request.signal, approve: true },
       }),
     );
     expect(await late.json()).toEqual({ status: "declined" });
@@ -255,11 +258,11 @@ describe("the complete journey", () => {
     signer = { ok: true, address: USER };
     const request = (await (
       await requestRoute(post("/api/agent/approval/request", { goalId: GOAL }))
-    ).json()) as { requestId: string; action: string };
+    ).json()) as { requestId: string; action: string; signal: string };
     const bad = await completeRoute(
       post("/api/agent/approval/complete", {
         requestId: request.requestId,
-        proof: { kind: MOCK_PROOF_KIND, action: "settle:other:1", approve: true },
+        proof: { kind: MOCK_PROOF_KIND, action: "prove-human", signal: request.signal, approve: true },
       }),
     );
     expect(bad.status).toBe(401);
