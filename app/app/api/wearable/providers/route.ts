@@ -83,10 +83,12 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Three-way, and the wire keeps all three. "unknown" means we could
-        // not find out, and the client must withhold rather than fall back to
-        // the declared union - that fallback is how a Junction outage handed a
-        // wallet all seven metrics on no evidence.
+        // Four-way, and the wire keeps all four. "unknown" means we could
+        // not find out, and "awaiting-sync" means a multi-brand provider has
+        // nothing from this device yet. The client must withhold on both
+        // rather than fall back to the declared union - that fallback is how
+        // a Junction outage handed a wallet all seven metrics on no evidence,
+        // and how a WHOOP-via-Junction wallet was offered steps runs.
         let capability: ObservedCapability = { kind: "declared" };
         if (connected && id === selected) {
           try {
