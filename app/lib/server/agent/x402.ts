@@ -21,8 +21,11 @@
 // marketplace service; the TEE attester is the only thing that ever sees them.
 
 import { GatewayClient } from "@circle-fin/x402-batching/client";
-import type { Hex } from "viem";
+import { getAddress, isAddress, type Hex } from "viem";
 import { optionalEnv } from "@/lib/server/env";
+// --- intercepta ---
+import { screenPayeeBeforeSigning } from "@/lib/server/screening/gate";
+// --- end intercepta ---
 
 export const ATTESTER_READ_SERVICE = "attester-read";
 export const ATTESTER_READ_LABEL = "document read (TEE attester)";
@@ -48,6 +51,12 @@ export interface ServiceQuote {
   estUsd: string;
   /** Paid endpoint, or null when the service settles prepaid. */
   url: string | null;
+  // --- intercepta ---
+  /** The seller's payTo from the 402 requirements: the wallet an x402
+   *  purchase would pay. Screened before gw.pay() signs. Absent or null when
+   *  the quote is prepaid or the 402 carried no usable payTo. */
+  payee?: string | null;
+  // --- end intercepta ---
 }
 
 export interface PurchaseResult {
@@ -152,7 +161,15 @@ async function quoteService(
         ? atomicToUsdCeil(BigInt(Math.ceil(Number(raw) * 1_000_000)))
         : atomicToUsdCeil(BigInt(raw));
     }
+    // --- intercepta ---
+    // Carry the seller's payTo on the quote so the buy can screen it. The
+    // x402 v2 requirements object names the recipient in `payTo`.
+    const payTo = preflight.requirements?.payTo;
+    if (typeof payTo === "string" && isAddress(payTo)) {
+      return { service, label, estUsd, url, payee: getAddress(payTo) };
+    }
     return { service, label, estUsd, url };
+    // --- end intercepta ---
   } catch {
     return { service, label, estUsd: fallbackEstUsd, url: null };
   }
@@ -182,6 +199,22 @@ async function buyLive(
       data: null,
     };
   }
+  // --- intercepta ---
+  // The seller is a payee too. Screen its payTo against mainnet risk data
+  // BEFORE gw.pay() signs the Gateway authorization; blocked and unavailable
+  // throw, so no payment is signed for a sanctioned or unscreenable seller.
+  // A quote with no payee (a 402 that named no payTo) is refused outright:
+  // an agent must not pay a recipient it cannot name.
+  if (typeof quote.payee !== "string") {
+    throw new Error(
+      `${quote.service}: the 402 requirements carried no payTo to screen; refusing to pay an unnamed recipient`,
+    );
+  }
+  await screenPayeeBeforeSigning({
+    address: quote.payee as `0x${string}`,
+    purpose: "x402",
+  });
+  // --- end intercepta ---
   const paid = await gw.pay(quote.url, {
     method: "POST",
     body,

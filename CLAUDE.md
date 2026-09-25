@@ -1,6 +1,8 @@
 # GoHealthMe V4 (ETHGlobal Tokyo 2026, Continuity track)
 
-Verified health goals, paid in USDC the instant a wearable proves you did the thing, and nobody sees your health data. This repo is the **ETHGlobal Tokyo 2026** build (Sep 25-27 2026, Tokyo, JST). Andre Chuabio and Nikki Hu, on site. Stage word: **hackathon build**. Never "live", never "production".
+Verified health goals, paid in USDC the instant a wearable proves you did the thing, and nobody sees your health data. This repo is the **ETHGlobal Tokyo 2026** build (Sep 25-27 2026, Tokyo, JST). Andre Chuabio and Nikki Hu, on site.
+
+> **HARD RULE (Andre, 2026-09-26): this is the Continuity track, not a demo. V4 must actually work for real beta users, the same bar V3 already met.** No demo-only paths, no mock that can reach a production deployment, no hard-coded happy path, no "works for the video". Every flow is driven end to end against the real services before it is called done. Mock modes exist only for tests, local runs and preview deployments, and production code refuses them (`WORLD_VERIFY_MODE=mock` and `WORLD_APPROVAL_MODE=mock` are refused when `VERCEL_ENV=production`). Stage word stays honest: V4 is in **beta** on testnet, never "production" in copy.
 
 ## What this repo is
 
@@ -33,7 +35,7 @@ The thesis, in one line each. Do not reframe the product; add the mechanism.
 
 ## Landmines inherited from V3 (verified by the sessions that built it, 2026-09-25)
 
-1. **The settle path cannot pay a winner today (V3 item P19).** `HealthPoolsV3.healthVerdict()` returns `0x0` (oracle-only) but `app/lib/server/agent/spotter.ts` settle preflight and `run.ts` attester check read a verdict registry unconditionally. First achiever gets recorded, then settle errors, never auto-paid. **Day-one V4 fix:** read the pool's own `healthVerdict()` from chain and treat `0x0` as oracle-only in the settle preflight, the attester-role check and `recordVerdict`. Assert on the USDC delta, never on tx success. Andre held this on V3 because it is a payout route; on V4 it is the demo, so fix it here.
+1. **FIXED 2026-09-26 (foundation lane, merged `411100c`): the settle path could not pay a winner (V3 item P19).** `HealthPoolsV3.healthVerdict()` returns `0x0` (oracle-only) but `app/lib/server/agent/spotter.ts` settle preflight and `run.ts` attester check read a verdict registry unconditionally. First achiever gets recorded, then settle errors, never auto-paid. **Fix landed:** `verdict.ts` reads the pool's own `healthVerdict()` from chain (cached 60s) and `0x0` means oracle-only in the settle preflight, the attester-role check and `recordVerdict`; `HEALTH_VERDICT_ADDRESS` is no longer required. `npm run agent:verdict-gate` prints the live read. Still owed: one live settle asserted on the USDC delta.
 2. **`WEARABLE_TOKEN_KEY` fails silently.** Without it WHOOP reports itself unavailable and vanishes from the provider picker. `openssl rand -base64 32`.
 3. **`NEXT_PUBLIC_ACCESS_GATE_DISABLED=1` must never reach a deployed env.** It lives in `playwright.config.ts` for the suite only. It opens the closed beta.
 4. **The `e2e` CI workflow is red and pre-existing** (`agent-receipts.spec.ts`, `fail-closed.spec.ts`; mock RPC answers `getPool` with `0x`). Reproduced on `1df0e66`, before any wearable work. Do not spend Tokyo hours on it.

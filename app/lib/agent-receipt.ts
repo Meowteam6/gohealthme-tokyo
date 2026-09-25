@@ -21,6 +21,12 @@ import type { RunStatus } from "@/lib/server/agent/run";
 
 export type { LedgerEntry, RunStatus };
 
+/** Mirror of lib/server/screening/gate.ts SCREEN_HELD_PREFIX: every error
+ *  row a payout screening hold produces starts with it. Mirrored, not
+ *  imported, for the same client-safety reason as FAIL_PREFIX below;
+ *  gate.test.ts pins the two equal. */
+export const SCREEN_HELD_PREFIX = "payout held by screening:";
+
 export type ReceiptRow =
   | {
       kind: "spend";
@@ -54,7 +60,26 @@ export type ReceiptRow =
       paidUsd: string | null;
       note: string | null;
     }
-  | { kind: "error"; stage: string; message: string };
+  | { kind: "error"; stage: string; message: string }
+  | {
+      kind: "screen";
+      purpose: "record" | "settle" | "x402";
+      status: "clear" | "blocked" | "unavailable";
+      reason: string;
+      toxicScore: number | null;
+      traits: string[];
+    }
+  // --- world-agents ---
+  /** SPOTTER asked the achiever to confirm the payout; what the human did. */
+  | {
+      kind: "approval";
+      status: "requested" | "approved" | "declined" | "expired" | "cancelled";
+      provider: "mock" | "world";
+      expiresAtIso: string | null;
+      nullifierStub: string | null;
+      note: string | null;
+    };
+  // --- end world-agents ---
 
 export interface Receipt {
   rows: ReceiptRow[];
@@ -179,6 +204,30 @@ export function projectReceipt(ledger: LedgerEntry[]): Receipt {
         rows.push({ kind: "error", stage: entry.stage, message: entry.message });
         break;
       }
+      case "screen": {
+        rows.push({
+          kind: "screen",
+          purpose: entry.purpose,
+          status: entry.status,
+          reason: entry.reason,
+          toxicScore: entry.toxicScore ?? null,
+          traits: entry.traits ?? [],
+        });
+        break;
+      }
+      // --- world-agents ---
+      case "approval": {
+        rows.push({
+          kind: "approval",
+          status: entry.status,
+          provider: entry.provider,
+          expiresAtIso: entry.expiresAtIso ?? null,
+          nullifierStub: entry.nullifierStub ?? null,
+          note: entry.note ?? null,
+        });
+        break;
+      }
+      // --- end world-agents ---
     }
   }
 
@@ -374,7 +423,10 @@ export function runStatusFromLedger(ledger: LedgerEntry[]): RunStatus | null {
   }
   const last = ledger[ledger.length - 1];
   if (last.kind === "error") {
-    if (last.stage === "buy") return "cap-exceeded";
+    // A seller refused by payout screening is a hold, not a cap breach.
+    if (last.stage === "buy") {
+      return last.message.startsWith(SCREEN_HELD_PREFIX) ? "error" : "cap-exceeded";
+    }
     if (last.stage === "record" && last.message.includes("NOT_PARTICIPANT")) {
       return "blocked";
     }
@@ -383,6 +435,30 @@ export function runStatusFromLedger(ledger: LedgerEntry[]): RunStatus | null {
   if (ledger.some((e) => e.kind === "settle" && e.status === "deferred")) {
     return "recorded";
   }
+  // --- world-agents ---
+  // Nothing recorded yet and SPOTTER has asked the human: the newest
+  // approval row is the state. An approved row falls through: recording is
+  // next, which the run reports as verifying until the write lands.
+  if (!ledger.some((e) => e.kind === "record")) {
+    const approval = lastWhere(ledger, (e) => e.kind === "approval") as
+      | Extract<LedgerEntry, { kind: "approval" }>
+      | undefined;
+    if (approval !== undefined) {
+      switch (approval.status) {
+        case "requested":
+          return "awaiting-approval";
+        case "declined":
+          return "approval-declined";
+        case "expired":
+          return "approval-expired";
+        case "cancelled":
+          return "approval-cancelled";
+        case "approved":
+          break;
+      }
+    }
+  }
+  // --- end world-agents ---
   const reason = currentReasonEntry(ledger, currentAttesterIdOf(ledger));
   if (reason !== undefined && reason.decision === "no-pay") return "no-pay";
   return "verifying";

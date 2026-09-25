@@ -84,5 +84,14 @@ export function claimStepOf(
     case "blocked":
     case "error":
       return "verdict";
+    // --- world-agents ---
+    // The verdict is in; the payout waits on the human (or the human said
+    // no). The rail stays on verdict: nothing is recorded or paid yet.
+    case "awaiting-approval":
+    case "approval-declined":
+    case "approval-expired":
+    case "approval-cancelled":
+      return "verdict";
+    // --- end world-agents ---
   }
 }

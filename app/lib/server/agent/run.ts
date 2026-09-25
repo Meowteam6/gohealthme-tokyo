@@ -102,6 +102,9 @@ import {
 import { VERDICT_FACETS, type RecordVerdictOutcome } from "@/lib/server/verdict";
 import { optionalEnv } from "@/lib/server/env";
 import { runStatusFromLedger } from "@/lib/agent-receipt";
+// --- world-agents ---
+import { approvalGate, type GateOutcome } from "@/lib/server/agent/approval";
+// --- end world-agents ---
 
 export interface RunInput {
   goalId: Hex;
@@ -140,7 +143,16 @@ export type RunStatus =
   | "blocked"
   | "recorded"
   | "paid"
-  | "error";
+  | "error"
+  // --- world-agents ---
+  // SPOTTER decided to pay and is waiting on the achiever's fresh World ID
+  // confirmation ("awaiting your OK"), or the human said no, the window
+  // passed, or the pool settled first. In all four nothing is on chain yet.
+  | "awaiting-approval"
+  | "approval-declined"
+  | "approval-expired"
+  | "approval-cancelled";
+  // --- end world-agents ---
 
 export interface RunResult {
   status: RunStatus;
@@ -1066,6 +1078,62 @@ async function runClaimUnlocked(
     return { status: "no-pay", ledger };
   }
 
+  // --- world-agents ---
+  // AUTHORIZE (World ID for Agents, ETHGlobal Tokyo 2026). A pay decision is
+  // not a payout. Before the PASS below is recorded on chain, the write that
+  // lets settle() move USDC, SPOTTER asks the achiever for a fresh human
+  // confirmation and waits. The approval proves one human consented to this
+  // payout; the goal itself is still proven only by the evidence read and the
+  // verdict above. With WORLD_APPROVAL_MODE unset the gate answers "off"
+  // before touching anything, so the flow below is byte-for-byte the old one.
+  // A declined, expired or cancelled request writes no record, which also
+  // keeps this claim out of the settlement sweep (it settles only recorded
+  // claims); the stake comes back through the contract's unadjudicated
+  // refund at period end.
+  if (entryOf(ledger, "record") === undefined) {
+    let gate: GateOutcome;
+    try {
+      gate = await approvalGate({
+        goalId: input.goalId,
+        poolId: input.poolId,
+        address: input.address,
+        poolSettled: async () =>
+          (await deps.spotter.reader.getPoolState(input.poolId)).settled,
+      });
+    } catch (err) {
+      // Misconfigured provider (a missing WORLD_* variable) or a store fault:
+      // loud on the receipt, and nothing is recorded or paid.
+      ledger = await appendErrorOnce(
+        input.goalId,
+        ledger,
+        "approval",
+        err instanceof Error ? err.message : String(err),
+      );
+      return { status: "error", ledger };
+    }
+    if (gate.status === "unpayable") {
+      ledger = await appendErrorOnce(
+        input.goalId,
+        ledger,
+        "record",
+        SETTLE_UNPAYABLE_MESSAGE,
+      );
+      return { status: "error", ledger };
+    }
+    if (gate.status !== "off" && gate.status !== "approved") {
+      const status: RunStatus =
+        gate.status === "awaiting"
+          ? "awaiting-approval"
+          : gate.status === "declined"
+            ? "approval-declined"
+            : gate.status === "expired"
+              ? "approval-expired"
+              : "approval-cancelled";
+      return { status, ledger: await readLedger(input.goalId) };
+    }
+  }
+  // --- end world-agents ---
+
   // RECORD - both writes (pool result + verdict registry), dispatched to
   // whichever key the chain currently trusts. Recorded exactly once; the
   // ledger entry lands only after BOTH writes are in.
@@ -1111,7 +1179,21 @@ async function runClaimUnlocked(
         }
       }
 
-      if (await spotterHoldsRole(deps, "attester")) {
+      // --- foundation ---
+      // The registry write exists only when the POOL gates on a registry. Its
+      // own healthVerdict() decides that (read from chain, cached per pool
+      // address); address(0) is oracle-only, so there is no attester role to
+      // read and no registry to write - settle() pays on the recordResult
+      // above alone. Reading the attester role here on an oracle-only pool was
+      // the V3 P19 failure: the read threw, the run errored after recordResult
+      // had landed, and the first achiever was never settled.
+      if ((await deps.spotter.reader.verdictRegistry()) === null) {
+        registryStatus = "skipped";
+        console.log(
+          `[spotter] pool ${input.poolId} is oracle-only (healthVerdict() = 0x0): ` +
+            "no registry write; settle gates on the recorded result",
+        );
+      } else if (await spotterHoldsRole(deps, "attester")) {
         const r = await recordVerdictAsSpotter(deps.spotter, {
           goalId: input.goalId,
           verified: true,
@@ -1133,6 +1215,7 @@ async function runClaimUnlocked(
         registryStatus = r.status === "skipped" ? "skipped" : r.status;
         registryTx = r.status === "recorded" ? r.txHash : undefined;
       }
+      // --- end foundation ---
 
       ledger = await appendLedger(input.goalId, {
         kind: "record",

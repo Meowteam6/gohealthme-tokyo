@@ -32,6 +32,29 @@ export interface PublicFeedSettle {
   periodEndIso: string | null;
 }
 
+/** The payout screening verdict (Intercepta): machine facts only. The trait
+ *  names are the provider's enum identifiers, the reason is composed from
+ *  those names, and nothing here derives from health data. */
+export interface PublicFeedScreen {
+  at: string;
+  purpose: "record" | "settle" | "x402";
+  status: "clear" | "blocked" | "unavailable";
+  toxicScore: number | null;
+  traits: string[];
+  reason: string;
+  cached: boolean;
+}
+// --- world-agents ---
+/** The human step, as a machine state: SPOTTER asked, and what came back.
+ *  No prose, no identity; the nullifier stub stays on the private receipt. */
+export interface PublicFeedApproval {
+  at: string;
+  status: "requested" | "approved" | "declined" | "expired" | "cancelled";
+  provider: "mock" | "world";
+  expiresAtIso: string | null;
+}
+// --- end world-agents ---
+
 export interface PublicFeedClaim {
   goalId: string;
   at: string;
@@ -44,6 +67,13 @@ export interface PublicFeedClaim {
    *  no health-derived prose — so the public feed may show it. The feed must
    *  never present a self-reported win as "verified". */
   selfReported: boolean;
+  /** Latest payout screening row, when the claim has one. Absent (not null)
+   *  on claims that were never screened, so older feed shapes are unchanged. */
+  screen?: PublicFeedScreen;
+  // --- world-agents ---
+  /** Newest human-confirmation state, or null when SPOTTER never asked. */
+  approval: PublicFeedApproval | null;
+  // --- end world-agents ---
 }
 
 /** Runtime string check. The store returns whatever JSON it holds, so the
@@ -64,9 +94,40 @@ export function toPublicFeedClaim(
   let recordTxs: PublicFeedClaim["recordTxs"] = null;
   let settle: PublicFeedSettle | null = null;
   let selfReported = false;
+  let screen: PublicFeedScreen | undefined;
+  // --- world-agents ---
+  let approval: PublicFeedApproval | null = null;
+  // --- end world-agents ---
 
   for (const entry of ledger) {
     switch (entry.kind) {
+      case "screen":
+        // The newest verdict wins: a hold that later cleared must read as
+        // clear. Trait names and the composed reason are machine facts;
+        // the printed rule is server-side detail the feed does not need.
+        screen = {
+          at: entry.at,
+          purpose: entry.purpose,
+          status: entry.status,
+          toxicScore: typeof entry.toxicScore === "number" ? entry.toxicScore : null,
+          traits: Array.isArray(entry.traits)
+            ? entry.traits.filter((t): t is string => typeof t === "string")
+            : [],
+          reason: asString(entry.reason) ?? "",
+          cached: entry.cached === true,
+        };
+        break;
+      // --- world-agents ---
+      case "approval":
+        // Newest wins: the feed shows where the human step stands now.
+        approval = {
+          at: entry.at,
+          status: entry.status,
+          provider: entry.provider,
+          expiresAtIso: asString(entry.expiresAtIso),
+        };
+        break;
+      // --- end world-agents ---
       case "verdict":
         // Only the tier flag crosses the redaction boundary here — never the
         // verdict reason or any other prose, which stay server-side.
@@ -117,5 +178,18 @@ export function toPublicFeedClaim(
     }
   }
 
-  return { goalId, at, decision, spends, recordTxs, settle, selfReported };
+  const claim: PublicFeedClaim = {
+    goalId,
+    at,
+    decision,
+    spends,
+    recordTxs,
+    settle,
+    selfReported,
+    // --- world-agents ---
+    approval,
+    // --- end world-agents ---
+  };
+  if (screen !== undefined) claim.screen = screen;
+  return claim;
 }

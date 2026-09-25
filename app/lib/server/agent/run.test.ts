@@ -15,6 +15,8 @@ const GOAL = ("0x" + "ab".repeat(32)) as Hex;
 const USER = "0x1111111111111111111111111111111111111111" as Address;
 const SPOTTER = "0xd0d23b4ade9f55ca10e9c8a4e5b1e135f72c824d" as Address;
 const OTHER = "0x2222222222222222222222222222222222222222" as Address;
+/** The registry the fake pool reports from its own healthVerdict(). */
+const REGISTRY = "0x9bf5e4b54361DEAca4314c1d8de3aeB30111F042" as Address;
 
 const INPUT = {
   goalId: GOAL,
@@ -68,6 +70,9 @@ function fakeReader(overrides: Partial<ArcReader> = {}): ArcReader {
       .fn()
       .mockResolvedValue({ settled: false, periodEnd: 1_000n }),
     canSettle: vi.fn().mockResolvedValue(true),
+    // Registry latched on the pool by default: every pre-existing case here
+    // was written against the registry branch and must keep meaning that.
+    verdictRegistry: vi.fn().mockResolvedValue(REGISTRY),
     oracleAddress: vi.fn().mockResolvedValue(OTHER),
     attesterAddress: vi.fn().mockResolvedValue(OTHER),
     participantRecorded: vi.fn().mockResolvedValue(false),
@@ -1071,5 +1076,146 @@ describe("runAgentForGoal", () => {
     const second = await runAgentForGoal(deps, INPUT);
     expect(second.status).toBe("paid");
     expect(poll.mock.calls.length).toBe(pollCalls);
+  });
+});
+
+// The pool's own healthVerdict() decides whether a registry exists. On an
+// oracle-only pool (0x0, which is what HealthPoolsV3 on Base Sepolia reports)
+// there is no attester role to read and no registry to write: settle() pays
+// on recordResult alone. V3 read the attester role unconditionally whenever
+// SPOTTER_WALLET_ADDRESS was set, so the run errored right after recordResult
+// landed and the first achiever was never settled (P19).
+describe("runAgentForGoal on an oracle-only pool (healthVerdict() = 0x0)", () => {
+  /** The live reader throws here on V3; a fake that throws proves the role
+   *  read is never reached rather than merely tolerated. */
+  function attesterReadThatMustNotHappen() {
+    return vi
+      .fn()
+      .mockRejectedValue(
+        new Error("attester role read on an oracle-only pool"),
+      );
+  }
+
+  it("records, skips the registry write, never reads the attester role, and pays through SPOTTER", async () => {
+    const { runAgentForGoal } = await loadRun();
+    vi.stubEnv("HEALTH_VERDICT_ADDRESS", ""); // not required any more
+    const reader = fakeReader({
+      verdictRegistry: vi.fn().mockResolvedValue(null),
+      oracleAddress: vi.fn().mockResolvedValue(SPOTTER),
+      attesterAddress: attesterReadThatMustNotHappen(),
+      // recordResult's preflight sees it unrecorded; the settle preflight,
+      // after the inclusion wait, sees it on chain.
+      participantRecorded: vi
+        .fn()
+        .mockResolvedValueOnce(false)
+        .mockResolvedValue(true),
+    });
+    const executor = fakeExecutor();
+    const deps = makeDeps({
+      spotter: { circle: executor, reader, nowSeconds: () => 2_000n },
+    });
+
+    const result = await runAgentForGoal(deps, INPUT);
+
+    expect(result.status).toBe("paid");
+    expect(reader.attesterAddress).not.toHaveBeenCalled();
+    expect(reader.canSettle).not.toHaveBeenCalled();
+    expect(deps.legacyRecordVerdict).not.toHaveBeenCalled();
+    const signatures = (
+      executor.createContractExecutionTransaction as ReturnType<typeof vi.fn>
+    ).mock.calls.map(
+      (c) => (c[0] as { abiFunctionSignature: string }).abiFunctionSignature,
+    );
+    expect(signatures).toEqual([
+      "recordResult(uint256,address,bool,uint16)",
+      "settle(uint256)",
+    ]);
+    expect(result.ledger.find((e) => e.kind === "record")).toMatchObject({
+      resultTx: "0xfeed",
+      registryStatus: "skipped",
+    });
+    // Paid is still derived from the AchieverPaid payout, never from the tx.
+    expect(result.ledger.find((e) => e.kind === "settle")).toMatchObject({
+      status: "settled",
+      paidUsd: "50",
+    });
+  });
+
+  it("skips the registry write on the legacy signer path as well", async () => {
+    const { runAgentForGoal } = await loadRun();
+    vi.stubEnv("HEALTH_VERDICT_ADDRESS", "");
+    const reader = fakeReader({
+      verdictRegistry: vi.fn().mockResolvedValue(null),
+      attesterAddress: attesterReadThatMustNotHappen(),
+      participantRecorded: vi.fn().mockResolvedValue(true),
+    });
+    const deps = makeDeps({
+      spotter: { circle: fakeExecutor(), reader, nowSeconds: () => 2_000n },
+    });
+
+    const result = await runAgentForGoal(deps, INPUT);
+
+    expect(result.status).toBe("paid");
+    expect(deps.legacyRecordResult).toHaveBeenCalled();
+    expect(deps.legacyRecordVerdict).not.toHaveBeenCalled();
+    expect(reader.attesterAddress).not.toHaveBeenCalled();
+    expect(result.ledger.find((e) => e.kind === "record")).toMatchObject({
+      registryStatus: "skipped",
+    });
+  });
+
+  it("keeps the registry write when the pool has a registry, with HEALTH_VERDICT_ADDRESS unset", async () => {
+    const { runAgentForGoal } = await loadRun();
+    vi.stubEnv("HEALTH_VERDICT_ADDRESS", "");
+    const reader = fakeReader({
+      verdictRegistry: vi.fn().mockResolvedValue(REGISTRY),
+      oracleAddress: vi.fn().mockResolvedValue(SPOTTER),
+      attesterAddress: vi.fn().mockResolvedValue(SPOTTER),
+    });
+    const executor = fakeExecutor();
+    const deps = makeDeps({
+      spotter: { circle: executor, reader, nowSeconds: () => 2_000n },
+    });
+
+    const result = await runAgentForGoal(deps, INPUT);
+
+    expect(result.status).toBe("paid");
+    expect(reader.attesterAddress).toHaveBeenCalled();
+    expect(reader.canSettle).toHaveBeenCalledWith(GOAL);
+    expect(executor.createContractExecutionTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contractAddress: REGISTRY,
+        abiFunctionSignature: "recordVerdict(bytes32,bool,uint8,bytes32,uint16)",
+      }),
+    );
+    expect(result.ledger.find((e) => e.kind === "record")).toMatchObject({
+      registryStatus: "recorded",
+      registryTx: "0xfeed",
+    });
+  });
+
+  it("lets the sweep settle a recorded oracle-only claim after the browser is gone", async () => {
+    const { settleRecordedClaim } = await loadRun();
+    vi.stubEnv("HEALTH_VERDICT_ADDRESS", "");
+    const reader = fakeReader({
+      verdictRegistry: vi.fn().mockResolvedValue(null),
+      attesterAddress: attesterReadThatMustNotHappen(),
+      participantRecorded: vi.fn().mockResolvedValue(true),
+    });
+
+    const outcome = await settleRecordedClaim(
+      {
+        spotter: { circle: fakeExecutor(), reader, nowSeconds: () => 2_000n },
+        buy: fakeBuy(),
+      },
+      { goalId: GOAL, poolId: 7n, participant: USER },
+    );
+
+    expect(outcome.status).toBe("settled");
+    expect(reader.canSettle).not.toHaveBeenCalled();
+    expect(outcome.ledger.find((e) => e.kind === "settle")).toMatchObject({
+      status: "settled",
+      paidUsd: "50",
+    });
   });
 });

@@ -10,6 +10,22 @@ SPOTTER is an economic actor, not a script. It holds its own Circle wallet, buys
 
 Partners: Arc (USDC settlement chain), Circle (agent wallet + service payments), Chainlink (CRE + Confidential AI Attester verification).
 
+## Continuity (ETHGlobal Tokyo 2026)
+
+This repository is the ETHGlobal Tokyo 2026 build of GoHealthMe, entered on the Continuity track.
+
+**Pre-existing work.** Everything up to and including commit `a86387d` (2026-09-14) existed before the event: the V3 Base Sepolia pilot with self-staked commitment pools, three wearable providers (Junction, WHOOP, Apple Health) behind one join gate, SPOTTER the settlement agent, handles and the feed. Its lineage is `gohealthme` (ETHGlobal New York 2026, Chainlink Confidential AI Attester winner) to `arbiterpay` (Circle Agentic Economy) to `gohealthme-base` (V3 pilot).
+
+**Built at the event (2026-09-25 21:00 JST onward).** Every commit after `a86387d` on `main`:
+
+- Character creation: prove you are one human (World IDKit) replaces the closed-beta allowlist; pick your name mints an ENSv2 subname on Sepolia; pair your sensor moves the capability probe to onboarding.
+- The Verdict: SPOTTER asks the achiever for a fresh human verification (World ID for Agents) before the payout is recorded, with real declined and expired paths; payouts are screened through a live Intercepta call.
+- ENSv2 on Sepolia: `gohealthme.eth` namespace, `spotter.gohealthme.eth` with delegated record permissions, pool subnames carrying settlement receipts.
+- The three-screen game loop (Lobby, The Run, The Verdict) replacing nine sequential gates.
+- The oracle-only settle fix (the pilot could record a pass and never pay it).
+
+Per-lane detail and setup: `docs/LANES.md`, `docs/WORLD.md`, `docs/ENS.md`, `docs/INTERCEPTA.md`, `docs/DESIGN.md`. Addresses and transactions: `DEPLOYMENTS.md`, "Tokyo 2026" headings. Stage: hackathon build, testnet only, World proofs mocked as the event specifies.
+
 ## How it works
 
 1. Anyone funds an initiative pool (sleep, workouts, preventive care) with USDC and published bounties
@@ -51,6 +67,26 @@ Privacy invariant: raw health data never touches the chain — the Confidential 
 - `docs/PATH-A.md` — how the oracle-signed settlement path works end to end, plus a manual QA runbook
 
 See `HANDOFF.md` for run steps, on-chain addresses, env setup, and open items.
+
+## Intercepta payout screening (ETHGlobal Tokyo 2026)
+
+SPOTTER screens every payee with one live Intercepta call before it signs.
+Implementation: `app/lib/server/screening/intercepta.ts` (client, printed
+rule, cache), `app/lib/server/screening/gate.ts` (the gate), the fenced
+`// --- intercepta ---` blocks in `app/lib/server/agent/spotter.ts`
+(before `recordResult` and before `settle`) and `app/lib/server/agent/x402.ts`
+(seller `payTo` before `gw.pay`), `app/app/api/screen/status/route.ts`,
+`app/app/api/screen/demo-seller/route.ts`, and
+`app/components/intercepta/PayoutScreening.tsx`. Setup, the before/after
+flow, and the approved-plus-blocked demo are in `docs/INTERCEPTA.md`.
+
+API feedback: (1) `toxicScore` has no documented range, so a score cutoff
+cannot be chosen without calibrating on known addresses; (2) quick-scan has
+no chain parameter and the docs do not say which chains an address is
+screened across; (3) only 200 is documented, while the live 403 body and any
+429 shape are what a fail-closed client needs; (4) a documented test address
+that returns `sanction_address` would let teams prove the blocked path
+without pointing at a real SDN entry.
 
 ## Team
 

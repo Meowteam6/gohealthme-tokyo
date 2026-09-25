@@ -93,6 +93,7 @@ describe("toPublicFeedClaim", () => {
         periodEndIso: null,
       },
       selfReported: false,
+      approval: null,
     });
   });
 
@@ -190,6 +191,7 @@ describe("toPublicFeedClaim", () => {
       recordTxs: null,
       settle: null,
       selfReported: false,
+      approval: null,
     });
   });
 
@@ -234,6 +236,7 @@ describe("toPublicFeedClaim", () => {
       recordTxs: null,
       settle: null,
       selfReported: false,
+      approval: null,
     });
   });
 

@@ -73,6 +73,7 @@ import {
 import { participantJoined } from "@/lib/server/pools";
 import { computeGoalId } from "@/lib/server/verdict";
 import { isAllowed } from "@/lib/server/access";
+import { requireHuman } from "@/lib/server/world/require-human"; // world-idkit
 
 export async function POST(request: Request) {
   const cid = newCorrelationId("evidence-submit");
@@ -145,6 +146,16 @@ export async function POST(request: Request) {
         "Join this pool before submitting a record for it.",
       );
     }
+
+    // --- world-idkit ---
+    // One human, one entry. When WORLD_VERIFY_MODE is set, no TEE inference is
+    // bought for a wallet that has not proven it is one human. Same body
+    // address the membership gate just checked. A no-op when the mode is unset.
+    const human = await requireHuman(address);
+    if (!human.ok) {
+      return jsonError(human.status, human.reason);
+    }
+    // --- end world-idkit ---
 
     // Closed-beta gate: only an approved wallet can spend TEE inference. This
     // route has no signature proof (membership above is its identity gate), so
