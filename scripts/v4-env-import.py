@@ -34,6 +34,7 @@ SHAPES = {
     "CIRCLE_ENTITY_SECRET": r"^[0-9a-fA-F]{64}$",
     "CIRCLE_WALLET_ID": r"^[0-9a-f-]{36}$",
     "CIRCLE_WALLET_SET_ID": r"^[0-9a-f-]{36}$",
+    "CDP_API_KEY_ID": r"^[0-9a-f-]{36}$",
     "NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID": r"^[0-9a-f-]{36}$",
 }
 
@@ -92,6 +93,17 @@ def main():
         "JUNCTION_REGION": "us",
         "JUNCTION_API_KEY": local.get("JUNCTION_API_KEY", ""),
         "INTERCEPTA_API_KEY": local.get("INTERCEPTA_API_KEY", ""),
+        "CDP_API_KEY_ID": local.get("CDP_API_KEY_ID", ""),
+        "CDP_API_KEY_SECRET": local.get("CDP_API_KEY_SECRET", ""),
+        "NEXT_PUBLIC_CDP_PAYMASTER_URL": local.get("NEXT_PUBLIC_CDP_PAYMASTER_URL", ""),
+        "GOOGLE_CLOUD_PROJECT": local.get("GOOGLE_CLOUD_PROJECT", ""),
+        "GOOGLE_CREDENTIALS_JSON": local.get("GOOGLE_CREDENTIALS_JSON", ""),
+        "WORLD_APP_ID": local.get("WORLD_APP_ID", ""),
+        "WORLD_RP_ID": local.get("WORLD_RP_ID", ""),
+        "WORLD_RP_SIGNING_KEY": local.get("WORLD_RP_SIGNING_KEY", ""),
+        "WORLD_VERIFY_MODE": local.get("WORLD_VERIFY_MODE", ""),
+        "WORLD_APPROVAL_MODE": local.get("WORLD_APPROVAL_MODE", ""),
+        "WORLD_ENVIRONMENT": local.get("WORLD_ENVIRONMENT", ""),
         **supabase_values(),
     }
     ok, founder = [], []
