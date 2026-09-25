@@ -467,12 +467,18 @@ export interface ParticipantInfo {
   multiplierBps: number;
 }
 
+/** What a player reads when this build has no pools contract. Plain words:
+ *  the env var name goes to the console, never onto the screen. */
+export const POOLS_NOT_CONFIGURED_COPY =
+  "Runs are not open on this build yet. Nothing was sent.";
+
 export class ContractNotConfiguredError extends Error {
   constructor() {
-    super(
-      "HealthPools contract address is not configured. Set NEXT_PUBLIC_HEALTH_POOLS_ADDRESS and redeploy.",
-    );
+    super(POOLS_NOT_CONFIGURED_COPY);
     this.name = "ContractNotConfiguredError";
+    console.error(
+      "HealthPools contract address is not configured (or is the refused V3 address). Set NEXT_PUBLIC_HEALTH_POOLS_ADDRESS to the Tokyo HealthPoolsV3 and redeploy.",
+    );
   }
 }
 

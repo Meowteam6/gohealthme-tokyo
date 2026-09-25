@@ -62,11 +62,11 @@ vi.mock("@/lib/contract", () => ({
 
 // V4 pools are oracle-only (healthVerdict() == 0x0): the tier comes from
 // SPOTTER's ledger, never from a HEALTH_VERDICT_ADDRESS env var.
-const poolVerdictRegistry = vi.fn(async (_pools: string) => null as string | null);
+const poolVerdictRegistry = vi.fn<(pools: string) => Promise<string | null>>(async () => null);
 vi.mock("@/lib/server/verdict", () => ({
   poolVerdictRegistry: (pools: string) => poolVerdictRegistry(pools),
 }));
-const readLedger = vi.fn(async (_goalId: string): Promise<unknown[]> => []);
+const readLedger = vi.fn<(goalId: string) => Promise<unknown[]>>(async () => []);
 vi.mock("@/lib/server/agent/ledger", () => ({
   readLedger: (goalId: string) => readLedger(goalId),
 }));
