@@ -152,9 +152,10 @@ With `WORLD_APPROVAL_MODE` set, a pay decision stops at an AUTHORIZE gate:
    `rp_context` in world mode.
 3. **Validated result, server-side.** `POST /api/agent/approval/complete`
    (wallet-signed; the signer must be the achiever) hands the proof to the
-   provider. The action binding is checked, the proof is verified (mock shape,
-   or World's `POST /api/v4/verify/{rp_id}` with the environment pinned from
-   env), and the nullifier is consumed once. The ledger gets
+   provider. The action (`settle`) and the signal binding to this payout are
+   checked, the proof is verified (mock shape, or World's
+   `POST /api/v4/verify/{rp_id}` with the environment pinned from env), and
+   the nullifier is consumed once for this payout. The ledger gets
    `approval: approved` with a 10-character nullifier stub.
 4. **Protected action.** The browser's next poll of the run route finds the
    approval, records the PASS (both writes) and settles when the pool period
@@ -171,27 +172,57 @@ The stake comes back through the contract's unadjudicated refund at settle.
 | Declined | "Not now, do not pay" on the card | `approval: declined` | `approval-declined` | "you said no. nothing moved." with Ask again |
 | Expired | 90s pass with no answer (materialized lazily by the next read) | `approval: expired` | `approval-expired` | "the window closed before you answered. nothing moved." with Ask again |
 | Cancelled | the pool settled while the ask was open | `approval: cancelled` | `approval-cancelled` | "the pool settled before you confirmed. nothing moved." no retry, because none would work |
-| Refused proof | wrong action, wrong wallet, World says no, reused nullifier | none; request stays pending | `awaiting-approval` | the error line on the card, widget retryable inside the window |
+| Refused proof | wrong action, proof for a different payout (signal), wrong wallet, World says no, reused nullifier | none; request stays pending | `awaiting-approval` | the error line on the card, widget retryable inside the window |
 
-"Ask again" opens attempt+1 with a new action string, so it needs a new proof.
+"Ask again" opens attempt+1 with a new signal, so it needs a new proof.
 SPOTTER itself asks once per decision and never nags after a decline.
+
+### Action, signal and replay
+
+World ID 4.0 verifies proofs only for actions created in the Developer Portal
+(https://docs.world.org/world-id/4-0-migration.md), so the payout
+confirmation uses ONE static action for every payout:
+
+- **Action: `settle`.** Registered in the Portal for production and staging,
+  next to `prove-human`. `WORLD_APPROVAL_ACTION` overrides it; the value must
+  be a Portal action of the configured app. The server signs `rp_context` over
+  this action (`signRequest`, key never leaves the server) and the widget asks
+  for a proof against the same action from the request route's response.
+- **Signal: `<goalId lowercase>:<attempt>`.** This is what names the payout.
+  The request route returns it as `signal`; the widget passes it as the IDKit
+  signal (`orbLegacy({ signal })`), and World hashes it into
+  `responses[0].signal_hash`. On complete, the server requires
+  `responses[0].signal_hash === hashSignal(expectedSignal)` (the same
+  `hashSignal` from `@worldcoin/idkit-core/hashing` the prove-human lane uses)
+  BEFORE calling World. A proof with no signal_hash, or one made for another
+  goal or another attempt, is refused: a proof for one payout can never
+  approve another.
+- **Replay key: `agent-approval-nullifier:<action>:<goalId>:<attempt>:<nullifier>`.**
+  With a static action a human's nullifier is identical on every payout, so
+  the one-shot `setNx` key is scoped to the payout. The same proof twice for
+  the same payout is refused; the same human confirming a new payout (another
+  goal, or attempt 2 after a decline or expiry) is allowed.
+
+The mock provider mirrors all three: the mock proof carries `action` and
+`signal`, both are checked, and the mock nullifier depends only on wallet and
+action, like a real one.
 
 ### What an approval proves, and does not
 
 An approved row proves one human consented to this payout, within the window.
 It does not prove the goal, does not re-check the wearable, and carries no
-health data: the action string is `settle:<goalId>:<attempt>`. The nullifier
-is stored server-side for the one-shot check; the ledger, the receipt and the
-public feed see a stub at most. The comments in `approval-provider.ts`,
+health data: the action is `settle` and the signal is `<goalId>:<attempt>`.
+The nullifier is stored server-side for the one-shot check; the ledger, the
+receipt and the public feed see a stub at most. The comments in `approval-provider.ts`,
 `approval.ts`, `ledger.ts` and `HumanApprovalCard.tsx` say the same.
 
 ### What is mocked
 
 The prize page says proofs are mocked at this event and there is no sandbox
 app. `WORLD_APPROVAL_MODE=mock` is that event mode: the browser sends
-`{ kind: "gohealthme-mock-approval", action, approve: true }`, the server
-checks the action binding and derives a deterministic stand-in nullifier
-(sha256 of wallet plus action), and the card is labelled "event mode, mocked
+`{ kind: "gohealthme-mock-approval", action, signal, approve: true }`, the
+server checks the action and signal binding and derives a deterministic
+stand-in nullifier (sha256 of wallet plus action), and the card is labelled "event mode, mocked
 proofs (not production)". A mocked proof proves nothing about anybody. It
 exists so the whole journey, including every refusal path and the wallet
 signature that guards both routes, runs end to end before the event
@@ -199,7 +230,8 @@ environment is configured. Never ship it past the hackathon.
 
 `WORLD_APPROVAL_MODE=world` is the live path: `@worldcoin/idkit` 4.3.0
 (`signRequest` from `@worldcoin/idkit/signing` on the server,
-`IDKitRequestWidget` with `orbLegacy({ signal: address })` in the browser),
+`IDKitRequestWidget` with `orbLegacy({ signal })`, signal `<goalId>:<attempt>`,
+in the browser),
 and World's v4 verify endpoint. It is built from the docs fetched on
 2026-09-26 (human-in-the-loop integrate and SDK reference, the verify
 reference, the RP signatures page) and has NOT been exercised against a real
@@ -224,6 +256,7 @@ relying party yet; that is the booth step below.
 |---|---|---|
 | `WORLD_APPROVAL_MODE` | server | `mock` (event mode), `world` (live), unset (gate off, pre-Tokyo behaviour). Any other value throws. |
 | `WORLD_APPROVAL_TTL_S` | server | request window in seconds, default 90, clamped to 10..600 |
+| `WORLD_APPROVAL_ACTION` | server | the Portal action payout proofs are made against; default `settle` |
 | `NEXT_PUBLIC_WORLD_APP_ID` | server and browser | `app_...` from the Developer Portal (the event environment's app) |
 | `WORLD_RP_ID` | server | relying party id, `rp_...` |
 | `WORLD_RP_SIGNING_KEY` | server only | hex RP signing key; signs `rp_context`; never reaches the browser. Shared with prove-human. The older name `WORLD_SIGNING_KEY` is still read as a fallback. |
