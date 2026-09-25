@@ -35,8 +35,8 @@ function FundPoolInner({
   if (poolsAddress === null) {
     return (
       <ErrorNote
-        title="Contract not configured"
-        detail="Set NEXT_PUBLIC_HEALTH_POOLS_ADDRESS to enable funding."
+        title="Runs are off on this build"
+        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
   }
@@ -106,7 +106,7 @@ function FundPoolInner({
               }
               void submit();
             }}
-            className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3.5 text-base font-semibold text-accent hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3.5 text-base font-semibold text-accent hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {primaryLabel}
           </button>
@@ -171,8 +171,8 @@ export default function FundPool({
   if (!DYNAMIC_CONFIGURED) {
     return (
       <ErrorNote
-        title="Sign-in is not configured"
-        detail="Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable funding with an embedded wallet."
+        title="Sign-in is off on this build"
+        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
   }

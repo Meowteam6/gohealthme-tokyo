@@ -104,8 +104,8 @@ function CreatePoolInner() {
   if (poolsAddress === null) {
     return (
       <ErrorNote
-        title="Contract not configured"
-        detail="Set NEXT_PUBLIC_HEALTH_POOLS_ADDRESS to enable pool creation."
+        title="Runs are off on this build"
+        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
   }
@@ -191,6 +191,8 @@ function CreatePoolInner() {
       return;
     }
 
+    // Runs on submit, not during render: the clock read is the point.
+    // eslint-disable-next-line react-hooks/purity
     const now = BigInt(Math.floor(Date.now() / 1000));
     const periodStart = now;
     const periodEnd = now + BigInt(durationDays * SECONDS_PER_DAY);
@@ -289,7 +291,7 @@ function CreatePoolInner() {
               onClick={() => setFloor("wearable")}
               className={`rounded-xl border p-3 text-left ${
                 floor === "wearable"
-                  ? "border-accent/50 bg-accent-deep text-accent"
+                  ? "border-accent/50 bg-accent/10 text-accent-strong"
                   : "border-edge bg-surface-raised text-muted hover:text-foreground"
               }`}
             >
@@ -305,7 +307,7 @@ function CreatePoolInner() {
               aria-disabled={!docAvailable}
               className={`rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-60 ${
                 floor === "document"
-                  ? "border-accent/50 bg-accent-deep text-accent"
+                  ? "border-accent/50 bg-accent/10 text-accent-strong"
                   : "border-edge bg-surface-raised text-muted hover:text-foreground"
               }`}
             >
@@ -465,7 +467,7 @@ function CreatePoolInner() {
                 onClick={() => setDurationDays(opt.days)}
                 className={`rounded-xl border px-4 py-2 text-sm font-medium ${
                   durationDays === opt.days
-                    ? "border-accent/50 bg-accent-deep text-accent"
+                    ? "border-accent/50 bg-accent/10 text-accent-strong"
                     : "border-edge bg-surface-raised text-muted hover:text-foreground"
                 }`}
               >
@@ -616,8 +618,8 @@ export default function CreatePool() {
   if (!DYNAMIC_CONFIGURED) {
     return (
       <ErrorNote
-        title="Sign-in is not configured"
-        detail="Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable pool creation with an embedded wallet."
+        title="Sign-in is off on this build"
+        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
   }

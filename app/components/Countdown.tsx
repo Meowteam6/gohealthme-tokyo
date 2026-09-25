@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useNowSeconds } from "@/lib/game/useNowSeconds";
 
 function describe(periodStart: bigint, periodEnd: bigint, now: number): string {
   const start = Number(periodStart);
@@ -37,16 +37,7 @@ export default function Countdown({
   periodStart: bigint;
   periodEnd: bigint;
 }) {
-  const [now, setNow] = useState<number | null>(null);
-
-  useEffect(() => {
-    setNow(Math.floor(Date.now() / 1000));
-    const timer = setInterval(
-      () => setNow(Math.floor(Date.now() / 1000)),
-      1000,
-    );
-    return () => clearInterval(timer);
-  }, []);
+  const now = useNowSeconds();
 
   if (now === null) {
     return <span className="text-muted">--</span>;

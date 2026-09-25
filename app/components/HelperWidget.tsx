@@ -155,7 +155,7 @@ function Checklist({ step }: { step: CoachStep }) {
             <span
               className={`${
                 row.gold
-                  ? "text-gold"
+                  ? "text-gold-deep"
                   : current
                     ? "font-semibold text-foreground"
                     : done
@@ -309,7 +309,7 @@ function AskTab({ address }: { address: Address | null }) {
               <span
                 className={`inline-block max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
                   m.role === "you"
-                    ? "bg-accent-deep text-foreground"
+                    ? "bg-accent/10 text-foreground"
                     : "bg-surface-raised text-muted"
                 }`}
               >
@@ -429,7 +429,7 @@ function FeedbackTab({
             onClick={() => setRating(r)}
             className={`min-h-11 flex-1 rounded-lg border px-3 py-2 text-sm font-medium capitalize ${
               rating === r
-                ? "border-accent/60 bg-accent-deep text-accent"
+                ? "border-accent/60 bg-accent/10 text-accent-strong"
                 : "border-edge bg-surface-raised text-muted hover:text-foreground"
             }`}
           >
@@ -629,7 +629,7 @@ export default function HelperWidget() {
             onClick={() => setTab(t.id)}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
               tab === t.id
-                ? "bg-accent-deep text-accent"
+                ? "bg-accent/10 text-accent-strong"
                 : "text-muted hover:text-foreground"
             }`}
           >

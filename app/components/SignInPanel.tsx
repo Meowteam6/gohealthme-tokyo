@@ -289,10 +289,9 @@ export default function SignInPanel() {
   if (!DYNAMIC_CONFIGURED) {
     return (
       <div className="rounded-2xl border border-edge bg-surface p-5">
-        <h2 className="text-lg font-semibold">Sign-in is not configured</h2>
+        <h2 className="text-lg font-semibold">Sign-in is off on this build</h2>
         <p className="mt-2 text-sm text-muted">
-          Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable embedded wallets and
-          sign-in.
+          Nobody can sign in or play on this build yet.
         </p>
       </div>
     );

@@ -498,15 +498,18 @@ function EvidenceUploadInner({
 
       if (res.status === 404) {
         throw new Error(
-          "Document verification is not available right now. Nothing was " +
-            "submitted. Please try again in a few minutes.",
+          "Document checks are not available right now. Nothing was " +
+            "submitted. Try again in a few minutes.",
         );
       }
 
       const body = (await res.json().catch(() => ({}))) as SubmitResponse;
       if (!res.ok || typeof body.attesterId !== "string") {
+        // The route's own error is written for people; a bare status is
+        // not, so it never reaches the screen.
         throw new Error(
-          body.error ?? `Verification service responded ${res.status}.`,
+          body.error ??
+            "SPOTTER could not reach the document checker. Nothing was submitted. Try again in a few minutes.",
         );
       }
       attesterId = body.attesterId;
@@ -685,7 +688,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={unlockClaim}
-              className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Sign and show the rows
             </button>
@@ -754,7 +757,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={resetUpload}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Upload a different file
             </button>
@@ -777,7 +780,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={resetUpload}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Submit new evidence
             </button>
@@ -811,7 +814,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={resetUpload}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Try again
             </button>
@@ -955,8 +958,8 @@ export default function EvidenceUpload({
   if (!DYNAMIC_CONFIGURED) {
     return (
       <ErrorNote
-        title="Sign-in is not configured"
-        detail="Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable submitting records with an embedded wallet."
+        title="Sign-in is off on this build"
+        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
   }

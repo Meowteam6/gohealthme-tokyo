@@ -719,6 +719,10 @@ function CreateChallengeInner() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const v = new URLSearchParams(window.location.search).get("v");
+    // Reading the URL once on mount is the external-system case the rule
+    // exempts; the first render must match the server, so it cannot move
+    // into a state initializer.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (v === "self" || v === "dare") selectVariant(v);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1458,8 +1462,8 @@ export default function CreateChallenge() {
   if (!DYNAMIC_CONFIGURED) {
     return (
       <ErrorNote
-        title="Sign-in is not configured"
-        detail="Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable challenges with an embedded wallet."
+        title="Sign-in is off on this build"
+        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
   }

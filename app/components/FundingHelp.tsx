@@ -275,7 +275,7 @@ export default function FundingHelp({
             href={FAUCET_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-base font-semibold text-accent hover:bg-accent-deep"
+            className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-base font-semibold text-accent hover:bg-accent/10"
           >
             Open the Circle faucet
           </a>

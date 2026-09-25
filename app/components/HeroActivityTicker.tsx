@@ -53,7 +53,7 @@ const META: Record<
   ActivityType,
   { dot: string; line: (name: string) => string }
 > = {
-  joined: { dot: "bg-accent", line: (n) => `${n} staked on a goal` },
+  joined: { dot: "bg-accent", line: (n) => `${n} entered a run` },
   funded: { dot: "bg-coral", line: (n) => `${n} put up a reward` },
   paid: { dot: "bg-gold", line: (n) => `SPOTTER paid ${n}` },
 };
@@ -74,36 +74,30 @@ export default function HeroActivityTicker() {
   const events = (data?.events ?? []).slice(0, 5);
 
   return (
-    <div className="rounded-3xl border-2 border-edge bg-surface p-5 shadow-[var(--shadow-pop-edge)]">
+    <div className="rounded-xl border-2 border-foreground/15 bg-surface p-4">
       <div className="mb-3 flex items-center gap-2">
-        <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/60" />
-          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
-        </span>
-        <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-          Live activity
-        </p>
+        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-accent" aria-hidden="true" />
+        <p className="text-sm font-semibold text-muted">What just happened on chain</p>
       </div>
 
       {events.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-edge bg-surface-raised px-4 py-6 text-center">
+        <div className="rounded-lg border-2 border-dashed border-edge px-4 py-6">
           <p className="text-sm font-bold text-foreground">Quiet right now.</p>
           <p className="mt-1 text-sm text-muted">
-            Be the first. Join a pool or dare a friend and it shows up here the
+            Be the first. Enter a run or dare a friend and it shows up here the
             second it happens.
           </p>
         </div>
       ) : (
         <ul className="space-y-2">
-          {events.map((e, i) => {
+          {events.map((e) => {
             const name = displayName(e.handle, e.address);
             const meta = META[e.type];
             const amt = amount(e.amountUsd);
             return (
               <li
                 key={e.id}
-                className="ghm-rise-in flex items-center gap-3 rounded-2xl border border-edge bg-surface-raised px-3 py-2.5"
-                style={{ animationDelay: `${i * 60}ms` }}
+                className="flex items-center gap-3 rounded-lg border border-edge bg-surface-raised px-3 py-2.5"
               >
                 <span
                   className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`}
@@ -116,7 +110,7 @@ export default function HeroActivityTicker() {
                   <p className="text-xs text-muted">{relativeTime(e.at)}</p>
                 </div>
                 {amt !== "" ? (
-                  <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-gold">
+                  <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-gold-deep">
                     +{amt} USDC
                   </span>
                 ) : null}

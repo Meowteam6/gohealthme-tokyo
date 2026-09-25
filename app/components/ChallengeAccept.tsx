@@ -1,26 +1,27 @@
 "use client";
 
-// The Accept control on the you've-been-challenged landing.
+// The accept control inside the challenge link's run slip.
 //
-// Accepting a challenge IS joining its pool: this wraps the SAME JoinPool
-// primitive the pool page uses. Every pool on the deployed contract carries an
-// entry fee above zero (the contract requires every player to be a staker), so
-// accepting means staking that lock-in - JoinPool approves and pulls exactly
-// p.entryFee, read LIVE from the chain here, never a hardcoded amount. Passing a
-// zero fee would skip the approval and the join would revert on the missing
-// allowance, so the real fee has to be known before the button can act. One
-// wallet, one entry is enforced on-chain by joinPool exactly as everywhere else.
-// After joining, the target is handed off to the pool page, which is where
-// evidence upload and the claim rail live - this landing does not reimplement
-// that flow, it routes into it.
+// Accepting a dare IS entering its run: this wraps the SAME JoinPool primitive
+// the pool page uses, with the pool's on-chain entry fee read live (never a
+// hardcoded amount; a zero fee would under-approve and the join would revert).
+// One wallet, one entry is enforced on-chain by joinPool exactly as everywhere
+// else.
+//
+// The run's lock is decided once, in lib/game/lobby.ts, from the same join gate
+// (lib/wearable-join-gate.ts) both staking surfaces must use. It used to be a
+// second copy of the pool page's five refusals; now it is the lobby's lock
+// panel with its fix, so the dare and the lobby can never word a limit
+// differently. The "sign so I can check your device" step is one tap here.
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import JoinPool from "@/components/JoinPool";
+import ApprovalNote from "@/components/game/ApprovalNote";
+import LockPanel from "@/components/game/LockPanel";
 import { fetchParticipant, fetchPool, formatUsdc } from "@/lib/contract";
-import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
-import { Money, Skeleton, TAP_TARGET } from "@/components/ui";
+import { Skeleton, TAP_TARGET } from "@/components/ui";
 import {
   fetchProviderState,
   providerDownReason,
@@ -30,22 +31,27 @@ import {
   capabilityNeedsDevice,
   capabilityUnknown,
   fetchProviderOptions,
-  metricLabel,
   providerOptionsQueryKey,
   viewerMetricsOf,
 } from "@/lib/wearable-connect";
 import { wearableJoinBlock } from "@/lib/wearable-join-gate";
+import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
+import { runSlotOf } from "@/lib/game/lobby";
+import { useCharacter } from "@/lib/game/useCharacter";
+import { useNowSeconds } from "@/lib/game/useNowSeconds";
 
-// A full-width Next Link dressed as the shared candy control. Emerald-tinted
-// once you are in (the go-get-paid onward step), tan and secondary before that
-// (the quieter "see the whole thing" read). Button is a <button> and cannot be
-// a Link, so its look is matched here.
-const ONWARD_BASE =
-  "flex min-h-11 w-full items-center justify-center rounded-full border-2 px-5 py-3 font-display text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-
-export default function ChallengeAccept({ poolId }: { poolId: string }) {
-  const { address } = useEmbeddedWallet();
+export default function ChallengeAccept({
+  poolId,
+  returnTo,
+}: {
+  poolId: string;
+  /** The challenge link, so a fix brings the player back to the dare. */
+  returnTo: string;
+}) {
+  const view = useCharacter();
+  const { address } = view;
   const requestAuth = useWalletAuth();
+  const now = useNowSeconds();
 
   let poolIdBig: bigint | null;
   try {
@@ -54,9 +60,6 @@ export default function ChallengeAccept({ poolId }: { poolId: string }) {
     poolIdBig = null;
   }
 
-  // The lock-in is the pool's on-chain entry fee, read live. JoinPool approves
-  // and pulls exactly this, so the value has to be resolved before we can hand
-  // it a safe amount - a zero fee would under-approve and the join would revert.
   const poolQuery = useQuery({
     queryKey: ["pool", poolId],
     queryFn: () => {
@@ -66,10 +69,8 @@ export default function ChallengeAccept({ poolId }: { poolId: string }) {
     enabled: poolIdBig !== null,
   });
 
-  // Reflect an already-accepted challenge so a returning target sees "you are
-  // in" and a route onward, instead of tapping accept and hitting an
-  // ALREADY_JOINED revert. Owner-scoped and best-effort: an unknown status just
-  // shows the accept button, which fails closed on-chain anyway.
+  // Reflect an already-accepted dare so a returning player sees "you are in"
+  // and a route onward, instead of an ALREADY_JOINED revert.
   const participantQuery = useQuery({
     queryKey: ["participant", poolId, address],
     queryFn: () => {
@@ -79,13 +80,10 @@ export default function ChallengeAccept({ poolId }: { poolId: string }) {
     },
     enabled: poolIdBig !== null && address !== null,
   });
-
   const joined = participantQuery.data?.joined === true;
 
-  // The same two reads the pool page makes, and the same cachedOnly rule:
-  // opening a challenge link must not fire a wallet prompt. Unknown capability
-  // withholds the accept rather than assuming it is fine, which is the whole
-  // point - this surface used to mount JoinPool with no check at all.
+  // The same two cachedOnly reads the lobby makes: opening a dare never fires
+  // a wallet prompt. Unknown capability withholds the accept.
   const providerQuery = useQuery({
     queryKey: providerQueryKey(address),
     queryFn: () => {
@@ -110,93 +108,98 @@ export default function ChallengeAccept({ poolId }: { poolId: string }) {
     staleTime: 60_000,
   });
 
-  const joinBlock = wearableJoinBlock({
-    goalSpec: poolQuery.data?.goalSpec ?? "",
-    address,
-    joined,
-    providerDown: providerDownReason(providerQuery.data),
-    viewerMetrics: viewerMetricsOf(capabilityQuery.data),
-    capabilityPending:
-      address !== null && capabilityUnknown(capabilityQuery.data),
-    needsDevice: capabilityNeedsDevice(capabilityQuery.data),
-  });
-
   if (poolIdBig === null) return null;
 
-  const entryFee = poolQuery.data?.entryFee ?? null;
+  if (poolQuery.isError) {
+    // Never fall back to a zero fee: that join would revert on the missing
+    // allowance. Say so and offer the re-read.
+    return (
+      <div className="space-y-2">
+        <p className="text-sm">I could not read the stake for this dare just now.</p>
+        <button
+          type="button"
+          onClick={() => void poolQuery.refetch()}
+          className={`-ml-4 font-semibold text-accent underline underline-offset-2 ${TAP_TARGET}`}
+        >
+          Read it again
+        </button>
+      </div>
+    );
+  }
+  if (
+    poolQuery.data === undefined ||
+    now === null ||
+    (address !== null && participantQuery.isLoading) ||
+    // Prove-human mode not known yet: hold the stake, never offer it early.
+    (address !== null && view.worldLane === "loading")
+  ) {
+    return <Skeleton className="h-12 w-full rounded-lg" />;
+  }
 
-  return (
-    <div className="space-y-4">
-      {entryFee !== null && entryFee > 0n && !joined ? (
-        <p className="text-sm text-muted">
-          Accepting stakes your <Money usd={formatUsdc(entryFee)} size="sm" />{" "}
-          lock-in. Hit the goal and it comes back with the reward; the challenger
-          never keeps it.
+  const pool = poolQuery.data;
+  const deviceLabel =
+    (capabilityQuery.data?.providers ?? []).find(
+      (p) => p.id === capabilityQuery.data?.selected,
+    )?.label ?? null;
+  const slot = runSlotOf({
+    phase: poolPhase(pool, BigInt(now)),
+    cancelled: pool.cancelled,
+    canPay: poolCanPay(pool),
+    joined,
+    address,
+    joinBlock: wearableJoinBlock({
+      goalSpec: pool.goalSpec,
+      address,
+      joined,
+      providerDown: providerDownReason(providerQuery.data),
+      viewerMetrics: viewerMetricsOf(capabilityQuery.data),
+      capabilityPending: address !== null && capabilityUnknown(capabilityQuery.data),
+      needsDevice: capabilityNeedsDevice(capabilityQuery.data),
+    }),
+    humanRequired: view.worldLane === "on",
+    humanVerified: view.character?.human === "verified",
+    deviceLabel,
+  });
+
+  switch (slot.kind) {
+    case "in-run":
+      return (
+        <Link
+          href={`/pools/${poolId}`}
+          className={`w-full rounded-lg bg-foreground font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
+        >
+          You are in. Go to your run
+        </Link>
+      );
+    case "locked":
+      return (
+        <LockPanel lock={slot.lock} returnTo={returnTo} onCheckSensor={view.checkSensor} />
+      );
+    case "closed":
+      return (
+        <p className="text-sm text-foreground/80">
+          This dare has closed. If you were already in, your result settles on
+          your run page.
         </p>
-      ) : null}
-
-      {joinBlock.kind !== "ok" ? (
-        // The share link is probably the commonest way anyone reaches a pool,
-        // and it mounted JoinPool with no device check at all - so every limit
-        // the pool page surfaces before the stake was bypassed here. Same
-        // decision as the pool page, made in lib/wearable-join-gate.ts so the
-        // two surfaces cannot drift apart again.
-        <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
-          <p className="text-sm font-semibold text-warning">
-            {joinBlock.kind === "outage"
-              ? "I cannot check this goal right now"
-              : joinBlock.kind === "unsupported"
-                ? "Your device cannot measure this one"
-                : joinBlock.kind === "no-device"
-                  ? "Connect a device first"
-                  : "Let me check your device first"}
+      );
+    case "cannot-pay":
+      return (
+        <p className="text-sm text-foreground/80">
+          This dare was set up so even a verified result pays zero, so there is
+          nothing to accept here.
+        </p>
+      );
+    case "playable":
+      return (
+        <div className="space-y-2">
+          <p className="text-sm text-foreground/80">
+            Accepting stakes your {formatUsdc(pool.entryFee)} USDC. Hit the goal
+            and it comes back with the prize on top; the challenger never keeps
+            it.
           </p>
-          <p className="mt-1 text-sm text-foreground/80">
-            {joinBlock.kind === "outage"
-              ? joinBlock.reason
-              : joinBlock.kind === "unsupported"
-                ? `This challenge is measured in ${metricLabel(joinBlock.metric)}, which your connected device does not report. That is the hardware, not a delay.`
-                : joinBlock.kind === "no-device"
-                  ? "You have not linked a device yet, so there is nothing for SPOTTER to verify. Connect one and this opens up."
-                  : "Not every device can measure every goal and I have not checked yours yet. Open your dashboard and I will look."}
-          </p>
-          <p className="mt-2 text-sm text-foreground/80">
-            The lock-in is real money, so I am not taking it for a goal I might
-            not be able to verify for you.
-          </p>
-          <Link
-            href="/dashboard"
-            className={`mt-3 inline-block rounded-xl border-2 border-edge font-semibold hover:border-accent/50 ${TAP_TARGET}`}
-          >
-            {joinBlock.kind === "outage" ? "Go to my dashboard" : "Check my device"}
-          </Link>
+          <ApprovalNote />
+          <JoinPool poolId={poolIdBig} entryFee={pool.entryFee} alreadyJoined={joined} />
         </div>
-      ) : entryFee !== null ? (
-        <JoinPool poolId={poolIdBig} entryFee={entryFee} alreadyJoined={joined} />
-      ) : poolQuery.isError ? (
-        // Never fall back to a zero fee - that would send a join that reverts on
-        // the missing allowance. When the live read fails, say so and send them
-        // to the pool page, where the join primitive loads the fee fresh.
-        <p className="text-sm text-muted">
-          Could not read the stake for this challenge right now. Open the full
-          challenge below to accept it.
-        </p>
-      ) : (
-        // Hold the button until the live read lands; JoinPool renders once it
-        // knows the exact lock-in to approve.
-        <Skeleton className="h-12 w-full rounded-xl" />
-      )}
-
-      <Link
-        href={`/pools/${poolId}`}
-        className={`${ONWARD_BASE} ${
-          joined
-            ? "border-accent bg-accent/10 text-accent-strong hover:bg-accent/20"
-            : "border-edge bg-secondary text-secondary-foreground hover:border-accent/50"
-        }`}
-      >
-        {joined ? "Upload your proof and get paid" : "See the full challenge"}
-      </Link>
-    </div>
-  );
+      );
+  }
 }

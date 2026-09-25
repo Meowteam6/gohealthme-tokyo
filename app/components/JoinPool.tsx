@@ -75,7 +75,7 @@ function JoinPoolInner({
       const poolsAddress = getHealthPoolsAddress();
       if (poolsAddress === null) {
         throw new Error(
-          "HealthPools contract address is not configured. Set NEXT_PUBLIC_HEALTH_POOLS_ADDRESS.",
+          "Runs are not switched on for this build yet.",
         );
       }
       const publicClient = getArcPublicClient();

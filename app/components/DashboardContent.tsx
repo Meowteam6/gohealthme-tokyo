@@ -41,8 +41,6 @@ import {
   displayGoalSpec,
   evidenceTypeOf,
   fetchGoalId,
-  fetchParticipant,
-  fetchPools,
   fetchProofTier,
   formatUsdc,
   type ParticipantInfo,
@@ -62,6 +60,11 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
 import { resultLabel } from "@/lib/participant-status";
+import RunBoard from "@/components/game/RunBoard";
+import CharacterCard from "@/components/game/CharacterCard";
+import HeroActivityTicker from "@/components/HeroActivityTicker";
+import { useCharacter } from "@/lib/game/useCharacter";
+import { MY_RUNS_KEY, fetchMyRuns } from "@/lib/game/useLobby";
 import {
   disconnectWearable,
   fetchProviderOptions,
@@ -82,15 +85,6 @@ interface JoinedPool {
   participant: ParticipantInfo;
 }
 
-async function fetchJoinedPools(address: `0x${string}`): Promise<JoinedPool[]> {
-  const pools = await fetchPools();
-  const participants = await Promise.all(
-    pools.map((pool) => fetchParticipant(pool.id, address)),
-  );
-  return pools
-    .map((pool, i) => ({ pool, participant: participants[i] }))
-    .filter((entry) => entry.participant.joined);
-}
 
 /** A verified result on a pool that has not settled yet: the money is owed and
  *  is waiting on the clock, nothing else. The chain alone says this - the
@@ -771,12 +765,13 @@ function WhoopReturnNote({ liveConnected }: { liveConnected: boolean | null }) {
 export default function DashboardContent() {
   const { ready, authenticated, address } = useEmbeddedWallet();
   const requestAuth = useWalletAuth();
+  const character = useCharacter();
 
   const joinedQuery = useQuery({
-    queryKey: ["joined-pools", address],
+    queryKey: [MY_RUNS_KEY, address],
     queryFn: () => {
       if (address === null) throw new Error("No wallet address.");
-      return fetchJoinedPools(address);
+      return fetchMyRuns(address);
     },
     enabled: address !== null,
   });
@@ -856,114 +851,133 @@ export default function DashboardContent() {
   }
 
   const wearableConnected = providerConnected(connectionQuery.data);
-  const wearablePool = (joinedQuery.data ?? []).find(
-    ({ pool }) => evidenceTypeOf(pool.goalSpec) === "wearable",
-  )?.pool;
+  const runs = joinedQuery.data ?? [];
+  // An unsettled run is on the board; a settled or cancelled one is a
+  // result line with whatever is left to do on it.
+  const wearableRun = runs.find(
+    ({ pool }) =>
+      !pool.settled && !pool.cancelled && evidenceTypeOf(pool.goalSpec) === "wearable",
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* A settled win is CREDITED on-chain but not in the wallet until the
-       *  winner withdraws, so the claim card leads the page: it is the highest-
-       *  value action here and renders only when the chain says money is owed. */}
+       *  winner withdraws, so the claim leads the page: it renders only when
+       *  the chain says money is owed. */}
       <ClaimPayout address={address} />
 
       {/* Says what WHOOP's redirect just did, since the OAuth flow takes over
-       *  the tab and otherwise returns the user to an unchanged-looking page. */}
+       *  the tab and otherwise returns the player to an unchanged page. */}
       <WhoopReturnNote
         liveConnected={
           connectionQuery.data === undefined ? null : wearableConnected
         }
       />
-      <section className="space-y-4">
-        <h2 className="font-display text-lg font-semibold">Joined pools</h2>
-        {joinedQuery.isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-28" />
-            <Skeleton className="h-28" />
-          </div>
-        ) : joinedQuery.isError ? (
-          <ErrorNote
-            title="Could not load your pools"
-            detail={
-              joinedQuery.error instanceof Error
-                ? joinedQuery.error.message
-                : "Unknown error reading from Base Sepolia."
-            }
-            onRetry={() => {
-              void joinedQuery.refetch();
-            }}
-          />
-        ) : (joinedQuery.data ?? []).length === 0 ? (
-          <EmptyState
-            title="Nothing on the line yet"
-            detail="Pick a goal with USDC staked on it. One wallet, one entry, and SPOTTER pays the moment you prove it."
-            action={
-              <Link
-                href="/pools"
-                className="inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-6 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              >
-                Browse pools
-              </Link>
-            }
-          />
-        ) : (
-          (joinedQuery.data ?? []).map((entry) => {
-            const { pool, participant } = entry;
-            const result = resultLabel(pool, participant);
-            const settlesAt = deferredUntil(entry);
-            return (
-              <div key={pool.id.toString()}>
-              <Link
-                href={`/pools/${pool.id.toString()}`}
-                className="block rounded-3xl border border-edge bg-surface p-5 transition-colors hover:border-accent/50 sm:p-6"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Badge>{pool.initiative}</Badge>
-                  <Badge tone={result.tone}>{result.text}</Badge>
-                </div>
-                <h3 className="mt-3 font-display text-lg font-semibold leading-snug">
-                  {displayGoalSpec(pool.goalSpec)}
-                </h3>
-                <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted">
-                  <span>
-                    Reward pool{" "}
-                    <span className="font-semibold text-accent">
-                      {formatUsdc(pool.balance)} USDC
-                    </span>
-                  </span>
-                  <Countdown
-                    periodStart={pool.periodStart}
-                    periodEnd={pool.periodEnd}
-                  />
-                </div>
-                {settlesAt !== null ? (
-                  <DeferredNote
-                    tier={deferredTierQuery.data?.get(pool.id.toString()) ?? null}
-                    settlesAt={settlesAt}
-                  />
-                ) : null}
-              </Link>
-              {pool.cancelled && !participant.refunded ? (
-                <RefundClaim
-                  poolId={pool.id}
-                  entryFee={pool.entryFee}
-                  address={address}
-                />
-              ) : null}
-            </div>
-            );
-          })
-        )}
-      </section>
 
-      {/* The locked case earns the card too: a wearable may well be linked
-       *  and simply unreadable until the signature lands, and dropping the
-       *  card would leave nowhere to sign from. */}
-      {wearableConnected ||
-      wearablePool !== undefined ||
-      providerAuthReason(connectionQuery.data) !== null ? (
-        <StreakCard address={address} pool={wearablePool} />
+      <CharacterCard view={character} variant="strip" />
+
+      {joinedQuery.isLoading ? (
+        <div className="space-y-3" aria-busy="true">
+          <Skeleton className="h-40" />
+          <Skeleton className="h-40" />
+        </div>
+      ) : joinedQuery.isError ? (
+        <div role="alert" className="rounded-xl border-2 border-danger/40 bg-danger/5 p-4">
+          <p className="font-semibold">I could not read your runs from Base Sepolia just now.</p>
+          <p className="mt-1 text-sm text-foreground/80">Nothing changed on your side.</p>
+          <Button type="button" variant="secondary" className="mt-3" onClick={() => void joinedQuery.refetch()}>
+            Read my runs again
+          </Button>
+        </div>
+      ) : runs.length === 0 ? (
+        <EmptyState
+          title="You are not in a run yet"
+          detail="Pick a run in the lobby, stake on yourself, and your nights show up here."
+          action={
+            <Link
+              href="/pools"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-6 font-semibold text-white hover:bg-accent-strong"
+            >
+              Go to the lobby
+            </Link>
+          }
+        />
+      ) : (
+        <>
+          {runs
+            .filter(({ pool }) => !pool.settled && !pool.cancelled)
+            .map((entry) => {
+              const settlesAt = deferredUntil(entry);
+              return (
+                <div key={entry.pool.id.toString()} className="space-y-3">
+                  <RunBoard
+                    pool={entry.pool}
+                    address={address}
+                    promptForData
+                    showLink
+                  />
+                  {settlesAt !== null ? (
+                    <DeferredNote
+                      tier={deferredTierQuery.data?.get(entry.pool.id.toString()) ?? null}
+                      settlesAt={settlesAt}
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
+
+          {runs.some(({ pool }) => pool.settled || pool.cancelled) ? (
+            <section className="space-y-3">
+              <h2 className="font-display text-3xl font-extrabold">Finished runs</h2>
+              {runs
+                .filter(({ pool }) => pool.settled || pool.cancelled)
+                .map((entry) => {
+                  const { pool, participant } = entry;
+                  const result = resultLabel(pool, participant);
+                  return (
+                    <div
+                      key={pool.id.toString()}
+                      className="rounded-xl border-2 border-foreground/15 bg-surface p-4"
+                    >
+                      <Link
+                        href={`/pools/${pool.id.toString()}`}
+                        className="block hover:text-accent"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="font-display text-2xl font-extrabold leading-tight">
+                            {displayGoalSpec(pool.goalSpec)}
+                          </h3>
+                          <Badge tone={result.tone}>{result.text}</Badge>
+                        </div>
+                        <p className="mt-1 text-sm text-muted">
+                          Prize pool {formatUsdc(pool.balance)} test USDC
+                        </p>
+                      </Link>
+                      {pool.cancelled && !participant.refunded ? (
+                        <RefundClaim
+                          poolId={pool.id}
+                          entryFee={pool.entryFee}
+                          address={address}
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })}
+            </section>
+          ) : null}
+        </>
+      )}
+
+      {/* The general streak card earns its place only when no live wearable
+       *  run already shows the nights on its own board. */}
+      {wearableRun === undefined &&
+      (wearableConnected || providerAuthReason(connectionQuery.data) !== null) ? (
+        <StreakCard address={address} />
       ) : null}
+      <section className="space-y-3">
+        <h2 className="font-display text-3xl font-extrabold">On the river tonight</h2>
+        <HeroActivityTicker />
+      </section>
       <RecentDataCard address={address} />
       <BalanceCard address={address} />
     </div>

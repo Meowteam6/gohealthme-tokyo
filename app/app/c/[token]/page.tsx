@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Countdown from "@/components/Countdown";
 import ChallengeAccept from "@/components/ChallengeAccept";
 import ChallengeContribute from "@/components/ChallengeContribute";
 import ShareChallenge from "@/components/ShareChallenge";
-import { Badge, Money, Stat, TAP_TARGET } from "@/components/ui";
-import { displayGoalSpec, fetchPool, formatUsdc } from "@/lib/contract";
+import SpotterSays from "@/components/SpotterSays";
+import Lobby from "@/components/game/Lobby";
+import { TAP_TARGET } from "@/components/ui";
+import { fetchPool, formatUsdc } from "@/lib/contract";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
 import { getChallengeByToken } from "@/lib/server/challenges";
 import { fetchPoolFunders } from "@/lib/server/pool-funders";
@@ -41,19 +42,19 @@ export const metadata: Metadata = {
  *  of whether any given token exists beyond "this one does not resolve". */
 function InvalidLink() {
   return (
-    <div className="mx-auto max-w-md py-12 text-center">
-      <h1 className="text-2xl font-bold tracking-tight">
-        This challenge link is not valid
+    <div className="mx-auto max-w-md py-12">
+      <h1 className="font-display text-5xl font-black leading-[0.95]">
+        This dare link does not open
       </h1>
-      <p className="mt-3 text-sm text-muted">
-        It may have been mistyped, or the challenge may no longer exist. Ask
-        whoever sent it for a fresh link.
+      <p className="mt-3 text-base text-foreground/80">
+        It may have been mistyped, or the dare no longer exists. Ask whoever
+        sent it for a fresh link.
       </p>
       <Link
         href="/pools"
-        className={`mt-6 rounded-xl bg-accent-strong font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
+        className={`mt-6 rounded-lg bg-accent font-semibold text-white hover:bg-accent-strong ${TAP_TARGET}`}
       >
-        Browse open pools instead
+        Go to the lobby
       </Link>
     </div>
   );
@@ -79,19 +80,13 @@ export default async function ChallengeLandingPage({
   // The goal and the reward are read LIVE from the chain, never from the
   // challenges row. If the pool cannot be read, treat the link as unresolvable
   // rather than rendering a challenge with no goal or reward.
-  let goalTitle: string;
   let rewardUsd: string;
   let phase: ReturnType<typeof poolPhase>;
   let canPay: boolean;
-  let periodStart: bigint;
-  let periodEnd: bigint;
   try {
     const pool = await fetchPool(poolIdBig);
-    goalTitle = displayGoalSpec(pool.goalSpec);
     rewardUsd = formatUsdc(pool.balance);
     canPay = poolCanPay(pool);
-    periodStart = pool.periodStart;
-    periodEnd = pool.periodEnd;
     phase = poolPhase(pool, nowUnixSeconds());
   } catch {
     return <InvalidLink />;
@@ -126,125 +121,62 @@ export default async function ChallengeLandingPage({
   // live and can actually pay. The same gate the accept block uses.
   const canGrow = phase === "live" && canPay;
 
-  const accept =
-    phase === "live" && canPay ? (
-      <ChallengeAccept poolId={challenge.poolId} />
-    ) : phase === "live" && !canPay ? (
-      <div className="rounded-2xl border border-warning/40 bg-warning/10 p-5">
-        <p className="text-base font-semibold text-warning">
-          This challenge cannot pay out
-        </p>
-        <p className="mt-1 text-sm text-foreground/80">
-          The pool behind it was set up so a verified result still settles to
-          zero, so there is nothing to accept here.
-        </p>
-      </div>
-    ) : phase === "expired" ? (
-      <div className="rounded-2xl border border-edge bg-surface p-5">
-        <p className="text-base font-semibold">This challenge has closed</p>
-        <p className="mt-1 text-sm text-muted">
-          The window for it ended. If you were already in, your proof can still
-          settle from the pool page.
-        </p>
-        <Link
-          href={`/pools/${challenge.poolId}`}
-          className={`mt-4 rounded-xl border border-edge font-medium text-muted hover:text-foreground ${TAP_TARGET}`}
-        >
-          Go to the pool
-        </Link>
-      </div>
-    ) : (
-      <div className="rounded-2xl border border-edge bg-surface p-5">
-        <p className="text-base font-semibold">This challenge is settled</p>
-        <p className="mt-1 text-sm text-muted">
-          The reward has been paid out. Nothing more happens here.
-        </p>
-        <Link
-          href={`/pools/${challenge.poolId}`}
-          className={`mt-4 rounded-xl border border-edge font-medium text-muted hover:text-foreground ${TAP_TARGET}`}
-        >
-          See the pool
-        </Link>
-      </div>
-    );
-
-  return (
-    <div className="mx-auto max-w-xl space-y-6 py-6">
-      <div className="text-center">
-        {/* SPOTTER cheering the dare on. eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/spotter/spotter-cheer.png"
-          alt=""
-          aria-hidden="true"
-          className="mx-auto mb-3 h-28 w-auto drop-shadow-sm"
-        />
-        <Badge tone="accent">Challenge</Badge>
-        <h1 className="mt-4 font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
-          {challengerName} challenged you
-        </h1>
-        <p className="mt-3 text-base text-foreground/80">
-          They put up{" "}
-          <span className="font-semibold text-accent">{rewardUsd} USDC</span> on
-          you.
-        </p>
-        {challenge.targetHandle !== null ? (
-          <p className="mt-2 text-sm text-muted">For {challenge.targetHandle}</p>
-        ) : null}
-        {contributorNames.length > 0 ? (
-          <p className="mt-3 text-sm text-muted">
-            Backed by{" "}
-            <span className="font-semibold text-foreground">
-              {contributorNames.slice(0, 3).join(", ")}
-            </span>
-            {contributorNames.length > 3
-              ? ` +${contributorNames.length - 3} more`
-              : ""}
-          </p>
-        ) : null}
-      </div>
-
+  // The dare leads the same Lobby component /pools renders, with this run
+  // highlighted and its accept control inside the slip. The lock logic is the
+  // lobby's, so the dare link and the board can never disagree.
+  const intro = (
+    <header className="space-y-4">
+      <p className="text-sm font-semibold text-accent">You have been dared</p>
+      <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl">
+        {challengerName} put {rewardUsd} USDC on you
+      </h1>
+      {challenge.targetHandle !== null ? (
+        <p className="text-sm text-muted">For {challenge.targetHandle}</p>
+      ) : null}
       {challenge.message !== null ? (
-        <blockquote className="rounded-2xl border border-accent/30 bg-accent/20 p-5 text-center text-base italic text-foreground/90">
-          &ldquo;{challenge.message}&rdquo;
+        <blockquote className="border-l-4 border-accent pl-4 text-lg text-foreground/90">
+          {challenge.message}
         </blockquote>
       ) : null}
-
-      <div className="rounded-2xl border border-edge bg-surface p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-          The dare
+      {contributorNames.length > 0 ? (
+        <p className="text-sm text-muted">
+          Backed by{" "}
+          <span className="font-semibold text-foreground">
+            {contributorNames.slice(0, 3).join(", ")}
+          </span>
+          {contributorNames.length > 3 ? ` and ${contributorNames.length - 3} more` : ""}
         </p>
-        <p className="mt-1 text-lg font-semibold leading-snug">{goalTitle}</p>
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <Stat label="Reward" value={<Money usd={rewardUsd} />} />
-          <Stat
-            label="Time to do it"
-            value={
-              <Countdown periodStart={periodStart} periodEnd={periodEnd} />
-            }
-          />
-        </div>
-        <p className="mt-4 text-sm text-muted">
-          You lock in a stake to accept. Hit the goal and your stake comes back
-          to you with the reward on top, the second it is verified. Only the yes-or-no verdict is written on
-          chain - your health data never is. Only you can claim it: one wallet,
-          one entry.
-        </p>
-      </div>
+      ) : null}
+      <SpotterSays
+        surface="join"
+        state="joined"
+        pose="cheer"
+        say="Accept and your stake goes in. Hit it and it comes back with the prize. Only the yes or no verdict goes on chain, never your data."
+      />
+    </header>
+  );
 
-      {accept}
+  return (
+    <div className="mx-auto max-w-3xl space-y-8">
+      <Lobby
+        highlightId={challenge.poolId}
+        returnTo={`/c/${token}`}
+        intro={intro}
+        highlightAction={
+          <ChallengeAccept poolId={challenge.poolId} returnTo={`/c/${token}`} />
+        }
+      />
 
       {canGrow ? (
         <>
           <ChallengeContribute poolId={poolIdBig} potUsd={rewardUsd} />
 
-          <div className="space-y-3 rounded-2xl border border-edge bg-surface p-5">
+          <div className="space-y-3 rounded-xl border-2 border-foreground/15 bg-surface p-5">
             <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                Rally your friends
-              </p>
+              <h2 className="font-display text-2xl font-extrabold">Rally your boys</h2>
               <p className="text-sm text-muted">
                 Send this to people who want you to win. They can chip in and
-                grow the reward you collect when you hit the goal.
+                grow the prize you collect when you hit the goal.
               </p>
             </div>
             <ShareChallenge

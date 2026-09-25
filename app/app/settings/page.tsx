@@ -39,14 +39,14 @@ export default function SettingsPage() {
           <WalletSettings />
         ) : (
           <EmptyState
-            title="Sign-in is not configured"
-            detail="Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable embedded wallets and this page."
+            title="Sign-in is off on this build"
+            detail="Without sign-in there is no wallet to show here. The home page still explains how a run works."
             action={
               <Link
-                href="/pools"
-                className="inline-block rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
+                href="/"
+                className="inline-flex min-h-11 items-center rounded-lg bg-accent px-6 text-sm font-semibold text-white hover:bg-accent-strong"
               >
-                Browse pools instead
+                Go to the home page
               </Link>
             }
           />

@@ -1,0 +1,268 @@
+"use client";
+
+// Character creation step 4: pair your sensor. This is where the join gate's
+// capability probe now happens, once, instead of at every pool: the result
+// says what this device can and cannot measure, from the same provider read
+// lib/wearable-join-gate.ts uses. A WHOOP player learns "no step count" here,
+// not after a stake on a steps run.
+
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Button, TAP_TARGET } from "@/components/ui";
+import { useWalletAuth } from "@/lib/useWalletAuth";
+import {
+  PhoneLinkRequiredError,
+  PopupBlockedError,
+  startWearableLink,
+  type ProviderOption,
+  type WearableProviderId,
+} from "@/lib/wearable-connect";
+import {
+  WEARABLE_METRICS,
+  metricLabel,
+  type WearableMetric,
+} from "@/lib/wearable-goal";
+import type { CharacterView } from "@/lib/game/useCharacter";
+
+// What each provider is, in words, before anyone hands over health data.
+const BLURB: Record<WearableProviderId, string> = {
+  junction: "WHOOP, Oura, Fitbit or Garmin, through Junction.",
+  whoop: "WHOOP only, connected directly. Sleep and workouts. No step count.",
+  apple: "Apple Watch and iPhone, set up in the GoHealthMe app on your iPhone.",
+};
+
+const CTA: Record<WearableProviderId, string> = {
+  junction: "Pair with Junction",
+  whoop: "Pair my WHOOP",
+  apple: "Set up on my iPhone",
+};
+
+function metricsOf(option: ProviderOption): WearableMetric[] {
+  return option.observedMetrics ?? option.metrics;
+}
+
+function PairButton({
+  address,
+  option,
+  onPhoneSteps,
+  onBlocked,
+  onError,
+}: {
+  address: `0x${string}`;
+  option: ProviderOption;
+  onPhoneSteps: (steps: string) => void;
+  onBlocked: (url: string) => void;
+  onError: () => void;
+}) {
+  const requestAuth = useWalletAuth();
+  const [opening, setOpening] = useState(false);
+  return (
+    <Button
+      type="button"
+      variant={option.connected ? "secondary" : "primary"}
+      disabled={opening}
+      onClick={() => {
+        setOpening(true);
+        void startWearableLink(address, requestAuth, option.id)
+          .catch((err: unknown) => {
+            if (err instanceof PopupBlockedError) onBlocked(err.linkUrl);
+            else if (err instanceof PhoneLinkRequiredError) onPhoneSteps(err.instructions);
+            else onError();
+          })
+          .finally(() => setOpening(false));
+      }}
+      className="mt-3 w-full sm:w-auto"
+    >
+      {opening
+        ? "Opening the pairing page"
+        : option.connected
+          ? `Re-pair ${option.label}`
+          : CTA[option.id]}
+    </Button>
+  );
+}
+
+export default function SensorStep({
+  view,
+  onSkip,
+}: {
+  view: CharacterView;
+  onSkip?: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [phoneSteps, setPhoneSteps] = useState<string | null>(null);
+  const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [declined, setDeclined] = useState(false);
+  const address = view.address;
+  if (address === null) return null;
+
+  const recheck = () => {
+    void queryClient.invalidateQueries({ queryKey: ["wearable-providers"] });
+    void queryClient.invalidateQueries({ queryKey: ["wearable-progress"] });
+  };
+
+  const sensor = view.sensor;
+
+  if (sensor.kind === "loading") {
+    return <p className="text-sm text-muted" aria-live="polite">Looking at your sensor</p>;
+  }
+
+  if (sensor.kind === "unchecked") {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-foreground/80">
+          Sign once so I can see which sensor you have paired and what it
+          measures. Free, no transaction, and it covers every run.
+        </p>
+        <Button
+          type="button"
+          pop
+          disabled={view.checkingSensor}
+          onClick={() => {
+            void view.checkSensor().then((ok) => setDeclined(!ok));
+          }}
+        >
+          {view.checkingSensor ? "Waiting for your signature" : "Check my sensor"}
+        </Button>
+        {declined ? (
+          <p className="text-sm text-muted" aria-live="polite">
+            No signature, so I still cannot see it. Tap again when you are ready.
+          </p>
+        ) : null}
+        {onSkip !== undefined ? (
+          <button type="button" onClick={onSkip} className={`-ml-4 text-muted underline underline-offset-2 hover:text-foreground ${TAP_TARGET}`}>
+            Skip for now
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (sensor.kind === "unavailable") {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-foreground/80">
+          The sensor check is not answering right now, so I cannot pair
+          anything this minute. Your runs stay locked until it is back.
+        </p>
+        <Button type="button" variant="secondary" onClick={recheck}>
+          Try the sensor check again
+        </Button>
+        {onSkip !== undefined ? (
+          <button type="button" onClick={onSkip} className={`-ml-4 text-muted underline underline-offset-2 hover:text-foreground ${TAP_TARGET}`}>
+            Skip for now
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  const offered = (view.providers?.providers ?? []).filter((p) => p.configured);
+  const paired = sensor.kind === "paired" ? sensor.device : null;
+  const cannot =
+    paired !== null
+      ? WEARABLE_METRICS.filter((m) => !paired.metrics.includes(m)).map(metricLabel)
+      : [];
+
+  return (
+    <div className="space-y-4">
+      {paired !== null ? (
+        <div className="rounded-lg border-2 border-accent bg-accent/5 p-4" aria-live="polite">
+          <p className="font-semibold">{paired.label} is paired</p>
+          <p className="mt-1 text-sm">
+            Measures: {paired.metrics.map((m) => metricLabel(m as WearableMetric)).join(", ")}.
+          </p>
+          {cannot.length > 0 ? (
+            <p className="mt-1 text-sm text-foreground/80">
+              Cannot measure: {cannot.join(", ")}. Runs scored on those show as
+              locked for you in the lobby, before you stake anything.
+            </p>
+          ) : null}
+        </div>
+      ) : sensor.kind === "unreadable" ? (
+        <div className="rounded-lg border-2 border-warning/60 bg-warning/5 p-4">
+          <p className="font-semibold text-warning">
+            {sensor.label} is linked and I cannot read it right now
+          </p>
+          <p className="mt-1 text-sm text-foreground/80">
+            Wearable runs stay locked until I can see what it measures. Nothing
+            to do on your side; check back shortly.
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-foreground/80">
+          I pay on what your wearable reports, so pick the one you wear. Each
+          option says what it can measure.
+        </p>
+      )}
+
+      {offered.length === 0 ? (
+        <p className="rounded-lg border-2 border-edge bg-surface-raised p-4 text-sm text-foreground/80">
+          No wearable pairing is switched on for this build yet, so wearable
+          runs stay locked. You can still browse the lobby.
+        </p>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {offered.map((option) => (
+            <li key={option.id} className="rounded-lg border-2 border-edge bg-surface p-4">
+              <p className="font-semibold">
+                {option.label}
+                {option.connected ? (
+                  <span className="ml-2 text-xs font-bold text-accent">Paired</span>
+                ) : null}
+              </p>
+              <p className="mt-1 text-sm text-muted">{BLURB[option.id]}</p>
+              <p className="mt-2 text-sm">
+                Measures {metricsOf(option).map(metricLabel).join(", ")}
+              </p>
+              <PairButton
+                address={address}
+                option={option}
+                onPhoneSteps={setPhoneSteps}
+                onBlocked={setBlockedUrl}
+                onError={() => setFailed(true)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {phoneSteps !== null ? (
+        <p role="status" className="rounded-lg border-2 border-accent/40 bg-accent/5 p-4 text-sm">
+          {phoneSteps}
+        </p>
+      ) : null}
+      {blockedUrl !== null ? (
+        <a
+          href={blockedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setBlockedUrl(null)}
+          className={`rounded-lg border-2 border-foreground font-semibold ${TAP_TARGET}`}
+        >
+          Your browser blocked the pairing window. Open it here
+        </a>
+      ) : null}
+      {failed ? (
+        <p role="alert" className="rounded-lg border-2 border-danger/40 bg-danger/5 p-4 text-sm">
+          The pairing page would not open. Nothing was linked and nothing was
+          charged. Try again in a moment.
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-3">
+        {offered.length > 0 ? (
+          <Button type="button" variant="secondary" onClick={recheck}>
+            I paired it, check again
+          </Button>
+        ) : null}
+        {onSkip !== undefined ? (
+          <button type="button" onClick={onSkip} className={`text-muted underline underline-offset-2 hover:text-foreground ${TAP_TARGET}`}>
+            {paired !== null ? "Done" : "Skip for now"}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}

@@ -1,26 +1,26 @@
 "use client";
 
-// The closed-beta gate. Wraps the page content in the root layout.
+// The gate, now character creation. Wraps the page content in the root layout.
 //
 // Public surfaces (the landing page, legal pages, public profiles, and invite
-// links) always render — a LinkedIn visitor sees the pitch, and an invited
-// friend can read a dare before signing in. Everything else requires an
-// approved wallet: an unauthenticated visitor is asked to sign in, a signed-in
-// but unapproved wallet gets the request-access flow, and an approved wallet (or
-// an admin) passes straight through.
+// links) always render: a visitor sees the pitch, and an invited friend can
+// read a dare before signing in. Everything else shows character creation
+// until the two hard steps pass (signed in; World proof-of-human or the
+// closed-beta allowlist), then once more for the skippable onboarding pass
+// (name, sensor), then never again on this device.
 //
 // This is a UX gate. It decides what the browser SHOWS; the server decides what
-// actually happens (isAllowed on gated routes). The two are intentionally
-// separate so a determined caller cannot talk their way past enforcement by
-// editing client state.
+// actually happens (isAllowed on gated routes). The two stay separate so a
+// determined caller cannot talk their way past enforcement by editing client
+// state. With World off for a build, the allowlist behaves exactly as it did
+// before V4, and there is no skip that works on a deployed environment.
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { DYNAMIC_CONFIGURED } from "@/lib/config";
-import { useEmbeddedWallet } from "@/lib/wallet";
-import { useAccess } from "@/lib/useAccess";
-import { ErrorNote, TAP_TARGET } from "@/components/ui";
-import RequestAccess from "@/components/RequestAccess";
+import { Skeleton } from "@/components/ui";
+import CharacterCreation from "@/components/game/CharacterCreation";
+import { useCharacter } from "@/lib/game/useCharacter";
+import { useOnboarding } from "@/lib/game/onboarding-store";
 
 // Exact public paths and public path prefixes. Keep in sync with the route map;
 // anything not listed here is gated.
@@ -32,119 +32,46 @@ export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
-function GateShell({ children }: { children: ReactNode }) {
+function GateLoading() {
   return (
-    <div className="mx-auto flex max-w-lg flex-col items-center gap-6 py-10 text-center">
-      {children}
+    <div className="mx-auto w-full max-w-xl space-y-4 py-2" aria-busy="true">
+      <p className="sr-only" aria-live="polite">
+        Loading your player
+      </p>
+      <Skeleton className="h-14 w-2/3" />
+      <Skeleton className="h-5 w-full" />
+      <Skeleton className="h-64 w-full" />
     </div>
   );
 }
 
-function OtterCard({
-  pose,
-  alt,
-}: {
-  pose: string;
-  alt: string;
-}) {
-  return (
-    <div className="relative w-full max-w-xs">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-6 -z-10 rounded-full bg-accent/20 blur-3xl"
-      />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`/spotter/${pose}`}
-        alt={alt}
-        className="mx-auto aspect-square w-56 rounded-3xl border border-edge bg-surface object-cover shadow-sm"
-      />
-    </div>
-  );
+function CharacterGate({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const view = useCharacter();
+  const onboarding = useOnboarding(view.address);
+
+  // The /character page renders its own editor; the gate only guards the hard
+  // steps there, so the page is never shown twice.
+  const onCharacterPage = pathname === "/character";
+
+  if (view.gateLoading || !onboarding.hydrated) return <GateLoading />;
+
+  if (!view.gate) {
+    return <CharacterCreation view={view} onboarding={onboarding} mode="gate" />;
+  }
+
+  if (!onboarding.done && !onCharacterPage) {
+    return <CharacterCreation view={view} onboarding={onboarding} mode="gate" />;
+  }
+
+  return <>{children}</>;
 }
 
 export default function AccessGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  // Demo/pilot switch: NEXT_PUBLIC_ACCESS_GATE_DISABLED=1 turns the closed-beta
-  // gate off entirely (open demo — every path renders). Unset it to re-enable
-  // the family-and-friends gate for the real-money pilot.
+  // Playwright-only switch (playwright.config.ts). Never set on a deployed
+  // environment: it opens the closed beta (CLAUDE.md landmine 3).
   const gateDisabled = process.env.NEXT_PUBLIC_ACCESS_GATE_DISABLED === "1";
-  const gated = !gateDisabled && !isPublicPath(pathname);
-  const { ready, authenticated, login } = useEmbeddedWallet();
-  const access = useAccess(gated);
-
-  // Public pages never gate.
-  if (!gated) return <>{children}</>;
-
-  // Approved or admin: the app, unchanged. Checked before the loading gate so a
-  // cached-fast resolve does not flash a spinner.
-  if (access.isAdmin || access.status === "approved") return <>{children}</>;
-
-  if (!ready || access.loading) {
-    return (
-      <GateShell>
-        <OtterCard pose="spotter-peek.png" alt="" />
-        <p className="text-sm text-muted">Checking your spot on the list…</p>
-      </GateShell>
-    );
-  }
-
-  if (!authenticated) {
-    return (
-      <GateShell>
-        <OtterCard
-          pose="spotter-greet.png"
-          alt="SPOTTER the otter waving hello"
-        />
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            GoHealthMe is invite-only right now.
-          </h1>
-          <p className="mx-auto mt-3 max-w-sm text-muted">
-            We are running a closed family-and-friends beta. Sign in and ask for
-            a spot — no crypto experience needed, a wallet is created for you
-            automatically.
-          </p>
-        </div>
-        {DYNAMIC_CONFIGURED ? (
-          <button
-            type="button"
-            onClick={login}
-            className={`rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-strong hover:bg-accent/15 ${TAP_TARGET}`}
-          >
-            Sign in to request access
-          </button>
-        ) : (
-          // DYNAMIC_CONFIGURED is false when NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID
-          // is unset, which also means authenticated can never become true, so
-          // this branch renders forever. Without this guard the button above
-          // rendered anyway and did nothing on tap - live-looking, permanently
-          // dead. lib/wallet.ts already documents the same flag deciding which
-          // useEmbeddedWallet implementation loads; this is the one caller of
-          // login() in this file that had not checked it.
-          <p className="text-sm text-muted">
-            Sign-in is not configured. Set
-            NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable it.
-          </p>
-        )}
-      </GateShell>
-    );
-  }
-
-  if (access.error) {
-    return (
-      <GateShell>
-        <div className="w-full text-left">
-          <ErrorNote
-            title="Could not check your access."
-            detail="Something went wrong reaching the server. Your spot is safe — try again."
-            onRetry={access.refetch}
-          />
-        </div>
-      </GateShell>
-    );
-  }
-
-  // Authenticated but not approved: none / pending / denied.
-  return <RequestAccess status={access.status} onSubmitted={access.refetch} />;
+  if (gateDisabled || isPublicPath(pathname)) return <>{children}</>;
+  return <CharacterGate>{children}</CharacterGate>;
 }

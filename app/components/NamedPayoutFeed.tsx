@@ -96,9 +96,9 @@ function PayoutRow({ payout, index }: { payout: NamedPayout; index: number }) {
           </a>
         </span>
       </div>
-      <span className="shrink-0 font-mono tabular-nums text-base text-gold">
+      <span className="shrink-0 font-mono tabular-nums text-base text-gold-deep">
         {payout.amountUsd}
-        <span className="text-gold/80"> USDC</span>
+        <span className="text-gold-deep/80"> USDC</span>
       </span>
     </li>
   );
