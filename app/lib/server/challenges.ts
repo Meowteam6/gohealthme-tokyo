@@ -11,12 +11,21 @@
 //     public key cannot enumerate the table even though it is public - the only
 //     way to reach a row is to already hold its token.
 //
+// SCOPED TO ONE CONTRACT. Pool ids restart at 1 on every HealthPoolsV3 deploy,
+// so a row is keyed (contract_address, pool_id) and every read and write below
+// filters on the contract this deployment is configured for
+// (challengesContract()). A V3 row can never reach a V4 pool, and the reverse.
+// The schema is committed in supabase/migrations/20260926_challenges.sql.
+//
 // A challenge row is a pool id, who created it, an unguessable token, and the
 // challenger's framing text. There is NO health column anywhere: the goal
 // ("lose 10 lbs") lives on-chain in the pool goalSpec and is read live from the
 // chain by the landing, never copied here.
 
-import { getSupabaseServiceRole } from "@/lib/server/supabase";
+import {
+  getSupabaseServiceRole,
+  supabaseWriteConfigured,
+} from "@/lib/server/supabase";
 import {
   checkMessage,
   checkTargetHandle,
@@ -30,6 +39,94 @@ const CHALLENGES_TABLE = "challenges";
 
 /** How many times to retry on the astronomically unlikely token collision. */
 const TOKEN_COLLISION_RETRIES = 3;
+
+/** The preflight read gives up after this long rather than hanging the form. */
+const HEALTH_TIMEOUT_MS = 5_000;
+
+const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
+
+/** Why dares cannot be made on this deployment. Logged server-side; the user
+ *  only ever sees the plain "not live on this build" copy. */
+export type ChallengesUnavailableCode =
+  | "no-pools-address"
+  | "pools-address-mismatch"
+  | "no-database"
+  | "unreachable";
+
+export type ChallengesScope =
+  | { ok: true; contract: string }
+  | { ok: false; code: ChallengesUnavailableCode };
+
+/**
+ * The lowercase HealthPoolsV3 address every challenge row on this deployment
+ * belongs to. The server address (HEALTH_POOLS_ADDRESS) and the browser address
+ * (NEXT_PUBLIC_HEALTH_POOLS_ADDRESS) must agree: the create form deposits into
+ * the browser one and the routes verify the pool against it, so a row keyed to
+ * a different contract would point at a pool that does not exist there. Either
+ * one alone is enough; both set and different refuses.
+ */
+export function challengesContract(
+  env: Record<string, string | undefined> = process.env,
+): ChallengesScope {
+  const server = (env.HEALTH_POOLS_ADDRESS ?? "").trim();
+  const browser = (env.NEXT_PUBLIC_HEALTH_POOLS_ADDRESS ?? "").trim();
+  const serverOk = ADDRESS_PATTERN.test(server);
+  const browserOk = ADDRESS_PATTERN.test(browser);
+  if (!serverOk && !browserOk) return { ok: false, code: "no-pools-address" };
+  if (serverOk && browserOk && server.toLowerCase() !== browser.toLowerCase()) {
+    return { ok: false, code: "pools-address-mismatch" };
+  }
+  return { ok: true, contract: (serverOk ? server : browser).toLowerCase() };
+}
+
+/** User-facing copy for any unavailable code. Deliberately one line: the
+ *  player cannot fix configuration, so the only honest things to say are that
+ *  dares are off here and that nothing was charged. */
+export const CHALLENGES_UNAVAILABLE_MESSAGE =
+  "Dares are not live on this build yet. Nothing was charged.";
+
+/** The same refusal at the link write. That write can run AFTER a reward
+ *  landed (a link-only retry), so it must never claim nothing was charged. */
+export const CHALLENGE_LINK_UNAVAILABLE_MESSAGE =
+  "Dare links are not available on this build right now.";
+
+export type ChallengesHealth =
+  | { ok: true; contract: string }
+  | { ok: false; code: ChallengesUnavailableCode };
+
+/**
+ * Preflight for the dare form: proves, before any USDC moves, that this
+ * deployment can write the challenge row the link depends on. Checks the
+ * contract scope, the service-role config, and that the table is reachable
+ * WITH its contract_address column (a table from before the migration fails
+ * here, not after the deposit).
+ */
+export async function checkChallengesHealth(): Promise<ChallengesHealth> {
+  const scope = challengesContract();
+  if (!scope.ok) return scope;
+  if (!supabaseWriteConfigured()) return { ok: false, code: "no-database" };
+  const supabase = getSupabaseServiceRole();
+  if (supabase === null) return { ok: false, code: "no-database" };
+
+  const probe = supabase
+    .from(CHALLENGES_TABLE)
+    .select("contract_address, invite_token, pool_id", { head: true, count: "exact" })
+    .eq("contract_address", scope.contract)
+    .limit(1)
+    .then(({ error }) => error === null);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => resolve(false), HEALTH_TIMEOUT_MS);
+  });
+  try {
+    const reachable = await Promise.race([probe, timeout]);
+    return reachable ? scope : { ok: false, code: "unreachable" };
+  } catch {
+    return { ok: false, code: "unreachable" };
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 
 export interface Challenge {
   inviteToken: string;
@@ -71,12 +168,15 @@ export async function getChallengeByToken(
   rawToken: string,
 ): Promise<Challenge | null> {
   if (!isValidInviteToken(rawToken)) return null;
+  const scope = challengesContract();
+  if (!scope.ok) return null;
   const supabase = getSupabaseServiceRole();
   if (supabase === null) return null;
 
   const { data, error } = await supabase
     .from(CHALLENGES_TABLE)
     .select("invite_token, pool_id, challenger_address, target_handle, message, created_at")
+    .eq("contract_address", scope.contract)
     .eq("invite_token", rawToken)
     .maybeSingle<ChallengeRow>();
 
@@ -87,7 +187,8 @@ export async function getChallengeByToken(
 /**
  * The private invite token for the challenge that created a given pool, or null
  * when the pool is not a challenge, Supabase is not configured, or no row
- * matches. A challenge creates exactly one pool, so pool_id is unique.
+ * matches. A challenge creates exactly one pool, so (contract, pool_id) is
+ * unique.
  *
  * SECURITY: this returns a secret that gates the /c/<token> landing, so it must
  * ONLY be called from a route that has already proven the caller is the pool's
@@ -97,13 +198,16 @@ export async function getChallengeByToken(
 export async function getInviteTokenByPoolId(
   poolId: bigint | string,
 ): Promise<string | null> {
+  const scope = challengesContract();
+  if (!scope.ok) return null;
   const supabase = getSupabaseServiceRole();
   if (supabase === null) return null;
 
   const { data, error } = await supabase
     .from(CHALLENGES_TABLE)
     .select("invite_token")
-    .eq("pool_id", Number(poolId))
+    .eq("contract_address", scope.contract)
+    .eq("pool_id", poolId.toString())
     .maybeSingle<{ invite_token: string }>();
 
   if (error !== null || data === null) return null;
@@ -143,6 +247,8 @@ export async function getChallengesForTargetHandle(
 ): Promise<InvitedChallenge[]> {
   const handle = normalizeTargetHandle(rawHandle);
   if (handle === "") return [];
+  const scope = challengesContract();
+  if (!scope.ok) return [];
   const supabase = getSupabaseServiceRole();
   if (supabase === null) return [];
 
@@ -151,6 +257,7 @@ export async function getChallengesForTargetHandle(
     .select(
       "invite_token, pool_id, challenger_address, target_handle, message, created_at",
     )
+    .eq("contract_address", scope.contract)
     .in("target_handle", [handle, `@${handle}`]);
 
   if (error !== null || data === null) return [];
@@ -174,7 +281,8 @@ export type CreateChallengeResult =
  *
  * The invite token is minted here from crypto-random bytes, retried on the
  * (near-impossible) unique-token collision. A second challenge for the same
- * pool trips the unique(pool_id) constraint and comes back as a conflict.
+ * pool trips the unique(contract_address, pool_id) constraint and comes back
+ * as a conflict.
  */
 export async function createChallenge(params: {
   rawChallengerAddress: string;
@@ -198,13 +306,10 @@ export async function createChallenge(params: {
     return { ok: false, status: 400, reason: targetCheck.reason };
   }
 
-  const supabase = getSupabaseServiceRole();
-  if (supabase === null) {
-    return {
-      ok: false,
-      status: 503,
-      reason: "Challenges are not configured on this deployment.",
-    };
+  const scope = challengesContract();
+  const supabase = scope.ok ? getSupabaseServiceRole() : null;
+  if (!scope.ok || supabase === null) {
+    return { ok: false, status: 503, reason: CHALLENGE_LINK_UNAVAILABLE_MESSAGE };
   }
 
   // pool_id is written as a decimal string so a value beyond 2^53 is not
@@ -217,6 +322,7 @@ export async function createChallenge(params: {
       .from(CHALLENGES_TABLE)
       .insert({
         invite_token: inviteToken,
+        contract_address: scope.contract,
         pool_id: poolIdText,
         challenger_address: challengerAddress,
         target_handle: targetCheck.targetHandle,
@@ -231,11 +337,11 @@ export async function createChallenge(params: {
 
     if (error !== null && error.code === "23505") {
       // Unique violation. Two constraints can trip it:
-      //   - pool_id: a challenge already exists for this pool -> conflict, do
-      //     not retry (a fresh token would still collide on pool_id).
+      //   - (contract_address, pool_id): a challenge already exists for this
+      //     pool -> conflict, do not retry (a fresh token would still collide).
       //   - invite_token: retry with a new token.
-      const message = (error.message ?? "").toLowerCase();
-      if (message.includes("pool_id")) {
+      const detail = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
+      if (detail.includes("pool_id")) {
         return {
           ok: false,
           status: 409,

@@ -18,7 +18,7 @@
 // title).
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { challengeShareUrl } from "@/lib/challenges";
+import { challengeBackerUrl, challengeShareUrl } from "@/lib/challenges";
 import { TAP_TARGET } from "@/components/ui";
 
 type CopyState = "idle" | "copied" | "failed";
@@ -54,6 +54,7 @@ export default function ShareChallenge({
   message,
   emailSubject,
   includeCopy = true,
+  backer = false,
   shareLabel = "Share",
 }: {
   /** A ready full URL (the create screen has it in hand). */
@@ -69,6 +70,9 @@ export default function ShareChallenge({
   /** Hide the copy button when the caller already shows its own (the create
    *  screen keeps its full-link CopyLink as the fallback). */
   includeCopy?: boolean;
+  /** Compose the rally (backer) variant of a token link, which leads with
+   *  "chip in" and hides accept. Ignored when `url` is given. */
+  backer?: boolean;
   shareLabel?: string;
 }) {
   const isClient = useIsClient();
@@ -86,7 +90,10 @@ export default function ShareChallenge({
   const resolvedUrl =
     url ??
     (isClient && token !== undefined && typeof window !== "undefined"
-      ? challengeShareUrl(window.location.origin, token)
+      ? (backer ? challengeBackerUrl : challengeShareUrl)(
+          window.location.origin,
+          token,
+        )
       : null);
 
   const canNativeShare =

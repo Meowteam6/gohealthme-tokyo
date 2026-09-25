@@ -11,7 +11,95 @@ import {
   checkTargetHandle,
   normalizeTargetHandle,
   challengeShareUrl,
+  challengeBackerUrl,
+  isBackerView,
+  darePot,
 } from "@/lib/challenges";
+
+const USDC = (n: number): bigint => BigInt(n) * 1_000_000n;
+
+describe("darePot", () => {
+  const live = { settled: false, cancelled: false };
+
+  it("a $10 dare with a $5 lock-in accepted reads reward $10, not $15", () => {
+    const pot = darePot({
+      ...live,
+      balance: USDC(15),
+      entryFee: USDC(5),
+      participantCount: 1,
+      contributed: 0n,
+    });
+    expect(pot).toEqual({ prize: USDC(10), stakes: USDC(5), seed: USDC(10) });
+  });
+
+  it("splits friends' top-ups out of the challenger's seed", () => {
+    const pot = darePot({
+      ...live,
+      balance: USDC(10 + 5 + 7),
+      entryFee: USDC(5),
+      participantCount: 1,
+      contributed: USDC(7),
+    });
+    expect(pot.prize).toBe(USDC(17));
+    expect(pot.seed).toBe(USDC(10));
+  });
+
+  it("leaves the seed unknown when top-ups were not read", () => {
+    const pot = darePot({
+      ...live,
+      balance: USDC(12),
+      entryFee: USDC(2),
+      participantCount: 0,
+    });
+    expect(pot).toEqual({ prize: USDC(12), stakes: 0n, seed: null });
+  });
+
+  it("a self-commitment with only stakes has zero prize, never stakes as reward", () => {
+    const pot = darePot({
+      ...live,
+      balance: USDC(20),
+      entryFee: USDC(10),
+      participantCount: 2,
+      contributed: 0n,
+    });
+    expect(pot.prize).toBe(0n);
+  });
+
+  it("states nothing when the count is unknown or the pool is settled or cancelled", () => {
+    const base = { balance: USDC(15), entryFee: USDC(5), participantCount: 1 };
+    const none = { prize: null, stakes: null, seed: null };
+    expect(darePot({ ...base, ...live, participantCount: null })).toEqual(none);
+    expect(darePot({ ...base, settled: true, cancelled: false })).toEqual(none);
+    expect(darePot({ ...base, settled: false, cancelled: true })).toEqual(none);
+  });
+
+  it("never goes negative", () => {
+    const pot = darePot({
+      ...live,
+      balance: USDC(3),
+      entryFee: USDC(5),
+      participantCount: 1,
+      contributed: USDC(9),
+    });
+    expect(pot.prize).toBe(0n);
+    expect(pot.seed).toBe(0n);
+  });
+});
+
+describe("backer links", () => {
+  it("adds the backer flag to the same /c/<token> link", () => {
+    expect(challengeBackerUrl("https://x.app/", "tok_abc")).toBe(
+      "https://x.app/c/tok_abc?as=backer",
+    );
+  });
+
+  it("only the exact backer flag switches the view", () => {
+    expect(isBackerView("backer")).toBe(true);
+    expect(isBackerView(["backer"])).toBe(true);
+    expect(isBackerView(undefined)).toBe(false);
+    expect(isBackerView("player")).toBe(false);
+  });
+});
 
 describe("invite tokens", () => {
   it("encodes bytes into the URL-safe alphabet with no padding", () => {

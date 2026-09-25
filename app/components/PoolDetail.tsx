@@ -73,6 +73,7 @@ import {
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useDisplayNames } from "@/lib/use-display-names";
+import { darePot } from "@/lib/challenges";
 
 function formatDay(seconds: bigint): string {
   return new Date(Number(seconds) * 1000).toLocaleDateString("en-US", {
@@ -925,7 +926,20 @@ export default function PoolDetail({ id }: { id: string }) {
           // tops up with no disclosure. Re-sharing a challenge uses its private
           // /c/<token> invite link (handed out at creation and on the landing),
           // never this gated pool URL, so no share row is offered here.
-          <ChallengeContribute poolId={pool.id} potUsd={formatUsdc(pool.balance)} />
+          <ChallengeContribute
+            poolId={pool.id}
+            prizeUsd={(() => {
+              // The prize net of every player's own stake, never raw balance.
+              const { prize } = darePot({
+                balance: pool.balance,
+                entryFee: pool.entryFee,
+                participantCount,
+                settled: pool.settled,
+                cancelled: pool.cancelled,
+              });
+              return prize !== null ? formatUsdc(prize) : null;
+            })()}
+          />
         ) : (
           <div className="space-y-4">
             {/* Share block: bring more people onto a PUBLIC pool. The pool's own

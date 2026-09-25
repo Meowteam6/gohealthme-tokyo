@@ -18,12 +18,13 @@ import { Money } from "@/components/ui";
 
 export default function ChallengeContribute({
   poolId,
-  potUsd,
+  prizeUsd,
 }: {
   poolId: bigint;
-  /** Current pot as a formatted USDC string (pool.balance), read live on the
-   *  server that renders the landing. */
-  potUsd: string;
+  /** The prize as a formatted USDC string: pool.balance minus every player's
+   *  own stake (lib/challenges darePot), read live on the server. null when it
+   *  cannot be stated honestly, and then no figure is shown. */
+  prizeUsd: string | null;
 }) {
   return (
     <div className="space-y-4 rounded-2xl border border-edge bg-surface p-5">
@@ -31,9 +32,11 @@ export default function ChallengeContribute({
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">
           Sweeten the dare
         </p>
-        <p className="text-lg font-semibold leading-snug">
-          The pot is <Money usd={potUsd} />
-        </p>
+        {prizeUsd !== null ? (
+          <p className="text-lg font-semibold leading-snug">
+            The prize is <Money usd={prizeUsd} />
+          </p>
+        ) : null}
         <p className="text-sm text-muted">
           Anyone with this link can add to the reward. Everything you chip in
           grows what they collect the moment they hit the goal.
