@@ -40,6 +40,10 @@ describe("runSlotOf", () => {
     expect(runSlotOf(input({ phase: "settled" }))).toEqual({ kind: "closed", joined: false });
   });
 
+  it("closes a cancelled run to new players", () => {
+    expect(runSlotOf(input({ cancelled: true }))).toEqual({ kind: "closed", joined: false });
+  });
+
   it("never offers a run that cannot pay", () => {
     expect(runSlotOf(input({ canPay: false }))).toEqual({ kind: "cannot-pay" });
   });

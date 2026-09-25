@@ -136,6 +136,7 @@ export default function ChallengeAccept({
     )?.label ?? null;
   const slot = runSlotOf({
     phase: poolPhase(pool, BigInt(now)),
+    cancelled: pool.cancelled,
     canPay: poolCanPay(pool),
     joined,
     address,

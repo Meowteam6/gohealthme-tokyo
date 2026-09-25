@@ -37,6 +37,8 @@ export type RunSlot =
 
 export interface RunSlotInput {
   phase: PoolPhase;
+  /** A cancelled run takes no new players; its players take their stake back. */
+  cancelled?: boolean;
   canPay: boolean;
   joined: boolean;
   address: string | null;
@@ -60,7 +62,9 @@ export interface RunSlotInput {
  *  7. No sensor, then sensor not checked this visit.
  */
 export function runSlotOf(input: RunSlotInput): RunSlot {
-  if (input.phase !== "live") return { kind: "closed", joined: input.joined };
+  if (input.phase !== "live" || input.cancelled === true) {
+    return { kind: "closed", joined: input.joined };
+  }
   if (!input.canPay) return { kind: "cannot-pay" };
   if (input.joined) return { kind: "in-run" };
   if (input.address === null) return { kind: "locked", lock: { kind: "sign-in" } };
@@ -243,6 +247,7 @@ export function buildLobby(input: LobbyInput): Lobby {
       highlighted: id === input.highlightId,
       slot: runSlotOf({
         phase,
+        cancelled: pool.cancelled,
         canPay: true,
         joined,
         address: input.address,
