@@ -37,14 +37,30 @@ function rowToProfile(row: ProfileRow): Profile {
   return { address: row.address, handle: row.handle, emoji: row.emoji };
 }
 
-/** The profile that claimed a handle, or null when the handle is unclaimed. */
+/** The profile store could not answer (not configured, or a query error).
+ *  Distinct from "no such handle" so a real, shared profile never 404s
+ *  during an outage. */
+export class ProfileLookupError extends Error {
+  constructor(message: string, cause?: unknown) {
+    super(message, { cause });
+    this.name = "ProfileLookupError";
+  }
+}
+
+/**
+ * The profile that claimed a handle, or null when the handle is unclaimed.
+ * Throws ProfileLookupError when the store cannot answer: null must only ever
+ * mean "nobody owns this handle", because the page turns it into a 404.
+ */
 export async function getProfileByHandle(
   rawHandle: string,
 ): Promise<Profile | null> {
   const check = checkHandle(rawHandle);
   if (!check.ok) return null;
   const supabase = getSupabaseAnon();
-  if (supabase === null) return null;
+  if (supabase === null) {
+    throw new ProfileLookupError("profile store is not configured on this deployment");
+  }
 
   const { data, error } = await supabase
     .from(PROFILES_TABLE)
@@ -52,7 +68,8 @@ export async function getProfileByHandle(
     .eq("handle", check.handle)
     .maybeSingle<ProfileRow>();
 
-  if (error !== null || data === null) return null;
+  if (error !== null) throw new ProfileLookupError("profile lookup failed", error);
+  if (data === null) return null;
   return rowToProfile(data);
 }
 

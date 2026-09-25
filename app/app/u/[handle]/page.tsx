@@ -7,7 +7,8 @@ import {
   type Win,
 } from "@/components/profile-paid-wall";
 import { formatUsdc } from "@/lib/contract";
-import { getProfileByHandle } from "@/lib/server/social-profile";
+import { getProfileByHandle, ProfileLookupError } from "@/lib/server/social-profile";
+import { errorMessage, newCorrelationId } from "@/lib/server/http";
 import { getSocialStats } from "@/lib/server/social-stats";
 import { NOINDEX } from "@/lib/site";
 import { checkHandle } from "@/lib/social";
@@ -63,6 +64,27 @@ function Unclaimed({ handle }: { handle: string }) {
   );
 }
 
+/** The profile store did not answer. Not a 404: the handle may well exist. */
+function LookupFailed({ handle, reference }: { handle: string; reference: string }) {
+  return (
+    <main className="min-h-screen bg-background px-4 py-16 text-foreground">
+      <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 text-center">
+        <h1 className="text-2xl font-bold tracking-tight">@{handle}</h1>
+        <p role="alert" className="text-sm text-muted">
+          This profile could not be loaded right now. That is a problem on our
+          side, not a missing page. Reference {reference}.
+        </p>
+        <Link
+          href={`/u/${handle}`}
+          className="rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
+        >
+          Try again
+        </Link>
+      </div>
+    </main>
+  );
+}
+
 export default async function ProfilePage({
   params,
 }: {
@@ -72,7 +94,17 @@ export default async function ProfilePage({
   const check = checkHandle(handle);
   if (!check.ok) return <Unclaimed handle={handle} />;
 
-  const profile = await getProfileByHandle(check.handle);
+  let profile: Awaited<ReturnType<typeof getProfileByHandle>>;
+  try {
+    profile = await getProfileByHandle(check.handle);
+  } catch (err) {
+    // The store could not answer: a real, shared profile must not read as
+    // "this page does not exist". Say it is a read problem and offer a retry.
+    if (!(err instanceof ProfileLookupError)) throw err;
+    const cid = newCorrelationId("profile");
+    console.error(`[${cid}] ${errorMessage(err)}`, err);
+    return <LookupFailed handle={check.handle} reference={cid} />;
+  }
   if (profile === null) notFound();
 
   const stats = await getSocialStats(profile.address);
@@ -97,6 +129,7 @@ export default async function ProfilePage({
     usdcEarned: formatUsdc(stats.usdcEarned),
     winStreak: stats.winStreak,
     wins,
+    statsUnavailable: !stats.readable,
   };
 
   return <ProfilePaidWall profile={data} />;

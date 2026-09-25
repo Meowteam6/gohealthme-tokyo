@@ -35,6 +35,8 @@ export interface ProfileData {
   usdcEarned: string; // "1240.00"
   winStreak: number;
   wins: Win[]; // most recent first
+  /** The chain could not be read: the counters are unknown, not zero. */
+  statsUnavailable?: boolean;
 }
 
 const PRIVACY_COPY = "Verified privately. The health category is never shown.";
@@ -281,6 +283,15 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
 
         {/* 2. Hero stat rail */}
         <section className="rounded-2xl border border-edge bg-surface p-5">
+          {profile.statsUnavailable === true ? (
+            <p role="status" className="flex items-start gap-2 text-sm text-warning">
+              <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Stats could not be read from the chain right now. Nothing is
+                shown rather than a zero that might be wrong. Reload in a moment.
+              </span>
+            </p>
+          ) : (
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-3 flex flex-col gap-1 sm:col-span-1 sm:border-r sm:border-edge sm:pr-4">
               <span className="text-xs uppercase tracking-wider text-muted">
@@ -310,9 +321,10 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
               </span>
             </div>
           </div>
+          )}
           {/* Self-reported wins are counted separately and never folded into
               the "Verified wins" figure above. */}
-          {profile.selfReportedWins > 0 ? (
+          {profile.statsUnavailable !== true && profile.selfReportedWins > 0 ? (
             <p className="mt-3 flex items-center gap-1.5 text-xs text-warning">
               <AlertIcon className="h-3.5 w-3.5 shrink-0" />
               <span>
@@ -334,7 +346,11 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
             </h2>
             <PrivacyLine />
           </div>
-          {profile.wins.length === 0 ? (
+          {profile.statsUnavailable === true ? (
+            <p className="rounded-2xl border border-dashed border-warning/50 bg-surface p-5 text-sm text-muted">
+              Wins could not be read right now.
+            </p>
+          ) : profile.wins.length === 0 ? (
             <p className="rounded-2xl border border-edge bg-surface p-5 text-sm text-muted">
               No wins yet
             </p>
