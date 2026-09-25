@@ -36,8 +36,15 @@
 // cron sends exactly that header (as a GET) when the CRON_SECRET env var
 // exists, so GET and POST share one handler.
 //
+// APPROVED, NOT RECORDED (World ID for Agents). A claim the human confirmed
+// but whose record write never ran (the tab closed after the confirmation) is
+// recorded here through the same run loop the browser drives
+// (lib/server/agent/approved-record.ts), and its pool is held from the pool
+// phase meanwhile, so a confirmed win is never refunded as unadjudicated.
+//
 // Response JSON:
-//   { swept: [...goalIds], settled, deferred, errors, truncated, skipped? }
+//   { swept: [...goalIds], settled, deferred, errors, recorded, truncated,
+//     poolsSettled, poolErrors, skipped? }
 
 import { timingSafeEqual } from "crypto";
 import { isAddress, type Address, type Hex } from "viem";
@@ -67,6 +74,12 @@ import {
   type SpotterExecutor,
 } from "@/lib/server/agent/spotter";
 import { liveBuyDeps } from "@/lib/server/agent/x402";
+import {
+  approvedUnrecordedOf,
+  recordApprovedClaim,
+  withinRecordHold,
+  type ApprovedRecordTarget,
+} from "@/lib/server/agent/approved-record";
 import { requireEnv } from "@/lib/server/env";
 import { errorMessage, jsonError } from "@/lib/server/http";
 // --- ens ---
@@ -114,6 +127,8 @@ interface SweepCounts {
   settled: number;
   deferred: number;
   errors: number;
+  /** Human-approved claims whose record write this sweep drove (tab closed). */
+  recorded: number;
   truncated: boolean;
   /** Pools settled by the pool phase (abandoned pools, no claim to drive them). */
   poolsSettled: number;
@@ -132,7 +147,14 @@ function authorized(request: Request): boolean {
 
 type Eligibility =
   | { settle: true; poolId: bigint; participant: Address }
-  | { settle: false; poolId?: bigint };
+  /** Approved by the human, not recorded yet: drive the record write. */
+  | { settle: false; record: ApprovedRecordTarget; poolId: bigint }
+  | { settle: false; poolId?: bigint; record?: undefined };
+
+/** Approved claims recorded per sweep. Each is a full run-loop pass (an
+ *  evidence read, a record write, maybe a settle), so a few per tick keeps the
+ *  sweep inside its window; the rest are picked up two minutes later. */
+const APPROVED_RECORDS_PER_SWEEP = 3;
 
 /**
  * Decide whether a claim is worth a settle attempt, from its ledger alone.
@@ -144,8 +166,24 @@ async function eligibility(
   ledger: LedgerEntry[],
   nowMs: number,
 ): Promise<Eligibility> {
-  // Only claims whose on-chain writes are in: no record, nothing to pay.
-  if (!ledger.some((e) => e.kind === "record")) return { settle: false };
+  if (!ledger.some((e) => e.kind === "record")) {
+    // World ID for Agents: the human confirmed, but the record write never
+    // ran because nobody polled after the confirmation (tab closed). Record
+    // it now, and report the pool so the pool phase does not settle it
+    // underneath this claim and refund a confirmed win.
+    const approved = approvedUnrecordedOf(ledger);
+    if (approved !== null) {
+      if (withinRecordHold(approved, nowMs)) {
+        return { settle: false, record: approved, poolId: approved.poolId };
+      }
+      console.error(
+        `[agent/sweep] ${goalId}: approved claim still unrecorded after the hold window; releasing pool ${approved.poolId} to the pool phase`,
+      );
+      await removePendingSettlement(goalId);
+    }
+    // Otherwise nothing is on chain for this claim, so there is nothing to pay.
+    return { settle: false };
+  }
   // Already paid - the run loop's fast path would say "paid" too.
   if (ledger.some((e) => e.kind === "settle" && e.status === "settled")) {
     await removePendingSettlement(goalId);
@@ -291,6 +329,7 @@ async function runSweep(): Promise<SweepCounts> {
     settled: 0,
     deferred: 0,
     errors: 0,
+    recorded: 0,
     truncated: false,
     poolsSettled: 0,
     poolErrors: [],
@@ -298,6 +337,7 @@ async function runSweep(): Promise<SweepCounts> {
   const seen = new Set<string>();
   /** Pools the claim phase owns this tick; the pool phase must not touch them. */
   const claimPools = new Set<string>();
+  let recordAttempts = 0;
 
   const outOfTime = () => Date.now() - startedAt >= SWEEP_BUDGET_MS;
 
@@ -309,6 +349,33 @@ async function runSweep(): Promise<SweepCounts> {
     const ledger = await readLedger(goalId);
     const verdict = await eligibility(goalId, ledger, Date.now());
     if (verdict.poolId !== undefined) claimPools.add(verdict.poolId.toString());
+    if (!verdict.settle && verdict.record !== undefined) {
+      if (recordAttempts >= APPROVED_RECORDS_PER_SWEEP) return;
+      recordAttempts += 1;
+      counts.swept.push(goalId);
+      try {
+        const result = await recordApprovedClaim(goalId as Hex, verdict.record);
+        if (result.status === "paid") {
+          counts.recorded += 1;
+          counts.settled += 1;
+        } else if (result.status === "recorded") {
+          // Recorded; the run loop queued it for settle at period end.
+          counts.recorded += 1;
+          counts.deferred += 1;
+        } else {
+          counts.errors += 1;
+          console.error(
+            `[agent/sweep] ${goalId}: approved claim not recorded this tick (run status ${result.status}); retrying next tick`,
+          );
+        }
+      } catch (err) {
+        counts.errors += 1;
+        console.error(
+          `[agent/sweep] ${goalId}: recording the approved claim failed: ${errorMessage(err)}`,
+        );
+      }
+      return;
+    }
     if (!verdict.settle) return;
 
     counts.swept.push(goalId);
@@ -387,6 +454,7 @@ async function sweep(): Promise<Response> {
     settled: 0,
     deferred: 0,
     errors: 0,
+    recorded: 0,
     truncated: false,
     poolsSettled: 0,
     poolErrors: [],

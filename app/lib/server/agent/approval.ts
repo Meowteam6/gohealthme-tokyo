@@ -6,7 +6,10 @@
 // WORLD_APPROVAL_MODE set, the record write waits on a record here reaching
 // "approved". Nothing else in the money path changes: the sweep only settles
 // claims that carry a record row, and no record row lands without an
-// approval, so an unapproved PASS can never be paid by any path.
+// approval, so an unapproved PASS can never be paid by any path. An APPROVED
+// claim with no record yet (the player confirmed and closed the tab) is
+// queued for the sweep here, and the sweep drives its record write, so a
+// confirmed win is never refunded for want of an open browser.
 //
 // WHAT AN APPROVAL PROVES. That one human consented to this payout, within
 // the request's window. It never proves the goal: the wearable read and
@@ -39,6 +42,7 @@ import { randomUUID } from "crypto";
 import { getAddress, isAddress } from "viem";
 import { readJson, setNx, withLock, writeJson } from "@/lib/server/store";
 import { appendLedger } from "@/lib/server/agent/ledger";
+import { addPendingSettlement } from "@/lib/server/agent/lock";
 import { optionalEnv } from "@/lib/server/env";
 import {
   approvalMode,
@@ -405,6 +409,12 @@ export async function completeApproval(args: {
       nullifierStub: nullifierStub(verified.nullifier),
       note: approved.note,
     });
+    // Queue the claim for the settlement sweep, due now. The record write
+    // runs on the next browser poll, but a player who confirms and closes the
+    // tab has no next poll: without this the sweep never sees the claim, the
+    // pool phase settles its pool, and a confirmed win becomes a refund. The
+    // sweep records approved, unrecorded claims (app/api/agent/sweep).
+    await addPendingSettlement(goalId, Math.floor(nowMs / 1000));
     return { status: "approved", record: approved };
   });
 }
@@ -481,22 +491,28 @@ export async function approvalGate(args: {
   const nowMs = args.nowMs ?? Date.now();
 
   const current = await readApproval(args.goalId, nowMs);
-  if (current?.status === "approved") return { status: "approved", record: current };
 
+  // Settled is checked BEFORE approved. An approval on a settled pool guards
+  // nothing: settle() is one-shot and already refunded this claim (B-2), so
+  // the record write would revert SETTLED after the player was told
+  // "confirmed". The sweep records approved claims before the pool phase can
+  // settle their pool, so reaching this means that race was lost.
   if (await args.poolSettled()) {
-    if (current?.status === "pending") {
+    if (current === null || current.status === "approved") return { status: "unpayable" };
+    if (current.status === "pending") {
       const cancelled = await cancelApproval(
         args.goalId,
         "the pool settled before you confirmed; nothing moved, and your stake comes back with the pool's refund",
         nowMs,
       );
-      if (cancelled !== null && cancelled.status !== "approved") {
-        return { status: cancelled.status === "pending" ? "awaiting" : cancelled.status, record: cancelled };
-      }
+      // Approved in the same instant the settle landed: still unpayable.
+      if (cancelled === null || cancelled.status === "approved") return { status: "unpayable" };
+      return { status: cancelled.status === "pending" ? "awaiting" : cancelled.status, record: cancelled };
     }
-    if (current === null) return { status: "unpayable" };
-    return { status: current.status === "pending" ? "awaiting" : current.status, record: current };
+    return { status: current.status, record: current };
   }
+
+  if (current?.status === "approved") return { status: "approved", record: current };
 
   if (current === null) {
     const asked = await requestApproval({
