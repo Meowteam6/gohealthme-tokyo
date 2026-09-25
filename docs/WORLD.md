@@ -33,6 +33,16 @@ WORLD_ENVIRONMENT=staging
 
 **Why unlimited.** An incognito action with max verifications 1 makes World itself refuse the second proof of the same human (`max_verifications_reached`), before GoHealthMe's own binding can run. That is a valid denied path, but the app's 409 is the better one: it names the wallet the person verified with and tells them to sign in with it. With Unlimited, World checks the proof and GoHealthMe enforces one human, one wallet. Either way a second entry never happens; with 1, the screen reads "This World ID has already been used for this action" instead.
 
+## Credentials (no Orb gate)
+
+Founder decision, 2026-09-26: anyone with World App can play. Prove-human and the payout confirmation share one policy (`app/lib/world/credentials.ts`):
+
+- **World ID 4.0 first:** any one of Orb (`proof_of_human`), NFC passport, My Number Card, or Selfie Check. Selfie Check needs only World App and a camera, so every 4.0 holder can pass.
+- **3.0 fallback:** only when World App answers `world_id_4_not_available`, the check reopens at Device level, which accepts the user's highest 3.0 credential. It stays bound to the same signal.
+- The credential that verified is stored on the human record and the approval ledger row, and the feed shows it.
+
+**The tradeoff, stated plainly.** Only an Orb credential proves an Orb-verified unique human. Selfie Check, documents and device-level proofs are weaker sybil resistance: a determined person could hold more than one. GoHealthMe still enforces one World ID per wallet and one wallet per World ID through the nullifier. This was a deliberate accessibility choice for the beta; stakes are test USDC.
+
 ## Environment variables
 
 | Variable | Where | Meaning |

@@ -46,6 +46,11 @@ import { signRequest, type RpSignature } from "@worldcoin/idkit/signing";
 import { hashSignal } from "@worldcoin/idkit-core/hashing";
 import type { RpContext } from "@worldcoin/idkit";
 import { optionalEnv, requireEnv } from "@/lib/server/env";
+import {
+  credentialFromIdentifier,
+  LEGACY_FALLBACK_ENABLED,
+  type WorldCredential,
+} from "@/lib/world/credentials";
 
 export type ApprovalMode = "off" | "mock" | "world";
 export type ApprovalProviderName = Exclude<ApprovalMode, "off">;
@@ -68,7 +73,14 @@ export interface ApprovalChallenge {
 }
 
 export type ProviderVerification =
-  | { ok: true; nullifier: string }
+  | {
+      ok: true;
+      nullifier: string;
+      /** The World credential that verified (Orb, passport, Selfie Check,
+       *  ...); null for the mock provider or an identifier this app does not
+       *  know. Recorded on the approval, never used to refuse. */
+      credential: WorldCredential | null;
+    }
   | { ok: false; reason: string };
 
 export interface ApprovalProvider {
@@ -174,7 +186,7 @@ export function mockApprovalProvider(): ApprovalProvider {
       if (candidate.approve !== true) {
         return { ok: false, reason: "the proof does not approve the payout" };
       }
-      return { ok: true, nullifier: mockNullifier(address, action) };
+      return { ok: true, nullifier: mockNullifier(address, action), credential: null };
     },
   };
 }
@@ -321,7 +333,7 @@ export function worldApprovalProvider(
           reason: `World did not accept the proof (${code})`,
         };
       }
-      const first = responses[0] as { nullifier?: unknown };
+      const first = responses[0] as { nullifier?: unknown; identifier?: unknown };
       const raw =
         typeof data.nullifier === "string"
           ? data.nullifier
@@ -335,7 +347,13 @@ export function worldApprovalProvider(
           reason: "World accepted the proof but returned no nullifier",
         };
       }
-      return { ok: true, nullifier };
+      // Whatever credential World verified is accepted: Orb is not required
+      // (lib/world/credentials.ts). It is only recorded.
+      const credential =
+        typeof first.identifier === "string"
+          ? credentialFromIdentifier(first.identifier)
+          : null;
+      return { ok: true, nullifier, credential };
     },
   };
 }
@@ -384,8 +402,9 @@ export function worldApprovalProviderFromEnv(): ApprovalProvider {
     appId: appId as `app_${string}`,
     environment: worldEnvironmentFromEnv(),
     verifyUrl: optionalEnv("WORLD_VERIFY_URL", DEFAULT_WORLD_VERIFY_URL),
-    allowLegacyProofs:
-      optionalEnv("WORLD_ALLOW_LEGACY_PROOFS", "false") === "true",
+    // One legacy policy for both widgets (lib/world/credentials.ts): a player
+    // who can prove-human must be able to confirm a payout too.
+    allowLegacyProofs: LEGACY_FALLBACK_ENABLED,
   });
 }
 

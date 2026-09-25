@@ -34,7 +34,8 @@
 // bind two wallets.
 //
 // WHAT IS STORED: the wallet address, the nullifier, a timestamp, the mode
-// the proof was checked in and the protocol version. No name, no email, no
+// the proof was checked in, the protocol version and which World credential
+// verified (Orb, passport, Selfie Check, ...). No name, no email, no
 // health data, nothing from Junction. The nullifier is World's own per-app
 // pseudonym for the human; it identifies nobody outside this app.
 
@@ -48,6 +49,7 @@ import {
   type WorldNamespace,
 } from "@/lib/server/world/config";
 import type { ProtocolVersion } from "@/lib/server/world/payload";
+import type { WorldCredential } from "@/lib/world/credentials";
 
 export interface HumanRecord {
   /** Checksummed wallet address. */
@@ -59,6 +61,11 @@ export interface HumanRecord {
   /** "live" means World verified it; "mock" means the event build did not. */
   mode: Exclude<WorldMode, "off">;
   protocolVersion: ProtocolVersion;
+  /** The credential the latest verification used (Orb, passport, Selfie
+   *  Check, ...). Absent on records written before 2026-09-26, which were all
+   *  Orb-level. null when World verified an identifier this app does not
+   *  know. Recorded, never used to refuse (docs/WORLD.md, "Credentials"). */
+  credential?: WorldCredential | null;
 }
 
 interface NullifierRecord {
@@ -83,6 +90,8 @@ export type BindResult =
 export interface HumanStatusView {
   human: "verified" | "unverified";
   verifiedAt?: string;
+  /** The credential the record was proven with, when known. */
+  credential?: WorldCredential | null;
   /** The mode the RECORD was proven in (not the deployment's), so a mocked
    *  verification is always labelled as mocked. */
   proofMode?: Exclude<WorldMode, "off">;
@@ -177,6 +186,8 @@ export async function bindHuman(params: {
   nullifierHash: string;
   mode: Exclude<WorldMode, "off">;
   protocolVersion: ProtocolVersion;
+  /** The credential that verified; stored on the record. */
+  credential?: WorldCredential | null;
   /** Defaults to the mode's namespace in this deployment's World environment. */
   namespace?: WorldNamespace;
   now?: () => number;
@@ -216,7 +227,17 @@ export async function bindHuman(params: {
     }
 
     if (existing !== null) {
-      // Same human, same wallet: a re-verification. Nothing to change.
+      // Same human, same wallet: a re-verification. Only the credential can
+      // move (a Selfie Check player who later visits an Orb, say); keep the
+      // record's credential current so the feed shows the latest one.
+      if (
+        params.credential !== undefined &&
+        existing.credential !== params.credential
+      ) {
+        const updated: HumanRecord = { ...existing, credential: params.credential };
+        await writeJson(recordKey(ns, lower), updated);
+        return { ok: true, record: updated, created: false };
+      }
       return { ok: true, record: existing, created: false };
     }
 
@@ -234,6 +255,7 @@ export async function bindHuman(params: {
       verifiedAt: holder?.verifiedAt ?? verifiedAt,
       mode: params.mode,
       protocolVersion: params.protocolVersion,
+      ...(params.credential === undefined ? {} : { credential: params.credential }),
     };
     await writeJson(recordKey(ns, lower), record);
     return { ok: true, record, created: true };
@@ -266,5 +288,10 @@ export async function humanStatus(
 ): Promise<HumanStatusView> {
   const record = await getHumanRecord(address, namespace);
   if (record === null) return { human: "unverified" };
-  return { human: "verified", verifiedAt: record.verifiedAt, proofMode: record.mode };
+  return {
+    human: "verified",
+    verifiedAt: record.verifiedAt,
+    proofMode: record.mode,
+    ...(record.credential === undefined ? {} : { credential: record.credential }),
+  };
 }

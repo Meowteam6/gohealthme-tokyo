@@ -40,6 +40,11 @@ import {
   type VerifyOutcome,
   type WorldClientConfig,
 } from "@/lib/world/api";
+import {
+  credentialLabel,
+  shouldFallBackToLegacy,
+  type WorldRequestStage,
+} from "@/lib/world/credentials";
 import { idkitErrorView } from "@/lib/world/idkit-errors";
 import { buildMockProof } from "@/lib/world/mock-proof";
 
@@ -75,8 +80,8 @@ type Phase =
   | { kind: "off"; problem: string | null }
   | { kind: "idle" }
   | { kind: "starting" }
-  | { kind: "widget"; rpContext: RpContext }
-  | { kind: "verified"; mode: "live" | "mock" }
+  | { kind: "widget"; rpContext: RpContext; stage: WorldRequestStage }
+  | { kind: "verified"; mode: "live" | "mock"; credential: string | null }
   | { kind: "failed"; failure: Failure };
 
 function shortAddress(address: string): string {
@@ -157,7 +162,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
 
   const succeed = useCallback(
     (outcome: Extract<VerifyOutcome, { ok: true }>) => {
-      setPhase({ kind: "verified", mode: outcome.mode });
+      setPhase({ kind: "verified", mode: outcome.mode, credential: outcome.credential });
       onVerified({ nullifierHash: outcome.nullifierHash });
     },
     [onVerified],
@@ -165,10 +170,13 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
 
   // ------------------------------------------------------------- live path
 
-  async function startLive() {
+  // `stage` is "v4" from the button. "legacy" is only reached from
+  // handleError, when World App says World ID 4.0 is not available on this
+  // account yet (lib/world/credentials.ts): the check reopens with a fresh
+  // rp_context on the 3.0 request instead of failing the person.
+  async function startLive(stage: WorldRequestStage = "v4") {
     setPhase({ kind: "starting" });
     lastOutcome.current = null;
-    settled.current = false;
     try {
       const fresh = await mintRpContext();
       if (fresh.mode !== "live" || fresh.rp_context === undefined) {
@@ -178,7 +186,10 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
         return;
       }
       setConfig(fresh);
-      setPhase({ kind: "widget", rpContext: fresh.rp_context });
+      // Reset only now: a close event from the previous widget (the v4 stage
+      // that just failed over) must not read as a cancel of this one.
+      settled.current = false;
+      setPhase({ kind: "widget", rpContext: fresh.rp_context, stage });
     } catch {
       fail({
         title: "Could not start the check.",
@@ -220,6 +231,13 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
     const outcome = lastOutcome.current;
     if (outcome !== null && !outcome.ok) {
       fail(failureFromOutcome(outcome));
+      return;
+    }
+    if (
+      phase.kind === "widget" &&
+      shouldFallBackToLegacy(String(code), phase.stage)
+    ) {
+      void startLive("legacy");
       return;
     }
     const view = idkitErrorView(code);
@@ -330,7 +348,11 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
           <p className="mt-1 text-sm text-foreground/80">
             {phase.mode === "mock"
               ? "Recorded in event mode with a mocked proof. This is not a real World ID verification and would not count outside the hackathon build."
-              : "World confirmed a proof-of-human for this wallet. SPOTTER has you down as one person, one entry."}
+              : `World verified you${
+                  phase.credential !== null
+                    ? ` with ${credentialLabel(phase.credential)}`
+                    : ""
+                }. SPOTTER has you down as one person, one entry.`}
           </p>
         </div>
       ) : null}
@@ -371,14 +393,14 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
             type="button"
             pop
             disabled={phase.kind !== "idle"}
-            onClick={startLive}
+            onClick={() => void startLive("v4")}
           >
-            {phase.kind === "idle" ? "Verify with World ID" : "Opening World ID…"}
+            {phase.kind === "idle" ? "Verify with World App" : "Opening World App…"}
           </Button>
           <p className="text-xs text-muted">
             {config.environment === "staging"
               ? "Staging: scan the QR with World App on staging or the simulator at simulator.worldcoin.org."
-              : "Scan the QR with World App. A proof-of-human credential is required."}
+              : "Scan the QR with World App. Any World ID works; if you are new, World App walks you through a quick selfie check."}
           </p>
         </div>
       ) : null}
@@ -422,6 +444,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
           action={config.action}
           environment={config.environment}
           rpContext={phase.rpContext}
+          stage={phase.stage}
           signalAddress={address}
           handleVerify={handleVerify}
           onSuccess={handleSuccess}

@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { baseTxUrl } from "@/lib/chains";
 import { toUsd2 } from "@/lib/agent-receipt";
+import { credentialLabel } from "@/lib/world/credentials";
 import type {
   PublicFeedApproval,
   PublicFeedClaim,
@@ -95,6 +96,9 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
           {shortGoal(claim.goalId)}
           {claim.selfReported ? <Tag>self-reported</Tag> : null}
           {claim.approval?.provider === "mock" ? <Tag>mocked World ID</Tag> : null}
+          {claim.approval?.credential != null ? (
+            <Tag>{`World ID: ${credentialLabel(claim.approval.credential)}`}</Tag>
+          ) : null}
         </span>
         <span className="text-xs text-muted">
           {new Date(claim.at).toLocaleString()}

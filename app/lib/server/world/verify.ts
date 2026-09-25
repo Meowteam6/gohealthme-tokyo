@@ -14,6 +14,9 @@
 //
 // LIVE: the untouched IDKit payload is forwarded as-is to
 //   POST https://developer.world.org/api/v4/verify/{rp_id}
+// Any credential World verifies is accepted (founder decision 2026-09-26:
+// no Orb requirement; see lib/world/credentials.ts). The credential that
+// verified is returned so it can be recorded, never used to refuse.
 // per docs.world.org/world-id/idkit/integrate (read 2026-09-26). The response's
 // nullifier is canonicalised and returned. World's error codes are mapped to
 // plain sentences; the code is kept for the log.
@@ -30,6 +33,10 @@
 import { hashSignal } from "@worldcoin/idkit-core/hashing";
 import { keccak256, stringToBytes } from "viem";
 import type { LiveConfig } from "@/lib/server/world/config";
+import {
+  credentialFromIdentifier,
+  type WorldCredential,
+} from "@/lib/world/credentials";
 import { normalizeNullifier } from "@/lib/server/world/nullifier";
 import type { ParsedProof, ProtocolVersion } from "@/lib/server/world/payload";
 
@@ -39,7 +46,15 @@ export const WORLD_VERIFY_URL = "https://developer.world.org/api/v4/verify";
 export const MOCK_ENVIRONMENT = "mock";
 
 export type VerifyResult =
-  | { ok: true; nullifierHash: string; protocolVersion: ProtocolVersion }
+  | {
+      ok: true;
+      nullifierHash: string;
+      protocolVersion: ProtocolVersion;
+      /** The credential that verified (Orb, passport, Selfie Check, ...).
+       *  null when World verified an identifier this app does not know yet:
+       *  still accepted, because World is the judge of validity. */
+      credential: WorldCredential | null;
+    }
   | {
       ok: false;
       /** 401: the proof did not check out. 502: World could not be reached
@@ -206,7 +221,12 @@ export async function verifyLive(params: {
         "World verified the proof but returned no usable nullifier. Try again.",
     };
   }
-  return { ok: true, nullifierHash, protocolVersion: proof.protocolVersion };
+  return {
+    ok: true,
+    nullifierHash,
+    protocolVersion: proof.protocolVersion,
+    credential: credentialFromIdentifier(proof.identifier),
+  };
 }
 
 // --------------------------------------------------------------------- mock
@@ -236,11 +256,14 @@ export function verifyMock(params: {
       reason: `This deployment is in event mode and only accepts mocked proofs; that one came from World's ${proof.environment || "unknown"} environment.`,
     };
   }
-  if (proof.identifier !== "proof_of_human") {
+  // Any credential the live request can return is accepted here too, so the
+  // mock never enforces a stricter tier than production (Orb not required).
+  const credential = credentialFromIdentifier(proof.identifier);
+  if (credential === null) {
     return {
       ok: false,
       status: 401,
-      reason: "Event mode accepts proof_of_human mock payloads only.",
+      reason: `Event mode does not recognise the mock credential "${proof.identifier}".`,
     };
   }
   const input = normalizeNullifier(proof.nullifier);
@@ -255,5 +278,6 @@ export function verifyMock(params: {
     ok: true,
     nullifierHash: mockNullifier(action, input),
     protocolVersion: proof.protocolVersion,
+    credential,
   };
 }

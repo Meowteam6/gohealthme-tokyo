@@ -140,6 +140,10 @@ export type LedgerEntry = Stamped &
         /** First 10 hex chars of the nullifier, approved rows only: enough to
          *  show one human consented, never enough to identify them. */
         nullifierStub?: string;
+        /** The World credential that confirmed (Orb, passport, Selfie
+         *  Check, ...), approved world-mode rows only. A credential name, no
+         *  identity. */
+        credential?: string;
         note?: string;
       }
     /** stage vocabulary: "buy" | "attester" | "record" | "settle" | "approval". */

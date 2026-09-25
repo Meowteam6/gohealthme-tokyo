@@ -20,6 +20,7 @@ import {
 } from "@/lib/agent-receipt";
 import { ArcTxLink, Money, Verdict } from "@/components/ui";
 import PayoutScreening from "@/components/intercepta/PayoutScreening";
+import { credentialLabel } from "@/lib/world/credentials";
 
 type SpendReceiptRow = Extract<ReceiptRow, { kind: "spend" }>;
 
@@ -464,6 +465,9 @@ export default function AgentReceipt({
                     <p className="mt-1 text-xs text-muted">
                       World ID nullifier {row.nullifierStub}... (one human, one
                       consent; no identity)
+                      {row.credential !== null
+                        ? `, verified with ${credentialLabel(row.credential)}`
+                        : ""}
                     </p>
                   ) : null}
                 </li>

@@ -38,7 +38,14 @@ export type WorldClientConfig =
 export type BindConflict = "wallet-has-other-human" | "human-has-other-wallet";
 
 export type VerifyOutcome =
-  | { ok: true; nullifierHash: string; mode: "live" | "mock"; created: boolean }
+  | {
+      ok: true;
+      nullifierHash: string;
+      mode: "live" | "mock";
+      /** The World credential that verified (lib/world/credentials.ts). */
+      credential: string | null;
+      created: boolean;
+    }
   | {
       ok: false;
       /** HTTP status, or 0 when the request never got a verdict (no
@@ -152,6 +159,7 @@ export async function submitProof(params: {
       ok: true,
       nullifierHash: String(body.nullifierHash),
       mode: body.mode === "live" ? "live" : "mock",
+      credential: typeof body.credential === "string" ? body.credential : null,
       created: body.created === true,
     };
   }
