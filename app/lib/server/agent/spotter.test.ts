@@ -35,6 +35,8 @@ import {
 const POOL = 7n;
 const GOAL = ("0x" + "ab".repeat(32)) as Hex;
 const USER = "0x1111111111111111111111111111111111111111" as Address;
+/** The registry the fake pool reports from its own healthVerdict(). */
+const REGISTRY = "0x9bf5e4b54361DEAca4314c1d8de3aeB30111F042" as Address;
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -73,6 +75,9 @@ function fakeReader(overrides: Partial<ArcReader> = {}): ArcReader {
       .mockResolvedValue({ settled: false, periodEnd: 1_000n }),
     poolCount: vi.fn().mockResolvedValue(1n),
     canSettle: vi.fn().mockResolvedValue(true),
+    // Registry latched on the pool by default: every pre-existing case here
+    // was written against the registry branch and must keep meaning that.
+    verdictRegistry: vi.fn().mockResolvedValue(REGISTRY),
     oracleAddress: vi.fn().mockResolvedValue(USER),
     attesterAddress: vi.fn().mockResolvedValue(USER),
     participantRecorded: vi.fn().mockResolvedValue(false),
@@ -772,5 +777,149 @@ describe("recordVerdictAsSpotter", () => {
     });
 
     expect(result).toEqual({ status: "already-recorded" });
+  });
+});
+
+// The pool decides whether a verdict registry exists. HealthPoolsV3 on Base
+// Sepolia reports healthVerdict() = 0x0 (oracle-only): settle() pays on
+// recordResult alone. V3 consulted HEALTH_VERDICT_ADDRESS unconditionally, so
+// the first achiever was recorded on chain and then never settled (P19). These
+// cases pin both branches: the pool's own answer selects the gate, and the env
+// var is neither required nor trusted over the chain.
+describe("oracle-only pools (healthVerdict() = 0x0)", () => {
+  function stubOracleOnlyEnv() {
+    vi.stubEnv("CIRCLE_WALLET_ID", "w-1");
+    vi.stubEnv(
+      "HEALTH_POOLS_ADDRESS",
+      "0xc4274eF2cBe28f77Af31b980055Cc1171818390C",
+    );
+    // Deliberately NOT stubbing HEALTH_VERDICT_ADDRESS: the settle path must
+    // not require it when the pool has no registry.
+  }
+
+  it("settle preflight passes with HEALTH_VERDICT_ADDRESS unset when the pool says 0x0", async () => {
+    stubOracleOnlyEnv();
+    const executor = fakeExecutor();
+    const reader = fakeReader({
+      verdictRegistry: vi.fn().mockResolvedValue(null),
+      participantRecorded: vi.fn().mockResolvedValue(true),
+    });
+
+    const result = await settlePoolAsSpotter(deps(executor, reader), {
+      poolId: POOL,
+      goalId: GOAL,
+      participant: USER,
+    });
+
+    expect(reader.canSettle).not.toHaveBeenCalled();
+    expect(reader.participantRecorded).toHaveBeenCalledWith(POOL, USER);
+    expect(executor.createContractExecutionTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ abiFunctionSignature: "settle(uint256)" }),
+    );
+    // Still asserted on the AchieverPaid payout, never on the transaction.
+    expect(result).toEqual({
+      status: "settled",
+      txHash: "0xfeed",
+      participantPaidUsd: "50",
+      payouts: [{ participant: USER, amount: 50_000_000n }],
+    });
+  });
+
+  it("does not consult the registry when HEALTH_VERDICT_ADDRESS is set but the pool says 0x0", async () => {
+    stubSpotterEnv(); // env names a registry the pool does not gate on
+    const executor = fakeExecutor();
+    const reader = fakeReader({
+      verdictRegistry: vi.fn().mockResolvedValue(null),
+      participantRecorded: vi.fn().mockResolvedValue(true),
+      canSettle: vi.fn().mockResolvedValue(false), // would block if consulted
+    });
+
+    const result = await settlePoolAsSpotter(deps(executor, reader), {
+      poolId: POOL,
+      goalId: GOAL,
+      participant: USER,
+    });
+
+    expect(reader.canSettle).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ status: "settled", participantPaidUsd: "50" });
+  });
+
+  it("refuses to settle an oracle-only participant whose result is not on chain", async () => {
+    stubOracleOnlyEnv();
+    const executor = fakeExecutor();
+    const reader = fakeReader({
+      verdictRegistry: vi.fn().mockResolvedValue(null),
+      participantRecorded: vi.fn().mockResolvedValue(false),
+    });
+
+    await expect(
+      settlePoolAsSpotter(deps(executor, reader), {
+        poolId: POOL,
+        goalId: GOAL,
+        participant: USER,
+      }),
+    ).rejects.toThrow(/oracle-only .* no recorded result/);
+    expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
+  });
+
+  it("keeps the canSettle gate when the pool has a registry, even with HEALTH_VERDICT_ADDRESS unset", async () => {
+    stubOracleOnlyEnv();
+    const executor = fakeExecutor();
+    const reader = fakeReader({
+      verdictRegistry: vi.fn().mockResolvedValue(REGISTRY),
+      canSettle: vi.fn().mockResolvedValue(false),
+    });
+
+    await expect(
+      settlePoolAsSpotter(deps(executor, reader), {
+        poolId: POOL,
+        goalId: GOAL,
+        participant: USER,
+      }),
+    ).rejects.toThrow(/canSettle/);
+    expect(reader.canSettle).toHaveBeenCalledWith(GOAL);
+    expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
+  });
+
+  it("writes the verdict to the pool's own registry, not the env var", async () => {
+    stubSpotterEnv(); // env says 0x9bf5...; the pool says something else
+    const onChain = "0x7777777777777777777777777777777777777777" as Address;
+    const executor = fakeExecutor();
+    const reader = fakeReader({
+      verdictRegistry: vi.fn().mockResolvedValue(onChain),
+    });
+
+    const result = await recordVerdictAsSpotter(deps(executor, reader), {
+      goalId: GOAL,
+      verified: true,
+      confidence: "high",
+      attesterRef: "job-1",
+      facets: 6,
+    });
+
+    expect(executor.createContractExecutionTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ contractAddress: onChain }),
+    );
+    expect(result).toEqual({ status: "recorded", txHash: "0xfeed" });
+  });
+
+  it("refuses a registry write on an oracle-only pool instead of writing to nowhere", async () => {
+    stubSpotterEnv();
+    const executor = fakeExecutor();
+    const reader = fakeReader({
+      verdictRegistry: vi.fn().mockResolvedValue(null),
+    });
+
+    await expect(
+      recordVerdictAsSpotter(deps(executor, reader), {
+        goalId: GOAL,
+        verified: true,
+        confidence: "high",
+        attesterRef: "job-1",
+        facets: 6,
+      }),
+    ).rejects.toThrow(/oracle-only/);
+    expect(reader.verdictRecorded).not.toHaveBeenCalled();
+    expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
   });
 });

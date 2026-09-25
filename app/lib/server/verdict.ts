@@ -5,6 +5,11 @@
 // can gate on canSettle(goalId). Same oracle key — it is the registry's
 // authorized attester.
 //
+// Whether a registry exists is the POOL's decision, read from its own
+// healthVerdict() (poolVerdictRegistry below). address(0) means oracle-only:
+// settle pays on recordResult alone, and every registry read or write in the
+// app is skipped. HEALTH_VERDICT_ADDRESS is not consulted for that decision.
+//
 // The `digest` here is an ADVISORY content hash of the attester inference id: the
 // poll-based live path (judge.ts) does not return the DON-signed inference digest
 // — that is the CRE / onReport path (Tier 2). canSettle ignores the digest; it
@@ -127,7 +132,7 @@ function oracleAccount() {
   return privateKeyToAccount((pk.startsWith("0x") ? pk : `0x${pk}`) as Hex);
 }
 
-const HEALTH_POOLS_GOALID_ABI = [
+const HEALTH_POOLS_READ_ABI = [
   {
     type: "function",
     name: "computeGoalId",
@@ -138,7 +143,102 @@ const HEALTH_POOLS_GOALID_ABI = [
     ],
     outputs: [{ name: "", type: "bytes32" }],
   },
+  {
+    type: "function",
+    name: "healthVerdict",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
 ] as const;
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+/**
+ * The pool's own verdict registry address is a role-like value: it changes
+ * roughly never (HealthPoolsV3.setHealthVerdict is a write-once-on latch), yet
+ * every record and settle would otherwise re-read it. Same TTL as SPOTTER's
+ * oracle/attester role cache, so a latch flipped mid-process is picked up
+ * within the minute instead of at the next cold start.
+ */
+const VERDICT_REGISTRY_TTL_MS = 60_000;
+const verdictRegistryCache = ttlCache<Address | null>({
+  ttlMs: VERDICT_REGISTRY_TTL_MS,
+  maxEntries: 8,
+});
+
+/** Test seam: forget every cached registry address. */
+export function resetVerdictRegistryCache(): void {
+  verdictRegistryCache.invalidate();
+}
+
+/**
+ * The verdict registry HealthPools.settle() actually gates on, read from the
+ * pool contract's own `healthVerdict()`, or null when the pool is oracle-only.
+ *
+ * The contract is the only source of truth here. Its `_isAchiever` is
+ * `resultRecorded && verdict && (healthVerdict == 0 || canSettle(goalId))`,
+ * so a pool whose `healthVerdict()` is address(0) pays on recordResult alone
+ * and has no registry to consult or write. V3 read the registry address from
+ * HEALTH_VERDICT_ADDRESS instead, unconditionally: against an oracle-only
+ * pool the settle preflight and the attester-role read then hit a registry the
+ * pool never looks at (or threw on the missing env var), so the first achiever
+ * was recorded on chain and never settled (V3 item P19).
+ *
+ * HEALTH_VERDICT_ADDRESS is no longer required. When it is set and disagrees
+ * with the chain it is logged, loudly, and ignored: writing a verdict into a
+ * registry the pool does not gate on would let a green transaction stand in
+ * for a payout, which is the money rule's exact failure.
+ *
+ * Cached per pool address (the key), like computeGoalId, so a redeploy that
+ * repoints HEALTH_POOLS_ADDRESS is never answered from the old pool's value.
+ */
+export async function poolVerdictRegistry(
+  pools: Address = requireEnv("HEALTH_POOLS_ADDRESS") as Address,
+): Promise<Address | null> {
+  const key = pools.toLowerCase();
+  return verdictRegistryCache.get(key, async () => {
+    const onChain = await withRetry(
+      () =>
+        arcPublicClient().readContract({
+          address: pools,
+          abi: HEALTH_POOLS_READ_ABI,
+          functionName: "healthVerdict",
+        }),
+      {
+        attempts: RECORD_ATTEMPTS,
+        backoffMs: RETRY_BACKOFF_MS,
+        deadlineMs: READ_DEADLINE_MS,
+        isRetryable: isRetryableExternalError,
+        onRetry: (err, attempt, attempts) =>
+          console.warn(
+            `[verdict] healthVerdict() attempt ${attempt}/${attempts} failed for pool ${pools}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          ),
+      },
+    );
+    const registry =
+      onChain.toLowerCase() === ZERO_ADDRESS ? null : (onChain as Address);
+
+    const configured = optionalEnv("HEALTH_VERDICT_ADDRESS", "");
+    if (
+      configured !== "" &&
+      configured.toLowerCase() !== (registry ?? ZERO_ADDRESS).toLowerCase()
+    ) {
+      console.warn(
+        `[verdict] HEALTH_VERDICT_ADDRESS=${configured} disagrees with pool ${pools} ` +
+          `healthVerdict()=${registry ?? ZERO_ADDRESS}; the chain wins and the env value is ignored`,
+      );
+    }
+    console.log(
+      registry === null
+        ? `[verdict] pool ${pools} healthVerdict()=0x0: oracle-only, settle gates on recordResult alone and no registry is consulted`
+        : `[verdict] pool ${pools} healthVerdict()=${registry}: registry gate active, settle also requires canSettle(goalId)`,
+    );
+    return registry;
+  });
+}
 
 /**
  * goalId is fixed the moment a pool is created (it hashes the pool address,
@@ -176,7 +276,7 @@ export async function computeGoalId(
       () =>
         arcPublicClient().readContract({
           address: pools,
-          abi: HEALTH_POOLS_GOALID_ABI,
+          abi: HEALTH_POOLS_READ_ABI,
           functionName: "computeGoalId",
           args: [poolId, user],
         }),
@@ -214,9 +314,11 @@ const ALREADY_RECORDED_RE = /ALREADY_RECORDED/;
  * Reporting success after a failed write silently costs a verified user their
  * entire payout.
  *
- * No-op (status "skipped") when HEALTH_VERDICT_ADDRESS is unset — that is the
- * explicit opt-out for the pre-gate, oracle-only deployment. scripts/demo-reset.sh
- * keeps that env var in lockstep with the on-chain gate.
+ * No-op (status "skipped") when the pool itself is oracle-only: its
+ * healthVerdict() is address(0), so settle() gates on recordResult alone and
+ * there is no registry to write. The registry address comes from the pool
+ * contract (poolVerdictRegistry), never from HEALTH_VERDICT_ADDRESS, so this
+ * write can never land in a registry the pool does not gate on.
  *
  * Idempotent: a goalId already on chain resolves as "already-recorded", which is
  * the desired end state and therefore success, not failure. Safe to call on every
@@ -233,9 +335,16 @@ export async function recordVerdict(
   attesterId: string,
   facets: number = VERDICT_FACETS.document,
 ): Promise<RecordVerdictOutcome> {
-  const registry = optionalEnv("HEALTH_VERDICT_ADDRESS", "");
-  if (registry === "") {
-    return { status: "skipped", reason: "HEALTH_VERDICT_ADDRESS not set" };
+  // The pool decides whether a registry exists at all. Read before anything
+  // else so an oracle-only pool never builds a signer or touches the chain
+  // for a write it does not need.
+  const registry = await poolVerdictRegistry();
+  if (registry === null) {
+    return {
+      status: "skipped",
+      reason:
+        "pool is oracle-only (healthVerdict() is 0x0); settle gates on recordResult alone",
+    };
   }
 
   // A failure here throws to the caller, which surfaces it. The frontend re-polls,
@@ -257,7 +366,7 @@ export async function recordVerdict(
       async () => {
         const { request } = await publicClient.simulateContract({
           account,
-          address: registry as Address,
+          address: registry,
           abi: HEALTH_VERDICT_ABI,
           functionName: "recordVerdict",
           args: [goalId, verified, CONFIDENCE_U8[confidence], digest, facets],

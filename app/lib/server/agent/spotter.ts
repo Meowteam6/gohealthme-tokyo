@@ -38,6 +38,9 @@ import { requireEnv } from "@/lib/server/env";
 import { errorMessage } from "@/lib/server/http";
 import { readJson, writeJson } from "@/lib/server/store";
 import type { Confidence } from "@/lib/server/judge";
+// --- foundation ---
+import { poolVerdictRegistry } from "@/lib/server/verdict";
+// --- end foundation ---
 
 const USDC_DECIMALS = 6;
 const CONFIDENCE_U8: Record<Confidence, number> = { low: 0, medium: 1, high: 2 };
@@ -97,6 +100,17 @@ export interface ArcReader {
    *  existing fakes keep compiling; callers must tolerate its absence. */
   poolBalanceUsd?(poolId: bigint): Promise<string>;
   canSettle(goalId: Hex): Promise<boolean>;
+  // --- foundation ---
+  /**
+   * The verdict registry the POOL gates settle() on, read from its own
+   * healthVerdict(); null when that is address(0) (oracle-only). Every
+   * registry read and write below is skipped when this is null. Required, not
+   * optional: a fake that silently lacked it would consult a registry the pool
+   * does not have, which is the V3 P19 failure (first achiever recorded, never
+   * paid).
+   */
+  verdictRegistry(): Promise<Address | null>;
+  // --- end foundation ---
   oracleAddress(): Promise<Address>;
   attesterAddress(): Promise<Address>;
   participantRecorded(poolId: bigint, user: Address): Promise<boolean>;
@@ -267,13 +281,40 @@ export async function settlePoolAsSpotter(
       if (fresh.settled) return { status: "already-settled" };
     }
 
-    const open = await deps.reader.canSettle(input.goalId);
-    if (!open) {
-      throw new Error(
-        `canSettle(${input.goalId}) is false - settling now would pay this ` +
-          "participant nothing. Record the verdict first.",
+    // --- foundation ---
+    // The preflight mirrors the contract's own _isAchiever gate. With a
+    // registry latched on the pool it is canSettle(goalId); with none
+    // (healthVerdict() = 0x0, oracle-only) the pool pays on recordResult
+    // alone, so the registry is never consulted and the check is that this
+    // participant's result is actually on chain. Either way the point is the
+    // same: never burn the one-shot settle() paying this participant nothing.
+    const registry = await deps.reader.verdictRegistry();
+    if (registry === null) {
+      const recorded = await deps.reader.participantRecorded(
+        input.poolId,
+        input.participant,
       );
+      if (!recorded) {
+        throw new Error(
+          `pool ${input.poolId} is oracle-only and ${input.participant} has no ` +
+            "recorded result - settling now would pay this participant nothing. " +
+            "Record the result first.",
+        );
+      }
+      console.log(
+        `[spotter] pool ${input.poolId} is oracle-only (healthVerdict() = 0x0): ` +
+          "settle preflight passes on the recorded result; no registry consulted",
+      );
+    } else {
+      const open = await deps.reader.canSettle(input.goalId);
+      if (!open) {
+        throw new Error(
+          `canSettle(${input.goalId}) is false - settling now would pay this ` +
+            "participant nothing. Record the verdict first.",
+        );
+      }
     }
+    // --- end foundation ---
 
     let txHash: Hex;
     let payouts: { participant: Address; amount: bigint }[];
@@ -466,7 +507,19 @@ export async function recordVerdictAsSpotter(
     facets: number;
   },
 ): Promise<RecordOutcome> {
-  const registry = requireEnv("HEALTH_VERDICT_ADDRESS");
+  // --- foundation ---
+  // Write to the registry the pool gates on, never to an env-configured one.
+  // The run loop skips this call on an oracle-only pool; reaching it anyway is
+  // a programming error, and a write to nowhere must not look like a gate.
+  const registry = await deps.reader.verdictRegistry();
+  if (registry === null) {
+    throw new Error(
+      `recordVerdict called for goal ${input.goalId} on an oracle-only pool ` +
+        "(healthVerdict() = 0x0): there is no registry to write. Skip the " +
+        "registry write; settle gates on recordResult alone.",
+    );
+  }
+  // --- end foundation ---
   if (await deps.reader.verdictRecorded(input.goalId)) {
     return { status: "already-recorded" };
   }
@@ -687,7 +740,21 @@ export function arcReader(
   // us. A per-call client could do neither.
   const client = arcPublicClient();
   const pools = () => requireEnv("HEALTH_POOLS_ADDRESS") as Address;
-  const registry = () => requireEnv("HEALTH_VERDICT_ADDRESS") as Address;
+  // --- foundation ---
+  // The registry address is the pool's own healthVerdict(), read from chain
+  // and cached per pool address (verdict.ts). The three registry reads below
+  // are only reached on the registry branch; on an oracle-only pool the
+  // callers skip them, so reaching one is a programming error and throws.
+  const registry = async (): Promise<Address> => {
+    const address = await poolVerdictRegistry(pools());
+    if (address === null) {
+      throw new Error(
+        `pool ${pools()} is oracle-only (healthVerdict() = 0x0): there is no verdict registry to read`,
+      );
+    }
+    return address;
+  };
+  // --- end foundation ---
 
   return {
     async getPoolState(poolId) {
@@ -722,14 +789,19 @@ export function arcReader(
       const cents = pool.balance / 10_000n;
       return `${cents / 100n}.${(cents % 100n).toString().padStart(2, "0")}`;
     },
+    // --- foundation ---
+    async verdictRegistry() {
+      return poolVerdictRegistry(pools());
+    },
     async canSettle(goalId) {
       return client.readContract({
-        address: registry(),
+        address: await registry(),
         abi: VERDICT_READ_ABI,
         functionName: "canSettle",
         args: [goalId],
       });
     },
+    // --- end foundation ---
     async oracleAddress() {
       return roleCache.get(`oracle:${pools()}`, () =>
         client.readContract({
@@ -739,15 +811,18 @@ export function arcReader(
         }),
       );
     },
+    // --- foundation ---
     async attesterAddress() {
-      return roleCache.get(`attester:${registry()}`, () =>
+      const address = await registry();
+      return roleCache.get(`attester:${address}`, () =>
         client.readContract({
-          address: registry(),
+          address,
           abi: VERDICT_READ_ABI,
           functionName: "attester",
         }),
       );
     },
+    // --- end foundation ---
     async participantRecorded(poolId, user) {
       const participant = await client.readContract({
         address: pools(),
@@ -757,14 +832,16 @@ export function arcReader(
       });
       return participant.resultRecorded;
     },
+    // --- foundation ---
     async verdictRecorded(goalId) {
       return client.readContract({
-        address: registry(),
+        address: await registry(),
         abi: VERDICT_READ_ABI,
         functionName: "recorded",
         args: [goalId],
       });
     },
+    // --- end foundation ---
     async waitForInclusion(txHash) {
       // Same viem client as every preflight read above, so "mined" here means
       // mined where canSettle/participantRecorded will be answered next.
