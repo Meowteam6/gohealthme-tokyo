@@ -3,6 +3,8 @@ import Link from "next/link";
 import HeroActivityTicker from "@/components/HeroActivityTicker";
 import SpotterSays from "@/components/SpotterSays";
 import LandingCta from "@/components/game/LandingCta";
+import { approvalMode } from "@/lib/server/agent/approval-provider";
+import { worldSetup } from "@/lib/server/world/config";
 
 // Title, description and share card come from the root layout. The landing
 // only pins its canonical so tracking or deploy query strings collapse to /.
@@ -10,27 +12,51 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
+// The landing describes THIS deployment, not the roadmap: whether the human
+// step is World ID or the closed-beta list, and whether SPOTTER asks the
+// winner to confirm before it pays, both depend on config. A misconfigured
+// approval mode fails closed on the server (every payout holds), so the copy
+// treats it as "confirmation on".
+function deploymentCopy(): { human: boolean; confirm: boolean } {
+  const human = worldSetup().mode !== "off";
+  let confirm = true;
+  try {
+    confirm = approvalMode() !== "off";
+  } catch {
+    confirm = true;
+  }
+  return { human, confirm };
+}
+
 // The run, start to finish. A real sequence, so it is numbered.
-const RUN: { title: string; body: string }[] = [
-  {
-    title: "Make your player",
-    body: "Sign in with an email, prove you are one human, pick a name, pair your wearable. Once.",
-  },
-  {
-    title: "Pick a run and stake on yourself",
-    body: "Sleep, steps, workouts. The lobby tells you which runs your sensor can actually measure before you put a cent down.",
-  },
-  {
-    title: "Bank your nights",
-    body: "Your sensor syncs, the board counts. 3 of 5 banked, tonight still counts, and you can see who else is still in.",
-  },
-  {
-    title: "The Verdict",
-    body: "SPOTTER checks the data, asks you to confirm it is you, and pays in USDC the second it clears. Miss it and the run pays nothing.",
-  },
-];
+function runSteps(human: boolean, confirm: boolean): { title: string; body: string }[] {
+  return [
+    {
+      title: "Make your player",
+      body: human
+        ? "Sign in with an email, prove you are one human with World ID, pick a name, pair your wearable. Once."
+        : "Sign in with an email, get your spot in the closed beta, pick a name, pair your wearable. Once.",
+    },
+    {
+      title: "Pick a run and stake on yourself",
+      body: "Sleep, steps, workouts. The lobby tells you which runs your sensor can actually measure before you put a cent down.",
+    },
+    {
+      title: "Bank your nights",
+      body: "Your sensor syncs, the board counts. 3 of 5 banked, tonight still counts, and you can see who else is still in.",
+    },
+    {
+      title: "The Verdict",
+      body: confirm
+        ? "SPOTTER checks the data, asks you to confirm it is you with World ID, and pays in test USDC when the run settles. Miss it and there is no prize; your stake is credited back at settle."
+        : "SPOTTER checks the data and pays in test USDC when the run settles. Miss it and there is no prize; your stake is credited back at settle.",
+    },
+  ];
+}
 
 export default function Home() {
+  const { human, confirm } = deploymentCopy();
+  const RUN = runSteps(human, confirm);
   return (
     <div className="flex flex-col gap-16 py-4 sm:py-10">
       <section className="grid gap-10 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
@@ -39,9 +65,10 @@ export default function Home() {
             A dare with your own money.
           </h1>
           <p className="max-w-xl text-xl leading-snug text-foreground/85">
-            Stake on your own health goal. Your wearable decides. SPOTTER pays
-            you the second it checks out, or it does not. Nobody ever sees your
-            health data, only the verdict goes on chain.
+            Stake on your own health goal. Your wearable decides. Hit it and
+            SPOTTER pays you when the run settles. Miss it and you just get
+            your stake back. Only the verdict goes on chain, never your health
+            data.
           </p>
           <LandingCta />
           <p className="max-w-xl text-sm text-muted">
@@ -64,7 +91,11 @@ export default function Home() {
             state="idle"
             pose="point"
             size="md"
-            say="I buy the proof, I make the call, I move the money. No human in the loop."
+            say={
+              confirm
+                ? "I read the proof and make the call. You confirm it is you. Then I move the money."
+                : "I read the proof, I make the call, I move the money."
+            }
           />
           <HeroActivityTicker />
         </div>
@@ -93,8 +124,8 @@ export default function Home() {
             You cannot Venmo your grandma in another country to go for a walk.
           </h2>
           <p className="max-w-xl text-lg text-chalk/85">
-            USDC can pay her the second she does, with no bank and no border in
-            the way. Dare a friend, back your parents, and the money lands when
+            USDC can pay her when she does, with no bank and no border in the
+            way. Dare a friend, back your parents, and the money lands when
             the sensor says it happened. Today it runs on test money while we
             build; real payouts are the road ahead, not a claim.
           </p>
