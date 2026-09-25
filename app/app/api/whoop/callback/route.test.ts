@@ -27,7 +27,7 @@ vi.mock("@/lib/server/wearable", () => ({
 
 const { GET } = await import("@/app/api/whoop/callback/route");
 const { WHOOP_NONCE_COOKIE, WHOOP_RETURN_COOKIE } = await import(
-  "@/app/api/whoop/login/route"
+  "@/lib/server/wearable/whoop-cookies"
 );
 
 const OWNER = "0x1111111111111111111111111111111111111111";

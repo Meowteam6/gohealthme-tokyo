@@ -25,8 +25,9 @@ vi.mock("@/lib/server/wearable/whoop", () => ({
   buildAuthorizeUrl: (...args: unknown[]) => buildAuthorizeUrl(...args),
 }));
 
-const { GET, WHOOP_NONCE_COOKIE, WHOOP_RETURN_COOKIE } = await import(
-  "@/app/api/whoop/login/route"
+const { GET } = await import("@/app/api/whoop/login/route");
+const { WHOOP_NONCE_COOKIE, WHOOP_RETURN_COOKIE } = await import(
+  "@/lib/server/wearable/whoop-cookies"
 );
 
 const OWNER = "0x1111111111111111111111111111111111111111";

@@ -36,6 +36,10 @@ import {
   safeReturnPath,
 } from "@/lib/server/wearable/return-path";
 import { buildAuthorizeUrl } from "@/lib/server/wearable/whoop";
+import {
+  WHOOP_NONCE_COOKIE,
+  WHOOP_RETURN_COOKIE,
+} from "@/lib/server/wearable/whoop-cookies";
 
 /**
  * This route is reached by a top-level NAVIGATION from a button, so a failure
@@ -54,14 +58,9 @@ function backToDashboard(
   return NextResponse.redirect(target);
 }
 
-/** Scope of the nonce cookie: only the callback ever reads it. */
-export const WHOOP_NONCE_COOKIE = "whoop_oauth_nonce";
-/**
- * Where the flow returns to, carried beside the nonce. A player pairing from
- * character creation goes back there, not to a dashboard the onboarding gate
- * would cover. Validated on the way in AND on the way out (safeReturnPath).
- */
-export const WHOOP_RETURN_COOKIE = "whoop_oauth_return";
+// Both cookies are scoped to /api/whoop: only the callback ever reads them.
+// The return cookie sends a player pairing from character creation back
+// there, not to a dashboard the onboarding gate would cover.
 const NONCE_TTL_SECONDS = 600;
 
 export async function GET(request: NextRequest) {

@@ -27,7 +27,7 @@ import { exchangeCode } from "@/lib/server/wearable/whoop";
 import {
   WHOOP_NONCE_COOKIE,
   WHOOP_RETURN_COOKIE,
-} from "@/app/api/whoop/login/route";
+} from "@/lib/server/wearable/whoop-cookies";
 import {
   DEFAULT_RETURN_PATH,
   safeReturnPath,
