@@ -34,6 +34,7 @@ import { useWalletAuth } from "@/lib/useWalletAuth";
 import {
   fetchWorldConfig,
   mintRpContext,
+  signatureBlockReason,
   submitProof,
   type BindConflict,
   type RpContext,
@@ -177,6 +178,22 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
   async function startLive(stage: WorldRequestStage = "v4") {
     setPhase({ kind: "starting" });
     lastOutcome.current = null;
+    // Get the wallet signature BEFORE World's modal opens. handleVerify needs
+    // it to post the proof, and a signing prompt raised while IDKit's modal is
+    // on screen renders behind it: live on 2026-09-26 the phone said success
+    // and the page sat on "Transmitting verification to host app" forever.
+    // The signature is cached for its freshness window, so handleVerify then
+    // posts without prompting.
+    const auth = await requestAuth();
+    if (auth.kind !== "ok") {
+      fail({
+        title: "Sign with your wallet first.",
+        detail: signatureBlockReason(auth),
+        retryable: true,
+        cancelled: false,
+      });
+      return;
+    }
     try {
       const fresh = await mintRpContext();
       if (fresh.mode !== "live" || fresh.rp_context === undefined) {
