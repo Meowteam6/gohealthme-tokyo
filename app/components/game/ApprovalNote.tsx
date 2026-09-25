@@ -8,21 +8,27 @@
 //
 // The mode comes from the approval status route, which reports it on every
 // answer; the zero goal id has no request, so the read is side-effect free.
+// While the mode is loading, failed, or misconfigured, the join itself is held
+// (runSlotOf's "checking", "check-failed" and "payouts-paused"), so this note
+// only ever renders next to a stake button whose payout rule is known.
 
 import { parseApprovalMode } from "@/lib/game/lanes";
 import { useLaneProbe } from "@/lib/game/useLaneProbe";
+import { approvalModeOf, type ApprovalModeView } from "@/lib/game/join-checks";
 
 const ZERO_GOAL = `0x${"0".repeat(64)}`;
 
-export function useApprovalMode(): "off" | "mock" | "world" | "unknown" {
+export function useApprovalProbe(): { mode: ApprovalModeView; refetch: () => void } {
   const probe = useLaneProbe(
     ["approval-mode"],
     `/api/agent/approval/status?goalId=${ZERO_GOAL}`,
     parseApprovalMode,
   );
-  if (probe.lane === "off") return "off";
-  if (probe.lane !== "on" || probe.value === null) return "unknown";
-  return probe.value;
+  return { mode: approvalModeOf(probe), refetch: probe.refetch };
+}
+
+export function useApprovalMode(): ApprovalModeView {
+  return useApprovalProbe().mode;
 }
 
 export default function ApprovalNote() {

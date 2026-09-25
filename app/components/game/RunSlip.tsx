@@ -12,6 +12,7 @@ import { formatRunClock, runClock } from "@/lib/game/tally";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
 import type { LobbyRow } from "@/lib/game/lobby";
 import LockPanel from "@/components/game/LockPanel";
+import { Skeleton } from "@/components/ui";
 
 function StateTag({ row }: { row: LobbyRow }) {
   const slot = row.slot;
@@ -31,8 +32,12 @@ function StateTag({ row }: { row: LobbyRow }) {
         : slot.kind === "locked"
           ? slot.lock.kind === "sign-in"
             ? "Sign in to play"
-            : "Locked for you"
-          : slot.kind === "closed"
+            : slot.lock.kind === "verifier-off" || slot.lock.kind === "payouts-paused"
+              ? "Paused"
+              : "Locked for you"
+          : slot.kind === "checking"
+            ? "Checking"
+            : slot.kind === "closed"
             ? row.pool.settled
               ? "Paid out"
               : "Ended"
@@ -60,13 +65,20 @@ export default function RunSlip({
   row,
   returnTo,
   action,
+  onRetry,
+  onCheckSensor,
 }: {
   row: LobbyRow;
   returnTo: string;
   /** The run's own entry control, rendered in the slip instead of a link to
    *  the run page (the challenge link: a private dare's page is closed to
-   *  anyone not yet in it, so entering happens here). It owns its locks. */
+   *  anyone not yet in it, so entering happens here). Hidden while the row
+   *  is locked or checking. */
   action?: ReactNode;
+  /** Re-reads a failed join check ("Check again"). */
+  onRetry?: () => void;
+  /** The one-tap sensor check, for a locked highlighted row. */
+  onCheckSensor?: () => Promise<boolean>;
 }) {
   const now = useNowSeconds();
   const { pool } = row;
@@ -112,13 +124,31 @@ export default function RunSlip({
         </dl>
         <p className="mt-1 text-xs text-muted">Test USDC on Base Sepolia</p>
       </SlipHead>
-      {action !== undefined ? <div className="px-4 pb-4 sm:px-5">{action}</div> : null}
+      {action !== undefined ? (
+        // A locked or still-checking run never shows its entry control, even
+        // one that decides its own locks: the slip's lock is shown instead,
+        // so the stake cannot appear on a board that says "locked".
+        <div className="px-4 pb-4 sm:px-5">
+          {row.slot.kind === "locked" ? (
+            <LockPanel
+              lock={row.slot.lock}
+              returnTo={returnTo}
+              onRetry={onRetry}
+              onCheckSensor={onCheckSensor}
+            />
+          ) : row.slot.kind === "checking" ? (
+            <Skeleton className="h-12 w-full rounded-lg" />
+          ) : (
+            action
+          )}
+        </div>
+      ) : null}
       {action === undefined &&
       row.slot.kind === "locked" &&
       row.slot.lock.kind !== "sensor-unchecked" &&
       row.slot.lock.kind !== "sign-in" ? (
         <div className="px-4 pb-4 sm:px-5">
-          <LockPanel lock={row.slot.lock} returnTo={returnTo} compact />
+          <LockPanel lock={row.slot.lock} returnTo={returnTo} onRetry={onRetry} compact />
         </div>
       ) : null}
       {action === undefined &&

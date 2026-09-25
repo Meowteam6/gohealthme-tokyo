@@ -68,11 +68,16 @@ export function parseApprovalStatus(payload: unknown): ApprovalStatus | null {
     : null;
 }
 
+export type ApprovalModeAnswer = "off" | "mock" | "world" | "misconfigured";
+
 /** Whether SPOTTER asks for a World ID OK before it pays on this deployment.
- *  "off" when the step is not switched on; null when the answer is unusable. */
-export function parseApprovalMode(payload: unknown): "off" | "mock" | "world" | null {
+ *  "off" when the step is not switched on; "misconfigured" when it is on and
+ *  cannot run, so no win can pay; null when the answer is unusable. */
+export function parseApprovalMode(payload: unknown): ApprovalModeAnswer | null {
   const mode = recordOf(payload).mode;
-  return mode === "off" || mode === "mock" || mode === "world" ? mode : null;
+  return mode === "off" || mode === "mock" || mode === "world" || mode === "misconfigured"
+    ? mode
+    : null;
 }
 
 export type ScreeningStatus =

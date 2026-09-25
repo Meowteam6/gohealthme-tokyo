@@ -26,12 +26,16 @@ function Section({
   rows,
   returnTo,
   action,
+  onRetry,
+  onCheckSensor,
 }: {
   title: string;
   note?: ReactNode;
   rows: LobbyRow[];
   returnTo: string;
   action?: ReactNode;
+  onRetry?: () => void;
+  onCheckSensor?: () => Promise<boolean>;
 }) {
   if (rows.length === 0) return null;
   return (
@@ -47,6 +51,8 @@ function Section({
             row={row}
             returnTo={returnTo}
             action={row.highlighted ? action : undefined}
+            onRetry={onRetry}
+            onCheckSensor={onCheckSensor}
           />
         ))}
       </div>
@@ -68,7 +74,7 @@ export default function Lobby({
   highlightAction?: ReactNode;
 }) {
   const view = useCharacter();
-  const { lobby, loading, error, retry, outage } = useLobby(view, highlightId);
+  const { lobby, loading, error, retry, outage, retryChecks } = useLobby(view, highlightId);
   const signedIn = view.authenticated && view.address !== null;
 
   return (
@@ -145,6 +151,8 @@ export default function Lobby({
               rows={[lobby.highlighted]}
               action={highlightAction}
               returnTo={returnTo}
+              onRetry={retryChecks}
+              onCheckSensor={view.checkSensor}
             />
           ) : null}
           <Section
@@ -162,6 +170,7 @@ export default function Lobby({
               title={lobby.highlighted !== null ? "Other runs" : "Open runs"}
               rows={lobby.open}
               returnTo={returnTo}
+              onRetry={retryChecks}
             />
           ) : lobby.highlighted === null ? (
             <section className="rounded-xl border-2 border-dashed border-foreground/30 p-6">
