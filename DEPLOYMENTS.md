@@ -1,3 +1,63 @@
+# GoHealthMe deployments
+
+## Tokyo 2026 (Base Sepolia)
+
+ETHGlobal Tokyo 2026 (V4). A fresh instance of the unchanged `HealthPoolsV3.sol` so V4's
+SPOTTER never acts on the frozen V3 pilot pools below. Deployed and seeded by
+`scripts/tokyo-deploy.sh` (idempotent, forge create + cast send); state printed by
+`scripts/tokyo-status.sh`. Demo flow pinned in `contracts/test/TokyoDemo.t.sol`.
+
+**Status: NOT YET DEPLOYED.** `contracts/.env` `PRIVATE_KEY` does not parse (forge:
+"expected at least one digit"; cast: "Failed to decode private key"), so the deployer
+`0xc278e8e4621A0Ba02bACB6291E595ecd168A04e1` cannot sign from this machine. Fill it with the
+0xc278 key (`demo-reset.sh` reads the same key as `DEPLOYER_PRIVATE_KEY` from the V3 repo's
+root `.env`) and run `./scripts/tokyo-deploy.sh`; the script appends addresses and tx hashes
+under "Deploy log" below.
+
+Constructor and roles (identical to what the V3 contract reports ON CHAIN; the V3 heading
+below lists two stale addresses):
+- token: USDC `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+- owner: deployer `0xc278e8e4621A0Ba02bACB6291E595ecd168A04e1`
+- oracle: `0xA56eAD3A32b6261bDE6C2A45495C9250084F7F2D` (V3 `oracle()`; the key behind the app's
+  `ORACLE_SIGNER_PRIVATE_KEY` derives to this address. `0xBceC…B9F4` below is stale.)
+- authorizedSettler: `0x5BECa2BCe03ef2D8d91091744b2CfD6d1A5cd483` (V3 `authorizedSettler()`;
+  SPOTTER's Circle developer-controlled EOA behind `CIRCLE_WALLET_ID`, also the commented
+  `SPOTTER_WALLET_ADDRESS` in `app/.env.local`; it has 0.000196 ETH and 11 sent txs, so it is
+  the wallet that has been paying gas for V3 settles. `0xf441…697d` below is stale and holds
+  0 ETH.)
+- healthVerdict: `0x0` (oracle-only; `settle()` needs no registry)
+- commitmentFeeBps: 0 (read back after deploy), joinGateEnabled: false
+
+Settle window (`HealthPoolsV3.settle`): settler-only for 24h after `periodEnd`, then anyone.
+Gas on Base Sepolia at 0.006 gwei: a settle costs about 0.000001 ETH, so the settler's
+0.000196 ETH covers well over 100 settles; no top-up needed for the demo.
+
+Demo pools (all bountyModel 2 commitment, entry 1 USDC self-staked via `joinPool`, sponsor
+pot 2 USDC pulled from the deployer at `createPool`, no proof marker = wearable floor; the
+goal text sets `goalDays = 1` in `app/lib/wearable-goal.ts`; `periodStart` = the second
+the script runs):
+
+| # | initiative | goalSpec | metric / threshold | periodEnd (JST) | periodEnd (unix, UTC) |
+|---|---|---|---|---|---|
+| 1 | Sleep 7 hours tonight | Sleep at least 7 hours for 1 night | `sleep_hours` 7 | Sat 2026-09-26 19:00 | 1790416800 (10:00Z) |
+| 2 | One workout today | Complete at least 1 workout for 1 day | `workouts` 1 | Sun 2026-09-27 08:00 | 1790463600 (Sat 23:00Z) |
+| 3 | Walk 8k steps today | Walk at least 8,000 steps for 1 day | `steps` 8000 | Sun 2026-09-27 10:30 | 1790472600 (01:30Z) |
+
+Pool 1 settles Saturday evening JST; pools 2 and 3 settle Sunday morning around the 09:00
+JST submission deadline and during judging. Junction (the demo provider) reports all three
+metrics. Budget: 6 USDC of the deployer's 41 USDC; the script refuses to go below 15 USDC.
+Override windows with `POOL1_END`, `POOL2_END`, `POOL3_END` (unix seconds) if the run slips.
+
+App env to switch once deployed (in `app/.env.local` and the `gohealthme-tokyo` Vercel
+project; both values are the new contract address, never `0x66815e3A…`):
+- `HEALTH_POOLS_ADDRESS=<Tokyo HealthPoolsV3>`
+- `NEXT_PUBLIC_HEALTH_POOLS_ADDRESS=<Tokyo HealthPoolsV3>`
+
+### Deploy log
+<!-- tokyo-deploy-log -->
+
+---
+
 # GoHealthMe V3 (Base) deployments
 
 ## CURRENT — Base Sepolia (chain 84532), 2026-08-24
