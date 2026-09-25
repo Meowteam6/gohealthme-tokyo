@@ -191,6 +191,8 @@ function CreatePoolInner() {
       return;
     }
 
+    // Runs on submit, not during render: the clock read is the point.
+    // eslint-disable-next-line react-hooks/purity
     const now = BigInt(Math.floor(Date.now() / 1000));
     const periodStart = now;
     const periodEnd = now + BigInt(durationDays * SECONDS_PER_DAY);

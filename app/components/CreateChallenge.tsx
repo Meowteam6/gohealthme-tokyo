@@ -719,6 +719,10 @@ function CreateChallengeInner() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const v = new URLSearchParams(window.location.search).get("v");
+    // Reading the URL once on mount is the external-system case the rule
+    // exempts; the first render must match the server, so it cannot move
+    // into a state initializer.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (v === "self" || v === "dare") selectVariant(v);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
