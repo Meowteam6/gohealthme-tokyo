@@ -13,6 +13,8 @@ import {
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useDocumentProofAvailable } from "@/lib/useProofStatus";
 import AuthorCapabilityNotice from "@/components/AuthorCapabilityNotice";
+import { launchGoalIssue, LAUNCH_GOAL_EXAMPLES } from "@/lib/launch-goal-check";
+import { COMING_LINE } from "@/lib/provider-capabilities";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import { isEconomicallyDeadConfig } from "@/lib/pool-lifecycle";
 import { resolveNewPoolId } from "@/lib/resolve-pool-id";
@@ -163,6 +165,11 @@ function CreatePoolInner() {
       if (goalSpec.trim() === "") {
         throw new Error("Describe the goal participants must hit.");
       }
+      if (floor === "wearable") {
+        // Only goals every supported sensor can verify (lib/provider-capabilities).
+        const issue = launchGoalIssue(goalSpec);
+        if (issue !== null) throw new Error(issue);
+      }
       entryFeeUsdc = parseUsdc(entryFee.trim() === "" ? "0" : entryFee.trim());
       // The deployed contract reverts DEAD_CONFIG on a zero entry fee for
       // every payout model (every winner must have staked), so catch it here
@@ -297,7 +304,7 @@ function CreatePoolInner() {
             >
               <span className="block font-semibold">Wearable data</span>
               <span className="block text-xs font-normal">
-                Verified from connected device metrics like sleep or steps.
+                Verified from any connected sensor: sleep efficiency, hours of sleep or workouts.
               </span>
             </button>
             <button
@@ -387,12 +394,26 @@ function CreatePoolInner() {
             className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
           />
           <span className="mt-1 block text-xs text-muted">
-            Short tag shown on the pool, for example sleep, workouts, steps.
+            Short tag shown on the pool, for example sleep or workouts.
           </span>
         </label>
 
         <label className="block text-sm font-medium">
           Goal
+          {floor === "wearable" ? (
+            <span className="mt-1 flex flex-wrap gap-2">
+              {LAUNCH_GOAL_EXAMPLES.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  onClick={() => setGoalSpec(example)}
+                  className="rounded-full border border-edge bg-surface-raised px-3 py-1 text-xs font-normal text-muted hover:text-foreground"
+                >
+                  {example}
+                </button>
+              ))}
+            </span>
+          ) : null}
           <textarea
             placeholder={
               floor === "document"
@@ -407,7 +428,13 @@ function CreatePoolInner() {
             className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
           />
           {floor === "wearable" ? (
-            <AuthorCapabilityNotice goalSpec={goalSpec} noun="pool" />
+            <>
+              <AuthorCapabilityNotice goalSpec={goalSpec} noun="pool" />
+              {goalSpec.trim() !== "" && launchGoalIssue(goalSpec) !== null ? (
+                <span className="mt-1 block text-xs text-warning">{launchGoalIssue(goalSpec)}</span>
+              ) : null}
+              <span className="mt-1 block text-xs text-muted">{COMING_LINE}</span>
+            </>
           ) : null}
           <span className="mt-1 block text-xs text-muted">
             {floor === "document"
