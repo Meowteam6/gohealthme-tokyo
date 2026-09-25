@@ -1,109 +1,126 @@
 import { describe, it, expect } from "vitest";
 import {
-  COACH_CHECKLIST,
+  coachChecklist,
   coachCopy,
-  isPoolDetailPath,
   resolveCoachStep,
+  type CoachAction,
   type CoachInputs,
 } from "@/lib/help/coach";
+import type { StepId, StepState } from "@/lib/game/character";
 
-function inputs(overrides: Partial<CoachInputs> = {}): CoachInputs {
+const DONE: StepState = { status: "done", summary: "ok" };
+const TODO: StepState = { status: "todo" };
+
+function inputs(
+  steps: Partial<Record<StepId, StepState>> = {},
+  humanMode: CoachInputs["humanMode"] = "world",
+): CoachInputs {
   return {
-    authenticated: true,
-    balance: 1_000_000n,
-    handleClaimed: true,
-    pathname: "/",
-    ...overrides,
+    steps: {
+      "sign-in": DONE,
+      human: DONE,
+      name: DONE,
+      sensor: DONE,
+      ...steps,
+    },
+    humanMode,
   };
 }
 
-describe("resolveCoachStep", () => {
-  it("signIn when not authenticated, regardless of other signals", () => {
+describe("resolveCoachStep follows character creation", () => {
+  it("starts at sign in for a signed-out visitor", () => {
     const step = resolveCoachStep(
-      inputs({ authenticated: false, balance: 0n, handleClaimed: false }),
+      inputs({ "sign-in": TODO, human: TODO, name: TODO, sensor: TODO }),
     );
     expect(step.id).toBe("signIn");
     expect(step.index).toBe(0);
-    expect(step.loading).toBe(false);
   });
 
-  it("holds on getUsdc with loading while the balance is unknown", () => {
-    const step = resolveCoachStep(inputs({ balance: undefined }));
-    expect(step.id).toBe("getUsdc");
+  it("walks sign in, prove human, pick a name, pair a sensor, enter a run", () => {
+    const order: CoachAction[] = [];
+    const states: Partial<Record<StepId, StepState>>[] = [
+      { "sign-in": TODO, human: TODO, name: TODO, sensor: TODO },
+      { human: TODO, name: TODO, sensor: TODO },
+      { name: TODO, sensor: TODO },
+      { sensor: TODO },
+      {},
+    ];
+    for (const s of states) order.push(resolveCoachStep(inputs(s)).id);
+    expect(order).toEqual([
+      "signIn",
+      "proveHuman",
+      "pickName",
+      "pairSensor",
+      "enterRun",
+    ]);
+  });
+
+  it("holds on a loading step instead of skipping ahead", () => {
+    const step = resolveCoachStep(inputs({ human: { status: "loading" } }));
+    expect(step.id).toBe("proveHuman");
     expect(step.loading).toBe(true);
   });
 
-  it("getUsdc when authenticated and balance is zero", () => {
-    const step = resolveCoachStep(inputs({ balance: 0n }));
-    expect(step.id).toBe("getUsdc");
-    expect(step.index).toBe(1);
-    expect(step.loading).toBe(false);
-  });
-
-  it("claimHandle when funded but no handle", () => {
-    const step = resolveCoachStep(inputs({ handleClaimed: false }));
-    expect(step.id).toBe("claimHandle");
-    expect(step.index).toBe(2);
-  });
-
-  it("doTheThing when funded and handle claimed", () => {
-    const step = resolveCoachStep(inputs());
-    expect(step.id).toBe("doTheThing");
-    expect(step.index).toBe(3);
-  });
-
-  it("overrides to uploadProof on a funded pool-detail page", () => {
+  it("walks past a lane that is off for this build", () => {
     const step = resolveCoachStep(
-      inputs({ pathname: "/pools/42", handleClaimed: false }),
+      inputs({ name: { status: "off", note: "names are off" }, sensor: TODO }),
     );
-    expect(step.id).toBe("uploadProof");
-    expect(step.index).toBe(4);
+    expect(step.id).toBe("pairSensor");
   });
 
-  it("does NOT override to uploadProof when unfunded on a pool page", () => {
-    const step = resolveCoachStep(inputs({ pathname: "/pools/42", balance: 0n }));
-    expect(step.id).toBe("getUsdc");
+  it("carries the allowlist wait and a read error to the widget", () => {
+    expect(
+      resolveCoachStep(inputs({ human: { status: "waiting", note: "in review" } }))
+        .waiting,
+    ).toBe("in review");
+    expect(
+      resolveCoachStep(inputs({ sensor: { status: "error", note: "read failed" } }))
+        .error,
+    ).toBe("read failed");
   });
 
-  it("does NOT treat /pools/create as a pool-detail page", () => {
-    const step = resolveCoachStep(inputs({ pathname: "/pools/create" }));
-    expect(step.id).toBe("doTheThing");
+  it("respects a skipped name or sensor, never a skipped hard step", () => {
+    const skipped = new Set<StepId>(["name", "human"]);
+    expect(
+      resolveCoachStep({ ...inputs({ name: TODO, sensor: TODO }), skipped }).id,
+    ).toBe("pairSensor");
+    expect(
+      resolveCoachStep({ ...inputs({ human: TODO }), skipped }).id,
+    ).toBe("proveHuman");
+  });
+
+  it("treats an unread sensor as the sensor step, not as paired", () => {
+    const step = resolveCoachStep(inputs({ sensor: { status: "check" } }));
+    expect(step.id).toBe("pairSensor");
   });
 });
 
-describe("isPoolDetailPath", () => {
-  it("matches a pool id, not the list, create, or nested routes", () => {
-    expect(isPoolDetailPath("/pools/7")).toBe(true);
-    expect(isPoolDetailPath("/pools/7/")).toBe(true);
-    expect(isPoolDetailPath("/pools")).toBe(false);
-    expect(isPoolDetailPath("/pools/create")).toBe(false);
-    expect(isPoolDetailPath("/pools/7/proof")).toBe(false);
-    expect(isPoolDetailPath("/")).toBe(false);
-  });
-});
-
-describe("checklist and copy", () => {
-  it("always has six rows ending in the gold Get paid row", () => {
-    expect(COACH_CHECKLIST).toHaveLength(6);
-    const last = COACH_CHECKLIST[COACH_CHECKLIST.length - 1];
-    expect(last.id).toBe("paid");
-    expect(last.gold).toBe(true);
+describe("coach copy", () => {
+  it("labels the human step by how this build runs it", () => {
+    expect(coachChecklist("world")[1].label).toBe("Prove you are human");
+    expect(coachChecklist("allowlist")[1].label).toBe("Get your spot");
   });
 
-  it("has scripted copy with no exclamation marks for every action", () => {
-    for (const id of [
+  it("keeps six rows with only the payout row in gold", () => {
+    const rows = coachChecklist("world");
+    expect(rows).toHaveLength(6);
+    expect(rows.filter((r) => r.gold === true).map((r) => r.id)).toEqual(["paid"]);
+  });
+
+  it("never promises an instant payout, an enclave, or Arc gas", () => {
+    const actions: CoachAction[] = [
       "signIn",
-      "getUsdc",
-      "claimHandle",
-      "doTheThing",
-      "uploadProof",
-    ] as const) {
-      const copy = coachCopy(id);
-      expect(copy.headline.length).toBeGreaterThan(0);
-      expect(copy.primary.length).toBeGreaterThan(0);
-      expect(copy.body).not.toContain("!");
-      expect(copy.headline).not.toContain("!");
+      "proveHuman",
+      "pickName",
+      "pairSensor",
+      "enterRun",
+    ];
+    for (const mode of ["world", "allowlist"] as const) {
+      for (const id of actions) {
+        const copy = coachCopy(id, mode);
+        const text = `${copy.headline} ${copy.body} ${copy.primary ?? ""} ${copy.secondary ?? ""}`;
+        expect(text).not.toMatch(/instant|the moment|enclave|\bArc\b|!/i);
+      }
     }
-    expect(coachCopy("doTheThing").secondary).toBe("Browse pools");
   });
 });

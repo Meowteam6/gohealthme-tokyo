@@ -33,30 +33,24 @@ export const ASK_GLOBAL_CAP = 400;
  * honest than a sprawling one.
  */
 export const HELP_KB = [
-  "WHAT GOHEALTHME IS: sponsors fund USDC pools tied to a health goal. You hit the goal, prove it, and get paid in USDC the moment it verifies. Everything here is on Base Sepolia with play-money USDC that has no real value.",
-  "SIGN IN: tap Sign in and use an email address. We create an embedded wallet for you - no seed phrase, no browser extension, nothing to install.",
-  // TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
-  // "Arc pays gas in USDC, so your wallet needs a little before it can do anything" is
-  // false on Base (gas is ETH / paymaster-sponsored). This KB entry feeds the help
-  // assistant verbatim; left as-is on purpose so a human rewrites it with the real
-  // Base gas story rather than the assistant inventing one.
-  "GET TEST USDC: after signing in, tap Get test USDC (the chip near the top, or the Coach's button). Arc pays gas in USDC, so your wallet needs a little before it can do anything. It is a one-tap faucet, testnet only.",
-  "CLAIM A HANDLE: pick a public handle on the handle page so you show up as a name, not a wallet address. Your handle appears in the header, on your challenges, and on the payout feed. Optional for earning, but it is how friends recognize you.",
-  "DO THE THING: create a challenge (dare a friend, or a parent paying a kid) from the new-challenge page, or join a sponsor pool from the pools page. Creating a challenge creates a pool, and you the challenger fund the reward.",
-  "SEND A CHALLENGE: after you create one you get a private invite link. Share it, text it, or email it straight to the person you are daring. Challenge pools are private - they are not listed publicly and only people with the link can open them.",
-  "ADD TO THE REWARD: anyone with the challenge link can chip in USDC to grow the pot and push the person to hit their goal. You are growing the reward, not placing a bet, and contributors show up by handle.",
-  "IF THEY MISS THE GOAL: the whole pot, including friends' contributions, returns to the person who created the challenge, not split back to contributors. So chip in as an incentive, not as a refundable stake.",
-  "UPLOAD PROOF: on a pool page, upload your proof (a photo, a document, or a connected wearable). That is the evidence SPOTTER checks.",
-  "SPOTTER: the settlement agent. It buys the verification it needs, reads the confidential verdict, decides pay or no-pay, and pays achievers from its own wallet. It never sees your raw health data.",
-  "PRIVACY / TEE: your proof is judged inside a confidential trusted execution environment (a secure enclave). Only the signed verdict leaves it. Your raw health data never touches the chain and never goes to the model.",
-  "GET PAID: once your proof verifies, USDC lands in your wallet automatically. No manual checkout, no waiting on a person.",
+  "WHAT GOHEALTHME IS: you stake test USDC on your own health goal (sleep, steps, workouts), your wearable decides, and SPOTTER pays achievers in USDC when the run settles at the end of its window. Sponsors can put up a prize too. It is a beta on the Base Sepolia testnet with play-money USDC that has no real value.",
+  "MAKE YOUR PLAYER: the first time in, you sign in with an email (we create a wallet for you, no seed phrase, nothing to install), prove you are one human with World ID (on a build without World ID, you ask for a spot in the closed beta instead), pick a name, and pair your wearable. The name and the sensor can wait; the human step cannot.",
+  "PICK A NAME: on a build with ENS names on, your name is a public subname on Ethereum Sepolia pointing at your wallet; otherwise it is an @handle. It is how friends and the payout feed show you. Optional, and your health data stays private either way.",
+  "PAIR A SENSOR: link a wearable through Junction (WHOOP, Oura, Fitbit, Garmin) or connect WHOOP directly. The lobby then marks which runs your device can actually measure before you stake anything. You can disconnect it any time from the Wallet page.",
+  "ENTER A RUN: open the lobby, pick a run your sensor can play, and stake. If your wallet has no test USDC, the app tries to add some for you; if that fails, the faucet at faucet.circle.com on Base Sepolia works too. Network fees on Base are paid in ETH unless they are sponsored for you.",
+  "DARE A FRIEND: create a challenge from the new-challenge page. You fund the reward and get a private invite link to send. Anyone with the link can chip in to grow the pot. You are growing a reward, not placing a bet.",
+  "IF THEY MISS A DARE: the leftover pot belongs to the person who created the challenge, not split back to contributors. It stays in the pool until the creator takes it back.",
+  "IF YOU MISS YOUR OWN RUN: there is no prize, and your stake is credited back to you when the run settles.",
+  "SPOTTER: the settlement agent. It checks the result, may ask you to confirm the payout with World ID, records the win on chain, and pays achievers from the pool when the run settles. The reward is the pool's money, not SPOTTER's.",
+  "PRIVACY: wearable checks run on our server against a daily summary; uploaded documents are read inside a confidential enclave (the Chainlink attester), when document proof is switched on. Only a yes or no verdict goes on chain. Raw health data never touches the chain and never goes to the helper model.",
+  "GET PAID: when the run settles at the end of its window, your winnings are credited to you on chain and you withdraw them to your wallet from the run page or your dashboard. It is not instant.",
 ].join("\n");
 
 /** The refusal contract plus voice, grounded in the KB. */
 export const HELP_SYSTEM_PROMPT = [
   "You are the GoHealthMe onboarding helper. You help people USE the app and nothing else.",
   "",
-  "ANSWER ONLY questions about using the app: signing in, getting test USDC, creating challenges, joining pools, uploading proof, getting paid, the privacy and TEE model, what SPOTTER is, and that this is testnet play-money.",
+  "ANSWER ONLY questions about using the app: signing in, proving you are human, picking a name, pairing a sensor, entering a run, daring a friend, getting paid, the privacy model, what SPOTTER is, and that this is a testnet beta on play-money.",
   "",
   "REFUSE these, every time: medical advice or health guidance of any kind; financial or investment advice; and anything about a specific person's data or account. When a question is one of these, do not answer it - say you can only help with using the app, and that they should talk to a qualified professional for medical or financial questions.",
   "",
