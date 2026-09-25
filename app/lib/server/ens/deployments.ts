@@ -621,8 +621,10 @@ export const VERIFIABLE_FACTORY_ABI = [
     type: "event",
     name: "ProxyDeployed",
     inputs: [
-      { name: "sender", type: "address", indexed: false },
-      { name: "proxyAddress", type: "address", indexed: false },
+      // Both indexed on the live factory (topics[1], topics[2]); verified
+      // against tx 0xfb70e369...2d88 on Sepolia, 2026-09-26.
+      { name: "sender", type: "address", indexed: true },
+      { name: "proxyAddress", type: "address", indexed: true },
       { name: "salt", type: "uint256", indexed: false },
       { name: "implementation", type: "address", indexed: false },
     ],

@@ -206,13 +206,40 @@ async function main(): Promise<void> {
     const available = await client.readContract({ address: ENS_SEPOLIA.ethRegistrar, abi: ETH_REGISTRAR_ABI, functionName: "isAvailable", args: [label] });
     if (!available) throw new Error(`${parent} is not available and has no subregistry; it belongs to someone else`);
 
+    // A proxy is a CREATE2 deploy keyed by (owner, salt): sending it twice
+    // reverts. So before deploying, recover the proxy from a tx this state
+    // already recorded for the step, and prove it with the factory itself.
+    async function proxyFromLogs(logs: TransactionReceipt["logs"], impl: Address): Promise<Address | null> {
+      const events = parseEventLogs({ abi: VERIFIABLE_FACTORY_ABI, logs, eventName: "ProxyDeployed" });
+      const ev = events.find((e) => e.args.implementation.toLowerCase() === impl.toLowerCase());
+      if (ev === undefined) return null;
+      const verified = await client.readContract({ address: ENS_SEPOLIA.verifiableFactory, abi: VERIFIABLE_FACTORY_ABI, functionName: "verifyContract", args: [ev.args.proxyAddress] });
+      if (verified.toLowerCase() !== impl.toLowerCase()) throw new Error(`proxy ${ev.args.proxyAddress} does not verify against ${impl}`);
+      return ev.args.proxyAddress;
+    }
+
+    async function recoverProxy(step: string, impl: Address): Promise<Address | null> {
+      for (const tx of state.txs.filter((t) => t.step === step)) {
+        const receipt = await client.getTransactionReceipt({ hash: tx.hash });
+        if (receipt.status !== "success") continue;
+        const found = await proxyFromLogs(receipt.logs, impl);
+        if (found !== null) return found;
+      }
+      return null;
+    }
+
     async function deployProxy(step: string, impl: Address, salt: bigint, data: Hex): Promise<Address> {
+      const recovered = await recoverProxy(step, impl);
+      if (recovered !== null) {
+        console.log(`  recovered ${step}: ${recovered} (from an earlier tx, verified by the factory)`);
+        return recovered;
+      }
       const receipt = await send(step, 400_000n, () =>
         wallet.writeContract({ account: owner, chain: null, address: ENS_SEPOLIA.verifiableFactory, abi: VERIFIABLE_FACTORY_ABI, functionName: "deployProxy", args: [impl, salt, data] }),
       );
-      const [ev] = parseEventLogs({ abi: VERIFIABLE_FACTORY_ABI, logs: receipt.logs, eventName: "ProxyDeployed" });
-      if (ev === undefined) throw new Error(`${step}: no ProxyDeployed event`);
-      return ev.args.proxyAddress;
+      const proxy = await proxyFromLogs(receipt.logs, impl);
+      if (proxy === null) throw new Error(`${step}: no ProxyDeployed event for ${impl} in ${receipt.transactionHash}`);
+      return proxy;
     }
 
     if (state.registryProxy === undefined) {
