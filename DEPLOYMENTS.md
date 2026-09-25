@@ -1,3 +1,22 @@
+## Tokyo 2026 (ENSv2 Sepolia)
+
+ENSv2 on Ethereum Sepolia (chain 11155111), the 2026-09-15 deployment. Pools stay on Base Sepolia.
+Contracts used (verified against docs.ens.domains/learn/deployments and cast code, 2026-09-26):
+- UniversalResolverV2: `0x5d25c1d6acbb71b7a28aa7899618a3412a8303e3`
+- ETHRegistry: `0x657ea849311d3d5823348dded7c2aaafb3ede09e`
+- ETHRegistrar: `0xabe76f6c8dfced81aa5a2bb8034202a7136b94ca`
+- VerifiableFactory: `0x9e726eb570beb6bceb495ab8cda7df517d4e841c`
+- UserRegistryImpl: `0xa80338aaa8d23831cea25e858d1774534abb0263`
+- PermissionedResolverImpl: `0x14f09fd05d4585759e54844dc9b00147131cf243`
+- RootRegistry: `0x9703dbd26dab89504490994138cf2c575251a9ce`
+- MockUSDC: `0x16f95d91dba7da3aca778ec053df0ff6c6a8aa8e`
+
+Transactions written by `app/scripts/ens-bootstrap.ts` (append-only):
+
+- 2026-09-26: none yet. gohealthme.eth is still available; bootstrap pending the owner key (see docs/ENS.md).
+
+---
+
 # GoHealthMe V3 (Base) deployments
 
 ## CURRENT — Base Sepolia (chain 84532), 2026-08-24
