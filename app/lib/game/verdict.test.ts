@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runStatusFromLedger, type LedgerEntry } from "@/lib/agent-receipt";
 import {
   payDecidedOf,
+  runApprovalLine,
   verdictCopy,
   verdictScreenOf,
   verdictShowsClaim,
@@ -278,6 +279,40 @@ describe("verdictScreenOf", () => {
       kind: "cancelled",
       refunded: true,
     });
+  });
+});
+
+describe("runApprovalLine", () => {
+  const open = { settled: false, cancelled: false, resultRecorded: false };
+
+  it("tells a player who left that SPOTTER is waiting on them", () => {
+    const line = runApprovalLine("pending", open);
+    expect(line?.openRun).toBe(true);
+    expect(line?.text).toContain("waiting on your OK");
+  });
+
+  it("offers ask-again for a decline or an expiry while the run is open", () => {
+    for (const status of ["declined", "expired"] as const) {
+      const line = runApprovalLine(status, open);
+      expect(line?.openRun).toBe(true);
+      expect(line?.text).toMatch(/ask again/);
+      expect(line?.text).toContain("nothing moved");
+    }
+  });
+
+  it("says a confirmed payout is being recorded, with nothing to do", () => {
+    expect(runApprovalLine("approved", open)).toMatchObject({ tone: "accent", openRun: false });
+  });
+
+  it("is never silent about a failed read", () => {
+    expect(runApprovalLine("unknown", open)?.text).toContain("could not check");
+  });
+
+  it("says nothing once recorded, settled or cancelled, or when nobody asked", () => {
+    expect(runApprovalLine("pending", { ...open, resultRecorded: true })).toBeNull();
+    expect(runApprovalLine("pending", { ...open, settled: true })).toBeNull();
+    expect(runApprovalLine("pending", { ...open, cancelled: true })).toBeNull();
+    expect(runApprovalLine("none", open)).toBeNull();
   });
 });
 

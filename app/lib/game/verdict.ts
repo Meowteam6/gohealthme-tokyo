@@ -222,6 +222,72 @@ function approvedOnLedger(ledger: LedgerEntry[] | null): boolean {
   return false;
 }
 
+/** The approval status as GET /api/agent/approval/status reports it, or
+ *  "unknown" when that read failed. */
+export type RunApprovalStatus =
+  | "none"
+  | "pending"
+  | "approved"
+  | "declined"
+  | "expired"
+  | "cancelled"
+  | "unknown";
+
+export interface RunApprovalLine {
+  text: string;
+  tone: "accent" | "warning" | "muted";
+  /** True when opening the run is the player's next action. */
+  openRun: boolean;
+}
+
+/**
+ * The dashboard line for a run whose payout waits on the player's World ID
+ * OK. Without it, a player who ran the check and left saw an ordinary run
+ * board while SPOTTER waited on them, and later a refund that read as "no
+ * proof was submitted". Null when there is nothing to say: no ask, already
+ * recorded, or a finished run (the result label covers that).
+ */
+export function runApprovalLine(
+  status: RunApprovalStatus,
+  run: { settled: boolean; cancelled: boolean; resultRecorded: boolean },
+): RunApprovalLine | null {
+  if (run.settled || run.cancelled || run.resultRecorded) return null;
+  switch (status) {
+    case "pending":
+      return {
+        text: "SPOTTER decided to pay this run and is waiting on your OK. Open it and confirm before the window closes.",
+        tone: "warning",
+        openRun: true,
+      };
+    case "declined":
+      return {
+        text: "You said no to this payout, so nothing moved. Open the run to ask again before it settles.",
+        tone: "warning",
+        openRun: true,
+      };
+    case "expired":
+      return {
+        text: "Your payout confirmation timed out, so nothing moved. Open the run to ask again before it settles.",
+        tone: "warning",
+        openRun: true,
+      };
+    case "approved":
+      return {
+        text: "You confirmed the payout. SPOTTER is writing your result on chain.",
+        tone: "accent",
+        openRun: false,
+      };
+    case "unknown":
+      return {
+        text: "I could not check whether this run is waiting on your OK. Open it to see.",
+        tone: "muted",
+        openRun: true,
+      };
+    default:
+      return null;
+  }
+}
+
 export interface VerdictCopy {
   headline: string;
   body: string;

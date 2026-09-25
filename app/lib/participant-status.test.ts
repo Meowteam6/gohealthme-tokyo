@@ -42,6 +42,22 @@ describe("resultLabel", () => {
     });
   });
 
+  it("never says 'no proof' when the proof passed and only the World ID OK was missing", () => {
+    for (const approval of ["declined", "expired", "cancelled"] as const) {
+      expect(resultLabel({ settled: true }, p({}), approval)).toEqual({
+        text: "Refunded - payout not confirmed",
+        tone: "muted",
+      });
+    }
+    expect(resultLabel({ settled: true }, p({}), "approved").text).toBe(
+      "Refunded - result not recorded before settle",
+    );
+    // No approval asked: the old label stands.
+    expect(resultLabel({ settled: true }, p({}), null).text).toBe(
+      "Refunded - no proof was submitted",
+    );
+  });
+
   it("reads Achieved with the multiplier when the verdict is true", () => {
     expect(resultLabel({ settled: true }, p({ resultRecorded: true, verdict: true, multiplierBps: 15_000 }))).toEqual({
       text: "Achieved at 1.50x",
