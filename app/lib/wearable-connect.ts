@@ -83,15 +83,19 @@ export async function fetchLinkTarget(
   address: `0x${string}`,
   requestAuth: WalletAuthRequester,
   provider?: ProviderId,
+  returnTo?: string,
 ): Promise<LinkTarget> {
+  const payload: Record<string, string> = { address };
+  if (provider !== undefined) payload.provider = provider;
+  // Where WHOOP's redirect should land. The server validates it as an
+  // in-app path and ignores anything else.
+  if (returnTo !== undefined) payload.next = returnTo;
   const sent = await fetchWithWalletAuth(
     "/api/wearable/link",
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(
-        provider === undefined ? { address } : { address, provider },
-      ),
+      body: JSON.stringify(payload),
     },
     requestAuth,
   );
@@ -153,6 +157,8 @@ export async function startWearableLink(
   address: `0x${string}`,
   requestAuth: WalletAuthRequester,
   provider?: ProviderId,
+  /** In-app path a same-tab OAuth (WHOOP) returns to. Defaults to /dashboard. */
+  returnTo?: string,
 ): Promise<void> {
   const popup = window.open("about:blank", "_blank");
   if (popup !== null) {
@@ -172,7 +178,7 @@ export async function startWearableLink(
 
   let target: LinkTarget;
   try {
-    target = await fetchLinkTarget(address, requestAuth, provider);
+    target = await fetchLinkTarget(address, requestAuth, provider, returnTo);
   } catch (err) {
     if (popup !== null && !popup.closed) popup.close();
     throw err;
@@ -356,6 +362,16 @@ export async function fetchProviderOptions(
   } catch {
     return { providers: [], selected: null, status: "unavailable" };
   }
+}
+
+/**
+ * This page as an in-app path, for a same-tab OAuth to come back to. Drops a
+ * leftover ?whoop= so a new outcome is the only one the page reads.
+ */
+export function currentReturnPath(): string {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("whoop");
+  return `${url.pathname}${url.search}`;
 }
 
 /**

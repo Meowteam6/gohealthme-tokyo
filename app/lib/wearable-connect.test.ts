@@ -136,6 +136,26 @@ describe("startWearableLink", () => {
     expect(replaced).toEqual([]);
   });
 
+  it("sends the page's return path to the link route", async () => {
+    respond({
+      provider: "whoop",
+      kind: "oauth",
+      linkUrl: "/api/whoop/login?ticket=abc&next=%2Fcharacter",
+    });
+
+    await startWearableLink(ADDRESS, auth, "whoop", "/character?step=sensor");
+
+    const fetchMock = globalThis.fetch as unknown as {
+      mock: { calls: Array<[string, RequestInit | undefined]> };
+    };
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      address: ADDRESS,
+      provider: "whoop",
+      next: "/character?step=sensor",
+    });
+  });
+
   it("raises phone-link guidance, not an error, for a phone-only provider", async () => {
     const instructions = "Open the GoHealthMe app on your iPhone.";
     respond({ provider: "apple", kind: "app", linkUrl: null, instructions });

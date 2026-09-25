@@ -26,7 +26,9 @@ vi.mock("@/lib/server/wearable", () => ({
 }));
 
 const { GET } = await import("@/app/api/whoop/callback/route");
-const { WHOOP_NONCE_COOKIE } = await import("@/app/api/whoop/login/route");
+const { WHOOP_NONCE_COOKIE, WHOOP_RETURN_COOKIE } = await import(
+  "@/app/api/whoop/login/route"
+);
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const VICTIM = "0x2222222222222222222222222222222222222222";
@@ -161,5 +163,60 @@ describe("GET /api/whoop/callback", () => {
     ]) {
       expect(res.headers.get("set-cookie")).toContain(WHOOP_NONCE_COOKIE);
     }
+  });
+
+  function withReturn(query: string, returnPath: string): Promise<Response> {
+    return GET(
+      new NextRequest(`https://app.test/api/whoop/callback${query}`, {
+        headers: {
+          cookie:
+            `${WHOOP_NONCE_COOKIE}=${NONCE}:${OWNER}; ` +
+            `${WHOOP_RETURN_COOKIE}=${encodeURIComponent(returnPath)}`,
+        },
+      }),
+    );
+  }
+
+  it("returns to the page the connect started on, with the outcome", async () => {
+    // A player pairing from character creation lands back on the sensor step,
+    // which reads ?whoop=, instead of a dashboard the onboarding gate covers.
+    const res = await withReturn(
+      `?code=real-code&state=${NONCE}`,
+      "/character?step=sensor&next=/pools/3",
+    );
+
+    const location = new URL(res.headers.get("location") ?? "https://x/");
+    expect(location.origin).toBe("https://app.test");
+    expect(location.pathname).toBe("/character");
+    expect(location.searchParams.get("step")).toBe("sensor");
+    expect(location.searchParams.get("next")).toBe("/pools/3");
+    expect(location.searchParams.get("whoop")).toBe("connected");
+    expect(res.headers.get("set-cookie")).toContain(WHOOP_RETURN_COOKIE);
+  });
+
+  it("returns a declined consent to the same page", async () => {
+    const res = await withReturn("?error=access_denied", "/pools/3");
+
+    const location = new URL(res.headers.get("location") ?? "https://x/");
+    expect(location.pathname).toBe("/pools/3");
+    expect(location.searchParams.get("whoop")).toBe("declined");
+  });
+
+  it("never redirects off-site, even from a tampered cookie", async () => {
+    const res = await withReturn(
+      `?code=real-code&state=${NONCE}`,
+      "//evil.test/phish",
+    );
+
+    const location = new URL(res.headers.get("location") ?? "https://x/");
+    expect(location.origin).toBe("https://app.test");
+    expect(location.pathname).toBe("/dashboard");
+  });
+
+  it("defaults to the dashboard with no return cookie", async () => {
+    const res = await callback(`?code=real-code&state=${NONCE}`, `${NONCE}:${OWNER}`);
+    expect(new URL(res.headers.get("location") ?? "https://x/").pathname).toBe(
+      "/dashboard",
+    );
   });
 });

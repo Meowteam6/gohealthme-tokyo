@@ -1,4 +1,4 @@
-// GET /api/whoop/login?ticket=<link ticket>
+// GET /api/whoop/login?ticket=<link ticket>&next=<in-app path, optional>
 // Starts the WHOOP OAuth flow and redirects to WHOOP's consent screen.
 //
 // The browser arrives here by top-level navigation, so there are no auth
@@ -31,6 +31,10 @@ import { randomBytes } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { providerConfigured } from "@/lib/server/wearable";
 import { readLinkTicket } from "@/lib/server/wearable/link-ticket";
+import {
+  DEFAULT_RETURN_PATH,
+  safeReturnPath,
+} from "@/lib/server/wearable/return-path";
 import { buildAuthorizeUrl } from "@/lib/server/wearable/whoop";
 
 /**
@@ -40,20 +44,33 @@ import { buildAuthorizeUrl } from "@/lib/server/wearable/whoop";
  * no navigation and deploy-engineer text on it. Same outcomes the callback
  * uses, so the dashboard already knows how to word them.
  */
-function backToDashboard(request: NextRequest, outcome: string): NextResponse {
-  const target = new URL("/dashboard", request.nextUrl.origin);
+function backToDashboard(
+  request: NextRequest,
+  outcome: string,
+  returnPath: string = DEFAULT_RETURN_PATH,
+): NextResponse {
+  const target = new URL(returnPath, request.nextUrl.origin);
   target.searchParams.set("whoop", outcome);
   return NextResponse.redirect(target);
 }
 
 /** Scope of the nonce cookie: only the callback ever reads it. */
 export const WHOOP_NONCE_COOKIE = "whoop_oauth_nonce";
+/**
+ * Where the flow returns to, carried beside the nonce. A player pairing from
+ * character creation goes back there, not to a dashboard the onboarding gate
+ * would cover. Validated on the way in AND on the way out (safeReturnPath).
+ */
+export const WHOOP_RETURN_COOKIE = "whoop_oauth_return";
 const NONCE_TTL_SECONDS = 600;
 
 export async function GET(request: NextRequest) {
+  const returnPath =
+    safeReturnPath(request.nextUrl.searchParams.get("next")) ??
+    DEFAULT_RETURN_PATH;
   try {
     if (!providerConfigured("whoop")) {
-      return backToDashboard(request, "unavailable");
+      return backToDashboard(request, "unavailable", returnPath);
     }
 
     const ticket = request.nextUrl.searchParams.get("ticket");
@@ -62,7 +79,7 @@ export async function GET(request: NextRequest) {
       // Deliberately one outcome for missing, malformed, tampered and expired.
       // Which of the four it was tells an attacker something and the user
       // nothing: their fix is the same either way.
-      return backToDashboard(request, "expired");
+      return backToDashboard(request, "expired", returnPath);
     }
 
     const nonce = randomBytes(16).toString("hex");
@@ -80,9 +97,16 @@ export async function GET(request: NextRequest) {
       path: "/api/whoop",
       maxAge: NONCE_TTL_SECONDS,
     });
+    response.cookies.set(WHOOP_RETURN_COOKIE, returnPath, {
+      httpOnly: true,
+      secure: request.nextUrl.protocol === "https:",
+      sameSite: "lax",
+      path: "/api/whoop",
+      maxAge: NONCE_TTL_SECONDS,
+    });
     return response;
   } catch (err) {
     console.error("[whoop/login] failed", err);
-    return backToDashboard(request, "failed");
+    return backToDashboard(request, "failed", returnPath);
   }
 }
