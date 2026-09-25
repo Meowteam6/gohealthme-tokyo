@@ -35,7 +35,7 @@ import { poolOutcomeDisplay, type PoolAggregate } from "@/lib/sponsor-metrics";
 // card that can show outcomes carries this, matching every other verdict
 // surface in the app.
 const PRIVACY_LINE =
-  "SPOTTER verifies in a confidential enclave. Only the pass or fail verdict ever leaves it, never your health data.";
+  "Only the pass or fail verdict leaves SPOTTER's check. Nobody's health data reaches the chain or this console.";
 
 // A tan-well mini stat. `paid` marks the money-in-motion figure (achiever
 // payouts) with a leading plus. Every dollar renders through Money — monospace,
@@ -62,10 +62,14 @@ export default function SponsorPoolOutcome({
   pool,
   aggregate,
   nowSeconds,
+  outcomesOk = true,
 }: {
   pool: PoolInfo;
   aggregate: PoolAggregate;
   nowSeconds: bigint;
+  /** False when the outcome scan failed: every event-derived figure is then
+   *  unknown and says so, instead of rendering as zero or held. */
+  outcomesOk?: boolean;
 }) {
   const [showTopUp, setShowTopUp] = useState(false);
   const d = poolOutcomeDisplay(aggregate);
@@ -82,12 +86,14 @@ export default function SponsorPoolOutcome({
               {isDocGoal ? "Document" : "Wearable"}
             </Badge>
           </div>
-          {phase === "settled" ? (
+          {pool.cancelled ? (
+            <Badge tone="warning">Cancelled</Badge>
+          ) : phase === "settled" ? (
             <Badge tone="muted">Settled</Badge>
           ) : phase === "expired" ? (
             <Badge tone="warning">Awaiting settlement</Badge>
           ) : (
-            <Badge tone="accent">Live</Badge>
+            <Badge tone="accent">Open</Badge>
           )}
         </div>
         {/* Health label with no wallet or handle beside it, by rule. */}
@@ -106,13 +112,26 @@ export default function SponsorPoolOutcome({
         <WellStat label="In the pool now">
           <Money usd={formatUsdc(d.balanceUsdc)} />
         </WellStat>
-        <WellStat label="You funded">
-          <Money usd={formatUsdc(d.toppedUpUsdc)} />
+        {/* Top-ups only (the create-time seed emits no PoolFunded), from any
+            funder. Named for what it is. */}
+        <WellStat label="Top-ups, any funder">
+          {outcomesOk ? <Money usd={formatUsdc(d.toppedUpUsdc)} /> : (
+            <span className="text-muted">Unknown</span>
+          )}
         </WellStat>
       </div>
 
-      {/* Outcomes: gated by the k-anonymity floor. */}
-      {d.belowFloor ? (
+      {/* Outcomes: gated by the k-anonymity floor, and blanked (not zeroed)
+          when the scan could not be read. */}
+      {!outcomesOk ? (
+        <p
+          role="status"
+          className="rounded-2xl border border-dashed border-warning/40 bg-surface-raised p-4 text-sm text-muted"
+        >
+          Joins, completions and payouts for this pool could not be read right
+          now.
+        </p>
+      ) : d.belowFloor ? (
         <div className="rounded-2xl border border-dashed border-edge bg-surface-raised p-4">
           <p className="inline-flex items-center gap-1.5 text-sm font-semibold">
             <Icon name="eyeOff" className="h-4 w-4 text-muted" />
@@ -164,7 +183,7 @@ export default function SponsorPoolOutcome({
       {/* Top up: the existing FundPool machinery, reused unchanged. Only offered
           while the pool can still take funds — the contract reverts fundPool on
           a settled pool. */}
-      {phase !== "settled" ? (
+      {phase !== "settled" && !pool.cancelled ? (
         <div className="border-t border-edge pt-4">
           {showTopUp ? (
             <FundPool poolId={pool.id} />

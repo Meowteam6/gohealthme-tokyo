@@ -38,7 +38,12 @@ import {
   Money,
   PoolCardSkeleton,
 } from "@/components/ui";
-import { fetchPools, formatUsdc, type PoolInfo } from "@/lib/contract";
+import {
+  ContractNotConfiguredError,
+  fetchPools,
+  formatUsdc,
+  type PoolInfo,
+} from "@/lib/contract";
 import { toPoolAggregate, type PoolEventTotals } from "@/lib/sponsor-data";
 import {
   portfolioAggregate,
@@ -49,8 +54,61 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 
 interface ConsoleData {
   pools: PoolInfo[];
-  totals: Record<string, PoolEventTotals>;
+  /** Null when the outcome scan could not be read. The pools still render;
+   *  every outcome figure says it could not be read instead of reading as
+   *  zero or "Fewer than 5". */
+  totals: Record<string, PoolEventTotals> | null;
   asOfSeconds: bigint;
+}
+
+interface SerializedTotals {
+  joined: number;
+  completions: number;
+  paidUsdc: string;
+  toppedUpUsdc: string;
+}
+
+async function fetchOutcomeTotals(): Promise<Record<string, PoolEventTotals> | null> {
+  try {
+    const res = await fetch("/api/sponsor/outcomes");
+    if (!res.ok) return null;
+    const body = (await res.json()) as { totals?: Record<string, SerializedTotals> };
+    if (body.totals === undefined) return null;
+    const totals: Record<string, PoolEventTotals> = {};
+    for (const [poolId, t] of Object.entries(body.totals)) {
+      totals[poolId] = {
+        joined: t.joined,
+        completions: t.completions,
+        paidUsdc: BigInt(t.paidUsdc),
+        toppedUpUsdc: BigInt(t.toppedUpUsdc),
+      };
+    }
+    return totals;
+  } catch {
+    return null;
+  }
+}
+
+function OutcomesUnavailable({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div
+      role="status"
+      className="rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-foreground/85"
+    >
+      <p className="font-semibold">Outcomes could not be read right now.</p>
+      <p className="mt-1 text-muted">
+        Your pools and their balances are below. Joins, completions and payouts
+        show again once the chain answers.
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent-strong underline underline-offset-4"
+      >
+        Try again
+      </button>
+    </div>
+  );
 }
 
 /** A withheld count reads as "Fewer than 5", never as a misleading exact zero. */
@@ -99,7 +157,15 @@ function StatTile({
   );
 }
 
-function PortfolioSummary({ aggregates }: { aggregates: PoolAggregate[] }) {
+function PortfolioSummary({
+  aggregates,
+  outcomesOk,
+  onRetry,
+}: {
+  aggregates: PoolAggregate[];
+  outcomesOk: boolean;
+  onRetry: () => void;
+}) {
   const totals = useMemo(() => portfolioAggregate(aggregates), [aggregates]);
   const d = useMemo(() => portfolioDisplay(totals), [totals]);
 
@@ -114,6 +180,20 @@ function PortfolioSummary({ aggregates }: { aggregates: PoolAggregate[] }) {
         </Badge>
       </div>
 
+      {!outcomesOk ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <StatTile
+              icon="vault"
+              chip="bg-accent/12 text-accent-strong"
+              label="In your pools"
+            >
+              <Money usd={formatUsdc(d.totalBalanceUsdc)} />
+            </StatTile>
+          </div>
+          <OutcomesUnavailable onRetry={onRetry} />
+        </div>
+      ) : (
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile
           icon="vault"
@@ -122,10 +202,13 @@ function PortfolioSummary({ aggregates }: { aggregates: PoolAggregate[] }) {
         >
           <Money usd={formatUsdc(d.totalBalanceUsdc)} />
         </StatTile>
+        {/* Top-ups only: the create-time seed emits no PoolFunded event, and
+            top-ups from anyone (a dare backer included) are counted. Named for
+            what it is until lib/sponsor-data reads the seed and the funder. */}
         <StatTile
           icon="coins"
           chip="bg-accent/12 text-accent-strong"
-          label="You funded"
+          label="Top-ups, any funder"
         >
           <Money usd={formatUsdc(d.totalToppedUpUsdc)} />
         </StatTile>
@@ -153,23 +236,25 @@ function PortfolioSummary({ aggregates }: { aggregates: PoolAggregate[] }) {
           <CountValue value={d.totalCompletions} />
         </StatTile>
       </div>
+      )}
     </section>
   );
 }
 
-// The k-anonymity + enclave promise, made a proud feature instead of fine
-// print. Deep-emerald band (trust) with three plain-language points. No number
+// The privacy promise, made a proud feature instead of fine print, and kept
+// to what /privacy says: wearable goals are checked on our server against a
+// daily summary; only document goals go to the Chainlink enclave. No number
 // lives on this band, so no honest-core primitive is needed here.
 const PRIVACY_POINTS: { icon: IconName; title: string; body: string }[] = [
   {
     icon: "lock",
-    title: "Sealed enclave",
-    body: "SPOTTER checks each goal against the raw health data inside a confidential enclave nobody — us included — can see into.",
+    title: "Checked, then dropped",
+    body: "Wearable goals are checked on our server against a daily summary, never raw samples. Document goals are read inside a Chainlink enclave.",
   },
   {
     icon: "eye",
     title: "Verdict only",
-    body: "The enclave hands back one word: paid, or not yet. No steps, no sleep hours, no heart rate ever leaves it.",
+    body: "One word goes on chain and to you: paid, or not yet. No steps, no sleep hours, no heart rate ever reaches the chain or this console.",
   },
   {
     icon: "fingerprint",
@@ -237,28 +322,12 @@ export default function SponsorConsole() {
       // cannot run from the browser (Arc's public RPCs prune history and cap
       // getLogs), so it runs server-side against the archival ARC_RPC_URL and
       // returns bigints as strings, which we parse back here.
-      const [pools, totalsRes] = await Promise.all([
+      // A failed pools read is the page's error; a failed outcome read only
+      // blanks the outcome figures (null), never zeros them.
+      const [pools, totals] = await Promise.all([
         fetchPools(),
-        fetch("/api/sponsor/outcomes").then((r) => r.json()),
+        fetchOutcomeTotals(),
       ]);
-      const raw = (totalsRes?.totals ?? {}) as Record<
-        string,
-        {
-          joined: number;
-          completions: number;
-          paidUsdc: string;
-          toppedUpUsdc: string;
-        }
-      >;
-      const totals: Record<string, PoolEventTotals> = {};
-      for (const [poolId, t] of Object.entries(raw)) {
-        totals[poolId] = {
-          joined: t.joined,
-          completions: t.completions,
-          paidUsdc: BigInt(t.paidUsdc),
-          toppedUpUsdc: BigInt(t.toppedUpUsdc),
-        };
-      }
       return {
         pools,
         totals,
@@ -277,10 +346,13 @@ export default function SponsorConsole() {
     );
   }, [consoleQuery.data, address]);
 
+  const outcomeTotals = consoleQuery.data?.totals;
+  const outcomesOk = outcomeTotals !== null && outcomeTotals !== undefined;
+
   const aggregates = useMemo(
     () =>
       myPools.map((pool) =>
-        toPoolAggregate(pool, consoleQuery.data?.totals[pool.id.toString()]),
+        toPoolAggregate(pool, consoleQuery.data?.totals?.[pool.id.toString()]),
       ),
     [myPools, consoleQuery.data],
   );
@@ -292,7 +364,7 @@ export default function SponsorConsole() {
       eyebrow="Fund the goal"
       pose="spotter-detective.png"
       poseAlt="SPOTTER the otter, inspecting the ledger through a magnifying glass"
-      spotterLine="I hold the bag, not your business. I check each goal in a sealed enclave and hand out one word: paid, or not yet."
+      spotterLine="I hold the bag, not your business. I check each goal and hand out one word: paid, or not yet."
     >
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <Badge tone="warning">Base Sepolia · testnet · play money</Badge>
@@ -330,8 +402,9 @@ export default function SponsorConsole() {
           Fund a new goal
         </h2>
         <p className="mt-1 max-w-md text-sm leading-relaxed text-muted">
-          Name the behavior, set the reward, and drop in testnet USDC. SPOTTER
-          holds it and pays out the moment a goal clears.
+          Name the behavior, set the reward, and drop in testnet USDC. The
+          pool holds it, and SPOTTER pays the people who hit the goal when the
+          run settles.
         </p>
       </div>
       <Button
@@ -397,9 +470,9 @@ export default function SponsorConsole() {
         <ErrorNote
           title="Could not load your pools"
           detail={
-            consoleQuery.error instanceof Error
-              ? consoleQuery.error.message
-              : "Unknown error reading from Base Sepolia."
+            consoleQuery.error instanceof ContractNotConfiguredError
+              ? "Runs are off on this build, so there are no pools to show."
+              : "Base Sepolia did not answer. Your pools are safe on chain; try again in a moment."
           }
           onRetry={() => {
             void consoleQuery.refetch();
@@ -412,7 +485,13 @@ export default function SponsorConsole() {
         />
       ) : (
         <>
-          <PortfolioSummary aggregates={aggregates} />
+          <PortfolioSummary
+            aggregates={aggregates}
+            outcomesOk={outcomesOk}
+            onRetry={() => {
+              void consoleQuery.refetch();
+            }}
+          />
           <section id="pools" className="space-y-5">
             <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
               Your <span className="text-accent">pools</span>
@@ -423,6 +502,7 @@ export default function SponsorConsole() {
                   key={pool.id.toString()}
                   pool={pool}
                   aggregate={aggregates[i]}
+                  outcomesOk={outcomesOk}
                   nowSeconds={consoleQuery.data?.asOfSeconds ?? 0n}
                 />
               ))}

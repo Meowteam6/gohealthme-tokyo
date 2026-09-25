@@ -5,9 +5,9 @@
 // public one caps getLogs well below a full scan and rate-limits bursts. Run it
 // here instead, where getArcPublicClient() uses the archival ARC_RPC_URL
 // override that can serve the logs, then hand the client JSON-safe totals
-// (bigints as strings). If even the archival scan cannot complete,
-// fetchPoolEventTotals degrades to {} and the console lists pools with outcomes
-// pending rather than failing.
+// (bigints as strings). If even the archival scan cannot complete, this
+// answers 503 and the console shows the sponsor's pools with an honest
+// "outcomes could not be read" state, never an empty map read as zeros.
 
 import { NextResponse } from "next/server";
 import { fetchPoolEventTotals } from "@/lib/sponsor-data";
@@ -35,7 +35,11 @@ export async function GET() {
       };
     }
     return NextResponse.json({ totals: out });
-  } catch {
-    return NextResponse.json({ totals: {} });
+  } catch (err) {
+    console.error("[sponsor/outcomes] scan failed", err);
+    return NextResponse.json(
+      { error: "Pool outcomes could not be read right now." },
+      { status: 503 },
+    );
   }
 }
