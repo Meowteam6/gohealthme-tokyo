@@ -68,6 +68,26 @@ Privacy invariant: raw health data never touches the chain — the Confidential 
 
 See `HANDOFF.md` for run steps, on-chain addresses, env setup, and open items.
 
+## Intercepta payout screening (ETHGlobal Tokyo 2026)
+
+SPOTTER screens every payee with one live Intercepta call before it signs.
+Implementation: `app/lib/server/screening/intercepta.ts` (client, printed
+rule, cache), `app/lib/server/screening/gate.ts` (the gate), the fenced
+`// --- intercepta ---` blocks in `app/lib/server/agent/spotter.ts`
+(before `recordResult` and before `settle`) and `app/lib/server/agent/x402.ts`
+(seller `payTo` before `gw.pay`), `app/app/api/screen/status/route.ts`,
+`app/app/api/screen/demo-seller/route.ts`, and
+`app/components/intercepta/PayoutScreening.tsx`. Setup, the before/after
+flow, and the approved-plus-blocked demo are in `docs/INTERCEPTA.md`.
+
+API feedback: (1) `toxicScore` has no documented range, so a score cutoff
+cannot be chosen without calibrating on known addresses; (2) quick-scan has
+no chain parameter and the docs do not say which chains an address is
+screened across; (3) only 200 is documented, while the live 403 body and any
+429 shape are what a fail-closed client needs; (4) a documented test address
+that returns `sanction_address` would let teams prove the blocked path
+without pointing at a real SDN entry.
+
 ## Team
 
 Andre Chuabio, Nikki Hu

@@ -122,6 +122,33 @@ export type LedgerEntry = Stamped &
       }
     /** stage vocabulary: "buy" | "attester" | "record" | "settle". */
     | { kind: "error"; stage: string; message: string }
+    /**
+     * Payout screening (Intercepta), written by lib/server/screening/gate.ts
+     * before SPOTTER signs a transaction that would make this wallet a payee.
+     * Machine facts only: trait NAMES, a score, a printed rule and a reason
+     * composed from those names. Never the provider's description prose and
+     * never anything health-derived, so the public feed may carry it whole.
+     * "unconfigured" writes no row: the status endpoint reports it from env.
+     */
+    | {
+        kind: "screen";
+        provider: "intercepta";
+        /** Which signature the screen guarded: the achiever record, the
+         *  pool settlement, or an x402 purchase (the seller's payTo). */
+        purpose: "record" | "settle" | "x402";
+        address: string;
+        status: "clear" | "blocked" | "unavailable";
+        /** The provider's toxicScore when it answered; absent on unavailable. */
+        toxicScore?: number;
+        /** Trait names the provider reported, e.g. "sanction_address". */
+        traits?: string[];
+        /** The deterministic rule that turned traits and score into a status. */
+        rule: string;
+        /** Plain-English reason derived from trait names only. */
+        reason: string;
+        /** True when answered from the per-address cache, not a live call. */
+        cached: boolean;
+      }
   );
 
 export type LedgerEntryInput = LedgerEntry extends infer E

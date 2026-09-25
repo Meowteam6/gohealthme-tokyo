@@ -21,6 +21,12 @@ import type { RunStatus } from "@/lib/server/agent/run";
 
 export type { LedgerEntry, RunStatus };
 
+/** Mirror of lib/server/screening/gate.ts SCREEN_HELD_PREFIX: every error
+ *  row a payout screening hold produces starts with it. Mirrored, not
+ *  imported, for the same client-safety reason as FAIL_PREFIX below;
+ *  gate.test.ts pins the two equal. */
+export const SCREEN_HELD_PREFIX = "payout held by screening:";
+
 export type ReceiptRow =
   | {
       kind: "spend";
@@ -54,7 +60,15 @@ export type ReceiptRow =
       paidUsd: string | null;
       note: string | null;
     }
-  | { kind: "error"; stage: string; message: string };
+  | { kind: "error"; stage: string; message: string }
+  | {
+      kind: "screen";
+      purpose: "record" | "settle" | "x402";
+      status: "clear" | "blocked" | "unavailable";
+      reason: string;
+      toxicScore: number | null;
+      traits: string[];
+    };
 
 export interface Receipt {
   rows: ReceiptRow[];
@@ -177,6 +191,17 @@ export function projectReceipt(ledger: LedgerEntry[]): Receipt {
       }
       case "error": {
         rows.push({ kind: "error", stage: entry.stage, message: entry.message });
+        break;
+      }
+      case "screen": {
+        rows.push({
+          kind: "screen",
+          purpose: entry.purpose,
+          status: entry.status,
+          reason: entry.reason,
+          toxicScore: entry.toxicScore ?? null,
+          traits: entry.traits ?? [],
+        });
         break;
       }
     }
@@ -374,7 +399,10 @@ export function runStatusFromLedger(ledger: LedgerEntry[]): RunStatus | null {
   }
   const last = ledger[ledger.length - 1];
   if (last.kind === "error") {
-    if (last.stage === "buy") return "cap-exceeded";
+    // A seller refused by payout screening is a hold, not a cap breach.
+    if (last.stage === "buy") {
+      return last.message.startsWith(SCREEN_HELD_PREFIX) ? "error" : "cap-exceeded";
+    }
     if (last.stage === "record" && last.message.includes("NOT_PARTICIPANT")) {
       return "blocked";
     }
