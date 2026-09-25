@@ -65,7 +65,14 @@ import {
   MESSAGE_MAX,
   TARGET_HANDLE_MAX,
 } from "@/lib/challenges";
-import { ArcTxLink, Button, Card, Chip, ErrorNote, Money } from "@/components/ui";
+import { ArcTxLink, Button, Card, Chip, ErrorNote, Money, Skeleton } from "@/components/ui";
+import { useApprovalProbe } from "@/components/game/ApprovalNote";
+import {
+  challengeCreateBlock,
+  payoutStateOf,
+  verifierStateOf,
+} from "@/lib/game/join-checks";
+import { useDocumentProofQuery } from "@/lib/useProofStatus";
 
 const DURATION_OPTIONS: { label: string; days: number }[] = [
   { label: "1 week", days: 7 },
@@ -698,6 +705,16 @@ function CreateChallengeInner() {
 
   const isDare = variant === "dare";
 
+  // Every dare is an upload-proof run (encodeGoal below), so it can only be
+  // made while SPOTTER's document checker is on and a win can pay. Decided
+  // before the form and again on submit, never after the deposit.
+  const proofQuery = useDocumentProofQuery();
+  const approvalProbe = useApprovalProbe();
+  const createBlock = challengeCreateBlock(
+    verifierStateOf(proofQuery),
+    payoutStateOf(approvalProbe.mode),
+  );
+
   // Switch variants and keep a sensible headline number so the preview never
   // reads $0 the instant you toggle. Seeds a dare reward and a dare lock-in the
   // first time you land on it; leaves anything you already typed alone.
@@ -752,6 +769,14 @@ function CreateChallengeInner() {
   const submit = async () => {
     setFormError(null);
     setPhase({ kind: "idle" });
+    if (createBlock.kind !== "ok") {
+      setFormError(
+        createBlock.kind === "paused"
+          ? createBlock.detail
+          : "I am still checking whether dares can run right now. Try again in a moment.",
+      );
+      return;
+    }
 
     let stakeUsdc: bigint;
     let rewardUsdc: bigint;
@@ -1070,6 +1095,48 @@ function CreateChallengeInner() {
             Send another
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // A dare mid-creation (deposit or link step in flight) keeps its form: the
+  // block only stops a new one from starting.
+  const inFlight = busy || phase.kind === "linking" || phase.kind === "error";
+  if (!inFlight && createBlock.kind === "checking") {
+    return (
+      <div className="mx-auto max-w-xl space-y-4" aria-busy="true">
+        <p className="sr-only" aria-live="polite">
+          Checking whether dares can run
+        </p>
+        <Skeleton className="h-14 w-2/3" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  if (!inFlight && createBlock.kind === "retry") {
+    return (
+      <div className="mx-auto max-w-xl">
+        <ErrorNote
+          title={createBlock.title}
+          detail="It did not answer, so I am not starting a dare on a guess. Nothing has been charged."
+          onRetry={() => {
+            proofQuery.refetch();
+            approvalProbe.refetch();
+          }}
+        />
+      </div>
+    );
+  }
+  if (!inFlight && createBlock.kind === "paused") {
+    return (
+      <div className="mx-auto max-w-xl space-y-4">
+        <Card className="space-y-2 border-warning/40">
+          <p className="font-display text-2xl font-extrabold">{createBlock.title}</p>
+          <p className="text-sm text-foreground/80">{createBlock.detail}</p>
+        </Card>
+        <Link href="/pools" className={CANDY_LINK_PRIMARY}>
+          See the open runs
+        </Link>
       </div>
     );
   }

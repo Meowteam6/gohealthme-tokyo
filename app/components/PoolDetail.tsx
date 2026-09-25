@@ -562,6 +562,11 @@ export default function PoolDetail({ id }: { id: string }) {
     payouts: checks.payouts,
     deviceLabel: viewerProvider?.label ?? null,
   });
+  // Nobody tops up a run that cannot be checked or whose win could not pay on
+  // this build, and nobody tops one up on a guess while that is unknown.
+  const fundingPaused =
+    (needsDocumentVerifier(pool.goalSpec) && checks.verifier !== "available") ||
+    checks.payouts !== "ready";
   const unverifiableNow = joinBlock.kind === "outage";
   const unsupportedForViewer = joinBlock.kind === "unsupported";
 
@@ -935,7 +940,7 @@ export default function PoolDetail({ id }: { id: string }) {
         </Card>
       )}
 
-      {phase !== "settled" && canPay ? (
+      {phase !== "settled" && canPay && !fundingPaused ? (
         isChallenge ? (
           // A challenge pool's top-up must carry the sweep disclosure: miss the
           // goal and sweep() returns the whole pot to the challenger, not

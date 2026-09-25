@@ -75,6 +75,44 @@ export function approvalModeOf(probe: {
   return probe.value;
 }
 
+/**
+ * Whether a dare can be created right now. Every dare the create form makes
+ * is an upload-proof run (CreateChallenge encodeGoal), so with the document
+ * checker off it would fund a reward nobody can ever be verified on. Checked
+ * before the form, and again on submit, never after the deposit.
+ */
+export type CreateBlock =
+  | { kind: "ok" }
+  | { kind: "checking" }
+  | { kind: "retry"; title: string }
+  | { kind: "paused"; title: string; detail: string };
+
+export function challengeCreateBlock(
+  verifier: VerifierState,
+  payouts: PayoutState,
+): CreateBlock {
+  if (verifier === "off") {
+    return {
+      kind: "paused",
+      title: "Dares are paused for now",
+      detail:
+        "A dare is proven with an upload, and my document checker is paused on this build. I am not letting you put money on a goal I cannot check. Wearable runs still work, and nothing has been charged.",
+    };
+  }
+  if (payouts === "misconfigured") {
+    return {
+      kind: "paused",
+      title: "Dares are paused for now",
+      detail:
+        "Winners confirm with World ID before I pay, and that step is not set up here right now. I am not letting you fund a reward that could not pay out. Nothing has been charged.",
+    };
+  }
+  if (verifier === "error") return { kind: "retry", title: "I could not check my document checker just now" };
+  if (payouts === "error") return { kind: "retry", title: "I could not check how payouts run here just now" };
+  if (verifier === "loading" || payouts === "loading") return { kind: "checking" };
+  return { kind: "ok" };
+}
+
 /** Whether a verified win can pay on this build. */
 export function payoutStateOf(mode: ApprovalModeView): PayoutState {
   switch (mode) {

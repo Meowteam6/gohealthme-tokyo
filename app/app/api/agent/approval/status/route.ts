@@ -20,17 +20,8 @@
 // "the step is off". The reason goes to the server log, never the body.
 
 import { readApproval } from "@/lib/server/agent/approval";
-import {
-  approvalMode,
-  approvalProviderFor,
-  type ApprovalMode,
-} from "@/lib/server/agent/approval-provider";
-import {
-  errorMessage,
-  jsonError,
-  newCorrelationId,
-  safeError,
-} from "@/lib/server/http";
+import { approvalModeStatus } from "@/lib/server/agent/approval-mode-status";
+import { jsonError, newCorrelationId, safeError } from "@/lib/server/http";
 
 const GOAL_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 
@@ -42,17 +33,7 @@ export async function GET(request: Request) {
       return jsonError(400, "goalId must be a 0x-prefixed bytes32 hex string");
     }
 
-    let mode: ApprovalMode | "misconfigured";
-    try {
-      const resolved = approvalMode();
-      // Build the provider too: WORLD_APPROVAL_MODE=world with its credentials
-      // missing parses fine but throws the moment SPOTTER needs it.
-      if (resolved !== "off") approvalProviderFor(resolved);
-      mode = resolved;
-    } catch (err) {
-      console.error(`[${cid}] human confirmation misconfigured: ${errorMessage(err)}`);
-      mode = "misconfigured";
-    }
+    const mode = approvalModeStatus(cid);
 
     const record = await readApproval(goalId);
     if (record === null) return Response.json({ status: "none", mode });

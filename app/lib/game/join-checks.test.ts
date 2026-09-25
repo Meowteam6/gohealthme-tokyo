@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   accessGateDisabled,
   approvalModeOf,
+  challengeCreateBlock,
   gateStateOf,
   payoutStateOf,
   verifierStateOf,
@@ -86,6 +87,32 @@ describe("verifierStateOf", () => {
 
   it("keeps the last known answer through a failed refetch", () => {
     expect(verifierStateOf({ available: false, isError: true })).toBe("off");
+  });
+});
+
+describe("challengeCreateBlock", () => {
+  it("lets a dare be made only when the checker and the payout rule are known good", () => {
+    expect(challengeCreateBlock("available", "ready")).toEqual({ kind: "ok" });
+  });
+
+  it("pauses dares while the document checker is off, before any deposit", () => {
+    const block = challengeCreateBlock("off", "ready");
+    expect(block.kind).toBe("paused");
+    if (block.kind === "paused") {
+      expect(block.detail).toMatch(/nothing has been charged/i);
+      expect(block.detail).not.toMatch(/CONFIDENTIAL|DEMO_MODE|env/);
+    }
+  });
+
+  it("pauses dares when payouts cannot be confirmed on this build", () => {
+    expect(challengeCreateBlock("available", "misconfigured").kind).toBe("paused");
+  });
+
+  it("holds while loading and retries on a failed read, never ok", () => {
+    expect(challengeCreateBlock("loading", "ready")).toEqual({ kind: "checking" });
+    expect(challengeCreateBlock("available", "loading")).toEqual({ kind: "checking" });
+    expect(challengeCreateBlock("error", "ready").kind).toBe("retry");
+    expect(challengeCreateBlock("available", "error").kind).toBe("retry");
   });
 });
 
