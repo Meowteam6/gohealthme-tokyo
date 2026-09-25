@@ -8,7 +8,7 @@ import { NOINDEX } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Wallet",
   description:
-    "Your GoHealthMe wallet: address, Base Sepolia balance, whether it is the wallet we made for you or one you connected, and how to back it up.",
+    "Your GoHealthMe wallet: address, Base Sepolia balance, your name, your paired sensor and how to disconnect it, and how to back the wallet up.",
   robots: NOINDEX,
 };
 
@@ -21,7 +21,8 @@ export default function SettingsPage() {
             Wallet
           </h1>
           <p className="text-sm text-muted">
-            Where your USDC lives and how to look after it.
+            Where your USDC lives, the name you play under, and the sensor
+            SPOTTER reads.
           </p>
         </div>
         {/* SPOTTER holding your wallet - the mascot on the money page.

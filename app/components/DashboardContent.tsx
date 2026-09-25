@@ -65,8 +65,8 @@ import CharacterCard from "@/components/game/CharacterCard";
 import HeroActivityTicker from "@/components/HeroActivityTicker";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { MY_RUNS_KEY, fetchMyRuns } from "@/lib/game/useLobby";
+import DisconnectDeviceButton from "@/components/DisconnectDeviceButton";
 import {
-  disconnectWearable,
   fetchProviderOptions,
   isProviderId,
   PhoneLinkRequiredError,
@@ -478,7 +478,7 @@ function StreakCard({
             label="Connect / switch provider"
             secondary
           />
-          <DisconnectButton address={address} />
+          <DisconnectDeviceButton address={address} />
         </div>
       )}
     </Card>
@@ -533,83 +533,6 @@ async function fetchRecentData(
       activity: Array.isArray(j.activity) ? j.activity : [],
     },
   };
-}
-
-/**
- * Unlinking a device.
- *
- * This existed as a route with no caller: a WHOOP user had no way to revoke
- * from inside the product, while the privacy page told them they could do it
- * from their dashboard. That is a dead end AND a false claim in a
- * compliance-facing document.
- *
- * Junction owns its own link, so the route answers 409 with the page to go to.
- * That is guidance rather than an error and renders as a calm note.
- */
-function DisconnectButton({ address }: { address: `0x${string}` }) {
-  const requestAuth = useWalletAuth();
-  const queryClient = useQueryClient();
-  const [note, setNote] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  return (
-    <>
-      <Button
-        type="button"
-        variant="secondary"
-        disabled={busy}
-        onClick={() => {
-          setNote(null);
-          setError(null);
-          setBusy(true);
-          void disconnectWearable(address, requestAuth)
-            .then(async (guidance) => {
-              setNote(guidance);
-              if (guidance === null) {
-                await queryClient.invalidateQueries({
-                  queryKey: ["wearable-progress"],
-                });
-                await queryClient.invalidateQueries({
-                  queryKey: ["wearable-data"],
-                });
-                await queryClient.invalidateQueries({
-                  queryKey: ["wearable-providers"],
-                });
-              }
-            })
-            .catch((err: unknown) => {
-              setError(
-                err instanceof Error
-                  ? err.message
-                  : "Could not disconnect the device.",
-              );
-            })
-            .finally(() => setBusy(false));
-        }}
-        className="mt-3"
-      >
-        {busy ? "Disconnecting" : "Disconnect this device"}
-      </Button>
-      {note !== null ? (
-        <p
-          role="status"
-          className="mt-3 rounded-xl border border-edge bg-surface p-4 text-sm text-muted"
-        >
-          {note}
-        </p>
-      ) : null}
-      {error !== null ? (
-        <div className="mt-3">
-          <ErrorNote
-            title="Could not disconnect"
-            detail={error}
-            onRetry={() => setError(null)}
-          />
-        </div>
-      ) : null}
-    </>
-  );
 }
 
 /**
