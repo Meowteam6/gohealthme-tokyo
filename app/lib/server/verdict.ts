@@ -27,7 +27,7 @@ import {
   arcWalletClient,
   ttlCache,
 } from "@/lib/server/arc-client";
-import { optionalEnv, requireEnv } from "@/lib/server/env";
+import { optionalEnv, requireEnv, requireHealthPoolsAddress } from "@/lib/server/env";
 import type { Confidence } from "@/lib/server/judge";
 import {
   isRetryableExternalError,
@@ -194,7 +194,7 @@ export function resetVerdictRegistryCache(): void {
  * repoints HEALTH_POOLS_ADDRESS is never answered from the old pool's value.
  */
 export async function poolVerdictRegistry(
-  pools: Address = requireEnv("HEALTH_POOLS_ADDRESS") as Address,
+  pools: Address = requireHealthPoolsAddress() as Address,
 ): Promise<Address | null> {
   const key = pools.toLowerCase();
   return verdictRegistryCache.get(key, async () => {
@@ -269,7 +269,7 @@ export async function computeGoalId(
   poolId: bigint,
   user: Address,
 ): Promise<Hex> {
-  const pools = requireEnv("HEALTH_POOLS_ADDRESS") as Address;
+  const pools = requireHealthPoolsAddress() as Address;
   const key = `${pools.toLowerCase()}:${poolId.toString()}:${user.toLowerCase()}`;
   return goalIdCache.get(key, () =>
     withRetry(

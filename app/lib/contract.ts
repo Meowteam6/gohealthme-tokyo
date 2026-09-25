@@ -12,6 +12,7 @@ import {
 import { baseSepolia } from "@/lib/chains";
 import { poolsScanFromBlock } from "@/lib/server/chunked-logs";
 import { proofTierFromVerdict, type ProofTier } from "@/lib/proof-tier";
+import { isFrozenV3Pools } from "@/lib/frozen-pools";
 
 export { proofTierFromVerdict, type ProofTier };
 
@@ -27,11 +28,21 @@ export const USDC_DECIMALS = 6;
  * HealthPools deployment address. Set NEXT_PUBLIC_HEALTH_POOLS_ADDRESS once
  * the contract agent deploys; pages surface a visible configuration error
  * until then rather than failing silently.
+ *
+ * The frozen V3 pilot address is refused (null, the same "not configured"
+ * state every surface already renders honestly): V4 must never show V3 users'
+ * activity as its own, or let a V4 player join or fund a V3 pool.
  */
 export function getHealthPoolsAddress(): Address | null {
   const raw = process.env.NEXT_PUBLIC_HEALTH_POOLS_ADDRESS;
   if (raw === undefined || raw === "") return null;
   if (!/^0x[0-9a-fA-F]{40}$/.test(raw)) return null;
+  if (isFrozenV3Pools(raw)) {
+    console.error(
+      "NEXT_PUBLIC_HEALTH_POOLS_ADDRESS is the frozen V3 pilot contract; refusing it. Point it at the Tokyo HealthPoolsV3.",
+    );
+    return null;
+  }
   return raw as Address;
 }
 

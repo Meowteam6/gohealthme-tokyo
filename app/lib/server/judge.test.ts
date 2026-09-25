@@ -167,6 +167,31 @@ describe("fail-closed verdict", () => {
     expect(verdict?.verified).toBe(true);
   });
 
+  it("(c3) DEMO_MODE on a PRODUCTION deployment is refused: fail id, never verified:true", async () => {
+    vi.stubEnv("CONFIDENTIAL_AI_API_KEY", "");
+    vi.stubEnv("DEMO_MODE", "true");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const attesterId = await submitInference(
+      GOAL,
+      FILE_B64,
+      "flu.txt",
+      CONTENT_TYPE,
+    );
+    expect(isMockId(attesterId)).toBe(false);
+    expect(isFailId(attesterId)).toBe(true);
+    const { status, verdict } = await pollInference(attesterId, GOAL);
+    expect(status).toBe("failed");
+    expect(verdict?.verified).toBe(false);
+
+    // A mock id minted on a preview and replayed against production is
+    // refused too.
+    const replay = await pollInference("mock-abcdef1234", GOAL);
+    expect(replay.status).toBe("failed");
+    expect(replay.verdict?.verified).toBe(false);
+  });
+
   it("happy path: a real completed verified verdict is still honored", async () => {
     vi.stubEnv("CONFIDENTIAL_AI_API_KEY", "test-key");
     vi.stubEnv("DEMO_MODE", "");

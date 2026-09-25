@@ -13,7 +13,7 @@ describe("GET /api/proof/status", () => {
     const res = await GET();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      document: { available: false, reason: "no document verifier is configured" },
+      document: { available: false, reason: "no document verifier is configured", mocked: false },
       wearable: { available: true },
     });
   });
