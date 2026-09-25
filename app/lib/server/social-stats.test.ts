@@ -23,8 +23,8 @@ const fakeClient = {
     switch (event.name) {
       case "AchieverPaid":
         return [
-          fakeLog({ amount: 40_000_000n }, 10, "0xa1"),
-          fakeLog({ amount: 60_000_000n }, 12, "0xa2"),
+          fakeLog({ amount: 40_000_000n, poolId: 1n }, 10, "0xa1"),
+          fakeLog({ amount: 60_000_000n, poolId: 2n }, 12, "0xa2"),
         ];
       case "PoolJoined":
         return [
@@ -44,6 +44,11 @@ const fakeClient = {
     }
   }),
   getBlock: vi.fn(async () => ({ timestamp: 1_790_000_000n })),
+  // computeGoalId: one goal per pool, so the ledger lookup is keyed per win.
+  readContract: vi.fn(
+    async ({ args }: { args: [bigint, string] }) =>
+      `0x${args[0].toString(16).padStart(64, "0")}`,
+  ),
   // One window covers the whole pinned range below, so each event query is a
   // single getLogs call and the canned logs are not repeated across windows.
   getBlockNumber: vi.fn(async () => 50n),
@@ -53,20 +58,80 @@ vi.mock("@/lib/contract", () => ({
   getHealthPoolsAddress: () => "0x0000000000000000000000000000000000009999",
   getArcPublicClient: () => fakeClient,
   formatUsdc: (amount: bigint) => (Number(amount) / 1e6).toFixed(2),
+  healthPoolsAbi: [],
+  healthVerdictReadAbi: [],
   achieverPaidEvent: { name: "AchieverPaid" },
   poolJoinedEvent: { name: "PoolJoined" },
   resultRecordedEvent: { name: "ResultRecorded" },
 }));
 
-const { getSocialStats, clearSocialStatsCache } = await import(
+// V4 pools are oracle-only: healthVerdict() is 0x0, so the tier comes from
+// SPOTTER's ledger verdict, never from HEALTH_VERDICT_ADDRESS.
+const registry = vi.fn(async (): Promise<string | null> => null);
+vi.mock("@/lib/server/verdict", () => ({
+  poolVerdictRegistry: () => registry(),
+}));
+
+const ledgers = new Map<string, unknown[]>();
+vi.mock("@/lib/server/agent/ledger", () => ({
+  readLedger: async (goalId: string) => ledgers.get(goalId) ?? [],
+}));
+
+const { getSocialStats, clearSocialStatsCache, tierFromLedger } = await import(
   "@/lib/server/social-stats"
 );
+
+function goalOf(poolId: number): string {
+  return `0x${poolId.toString(16).padStart(64, "0")}`;
+}
 
 beforeEach(() => {
   // Pin the scan start so [start, getBlockNumber()] is a single 90k window.
   process.env.HEALTH_POOLS_FROM_BLOCK = "0";
   clearSocialStatsCache();
   vi.clearAllMocks();
+  ledgers.clear();
+  registry.mockImplementation(async () => null);
+});
+
+describe("win tier on an oracle-only pool", () => {
+  it("reads the tier from SPOTTER's ledger, so a verified win is not shown as 0", async () => {
+    ledgers.set(goalOf(1), [
+      { kind: "verdict", verified: true, confidence: "high", reason: "", ref: "a" },
+    ]);
+    ledgers.set(goalOf(2), [
+      { kind: "verdict", verified: true, confidence: "high", reason: "", ref: "b", selfReported: true },
+    ]);
+    const stats = await getSocialStats(ADDRESS);
+    expect(stats.readOk).toBe(true);
+    expect(stats.verifiedWins).toBe(1);
+    expect(stats.selfReportedWins).toBe(1);
+    expect(stats.recentWins.map((w) => w.tier)).toEqual(["self-reported", "verified"]);
+  });
+
+  it("leaves a win with no ledger verdict as unknown, never verified", async () => {
+    const stats = await getSocialStats(ADDRESS);
+    expect(stats.verifiedWins).toBe(0);
+    expect(stats.recentWins.every((w) => w.tier === "unknown")).toBe(true);
+  });
+
+  it("classifies from the newest verified verdict only", () => {
+    expect(tierFromLedger([])).toBeNull();
+    expect(
+      tierFromLedger([
+        { kind: "verdict", at: "", verified: false, confidence: "low", reason: "", ref: "x" },
+      ]),
+    ).toBeNull();
+  });
+});
+
+describe("a failed chain read", () => {
+  it("says so with readOk false instead of passing zeros off as fact", async () => {
+    fakeClient.getBlockNumber.mockRejectedValueOnce(new Error("rpc down"));
+    const stats = await getSocialStats(ADDRESS);
+    expect(stats.readOk).toBe(false);
+    expect(stats.goalsHit).toBe(0);
+  });
 });
 
 describe("getSocialStats", () => {

@@ -27,8 +27,9 @@ import {
 } from "@/lib/contract";
 import { proofTierFromVerdict, type ProofTier } from "@/lib/proof-tier";
 import { normalizeAddress } from "@/lib/social";
-import { optionalEnv } from "@/lib/server/env";
+import { readLedger, type LedgerEntry } from "@/lib/server/agent/ledger";
 import { scanInWindows, poolsScanFromBlock } from "@/lib/server/chunked-logs";
+import { poolVerdictRegistry } from "@/lib/server/verdict";
 
 export interface SocialWin {
   /** ISO-8601 block time, or "" when the block time could not be read. */
@@ -55,6 +56,10 @@ export interface SocialStats {
   poolsJoined: number;
   winStreak: number;
   recentWins: SocialWin[]; // newest first, capped at WINS_LIMIT
+  /** False when the chain could not be read: the counters above are then
+   *  placeholders, and the profile must say so instead of showing zeros as
+   *  fact. True for a real (possibly empty) answer. */
+  readOk: boolean;
 }
 
 export const EMPTY_STATS: SocialStats = {
@@ -65,7 +70,10 @@ export const EMPTY_STATS: SocialStats = {
   poolsJoined: 0,
   winStreak: 0,
   recentWins: [],
+  readOk: true,
 };
+
+const UNREADABLE_STATS: SocialStats = { ...EMPTY_STATS, readOk: false };
 
 // How many recent payout rows the paid-wall shows. Block timestamps for these
 // are fetched one block at a time, so the cap also bounds that fan-out.
@@ -142,13 +150,22 @@ async function achieverTierByPool(
   achieverPoolIds: bigint[],
 ): Promise<Map<string, ProofTier>> {
   const out = new Map<string, ProofTier>();
-  const registry = optionalEnv("HEALTH_VERDICT_ADDRESS", "");
-  if (registry === "" || !/^0x[0-9a-fA-F]{40}$/.test(registry)) return out;
-
   const distinct = Array.from(
     new Set(achieverPoolIds.map((id) => id.toString())),
   ).map((s) => BigInt(s));
   if (distinct.length === 0) return out;
+
+  // The pool's own healthVerdict() decides where the tier lives (the V3 P19
+  // lesson, lib/server/verdict.ts): a registry address means the on-chain
+  // facet bitmap; 0x0 means an oracle-only pool with no bitmap at all, so the
+  // tier comes from SPOTTER's ledger verdict for that goal. The env var is
+  // never consulted. A failed read leaves every pool "unknown".
+  let registry: Address | null;
+  try {
+    registry = await poolVerdictRegistry(poolsAddress);
+  } catch {
+    return out;
+  }
 
   const client = getArcPublicClient();
   await Promise.all(
@@ -160,8 +177,13 @@ async function achieverTierByPool(
           functionName: "computeGoalId",
           args: [poolId, account],
         })) as Hex;
+        if (registry === null) {
+          const tier = tierFromLedger(await readLedger(goalId));
+          if (tier !== null) out.set(poolId.toString(), tier);
+          return;
+        }
         const verdict = await client.readContract({
-          address: registry as Address,
+          address: registry,
           abi: healthVerdictReadAbi,
           functionName: "getVerdict",
           args: [goalId],
@@ -179,9 +201,24 @@ async function achieverTierByPool(
 }
 
 /**
+ * The tier of an oracle-only win, from SPOTTER's own record of it: the newest
+ * verified verdict entry. A self-reported verdict is the low tier; any other
+ * verified verdict (wearable or document) is the verified tier. No verified
+ * verdict on file means the win cannot be classified, so null ("unknown").
+ */
+export function tierFromLedger(ledger: LedgerEntry[]): ProofTier | null {
+  let tier: ProofTier | null = null;
+  for (const entry of ledger) {
+    if (entry.kind !== "verdict" || entry.verified !== true) continue;
+    tier = entry.selfReported === true ? "self-reported" : "verified";
+  }
+  return tier;
+}
+
+/**
  * Compute a wallet's public stats. Never throws: a dead RPC or a rejected log
- * query yields zeroed counters so the profile still renders its identity, and
- * the failure is loud server-side only.
+ * query yields placeholder counters with readOk false, so the profile still
+ * renders its identity and says the stats could not be read.
  */
 export async function getSocialStats(rawAddress: string): Promise<SocialStats> {
   const lower = normalizeAddress(rawAddress);
@@ -193,7 +230,7 @@ export async function getSocialStats(rawAddress: string): Promise<SocialStats> {
   }
 
   const poolsAddress = getHealthPoolsAddress();
-  if (poolsAddress === null) return EMPTY_STATS;
+  if (poolsAddress === null) return UNREADABLE_STATS;
   const account = getAddress(lower) as Address;
   const client = getArcPublicClient();
   const start = poolsScanFromBlock();
@@ -309,12 +346,13 @@ export async function getSocialStats(rawAddress: string): Promise<SocialStats> {
       poolsJoined: joined.length,
       winStreak: streak,
       recentWins,
+      readOk: true,
     };
 
     cache.set(lower, { at: Date.now(), stats });
     return stats;
   } catch (err) {
     console.error("[social-stats] log scan failed", err);
-    return EMPTY_STATS;
+    return UNREADABLE_STATS;
   }
 }

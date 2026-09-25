@@ -41,25 +41,27 @@ export async function generateMetadata({
   };
 }
 
-/** The landing for a string that cannot be a handle at all: a growth loop,
- *  not a dead end. A well-formed handle nobody owns is a real 404 instead,
- *  so /u/<anything> cannot be farmed into an endless set of 200 pages. */
-function Unclaimed({ handle }: { handle: string }) {
+/** The landing for a string that cannot be a handle at all (reserved, too
+ *  short, bad characters). It can never be claimed, so the page says that and
+ *  points at the feed instead of offering a claim that would dead-end. A
+ *  well-formed handle nobody owns is a real 404, so /u/<anything> cannot be
+ *  farmed into an endless set of 200 pages. */
+function NotAHandle({ handle }: { handle: string }) {
   return (
-    <main className="min-h-screen bg-background px-4 py-16 text-foreground">
-      <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 text-center">
-        <h1 className="text-2xl font-bold tracking-tight">@{handle}</h1>
-        <p className="text-sm text-muted">
-          Nobody has claimed this handle yet.
-        </p>
-        <Link
-          href="/handle"
-          className="rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
-        >
-          Claim your handle
-        </Link>
-      </div>
-    </main>
+    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 py-12 text-center">
+      <h1 className="max-w-full break-words text-2xl font-bold tracking-tight">
+        @{handle}
+      </h1>
+      <p className="text-sm text-muted">
+        That is not a player name anyone can hold here.
+      </p>
+      <Link
+        href="/feed"
+        className="inline-flex min-h-11 items-center rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
+      >
+        See who got paid
+      </Link>
+    </div>
   );
 }
 
@@ -70,7 +72,7 @@ export default async function ProfilePage({
 }) {
   const { handle } = await params;
   const check = checkHandle(handle);
-  if (!check.ok) return <Unclaimed handle={handle} />;
+  if (!check.ok) return <NotAHandle handle={handle} />;
 
   const profile = await getProfileByHandle(check.handle);
   if (profile === null) notFound();
@@ -90,6 +92,7 @@ export default async function ProfilePage({
     handle: profile.handle,
     emoji: avatarGlyph(profile.handle, profile.emoji),
     address: profile.address,
+    goalsHit: stats.goalsHit,
     // Verified-tier wins ONLY. Self-reported wins are counted separately and
     // never inflate this figure.
     verifiedWins: stats.verifiedWins,
@@ -97,6 +100,7 @@ export default async function ProfilePage({
     usdcEarned: formatUsdc(stats.usdcEarned),
     winStreak: stats.winStreak,
     wins,
+    readOk: stats.readOk,
   };
 
   return <ProfilePaidWall profile={data} />;
