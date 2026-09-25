@@ -38,6 +38,13 @@ import { requireEnv } from "@/lib/server/env";
 import { errorMessage } from "@/lib/server/http";
 import { readJson, writeJson } from "@/lib/server/store";
 import type { Confidence } from "@/lib/server/judge";
+// --- intercepta ---
+import {
+  goalIdFor,
+  screenPayeeBeforeSigning,
+  type PayeeScreener,
+} from "@/lib/server/screening/gate";
+// --- end intercepta ---
 
 const USDC_DECIMALS = 6;
 const CONFIDENCE_U8: Record<Confidence, number> = { low: 0, medium: 1, high: 2 };
@@ -145,6 +152,11 @@ export interface SpotterDeps {
   /** Injectable clock for the periodEnd comparison. */
   nowSeconds?: () => bigint;
   settleLock?: PoolSettleLock;
+  // --- intercepta ---
+  /** Payout screener. Absent means the live Intercepta client; tests inject
+   *  a fake so no spotter test reaches the network. */
+  screen?: PayeeScreener;
+  // --- end intercepta ---
 }
 
 export type SettleOutcome =
@@ -247,6 +259,21 @@ export async function settlePoolAsSpotter(
   if (now <= state.periodEnd) {
     return { status: "not-due", periodEnd: state.periodEnd };
   }
+
+  // --- intercepta ---
+  // Screen the payee against mainnet risk data BEFORE the settle lock and
+  // BEFORE anything is signed. blocked and unavailable throw (fail closed):
+  // no lock is held, no gas is spent, the claim shows the hold and the sweep
+  // retries it. Normally a cache hit: the record-time gate below already
+  // screened this wallet. Without INTERCEPTA_API_KEY this is a no-op and the
+  // UI says screening is not enabled on this deployment.
+  await screenPayeeBeforeSigning({
+    screener: deps.screen,
+    address: input.participant,
+    purpose: "settle",
+    goalId: input.goalId,
+  });
+  // --- end intercepta ---
 
   let lockToken: string | null = null;
   if (deps.settleLock !== undefined) {
@@ -427,6 +454,27 @@ export async function recordResultAsSpotter(
   if (await deps.reader.participantRecorded(input.poolId, input.user)) {
     return { status: "already-recorded" };
   }
+  // --- intercepta ---
+  // recordResult(verdict=true) is what makes this wallet an achiever that
+  // settle() will credit, and settle() cannot leave one achiever out. This
+  // is therefore the only point where a blocked payee can be EXCLUDED rather
+  // than holding the whole pool: never recorded means refunded its own stake
+  // by settle() (contract B-2), never paid the reward. A false verdict pays
+  // nothing and is not screened.
+  if (input.verdict) {
+    await screenPayeeBeforeSigning({
+      screener: deps.screen,
+      address: input.user,
+      purpose: "record",
+      goalId: async () => {
+        const pool = await deps.reader.getPoolState(input.poolId);
+        return pool.periodStart === undefined
+          ? undefined
+          : goalIdFor(pools as Address, input.poolId, input.user, pool.periodStart);
+      },
+    });
+  }
+  // --- end intercepta ---
   let txHash: Hex;
   try {
     txHash = await executeAsSpotter(deps.circle, {

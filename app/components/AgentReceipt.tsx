@@ -18,6 +18,9 @@ import {
   type ReceiptRow,
 } from "@/lib/agent-receipt";
 import { ArcTxLink, Money, Verdict } from "@/components/ui";
+import PayoutScreening, {
+  SCREEN_HELD_PREFIX,
+} from "@/components/intercepta/PayoutScreening";
 
 type SpendReceiptRow = Extract<ReceiptRow, { kind: "spend" }>;
 
@@ -113,6 +116,13 @@ export function errorPresentation(
   stage: string,
   message: string,
 ): { label: string; transient: boolean } {
+  // A payout screening hold (lib/server/screening/gate.ts) is not a chain
+  // failure. blocked is a decision; unavailable is a wait for Intercepta.
+  if (message.startsWith(SCREEN_HELD_PREFIX)) {
+    return message.includes(" unavailable ")
+      ? { label: "payout held until Intercepta answers", transient: true }
+      : { label: "payout held: this wallet failed screening", transient: false };
+  }
   switch (stage) {
     case "attester":
       return { label: "verification service unreachable", transient: true };
@@ -390,6 +400,12 @@ export default function AgentReceipt({
                       />
                     </p>
                   ) : null}
+                </li>
+              );
+            case "screen":
+              return (
+                <li key={item.key} className="animate-rise-in pl-7 text-sm">
+                  <PayoutScreening status={row.status} reason={row.reason} />
                 </li>
               );
             case "settle":

@@ -54,7 +54,15 @@ export type ReceiptRow =
       paidUsd: string | null;
       note: string | null;
     }
-  | { kind: "error"; stage: string; message: string };
+  | { kind: "error"; stage: string; message: string }
+  | {
+      kind: "screen";
+      purpose: "record" | "settle";
+      status: "clear" | "blocked" | "unavailable";
+      reason: string;
+      toxicScore: number | null;
+      traits: string[];
+    };
 
 export interface Receipt {
   rows: ReceiptRow[];
@@ -177,6 +185,17 @@ export function projectReceipt(ledger: LedgerEntry[]): Receipt {
       }
       case "error": {
         rows.push({ kind: "error", stage: entry.stage, message: entry.message });
+        break;
+      }
+      case "screen": {
+        rows.push({
+          kind: "screen",
+          purpose: entry.purpose,
+          status: entry.status,
+          reason: entry.reason,
+          toxicScore: entry.toxicScore ?? null,
+          traits: entry.traits ?? [],
+        });
         break;
       }
     }
