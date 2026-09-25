@@ -12,11 +12,15 @@
 // `status` is "unknown" until the first answer lands (or when there is no
 // address, or the fetch failed): the card must not show a stake button on
 // "unknown", and must not show "verify" either, since either could be wrong.
+// A failed read is retried twice before `error` is set (lib/world/retry.ts),
+// and `error` never reads as World off: every staking surface holds the stake
+// on it with a manual retry (the "check-failed" lock in lib/game/lobby.ts).
 // `mode` tells the card whether a verification here is real ("live"), mocked
 // for the event ("mock"), or not offered on this deployment ("off").
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchHumanStatus, type WorldMode } from "@/lib/world/api";
+import { withRetry } from "@/lib/world/retry";
 
 export type HumanStatus = "unknown" | "verified" | "unverified";
 
@@ -53,7 +57,9 @@ export function useHumanStatus(address: string | null): HumanStatusView {
   useEffect(() => {
     if (address === null || address === "") return;
     let cancelled = false;
-    fetchHumanStatus(address)
+    // A transient failure is retried before it becomes an error: the error
+    // state holds the stake at the join, so it should mean "still failing".
+    withRetry(() => fetchHumanStatus(address), { shouldStop: () => cancelled })
       .then((data) => {
         if (cancelled) return;
         setResult({
