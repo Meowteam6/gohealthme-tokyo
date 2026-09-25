@@ -58,16 +58,20 @@ function MatchCard({ match, lead }: { match: Match; lead: boolean }) {
       {/* A self-staked commitment pool (model 2) is funded by the participants'
           own stakes, so it must never claim a sponsor put the money up. Sponsor
           pools keep the existing framing. */}
+      {/* A missed stake is credited back at settle today (SPOTTER records
+          wins only), so there are no forfeits to promise a cut of. The pot
+          includes every entrant's stake, so it is "in the pot", not a
+          sponsor's money. */}
       {match.bountyModel === 2 ? (
         entryFeeUsd !== null ? (
           <p className="mt-2 text-sm text-muted">
-            Stake <Money usd={entryFeeUsd} size="sm" /> USDC, hit it, get it back
-            plus a cut of the forfeits.
+            Stake <Money usd={entryFeeUsd} size="sm" /> USDC on yourself. You
+            get it back when the run settles.
           </p>
         ) : null
       ) : balanceUsd !== null ? (
         <p className="mt-2 text-sm text-muted">
-          <Money usd={balanceUsd} size="sm" /> staked by a sponsor. Not you.
+          <Money usd={balanceUsd} size="sm" /> USDC in the pot.
         </p>
       ) : null}
       {entryFeeUsd !== null || deadline !== null ? (
@@ -89,75 +93,106 @@ export default function GoalMatch({ query }: { query: string }) {
     queryKey: ["goal-match", query],
     queryFn: async (): Promise<Match[]> => {
       const res = await fetch(`/api/goals/match?q=${encodeURIComponent(query)}`);
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? `Match service responded ${res.status}.`);
-      }
+      // The route's error body can carry config and RPC detail; the page
+      // shows its own plain copy and never relays it.
+      if (!res.ok) throw new Error(`goal match responded ${res.status}`);
       const body = (await res.json()) as { matches?: Match[] };
       return body.matches ?? [];
     },
   });
 
+  // The route keeps every open pool, scored. A typed goal that matches
+  // nothing must reach the "nothing staked" state, with the other open runs
+  // offered below it under their own heading, never presented as a match.
+  const all = matches.data ?? [];
+  const matched = query === "" ? all : all.filter((m) => m.score > 0);
+  const others = query === "" ? [] : all.filter((m) => m.score <= 0);
+
   return (
     <div className="space-y-6">
-      <div>
+      <div className="min-w-0">
         <p className="text-sm font-semibold uppercase tracking-widest text-accent">
-          Money&apos;s already on this goal
+          {query === "" ? "Open runs" : "Money on this goal"}
         </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">
-          {query === "" ? "Live goals with money behind them" : `"${query}"`}
+        <h1 className="mt-2 break-words text-3xl font-bold tracking-tight">
+          {query === "" ? "Open goals with money behind them" : `"${query}"`}
         </h1>
       </div>
 
       {matches.isPending ? (
-        <div className="space-y-3">
+        <div className="space-y-3" aria-busy="true">
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
         </div>
       ) : matches.isError ? (
         <ErrorNote
           title="Could not load pools"
-          detail={
-            matches.error instanceof Error
-              ? matches.error.message
-              : "Unknown error."
-          }
+          detail="Base Sepolia did not answer. Try again in a moment."
           onRetry={() => {
             void matches.refetch();
           }}
         />
-      ) : matches.data.length === 0 ? (
-        <EmptyState
-          title="Nothing staked on this one yet."
-          detail="No live pool matches your goal. Create the pool and stake your goal - or browse what is already live."
-          action={
-            <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link
-                href="/pools/create"
-                className="inline-block rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
+      ) : matched.length === 0 ? (
+        <div className="space-y-6">
+          <EmptyState
+            title="Nothing staked on this one yet."
+            detail="No open run matches your goal. Create the pool and stake your goal, or look at what is already open."
+            action={
+              <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
+                <Link
+                  href="/pools/create"
+                  className="inline-flex min-h-11 items-center rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
+                >
+                  Create the pool
+                </Link>
+                <Link
+                  href="/pools"
+                  className="inline-flex min-h-11 items-center rounded-xl border border-edge px-6 py-3 text-sm font-semibold text-foreground hover:bg-surface-raised"
+                >
+                  Browse open runs
+                </Link>
+              </div>
+            }
+          />
+          {others.length > 0 ? (
+            <section className="space-y-3" aria-labelledby="other-open-runs">
+              <h2
+                id="other-open-runs"
+                className="text-sm font-semibold uppercase tracking-widest text-muted"
               >
-                Create the pool
-              </Link>
-              <Link
-                href="/pools"
-                className="inline-block rounded-xl border border-edge px-6 py-3 text-sm font-semibold text-foreground hover:bg-surface-raised"
-              >
-                Browse pools
-              </Link>
-            </div>
-          }
-        />
+                Other open runs
+              </h2>
+              {others.map((match) => (
+                <MatchCard key={match.poolId} match={match} lead={false} />
+              ))}
+            </section>
+          ) : null}
+        </div>
       ) : (
         <div className="space-y-3">
-          {matches.data.map((match, index) => (
+          {matched.map((match, index) => (
             <MatchCard
               key={match.poolId}
               match={match}
               lead={index === 0 && match.score > 0}
             />
           ))}
+          {others.length > 0 ? (
+            <section className="space-y-3 pt-4" aria-labelledby="other-open-runs">
+              <h2
+                id="other-open-runs"
+                className="text-sm font-semibold uppercase tracking-widest text-muted"
+              >
+                Other open runs
+              </h2>
+              {others.map((match) => (
+                <MatchCard key={match.poolId} match={match} lead={false} />
+              ))}
+            </section>
+          ) : null}
         </div>
       )}
     </div>
   );
 }
+
