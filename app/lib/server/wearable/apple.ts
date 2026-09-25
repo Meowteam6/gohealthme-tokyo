@@ -43,6 +43,7 @@
 // claim. Two providers silently answering the same threshold with different
 // numbers was a money defect, not a wording one.
 
+import { PROVIDER_CAPABILITIES } from "@/lib/provider-capabilities";
 import {
   appleStoreConfigured,
   deleteAllAppleData,
@@ -184,14 +185,7 @@ export const appleProvider: WearableProvider = {
   // There is no consent page: HealthKit is readable only on the device, so the
   // link ends by handing the user to the phone and nothing here confirms it.
   linkKind: "app",
-  metrics: [
-    "sleep_efficiency",
-    "sleep_hours",
-    "steps",
-    "active_calories",
-    "distance_km",
-    "workouts",
-  ],
+  metrics: PROVIDER_CAPABILITIES.apple,
 
   async startLink(): Promise<WearableLink> {
     // Nothing to provision. The phone posts under the wallet it signs as, so

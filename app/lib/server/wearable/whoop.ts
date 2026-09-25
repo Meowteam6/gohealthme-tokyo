@@ -32,6 +32,7 @@
 // PRIVACY INVARIANT: raw sleep records never leave this module. Only per-day
 // scores, counts and labels cross the boundary, and nothing here goes on-chain.
 
+import { PROVIDER_CAPABILITIES } from "@/lib/provider-capabilities";
 import { optionalEnv, requireEnv } from "@/lib/server/env";
 import { isRetryableExternalError } from "@/lib/server/retry";
 import {
@@ -764,12 +765,7 @@ function sleepHoursOf(record: SleepRecord): number | null {
  *                   substituting sleep efficiency for a sleep score, and it is
  *                   refused for the same reason.
  */
-const WHOOP_METRICS: readonly WearableMetric[] = [
-  "sleep_score",
-  "sleep_efficiency",
-  "sleep_hours",
-  "workouts",
-];
+const WHOOP_METRICS: readonly WearableMetric[] = PROVIDER_CAPABILITIES.whoop;
 
 /** The per-day value for a sleep metric WHOOP can actually serve. */
 function sleepMetricValueOf(
