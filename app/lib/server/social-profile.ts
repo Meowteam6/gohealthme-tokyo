@@ -15,6 +15,9 @@ import {
   getSupabaseServiceRole,
 } from "@/lib/server/supabase";
 import { checkEmoji, checkHandle, normalizeAddress } from "@/lib/social";
+// --- ens ---
+import { mintHandleNameBestEffort } from "@/lib/server/ens/claim";
+// --- end ens ---
 
 const PROFILES_TABLE = "profiles";
 
@@ -129,6 +132,8 @@ export async function claimHandle(params: {
   rawAddress: string;
   rawHandle: string;
   rawEmoji: string | null | undefined;
+  /** Set by the ENS claim route, which minted the name before caching it here. */
+  skipEns?: boolean;
 }): Promise<ClaimResult> {
   const address = normalizeAddress(params.rawAddress);
   if (address === null) {
@@ -186,5 +191,15 @@ export async function claimHandle(params: {
       reason: "Could not save the handle. Try again.",
     };
   }
+  // --- ens ---
+  // ENS is the source of truth for a participant's name; this row is its
+  // cache. A handle claimed here is also minted as <handle>.gohealthme.eth on
+  // ENSv2 Sepolia when it is a valid label and the owner key is configured.
+  // Best effort: the profile write already succeeded, so a Sepolia problem is
+  // logged loudly and never reported as a handle failure.
+  if (params.skipEns !== true) {
+    await mintHandleNameBestEffort(address, handleCheck.handle);
+  }
+  // --- end ens ---
   return { ok: true, profile: rowToProfile(data) };
 }
