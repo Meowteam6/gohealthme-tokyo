@@ -123,10 +123,12 @@ function WearableCheckInner({
   poolId,
   goalSpec,
   onSwitchToDocument,
+  verdictShown = false,
 }: {
   poolId: bigint;
   goalSpec: string;
   onSwitchToDocument?: () => void;
+  verdictShown?: boolean;
 }) {
   const { ready, authenticated, address } = useEmbeddedWallet();
   const requestAuth = useWalletAuth();
@@ -565,7 +567,8 @@ function WearableCheckInner({
 
     return (
       <div className="space-y-4">
-        {status.runStatus === "paid" &&
+        {!verdictShown &&
+        status.runStatus === "paid" &&
         paid !== undefined &&
         paid.kind === "settle" &&
         paid.paidUsd !== undefined ? (
@@ -591,7 +594,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={unlockClaim}
-              className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Sign and show the rows
             </button>
@@ -604,7 +607,7 @@ function WearableCheckInner({
           </p>
         ) : null}
 
-        {status.runStatus === "recorded" ? (
+        {!verdictShown && status.runStatus === "recorded" ? (
           <div className="rounded-xl border border-edge bg-surface-raised p-4">
             <p className="text-base font-semibold">
               Verified and recorded on-chain.
@@ -645,7 +648,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Check again
             </button>
@@ -674,7 +677,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Check again
             </button>
@@ -690,7 +693,7 @@ function WearableCheckInner({
           </div>
         ) : null}
 
-        {status.runStatus === "cap-exceeded" ? (
+        {!verdictShown && status.runStatus === "cap-exceeded" ? (
           <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
             <p className="text-base font-semibold text-warning">
               SPOTTER hit its spending cap and stopped
@@ -717,7 +720,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Try again
             </button>
@@ -725,11 +728,21 @@ function WearableCheckInner({
         ) : null}
 
         {status.runStatus === "error" ? (
-          <ErrorNote
-            title="The run hit an error"
-            detail="The receipt above shows exactly where it stopped. Nothing was paid that the ledger does not show."
-            onRetry={() => setStatus({ kind: "idle" })}
-          />
+          verdictShown ? (
+            <button
+              type="button"
+              onClick={() => setStatus({ kind: "idle" })}
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
+            >
+              Have SPOTTER try again
+            </button>
+          ) : (
+            <ErrorNote
+              title="The check hit a problem"
+              detail="The receipt above shows where it stopped. Nothing was paid that the receipt does not show."
+              onRetry={() => setStatus({ kind: "idle" })}
+            />
+          )
         ) : null}
       </div>
     );
@@ -941,7 +954,7 @@ function WearableCheckInner({
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setConnectFallbackUrl(null)}
-              className="block w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3.5 text-center text-base font-semibold text-accent hover:bg-accent-deep"
+              className="block w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3.5 text-center text-base font-semibold text-accent hover:bg-accent/10"
             >
               Your browser blocked the popup - tap here to connect
             </a>
@@ -1006,19 +1019,24 @@ export default function WearableCheck({
   poolId,
   goalSpec,
   onSwitchToDocument,
+  verdictShown,
 }: {
   poolId: bigint;
   goalSpec: string;
   /** Switches the pool page to the document proof path. Absent when the pool
    *  has no document tab to switch to. */
   onSwitchToDocument?: () => void;
+  /** The Verdict screen above says what this run's state means, so this
+   *  panel keeps the receipt, the polling and the buttons, and drops the
+   *  status paragraphs that would say it twice. */
+  verdictShown?: boolean;
 }) {
   if (!DYNAMIC_CONFIGURED) {
     return (
-      <ErrorNote
-        title="Sign-in is not configured"
-        detail="Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable wearable checks with an embedded wallet."
-      />
+      <p className="rounded-xl border border-edge bg-surface-raised p-4 text-sm text-foreground/80">
+        Sign-in is not switched on for this build, so SPOTTER has no wallet to
+        check a sensor for.
+      </p>
     );
   }
   return (
@@ -1026,6 +1044,7 @@ export default function WearableCheck({
       poolId={poolId}
       goalSpec={goalSpec}
       onSwitchToDocument={onSwitchToDocument}
+      verdictShown={verdictShown}
     />
   );
 }

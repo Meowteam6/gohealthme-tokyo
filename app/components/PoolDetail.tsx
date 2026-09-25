@@ -3,14 +3,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
-import Countdown from "@/components/Countdown";
 import JoinPool from "@/components/JoinPool";
 import FundPool from "@/components/FundPool";
 import ChallengeContribute from "@/components/ChallengeContribute";
 import EvidenceUpload from "@/components/EvidenceUpload";
 import { useDocumentProofAvailable } from "@/lib/useProofStatus";
 import WearableCheck from "@/components/WearableCheck";
-import ClaimRail, { type ClaimRailState, type VerdictKind } from "@/components/ClaimRail";
 import ShareChallenge from "@/components/ShareChallenge";
 import ChallengeInviteShare from "@/components/ChallengeInviteShare";
 import SpotterSays from "@/components/SpotterSays";
@@ -18,28 +16,29 @@ import SpotterMascot from "@/components/SpotterMascot";
 import ClaimPayout from "@/components/ClaimPayout";
 import {
   Badge,
-  Button,
   Card,
   ErrorNote,
-  Money,
   ProofTierBadges,
   Skeleton,
   TAP_TARGET,
 } from "@/components/ui";
+import LockPanel from "@/components/game/LockPanel";
+import RunBoard from "@/components/game/RunBoard";
+import Scoreboard from "@/components/game/Scoreboard";
+import VerdictStage, {
+  proofSurfaceNeeded,
+  useVerdict,
+} from "@/components/game/VerdictStage";
 import { arcAddressUrl } from "@/lib/chains";
 import {
-  AGENT_WALLET_QUERY_KEY,
-  agentIsBroke,
-  fetchAgentWallet,
-} from "@/lib/agent-budget";
-import {
-  projectReceipt,
   runStatusFromLedger,
-  toUsd2,
   type LedgerEntry,
   type RunStatus,
 } from "@/lib/agent-receipt";
-import { claimStepOf } from "@/lib/claim-rail";
+import { runSlotOf } from "@/lib/game/lobby";
+import { formatRunClock, runClock } from "@/lib/game/tally";
+import { useCharacter } from "@/lib/game/useCharacter";
+import { useNowSeconds } from "@/lib/game/useNowSeconds";
 import { fetchWithWalletAuth } from "@/lib/client-auth";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { claimProofPathOf, type ProofPath } from "@/lib/claim-restore";
@@ -52,13 +51,11 @@ import {
   capabilityNeedsDevice,
   capabilityUnknown,
   fetchProviderOptions,
-  metricLabel,
   providerOptionsQueryKey,
   viewerMetricsOf,
 } from "@/lib/wearable-connect";
 import { unsupportedMetricFor } from "@/lib/pool-availability";
 import { wearableJoinBlock } from "@/lib/wearable-join-gate";
-import type { WearableMetric } from "@/lib/wearable-goal";
 import {
   BOUNTY_MODEL_LABELS,
   displayGoalSpec,
@@ -171,66 +168,13 @@ function Icon({
   );
 }
 
-type StatTint = "neutral" | "accent" | "warm";
-
-/** A candy stat card: chunky border, a soft edge shadow, and a tinted icon
- *  chip. Money still renders through <Money> in the value slot — the tint lives
- *  on the card chrome, never inside the number. Reward and entry read WARM tan,
- *  not gold: a static balance is not money in motion. */
-function StatCandy({
-  icon,
-  label,
-  value,
-  tint = "neutral",
-  span = false,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: ReactNode;
-  tint?: StatTint;
-  span?: boolean;
-}) {
-  const ring: Record<StatTint, string> = {
-    neutral: "border-edge bg-surface-raised",
-    accent: "border-accent/25 bg-accent/5",
-    warm: "border-[color:var(--secondary)] bg-secondary/40",
-  };
-  const chip: Record<StatTint, string> = {
-    neutral: "bg-surface text-muted",
-    accent: "bg-accent/15 text-accent-strong",
-    warm: "bg-secondary text-secondary-foreground",
-  };
+/** Test money, always in sight (docs/DESIGN.md). */
+function TestnetLine() {
   return (
-    <div
-      className={`flex flex-col gap-2 rounded-2xl border-2 p-4 shadow-sm ${ring[tint]} ${
-        span ? "col-span-2" : ""
-      }`}
-    >
-      <span
-        className={`inline-flex size-8 items-center justify-center rounded-full ${chip[tint]}`}
-      >
-        {icon}
-      </span>
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-          {label}
-        </p>
-        <p className="mt-0.5 font-display text-lg font-bold leading-snug text-foreground">
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/** The testnet play-money sticker. Tan, never gold — a testnet marker must not
- *  borrow the money-in-motion colour. */
-function TestnetSticker() {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground">
+    <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
       <Icon name="flask" className="size-3.5" />
-      Testnet · play money
-    </span>
+      Base Sepolia test USDC, no real money
+    </p>
   );
 }
 
@@ -245,6 +189,8 @@ interface ClaimLedgerData {
 export default function PoolDetail({ id }: { id: string }) {
   const { address } = useEmbeddedWallet();
   const requestAuth = useWalletAuth();
+  const character = useCharacter();
+  const now = useNowSeconds();
   // Wearable pools offer two proof paths, but only one may be mounted at a
   // time: WearableCheck and EvidenceUpload both drive SPOTTER's run loop for
   // the same goal id, and two concurrent pollers with conflicting evidence
@@ -334,9 +280,6 @@ export default function PoolDetail({ id }: { id: string }) {
 
   // What the viewer's own device can measure. cachedOnly for the same reason
   // as the read above: opening a pool page must never fire a wallet prompt.
-  // Held while the one-tap device check is signing, so the button cannot be
-  // pressed twice into two wallet prompts.
-  const [checkingDevice, setCheckingDevice] = useState(false);
 
   const capabilityQuery = useQuery({
     queryKey: providerOptionsQueryKey(address),
@@ -351,14 +294,8 @@ export default function PoolDetail({ id }: { id: string }) {
     staleTime: 60_000,
   });
 
-  // SPOTTER pays for verification from its own wallet. When that wallet is
-  // empty, a claim started here dies at the buy step, so say so before the
-  // person taps rather than after.
-  const agentWalletQuery = useQuery({
-    queryKey: AGENT_WALLET_QUERY_KEY,
-    queryFn: fetchAgentWallet,
-    staleTime: 15_000,
-  });
+  // SPOTTER's own wallet status is one line in the header on every screen
+  // (components/game/SpotterStatusLine.tsx), not a wall on this page.
 
   const joined = participantQuery.data?.joined === true;
   const canPay =
@@ -437,6 +374,17 @@ export default function PoolDetail({ id }: { id: string }) {
         : null;
   const restoredPath: ProofPath | null =
     claimLedger !== null ? claimProofPathOf(claimLedger) : null;
+
+  // The Verdict: the ledger, the chain and the World approval status mapped
+  // to one screen (lib/game/verdict.ts). Called before any early return.
+  const verdict = useVerdict({
+    pool: poolQuery.data?.pool ?? null,
+    address,
+    joined,
+    refunded: participantQuery.data?.refunded === true,
+    runStatus,
+    ledger: claimLedger,
+  });
 
   // Resolve the funder address to a handle when it has claimed one. Called
   // unconditionally with whatever is known this render (empty until the pool
@@ -550,12 +498,6 @@ export default function PoolDetail({ id }: { id: string }) {
   // The upload path a wearable-floor pool can switch to from WearableCheck (a
   // self-reported photo on a hybrid pool); undefined on a pure-wearable pool.
   const uploadAltPath = accepted.find((m) => m !== "wearable");
-  // A self-reported claim (photo/screenshot) is the low-trust tier: the rail
-  // must never call it "Verified". Any self-reported verdict on the ledger
-  // marks the claim.
-  const claimIsSelfReported =
-    claimLedger?.some((e) => e.kind === "verdict" && e.selfReported === true) ===
-    true;
   // joinPool reverts with PERIOD_ENDED once the period closes, so an expired
   // pool must never offer it. Evidence and the receipt stay visible for joined
   // participants until settlement runs.
@@ -589,13 +531,23 @@ export default function PoolDetail({ id }: { id: string }) {
     needsDevice: capabilityNeedsDevice(capabilityQuery.data),
   });
 
+  // The run's one decision, shared with the lobby and the dare link
+  // (lib/game/lobby.ts): the join gate above, plus World proof-of-human when
+  // that lane is on for this build. A limit is a lock with its fix, here,
+  // before any stake.
+  const slot = runSlotOf({
+    phase: poolPhase(pool, asOfSeconds),
+    cancelled: pool.cancelled,
+    canPay,
+    joined,
+    address,
+    joinBlock,
+    humanRequired: character.worldLane === "on",
+    humanVerified: character.character?.human === "verified",
+    deviceLabel: viewerProvider?.label ?? null,
+  });
   const unverifiableNow = joinBlock.kind === "outage";
   const unsupportedForViewer = joinBlock.kind === "unsupported";
-  const unsupportedMetric =
-    joinBlock.kind === "unsupported" ? joinBlock.metric : null;
-  const capabilityPending =
-    joinBlock.kind === "unchecked" || joinBlock.kind === "no-device";
-  const needsDevice = joinBlock.kind === "no-device";
 
   // A participant who ALREADY joined and then switched device is in the worst
   // position of anyone: the fee is spent and their new device cannot prove the
@@ -606,54 +558,14 @@ export default function PoolDetail({ id }: { id: string }) {
   const unsupportedAfterJoin =
     joined && unsupportedMetricFor(pool.goalSpec, viewerMetrics) !== null;
 
-  const agentBroke = agentIsBroke(agentWalletQuery.data?.balanceUsd ?? null);
   // Wait for the restore before mounting a tab on a multi-path pool; mounting
   // the wrong one first would start a poll loop the correct tab then supersedes.
   const claimPathPending =
     multiPath && joined && claimLedgerQuery.isLoading;
 
-  // Claim-rail state, derived from the same ledger the receipt reads so the
-  // rail and the workbench can never disagree. The paid step is the ONLY one
-  // that renders a payout figure, and it is fed exclusively by a settle entry
-  // the ledger marked settled - a deferred verdict (runStatus "recorded") maps
-  // to the verdict step and shows verified-and-settling, never paid.
-  const step = claimStepOf(joined, hasClaim, runStatus);
-  const receipt = claimLedger !== null ? projectReceipt(claimLedger) : null;
-  const settledEntry = claimLedger?.find(
-    (e) => e.kind === "settle" && e.status === "settled",
-  );
-  const paid =
-    settledEntry !== undefined &&
-    settledEntry.kind === "settle" &&
-    settledEntry.paidUsd !== undefined
-      ? {
-          paidUsd: toUsd2(settledEntry.paidUsd),
-          txHash: settledEntry.txHash ?? null,
-        }
-      : null;
-  const verdict: VerdictKind | null =
-    runStatus === "recorded"
-      ? "deferred"
-      : runStatus === "no-pay"
-        ? "no-pay"
-        : runStatus === "cap-exceeded" ||
-            runStatus === "blocked" ||
-            runStatus === "error"
-          ? "stopped"
-          : null;
-  const railState: ClaimRailState = {
-    step,
-    spentUsd: receipt?.spentUsd ?? "0.00",
-    capUsd: receipt?.capUsd ?? null,
-    verdict,
-    paid,
-    selfReported: claimIsSelfReported,
-  };
-  // The rail tracks a claim journey, so it shows only where one exists: a live
-  // payable pool, or an expired one the visitor is joined to (their claim can
-  // still settle). Settled or structurally-unpayable pools have no journey.
-  const showRail =
-    canPay && (phase === "live" || (phase === "expired" && joined));
+  const screen = verdict.screen;
+  const showProofSurface = proofSurfaceNeeded(screen);
+  const verdictShown = screen.kind !== "none";
 
   // The single mounted claim surface. Wearable pools default to the wearable
   // check with the document upload one tap away; document pools upload only.
@@ -668,30 +580,29 @@ export default function PoolDetail({ id }: { id: string }) {
     </div>
   ) : (
     <>
-      {agentBroke ? (
-        <div className="rounded-3xl border border-warning/40 bg-warning/10 p-4 sm:p-5">
-          <SpotterSays surface="agent-header" state="broke" size="sm" />
-          <p className="mt-3 text-sm text-foreground/80">
-            I buy every verification from my own wallet, and right now it is
-            empty. A check started now stops at the buy step and nobody gets
-            paid. Nothing you did - come back once I am topped up.
-          </p>
-          <Link
-            href="/agent"
-            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border-2 border-warning/50 px-5 py-2.5 font-display text-sm font-bold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            See my wallet
-          </Link>
-        </div>
+      {address !== null ? (
+        <VerdictStage
+          pool={pool}
+          address={address}
+          joined={joined}
+          refunded={participantQuery.data?.refunded === true}
+          runStatus={runStatus}
+          ledger={claimLedger}
+          hasClaim={hasClaim}
+          screen={screen}
+          goalId={verdict.goalId}
+          screening={verdict.screening}
+          onApproval={verdict.onApproval}
+        />
       ) : null}
-      {multiPath ? (
+      {showProofSurface && multiPath ? (
         <div className="flex flex-wrap gap-2">
           {accepted.map((m) => {
             const selected = proofPath === m;
             const tone = selected
               ? m === "self-reported"
                 ? "border-warning/50 bg-warning/10 text-warning"
-                : "border-accent/50 bg-accent-deep text-accent"
+                : "border-accent/50 bg-accent/10 text-accent-strong"
               : "border-edge bg-surface-raised text-muted hover:text-foreground";
             const label =
               m === "wearable"
@@ -713,28 +624,28 @@ export default function PoolDetail({ id }: { id: string }) {
           })}
         </div>
       ) : null}
-      {/* The prove-it surface is the whole game, so it is the loudest card on
-          the page: a thick emerald border with a soft emerald ring glow and a
-          floating "Prove it now" tab. SPOTTER encourages before, then flips to
-          the detective pose while the run is verifying. The real WearableCheck
-          / EvidenceUpload mount unchanged inside — only the frame is new. */}
+      {/* The proof surface stays mounted while its polling loop or its retry
+          still matters (proofSurfaceNeeded). Once the Verdict above is
+          showing, it keeps the receipt and the buttons and drops the status
+          paragraphs the Verdict already says. */}
+      {showProofSurface ? (
       <section
         id="proof-upload"
-        className="relative rounded-3xl border-2 border-accent bg-surface p-5 shadow-[0_0_0_5px_rgba(16,185,129,0.12)] sm:p-7"
+        className="rounded-xl border-2 border-foreground/15 bg-surface p-4 sm:p-6"
       >
-        <span className="absolute -top-3 left-5 inline-flex items-center rounded-full bg-accent px-3 py-1 font-display text-xs font-extrabold uppercase tracking-wide text-white shadow-[var(--shadow-pop)]">
-          Prove it now
-        </span>
-        <h2 className="mb-3 mt-2 font-display text-2xl font-extrabold leading-tight">
-          Prove it
+        <h2 className="mb-3 font-display text-3xl font-extrabold leading-tight">
+          {verdictShown ? "SPOTTER's check" : "Prove tonight"}
         </h2>
-        <div className="mb-5">
-          {runStatus === "verifying" ? (
-            <SpotterSays surface="evidence" state="verifying" size="sm" />
-          ) : (
-            <SpotterSays surface="join" state="joined" size="sm" />
-          )}
-        </div>
+        {!verdictShown ? (
+          <div className="mb-5">
+            <SpotterSays
+              surface="join"
+              state="joined"
+              pose="cheer"
+              say="You are in. When your nights are banked, send me in to check."
+            />
+          </div>
+        ) : null}
         {claimPathPending ? (
           <div className="space-y-3">
             <Skeleton className="h-6 w-40" />
@@ -744,6 +655,7 @@ export default function PoolDetail({ id }: { id: string }) {
           <WearableCheck
             poolId={pool.id}
             goalSpec={pool.goalSpec}
+            verdictShown={verdictShown}
             onSwitchToDocument={
               uploadAltPath !== undefined
                 ? () => choosePath(uploadAltPath)
@@ -764,6 +676,7 @@ export default function PoolDetail({ id }: { id: string }) {
           />
         )}
       </section>
+      ) : null}
     </>
   );
 
@@ -772,20 +685,23 @@ export default function PoolDetail({ id }: { id: string }) {
   // rather than a raw hex string standing in as the funder's identity.
   const funderHandle = handleFor(pool.creator);
 
+  const clockNow = now ?? Number(asOfSeconds);
+  const clock = runClock(pool.periodStart, pool.periodEnd, clockNow);
+
   const workbench = (
     <div className="min-w-0 space-y-8">
-      <div className="rounded-3xl border-2 border-accent/15 bg-surface p-5 shadow-[var(--shadow-pop-edge)] sm:p-7">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          {/* -ml-2 keeps the text optically flush while the padding still gives
-              the link a real 44px thumb target. */}
+      <header className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          {/* -ml-4 keeps the text optically flush while the padding keeps a
+              real 44px thumb target. */}
           <Link
             href="/pools"
-            className={`-ml-2 inline-flex items-center gap-1 text-muted hover:text-foreground ${TAP_TARGET}`}
+            className={`-ml-4 inline-flex items-center gap-1 text-muted hover:text-foreground ${TAP_TARGET}`}
           >
             <Icon name="back" className="size-4" />
-            All pools
+            Lobby
           </Link>
-          <TestnetSticker />
+          <TestnetLine />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge>{pool.initiative}</Badge>
@@ -793,340 +709,130 @@ export default function PoolDetail({ id }: { id: string }) {
           {phase === "settled" ? (
             <Badge tone="muted">Settled</Badge>
           ) : phase === "expired" ? (
-            <Badge tone="warning">Expired</Badge>
-          ) : (
-            <Badge tone="accent">Live</Badge>
-          )}
+            <Badge tone="warning">Ended</Badge>
+          ) : null}
           {unverifiableNow && phase === "live" ? (
-            <Badge tone="warning">Cannot verify right now</Badge>
+            <Badge tone="warning">Wearable checks down</Badge>
           ) : null}
-          {unsupportedForViewer && phase === "live" ? (
-            <Badge tone="warning">Your device cannot measure this</Badge>
-          ) : null}
-          {unsupportedAfterJoin && phase === "live" ? (
-            <Badge tone="warning">Your device cannot measure this</Badge>
+          {(unsupportedForViewer || unsupportedAfterJoin) && phase === "live" ? (
+            <Badge tone="warning">Your sensor cannot measure this</Badge>
           ) : null}
         </div>
-        {isDocGoal ? (
-          <p className="mt-3 text-sm font-semibold uppercase tracking-wide text-accent">
-            Preventive care - Earn from a {formatUsdc(pool.balance)} USDC bounty
-          </p>
-        ) : null}
-        <h1 className="mt-3 font-display text-3xl font-extrabold leading-[1.08] tracking-tight sm:text-4xl">
+        <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight text-balance sm:text-6xl">
           {goalTitle}
         </h1>
-        {/* A self-staked commitment pool (model 2) has no funder - every
-            participant stakes their own USDC and the creator merely set the
-            pool up - so it must never read "A sponsor". Name the creator
-            instead. For sponsor-funded models (0, 1) the funder's claimed
-            handle names them; otherwise the identity reads "A sponsor" and the
-            raw address is demoted to a small secondary link, so a wall of hex
-            never stands in for the funder. */}
         {pool.bountyModel === 2 ? (
-          <p className="mt-2 text-sm text-muted">
-            Created by{" "}
+          <p className="text-sm text-muted">
+            Started by{" "}
             <a
               href={arcAddressUrl(pool.creator)}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-mono underline decoration-edge underline-offset-2 hover:text-foreground"
+              className="underline decoration-edge underline-offset-2 hover:text-foreground"
             >
               {displayName(pool.creator)}
             </a>
+            . Everyone stakes their own; the nights decide.
           </p>
         ) : (
-          <p className="mt-2 text-sm text-muted">
-            {funderHandle !== null ? "Funder " : "A sponsor "}
+          <p className="text-sm text-muted">
+            {funderHandle !== null ? "Prize put up by " : "Prize put up by a sponsor, "}
             <a
               href={arcAddressUrl(pool.creator)}
               target="_blank"
               rel="noopener noreferrer"
-              className={
-                funderHandle !== null
-                  ? "font-mono underline decoration-edge underline-offset-2 hover:text-foreground"
-                  : "ml-1 font-mono text-xs underline decoration-edge underline-offset-2 hover:text-foreground"
-              }
+              className="underline decoration-edge underline-offset-2 hover:text-foreground"
             >
               {displayName(pool.creator)}
             </a>
           </p>
         )}
-        {/* Invite others, up top where it is findable. A PUBLIC pool's own URL
-            is safe to hand out, so it gets the full Share / Text / Email / Copy
-            row. A CHALLENGE's shareable link is its PRIVATE /c/<token> invite,
-            and pool ids are sequential and walkable, so the token must never be
-            rendered on this page. The creator already holds that invite (from
-            creation and on their Challenges page); point them there instead of
-            leaking it here. */}
-        {shareOrigin !== null ? (
-          <div className="mt-5 rounded-2xl border border-edge bg-surface-raised p-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-              Invite others
-            </p>
-            {isChallenge ? (
-              isCreator && address !== null ? (
-                // The creator gets their real /c/<token> link inline, revealed
-                // after a one-tap signature - the token is never rendered for a
-                // non-creator viewer of this walkable page.
-                <ChallengeInviteShare poolId={pool.id} address={address} />
-              ) : (
-                <p className="text-sm text-muted">
-                  This challenge is private. Only the person who created it can
-                  share the invite link.
-                </p>
-              )
-            ) : (
-              <ShareChallenge
-                url={`${shareOrigin}/pools/${id}`}
-                title="Join me on GoHealthMe"
-                message={`Get in on this goal with me on GoHealthMe: ${goalTitle}.`}
-                emailSubject="Join this pool on GoHealthMe"
-                shareLabel="Share"
-              />
-            )}
+        {joined && address !== null ? null : (
+          <Scoreboard
+            caption="Run scoreboard"
+            cells={[
+              { label: "Prize pool", value: formatUsdc(pool.balance), tone: "money", unit: "test USDC" },
+              {
+                label: pool.bountyModel === 2 ? "Stake to enter" : "Entry",
+                value: formatUsdc(pool.entryFee),
+                tone: "money",
+                unit: "test USDC",
+              },
+              {
+                label: "Time left",
+                value: formatRunClock(clock),
+                unit: `${participantCount ?? "--"} in the run`,
+              },
+            ]}
+          />
+        )}
+        {/* A dare's link is its PRIVATE /c/<token> invite and pool ids are
+            walkable, so only the creator gets it, revealed after a one-tap
+            signature. Public runs share from the block further down. */}
+        {isChallenge && isCreator && address !== null ? (
+          <div className="rounded-xl border-2 border-foreground/15 bg-surface p-4">
+            <h2 className="mb-2 font-display text-2xl font-extrabold">Send the dare</h2>
+            <ChallengeInviteShare poolId={pool.id} address={address} />
           </div>
         ) : null}
-        {phase === "live" ? (
-          <div className="mt-5">
-            <SpotterSays surface="pools-header" state="idle" size="md" />
-          </div>
-        ) : null}
-      </div>
+        <p className="text-xs text-muted">
+          {BOUNTY_MODEL_LABELS[pool.bountyModel] ?? "Custom payout"}. Runs{" "}
+          {formatDay(pool.periodStart)} to {formatDay(pool.periodEnd)}.
+        </p>
+      </header>
 
-      {/* owed[] is a GLOBAL per-wallet balance, so a settled win from any pool
-       *  shows here the moment it is credited - one tap withdraws it. It renders
-       *  nothing when nothing is owed, so it never intrudes on a fresh visitor. */}
-      {address !== null ? <ClaimPayout address={address} /> : null}
+      {/* A win credited on chain from ANY run shows here until it is claimed,
+          unless this run's own win screen is already showing the claim. */}
+      {address !== null && screen.kind !== "won" && screen.kind !== "cancelled" ? (
+        <ClaimPayout address={address} />
+      ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatCandy
-          tint="warm"
-          icon={<Icon name="coins" />}
-          label="Reward pool"
-          value={<Money usd={formatUsdc(pool.balance)} />}
-        />
-        <StatCandy
-          tint="warm"
-          icon={<Icon name="wallet" />}
-          label={pool.bountyModel === 2 ? "Entry stake" : "Entry fee"}
-          value={<Money usd={formatUsdc(pool.entryFee)} />}
-        />
-        <StatCandy
-          tint="accent"
-          icon={<Icon name="clock" />}
-          label="Time remaining"
-          value={
-            <Countdown
-              periodStart={pool.periodStart}
-              periodEnd={pool.periodEnd}
-            />
-          }
-        />
-        <StatCandy
-          tint="accent"
-          icon={<Icon name="users" />}
-          label="Participants"
-          value={participantCount !== null ? participantCount : "--"}
-        />
-        <StatCandy
-          icon={<Icon name="calendar" />}
-          label="Starts"
-          value={formatDay(pool.periodStart)}
-        />
-        <StatCandy
-          icon={<Icon name="calendar" />}
-          label="Ends"
-          value={formatDay(pool.periodEnd)}
-        />
-        <StatCandy
-          span
-          tint="accent"
-          icon={<Icon name="wallet" />}
-          label="Payout model"
-          value={
-            <span className="text-base">
-              {BOUNTY_MODEL_LABELS[pool.bountyModel] ?? "Custom model"}
-            </span>
-          }
-        />
-      </div>
+      {joined && address !== null ? (
+        <RunBoard pool={pool} address={address} promptForData={false} />
+      ) : null}
 
       {phase === "live" ? (
         <div className="space-y-4">
-          <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-            Participant actions
-          </p>
-          {!canPay ? (
-            <section className="rounded-3xl border border-warning/40 bg-warning/10 p-5 sm:p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <SpotterMascot
-                  pose="watching"
-                  size="sm"
-                  className="mx-auto sm:mx-0"
-                />
-                <div className="min-w-0">
-                  <h2 className="font-display text-lg font-semibold text-warning">
-                    This pool cannot pay out
-                  </h2>
-                  <p className="mt-1 text-sm text-foreground/80">
-                    It was set up with no reward per achiever, so even a verified
-                    claim would land you zero. I am not going to let you join or
-                    upload here - you would pass and still walk away with nothing.
-                  </p>
-                  <BrowsePoolsLink label="Find a pool that can pay" />
-                </div>
-              </div>
-            </section>
-          ) : capabilityPending ? (
-            <section className="rounded-3xl border border-accent/30 bg-accent/15 p-5 sm:p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <SpotterMascot
-                  pose="watching"
-                  size="sm"
-                  className="mx-auto sm:mx-0"
-                />
-                <div className="min-w-0">
-                  <h2 className="font-display text-lg font-semibold text-accent-deep">
-                    {needsDevice
-                      ? "Connect a device first"
-                      : "Let me check your device first"}
-                  </h2>
-                  <p className="mt-1 text-sm text-foreground/80">
-                    {needsDevice
-                      ? "Not every device can measure every goal, and you have not linked one yet. Connect one from your dashboard and I will tell you straight away whether it can prove this goal."
-                      : "Not every device can measure every goal, and I have not checked yours yet. Sign to let me look - nothing is charged and no transaction is sent."}
-                  </p>
-                  <p className="mt-2 text-sm text-foreground/80">
-                    The {formatUsdc(pool.entryFee)} USDC entry fee is real
-                    money, so I am not selling you a spot before I know I can
-                    verify you.
-                  </p>
-                  {needsDevice ? (
-                    <Link
-                      href="/dashboard"
-                      className={`mt-3 inline-block rounded-xl border-2 border-edge font-semibold hover:border-accent/50 ${TAP_TARGET}`}
-                    >
-                      Connect a device
-                    </Link>
-                  ) : (
-                  <Button
-                    type="button"
-                    pop
-                    className="mt-3"
-                    disabled={checkingDevice}
-                    onClick={() => {
-                      setCheckingDevice(true);
-                      // The PROMPTING requester, deliberately. Browsing must
-                      // never open a wallet modal, but this is the moment
-                      // before an entry fee and the person asked for it.
-                      // BOTH reads, not just capability. providerQuery was
-                      // left holding its cold-load auth-required result, and
-                      // providerDownReason returns null for that - so an
-                      // outage stayed invisible after signing, and the page
-                      // went on to talk about the device instead of saying
-                      // the provider was refusing us. Nothing on this page
-                      // invalidates the progress key otherwise.
-                      void requestAuth({ refresh: true })
-                        .then(() =>
-                          Promise.all([
-                            capabilityQuery.refetch(),
-                            providerQuery.refetch(),
-                          ]),
-                        )
-                        .finally(() => setCheckingDevice(false));
-                    }}
-                  >
-                    {checkingDevice ? "Checking" : "Sign and check my device"}
-                  </Button>
-                  )}
-                </div>
-              </div>
-            </section>
-          ) : unsupportedForViewer ? (
-            <section className="rounded-3xl border border-warning/40 bg-warning/10 p-5 sm:p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <SpotterMascot
-                  pose="watching"
-                  size="sm"
-                  className="mx-auto sm:mx-0"
-                />
-                <div className="min-w-0">
-                  <h2 className="font-display text-lg font-semibold text-warning">
-                    Your {viewerProvider?.label ?? "device"} cannot measure this
-                    one
-                  </h2>
-                  <p className="mt-1 text-sm text-foreground/80">
-                    This goal is measured in{" "}
-                    {metricLabel(unsupportedMetric as WearableMetric)}, and{" "}
-                    {viewerProvider?.label ?? "your connected device"} does not
-                    report it. That is the hardware, not an outage, so it will
-                    not start working later.
-                  </p>
-                  <p className="mt-2 text-sm text-foreground/80">
-                    The {formatUsdc(pool.entryFee)} USDC entry fee is real
-                    money, so I am not going to sell you a spot for a goal I
-                    could never verify for you. Connect a device that tracks{" "}
-                    {metricLabel(unsupportedMetric as WearableMetric)} and this
-                    pool opens up.
-                  </p>
-                  <Link
-                    href="/dashboard"
-                    className={`mt-3 inline-block rounded-xl border-2 border-edge font-semibold hover:border-accent/50 ${TAP_TARGET}`}
-                  >
-                    Change your device
-                  </Link>
-                </div>
-              </div>
-            </section>
-          ) : unverifiableNow && !joined ? (
-            <section className="rounded-3xl border border-warning/40 bg-warning/10 p-5 sm:p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <SpotterMascot
-                  pose="watching"
-                  size="sm"
-                  className="mx-auto sm:mx-0"
-                />
-                <div className="min-w-0">
-                  <h2 className="font-display text-lg font-semibold text-warning">
-                    I cannot check this goal right now
-                  </h2>
-                  <p className="mt-1 text-sm text-foreground/80">{providerDown}</p>
-                  <p className="mt-2 text-sm text-foreground/80">
-                    The {formatUsdc(pool.entryFee)} USDC entry fee is real money,
-                    so I am not going to sell you a spot while I have no way to
-                    read the goal. Document-verified pools are unaffected.
-                  </p>
-                  <BrowsePoolsLink label="Find a pool that can pay" />
-                </div>
-              </div>
-            </section>
-          ) : (
-            <div className="rounded-3xl border-2 border-accent/20 bg-surface p-5 shadow-[var(--shadow-pop-edge)] sm:p-7">
-              <p className="mb-1 font-display text-xs font-bold uppercase tracking-wide text-accent-strong">
-                Ready when you are
-              </p>
-              <h2 className="mb-2 font-display text-2xl font-extrabold leading-tight">
-                {isChallenge ? "Take the dare" : "Join this pool"}
+          {slot.kind === "cannot-pay" ? (
+            <section className="rounded-xl border-2 border-warning/60 bg-warning/5 p-4 sm:p-5">
+              <h2 className="font-display text-3xl font-extrabold text-warning">
+                This run cannot pay out
               </h2>
-              <p className="mb-4 text-sm text-muted">
+              <p className="mt-1 text-sm text-foreground/80">
+                It was set up with no reward per achiever, so even a verified
+                result would land you zero. I am not letting you enter a run
+                that cannot pay.
+              </p>
+              <BrowsePoolsLink label="Back to the lobby" />
+            </section>
+          ) : slot.kind === "locked" ? (
+            <LockPanel
+              lock={slot.lock}
+              returnTo={`/pools/${id}`}
+              onCheckSensor={character.checkSensor}
+            />
+          ) : slot.kind === "playable" ? (
+            <section className="rounded-xl border-2 border-foreground bg-surface p-4 sm:p-6">
+              <h2 className="font-display text-4xl font-black leading-none">
+                {isChallenge ? "Take the dare" : "Enter the run"}
+              </h2>
+              <p className="mt-3 mb-4 text-sm text-foreground/80">
                 {pool.bountyModel === 2
-                  ? `Stake the ${formatUsdc(pool.entryFee)} USDC entry, hit the goal during the period, and your stake comes back plus a share of what everyone who didn't show up left behind.`
+                  ? `Stake ${formatUsdc(pool.entryFee)} USDC. Hit the goal inside the run and your stake comes back plus a share of what the players who missed left behind. Miss it and your stake stays in the pool.`
                   : isDocGoal
-                    ? `Pay the ${formatUsdc(pool.entryFee)} USDC entry fee, then upload your record. The bounty pays out the moment your document is verified.`
-                    : `Pay the ${formatUsdc(pool.entryFee)} USDC entry fee, hit the goal during the period, and the bounty pays out the moment your result is verified.`}
+                    ? `Pay the ${formatUsdc(pool.entryFee)} USDC entry, then hand SPOTTER your record. The prize pays the moment the document checks out.`
+                    : `Pay the ${formatUsdc(pool.entryFee)} USDC entry, hit the goal inside the run, and the prize pays the moment SPOTTER confirms it.`}
               </p>
               {participantCount === 0 ? (
-                <p className="mb-4 rounded-xl border border-dashed border-accent/30 bg-accent/20 p-3 text-sm text-accent-deep">
-                  No one has joined yet, be the first.
-                </p>
+                <p className="mb-4 text-sm font-semibold">Nobody is in yet. You would be first.</p>
               ) : null}
               <JoinPool
                 poolId={pool.id}
                 entryFee={pool.entryFee}
                 alreadyJoined={joined}
               />
-            </div>
-          )}
+            </section>
+          ) : null}
 
           {canPay ? claimSection : null}
         </div>
@@ -1241,15 +947,5 @@ export default function PoolDetail({ id }: { id: string }) {
     </div>
   );
 
-  // Two-column on desktop: the workbench (actions + detailed receipt) on the
-  // left, the sticky claim rail on the right. On mobile the rail becomes a
-  // fixed bottom sheet, so the page reserves room beneath the content for it.
-  return (
-    <div className={showRail ? "pb-24 lg:pb-0" : undefined}>
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-8">
-        {workbench}
-        {showRail ? <ClaimRail state={railState} /> : null}
-      </div>
-    </div>
-  );
+  return <div className="mx-auto w-full max-w-3xl">{workbench}</div>;
 }
