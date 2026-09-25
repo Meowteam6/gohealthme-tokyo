@@ -60,6 +60,12 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
 import { resultLabel } from "@/lib/participant-status";
+import {
+  runApprovalLine,
+  type RunApprovalLine,
+  type RunApprovalStatus,
+} from "@/lib/game/verdict";
+import { parseStatus } from "@/lib/world/approval-client";
 import RunBoard from "@/components/game/RunBoard";
 import CharacterCard from "@/components/game/CharacterCard";
 import HeroActivityTicker from "@/components/HeroActivityTicker";
@@ -127,10 +133,82 @@ function DeferredNote({
     <p className={`mt-3 rounded-xl border border-dashed p-3 text-sm ${cls}`}>
       {lead} SPOTTER settles this {selfReported ? "self-reported claim " : ""}
       when the pool period ends at {formatSettleMoment(settlesAt)} (
-      <Countdown periodStart={0n} periodEnd={settlesAt} />) - no human involved,
-      nothing for you to do.
+      <Countdown periodStart={0n} periodEnd={settlesAt} />). Nothing for you to
+      do.
     </p>
   );
+}
+
+/** A run whose payout waits on (or just got) the player's World ID OK. The
+ *  run page owns the ask itself; this line says it is there and links to it. */
+function ApprovalRunNote({
+  line,
+  poolId,
+}: {
+  line: RunApprovalLine;
+  poolId: bigint;
+}) {
+  const cls =
+    line.tone === "warning"
+      ? "border-warning/40 bg-warning/10"
+      : line.tone === "accent"
+        ? "border-accent/30 bg-accent/15"
+        : "border-edge bg-surface";
+  return (
+    <div className={`rounded-xl border p-3 text-sm ${cls}`} role="status">
+      <p className="text-foreground/85">{line.text}</p>
+      {line.openRun ? (
+        <Link
+          href={`/pools/${poolId.toString()}`}
+          className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-2 hover:text-accent-strong"
+        >
+          Open this run
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+/** Where each open run's World ID payout confirmation stands, keyed by pool
+ *  id. The status route is public and machine-only; a failed read is
+ *  "unknown", never silence. */
+async function fetchRunApprovals(
+  address: `0x${string}`,
+  runs: readonly JoinedPool[],
+): Promise<Map<string, RunApprovalStatus>> {
+  const map = new Map<string, RunApprovalStatus>();
+  await Promise.all(
+    runs.map(async ({ pool }) => {
+      const key = pool.id.toString();
+      try {
+        const goalId = await fetchGoalId(pool.id, address);
+        const response = await fetch(
+          `/api/agent/approval/status?goalId=${encodeURIComponent(goalId)}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) {
+          map.set(key, "unknown");
+          return;
+        }
+        const parsed = parseStatus(await response.json().catch(() => null));
+        map.set(key, parsed?.status ?? "unknown");
+      } catch {
+        map.set(key, "unknown");
+      }
+    }),
+  );
+  return map;
+}
+
+function finalApprovalOf(
+  status: RunApprovalStatus | undefined,
+): "approved" | "declined" | "expired" | "cancelled" | null {
+  return status === "approved" ||
+    status === "declined" ||
+    status === "expired" ||
+    status === "cancelled"
+    ? status
+    : null;
 }
 
 function ConnectButton({
@@ -820,6 +898,24 @@ export default function DashboardContent() {
     },
   });
 
+  // World ID payout confirmation per run that has nothing recorded yet: open
+  // runs show whether SPOTTER is waiting on the player, finished runs say
+  // "payout not confirmed" instead of "no proof was submitted".
+  const approvalRuns = (joinedQuery.data ?? []).filter(
+    ({ pool, participant }) => !pool.cancelled && !participant.resultRecorded,
+  );
+  const approvalKey = approvalRuns.map(({ pool }) => pool.id.toString()).join(",");
+  const approvalQuery = useQuery({
+    queryKey: ["run-approvals", address, approvalKey],
+    enabled: address !== null && approvalRuns.length > 0,
+    queryFn: () => {
+      if (address === null) throw new Error("No wallet address.");
+      return fetchRunApprovals(address, approvalRuns);
+    },
+    // A pending ask expires in about 90 seconds; keep the line honest.
+    refetchInterval: 15_000,
+  });
+
   if (!ready) {
     return (
       <div className="space-y-4">
@@ -908,6 +1004,14 @@ export default function DashboardContent() {
             .filter(({ pool }) => !pool.settled && !pool.cancelled)
             .map((entry) => {
               const settlesAt = deferredUntil(entry);
+              const approvalLine = runApprovalLine(
+                approvalQuery.data?.get(entry.pool.id.toString()) ?? "none",
+                {
+                  settled: entry.pool.settled,
+                  cancelled: entry.pool.cancelled,
+                  resultRecorded: entry.participant.resultRecorded,
+                },
+              );
               return (
                 <div key={entry.pool.id.toString()} className="space-y-3">
                   <RunBoard
@@ -916,6 +1020,9 @@ export default function DashboardContent() {
                     promptForData
                     showLink
                   />
+                  {approvalLine !== null ? (
+                    <ApprovalRunNote line={approvalLine} poolId={entry.pool.id} />
+                  ) : null}
                   {settlesAt !== null ? (
                     <DeferredNote
                       tier={deferredTierQuery.data?.get(entry.pool.id.toString()) ?? null}
@@ -933,7 +1040,11 @@ export default function DashboardContent() {
                 .filter(({ pool }) => pool.settled || pool.cancelled)
                 .map((entry) => {
                   const { pool, participant } = entry;
-                  const result = resultLabel(pool, participant);
+                  const result = resultLabel(
+                    pool,
+                    participant,
+                    finalApprovalOf(approvalQuery.data?.get(pool.id.toString())),
+                  );
                   return (
                     <div
                       key={pool.id.toString()}
@@ -950,7 +1061,9 @@ export default function DashboardContent() {
                           <Badge tone={result.tone}>{result.text}</Badge>
                         </div>
                         <p className="mt-1 text-sm text-muted">
-                          Prize pool {formatUsdc(pool.balance)} test USDC
+                          {/* After settle this is what was NOT paid out; calling
+                              it the prize read as if the winner won nothing. */}
+                          Left in pool {formatUsdc(pool.balance)} test USDC
                         </p>
                       </Link>
                       {pool.cancelled && !participant.refunded ? (

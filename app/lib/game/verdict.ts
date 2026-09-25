@@ -38,14 +38,25 @@ export type VerdictScreen =
   | { kind: "confirm-human" }
   /** The player confirmed; SPOTTER is recording the result. */
   | { kind: "confirmed" }
-  | { kind: "approval-failed"; outcome: "declined" | "expired" | "cancelled" }
+  /** The goal was met but the human confirmation did not happen. `settled`
+   *  is true once the pool settled underneath it: nothing can be asked again
+   *  and the stake came back through the settle's refund. */
+  | {
+      kind: "approval-failed";
+      outcome: "declined" | "expired" | "cancelled";
+      settled: boolean;
+    }
   /** Verified, and the payout waits on the period end or on settlement. */
   | { kind: "banked"; selfReported: boolean }
   | { kind: "won"; paidUsd: string; txHash: string | null; selfReported: boolean }
   /** Read fine, goal not met yet, and later nights can still count. */
   | { kind: "not-yet" }
-  /** Read fine, goal not met, and the run is over. */
-  | { kind: "lost" }
+  /** Read fine, goal not met, and the run is over. `stakeBack` is true when no
+   *  miss was recorded on chain, so settle() credited the stake back (B-2). */
+  | { kind: "lost"; stakeBack: boolean }
+  /** The pool settled and this claim has no win row to show: every result is
+   *  final, and whatever settle() credited is claimable below. Never "won". */
+  | { kind: "settled-final" }
   /** SPOTTER could not get a clean read. Not the player's fault; retry. */
   | { kind: "bad-read" }
   | { kind: "stopped"; reason: StopReason }
@@ -60,6 +71,9 @@ export interface VerdictInput {
   runStatus: RunStatus | null;
   ledger: LedgerEntry[] | null;
   localApproval: LocalApproval | null;
+  /** The participant's on-chain resultRecorded flag, when read. Decides
+   *  whether a settled loss got its stake back (unrecorded, B-2). */
+  resultRecorded?: boolean;
 }
 
 /** True when SPOTTER's current attempt decided to pay. */
@@ -100,8 +114,10 @@ export function verdictScreenOf(input: VerdictInput): VerdictScreen {
       };
     }
     // Paid status without a figure: never fabricate one.
-    return { kind: "banked", selfReported };
+    return input.poolSettled ? { kind: "settled-final" } : { kind: "banked", selfReported };
   }
+
+  if (input.poolSettled) return settledScreenOf(input, ledger, local);
 
   switch (input.runStatus) {
     case null:
@@ -115,22 +131,22 @@ export function verdictScreenOf(input: VerdictInput): VerdictScreen {
     case "awaiting-approval":
       if (local === "approved") return { kind: "confirmed" };
       if (local === "declined" || local === "expired" || local === "cancelled") {
-        return { kind: "approval-failed", outcome: local };
+        return { kind: "approval-failed", outcome: local, settled: false };
       }
       return { kind: "confirm-human" };
     case "approval-declined":
-      return { kind: "approval-failed", outcome: "declined" };
+      return { kind: "approval-failed", outcome: "declined", settled: false };
     case "approval-expired":
-      return { kind: "approval-failed", outcome: "expired" };
+      return { kind: "approval-failed", outcome: "expired", settled: false };
     case "approval-cancelled":
-      return { kind: "approval-failed", outcome: "cancelled" };
+      return { kind: "approval-failed", outcome: "cancelled", settled: false };
     case "recorded":
       return { kind: "banked", selfReported };
     case "no-pay": {
       const mode = ledger !== null ? failureModeOf(ledger) : null;
       if (mode === "attester-offline") return { kind: "stopped", reason: "service" };
       if (mode === "evidence") return { kind: "bad-read" };
-      return input.poolSettled ? { kind: "lost" } : { kind: "not-yet" };
+      return { kind: "not-yet" };
     }
     case "cap-exceeded":
       return { kind: "stopped", reason: "budget" };
@@ -142,6 +158,60 @@ export function verdictScreenOf(input: VerdictInput): VerdictScreen {
   return { kind: "checking" };
 }
 
+/**
+ * The screen once the pool settled (not cancelled) and the ledger holds no
+ * paid win. Nothing can be checked, confirmed or asked again from here: a
+ * settle is one-shot. A declined or expired confirmation stays its own screen
+ * so the player learns why no prize came; a no-pay read is a loss; a bad read
+ * or a down verifier is still not the player's fault; everything else (no
+ * claim, still checking, waiting on the human, banked without a settle row)
+ * is final and shows what settle() credited.
+ */
+function settledScreenOf(
+  input: VerdictInput,
+  ledger: LedgerEntry[] | null,
+  local: LocalApproval["outcome"] | null,
+): VerdictScreen {
+  const stakeBack = input.resultRecorded !== true;
+  switch (input.runStatus) {
+    case "approval-declined":
+      return { kind: "approval-failed", outcome: "declined", settled: true };
+    case "approval-expired":
+      return { kind: "approval-failed", outcome: "expired", settled: true };
+    case "approval-cancelled":
+      return { kind: "approval-failed", outcome: "cancelled", settled: true };
+    case "awaiting-approval":
+      if (local === "declined" || local === "expired") {
+        return { kind: "approval-failed", outcome: local, settled: true };
+      }
+      return { kind: "approval-failed", outcome: "cancelled", settled: true };
+    case "no-pay": {
+      const mode = ledger !== null ? failureModeOf(ledger) : null;
+      if (mode === "attester-offline") return { kind: "stopped", reason: "service" };
+      if (mode === "evidence") return { kind: "bad-read" };
+      return { kind: "lost", stakeBack };
+    }
+    default:
+      return { kind: "settled-final" };
+  }
+}
+
+/** Which screens carry the claim tap (ClaimPayout) inside the Verdict, so the
+ *  page does not render a second one above it. */
+export function verdictShowsClaim(screen: VerdictScreen): boolean {
+  switch (screen.kind) {
+    case "won":
+    case "cancelled":
+    case "settled-final":
+    case "lost":
+      return true;
+    case "approval-failed":
+      return screen.settled;
+    default:
+      return false;
+  }
+}
+
 function approvedOnLedger(ledger: LedgerEntry[] | null): boolean {
   if (ledger === null) return false;
   for (let i = ledger.length - 1; i >= 0; i--) {
@@ -150,6 +220,72 @@ function approvedOnLedger(ledger: LedgerEntry[] | null): boolean {
     if (e.kind === "approval") return e.status === "approved";
   }
   return false;
+}
+
+/** The approval status as GET /api/agent/approval/status reports it, or
+ *  "unknown" when that read failed. */
+export type RunApprovalStatus =
+  | "none"
+  | "pending"
+  | "approved"
+  | "declined"
+  | "expired"
+  | "cancelled"
+  | "unknown";
+
+export interface RunApprovalLine {
+  text: string;
+  tone: "accent" | "warning" | "muted";
+  /** True when opening the run is the player's next action. */
+  openRun: boolean;
+}
+
+/**
+ * The dashboard line for a run whose payout waits on the player's World ID
+ * OK. Without it, a player who ran the check and left saw an ordinary run
+ * board while SPOTTER waited on them, and later a refund that read as "no
+ * proof was submitted". Null when there is nothing to say: no ask, already
+ * recorded, or a finished run (the result label covers that).
+ */
+export function runApprovalLine(
+  status: RunApprovalStatus,
+  run: { settled: boolean; cancelled: boolean; resultRecorded: boolean },
+): RunApprovalLine | null {
+  if (run.settled || run.cancelled || run.resultRecorded) return null;
+  switch (status) {
+    case "pending":
+      return {
+        text: "SPOTTER decided to pay this run and is waiting on your OK. Open it and confirm before the window closes.",
+        tone: "warning",
+        openRun: true,
+      };
+    case "declined":
+      return {
+        text: "You said no to this payout, so nothing moved. Open the run to ask again before it settles.",
+        tone: "warning",
+        openRun: true,
+      };
+    case "expired":
+      return {
+        text: "Your payout confirmation timed out, so nothing moved. Open the run to ask again before it settles.",
+        tone: "warning",
+        openRun: true,
+      };
+    case "approved":
+      return {
+        text: "You confirmed the payout. SPOTTER is writing your result on chain.",
+        tone: "accent",
+        openRun: false,
+      };
+    case "unknown":
+      return {
+        text: "I could not check whether this run is waiting on your OK. Open it to see.",
+        tone: "muted",
+        openRun: true,
+      };
+    default:
+      return null;
+  }
 }
 
 export interface VerdictCopy {
@@ -187,17 +323,19 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
         pose: "thumbsup",
       };
     case "approval-failed":
+      // The goal was met; only the human confirmation is missing. Never
+      // "run failed": that reads as a loss to someone who hit the goal.
       return {
-        headline:
-          screen.outcome === "cancelled"
-            ? "Run closed before you confirmed"
-            : "Run failed, ask again",
-        body:
-          screen.outcome === "expired"
-            ? "The confirmation window closed before you answered, so nothing moved. Ask again below and finish it this time."
+        headline: "Payout not confirmed",
+        body: screen.settled
+          ? screen.outcome === "declined"
+            ? "You hit the goal, then said no to the payout, and the run settled after that. No prize went out. The settle credited your stake back to you; claim it below."
+            : "You hit the goal, but the run settled before you confirmed the payout. No prize went out and there is nothing left to ask. The settle credited your stake back to you; claim it below."
+          : screen.outcome === "expired"
+            ? "You hit the goal. The confirmation window closed before you answered, so nothing moved yet. Ask again below and finish it before the run settles."
             : screen.outcome === "declined"
-              ? "You said no, so nothing moved. If that was a mistake, ask again below."
-              : "The run settled before you confirmed, so nothing moved and there is nothing left to ask. Your stake comes back through the pool's refund at settle.",
+              ? "You hit the goal and said no to the payout, so nothing moved. If that was a mistake, ask again below before the run settles."
+              : "The confirmation was withdrawn before you answered, so nothing moved.",
         pose: "facepalm",
       };
     case "banked":
@@ -227,9 +365,19 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
         pose: "flex",
       };
     case "lost":
+      // HealthPoolsV3 B-2: a participant with no recorded result is refunded
+      // at settle. SPOTTER never records a miss, so that is the normal case.
       return {
         headline: "Run lost",
-        body: "The goal was not met, so this run pays nothing and your stake stays in the pool.",
+        body: screen.stakeBack
+          ? "The goal was not met, so this run pays no prize. No miss was written on chain, so the settle credited your stake back to you; claim it below."
+          : "The goal was not met and the miss was recorded on chain, so this run pays you no prize and your stake stayed in the pool.",
+        pose: "standing",
+      };
+    case "settled-final":
+      return {
+        headline: "Run settled",
+        body: "Every result on this run is final on chain. Whatever the settle credited to you is below, ready to pull into your wallet.",
         pose: "standing",
       };
     case "bad-read":
@@ -267,7 +415,7 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
           }
         : {
             headline: "Run cancelled, take your stake back",
-            body: "This run was called off before it could settle. Your stake is yours; one tap credits it back.",
+            body: "The creator called this run off before it settled, so nobody was paid a prize. Your stake is yours; one tap credits it back.",
             pose: "standing",
           };
   }

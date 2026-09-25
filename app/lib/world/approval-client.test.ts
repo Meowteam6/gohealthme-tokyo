@@ -3,12 +3,28 @@ import {
   CLIENT_MOCK_PROOF_KIND,
   formatCountdown,
   mockApprovalProof,
+  mountActionFor,
   outcomeCopy,
   parseOpenRequest,
   parseStatus,
   secondsLeft,
 } from "@/lib/world/approval-client";
 import { MOCK_PROOF_KIND } from "@/lib/server/agent/approval-provider";
+
+describe("mountActionFor", () => {
+  it("adopts a finished answer on mount and never re-asks for it", () => {
+    // A reload after "Not now, do not pay" must not open a fresh request.
+    expect(mountActionFor("declined")).toBe("adopt");
+    expect(mountActionFor("expired")).toBe("adopt");
+    expect(mountActionFor("cancelled")).toBe("adopt");
+    expect(mountActionFor("approved")).toBe("adopt");
+  });
+
+  it("only picks up a pending request, or SPOTTER's ask that has not landed", () => {
+    expect(mountActionFor("pending")).toBe("open");
+    expect(mountActionFor("none")).toBe("open");
+  });
+});
 
 describe("approval-client", () => {
   it("mirrors the server's mock proof kind exactly (wire format)", () => {

@@ -84,6 +84,22 @@ export default function ClaimPayout({
     );
   }
 
+  // A failed owed() read is not "nothing owed": a winner whose credit is on
+  // chain must never see the claim vanish because an RPC hiccupped.
+  if (owedQuery.isError && owedQuery.data === undefined) {
+    return (
+      <div className={className}>
+        <ErrorNote
+          title="Could not check what you are owed"
+          detail="I could not read your claimable balance from Base Sepolia just now. Nothing moved; anything credited to you is still there."
+          onRetry={() => {
+            void owedQuery.refetch();
+          }}
+        />
+      </div>
+    );
+  }
+
   // Nothing owed (or not read yet): render nothing. A settled win that has not
   // been credited yet, and a wallet that already withdrew, both land here.
   if (owed <= 0n) return null;

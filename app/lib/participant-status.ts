@@ -23,6 +23,10 @@ export function resultLabel(
     multiplierBps: number;
     refunded?: boolean;
   },
+  /** The World ID payout confirmation's final status, when one was asked
+   *  for. A settled refund after a pay decision is not "no proof": the proof
+   *  passed and only the human confirmation was missing. */
+  approval?: "approved" | "declined" | "expired" | "cancelled" | null,
 ): StatusLabel {
   // A cancelled pool owes every joiner their stake back; claimRefund() credits
   // it and flips `refunded`. Nothing about verification applies any more.
@@ -32,6 +36,11 @@ export function resultLabel(
       : { text: "Pool cancelled - claim your refund", tone: "warning" };
   }
   if (!p.resultRecorded) {
+    if (pool.settled && approval !== undefined && approval !== null) {
+      return approval === "approved"
+        ? { text: "Refunded - result not recorded before settle", tone: "warning" }
+        : { text: "Refunded - payout not confirmed", tone: "muted" };
+    }
     return pool.settled
       ? { text: "Refunded - no proof was submitted", tone: "muted" }
       : { text: "Pending verification", tone: "warning" };

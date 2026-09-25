@@ -76,6 +76,7 @@ export function useClaimRefund(): UseClaimRefundResult {
     async (poolId: bigint): Promise<{ amount: bigint; txHash: Hash }> => {
       const poolsAddress = getHealthPoolsAddress();
       if (poolsAddress === null) {
+        // Player copy, never an env-var name: RefundClaim renders this.
         const message =
           POOLS_NOT_CONFIGURED_COPY;
         setStatus({ kind: "error", message });

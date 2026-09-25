@@ -5,25 +5,40 @@
 // pool can look joinable and hand the user a raw PERIOD_ENDED revert. Pure
 // and chain-free so it runs under vitest's node environment.
 
-export type PoolPhase = "live" | "expired" | "settled";
+export type PoolPhase = "live" | "expired" | "settled" | "cancelled";
 
 /** The minimal pool shape lifecycle decisions depend on. */
 export interface LifecycleFields {
   settled: boolean;
   periodEnd: bigint;
+  /** HealthPoolsV3.cancelPool sets BOTH settled and cancelled. Optional so
+   *  shapes that predate the field classify exactly as before. */
+  cancelled?: boolean;
 }
 
 /**
  * Classify a pool at a moment in time (unix seconds). "expired" means the
  * period has ended but settlement has not run yet - joining reverts on-chain,
  * while evidence and receipts remain meaningful.
+ *
+ * "cancelled" is checked before "settled" because cancelPool sets both flags.
+ * A cancelled pool paid nobody; every joiner is owed their stake back through
+ * claimRefund(). Reading it as "settled" is what told joined players "I paid
+ * the verified achievers" on a pool that paid no one.
  */
 export function poolPhase(
   pool: LifecycleFields,
   nowSeconds: bigint,
 ): PoolPhase {
+  if (pool.cancelled === true) return "cancelled";
   if (pool.settled) return "settled";
   return pool.periodEnd > nowSeconds ? "live" : "expired";
+}
+
+/** True once the pool's result can no longer change: settled or cancelled.
+ *  Joins, result records and top-ups all revert from here on chain. */
+export function poolIsOver(phase: PoolPhase): boolean {
+  return phase === "settled" || phase === "cancelled";
 }
 
 /** The minimal pool shape the payability check depends on. */

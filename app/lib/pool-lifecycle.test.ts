@@ -3,6 +3,7 @@ import {
   groupPoolsByPhase,
   isEconomicallyDeadConfig,
   poolCanPay,
+  poolIsOver,
   poolPhase,
 } from "@/lib/pool-lifecycle";
 
@@ -23,6 +24,34 @@ describe("poolPhase", () => {
   it("settled wins over any period state", () => {
     expect(poolPhase(pool(1, true, NOW + 100n), NOW)).toBe("settled");
     expect(poolPhase(pool(1, true, NOW - 100n), NOW)).toBe("settled");
+  });
+
+  it("cancelled wins over settled, because cancelPool sets both flags", () => {
+    const cancelled = { settled: true, cancelled: true, periodEnd: NOW + 100n };
+    expect(poolPhase(cancelled, NOW)).toBe("cancelled");
+    expect(poolPhase({ ...cancelled, periodEnd: NOW - 100n }, NOW)).toBe("cancelled");
+    expect(
+      poolPhase({ settled: true, cancelled: false, periodEnd: NOW - 1n }, NOW),
+    ).toBe("settled");
+  });
+
+  it("poolIsOver is true for settled and cancelled only", () => {
+    expect(poolIsOver("settled")).toBe(true);
+    expect(poolIsOver("cancelled")).toBe(true);
+    expect(poolIsOver("live")).toBe(false);
+    expect(poolIsOver("expired")).toBe(false);
+  });
+
+  it("groups a cancelled pool with the ended ones, never as live", () => {
+    const grouped = groupPoolsByPhase(
+      [
+        { id: 1n, settled: true, cancelled: true, periodEnd: NOW + 100n },
+        { id: 2n, settled: false, cancelled: false, periodEnd: NOW + 100n },
+      ],
+      NOW,
+    );
+    expect(grouped.live.map((p) => p.id)).toEqual([2n]);
+    expect(grouped.settled.map((p) => p.id)).toEqual([1n]);
   });
 });
 

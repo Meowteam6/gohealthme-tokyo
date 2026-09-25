@@ -67,7 +67,18 @@ function RunPath({ step }: { step: ClaimStep }) {
 /** Which screens keep the proof surface (WearableCheck) mounted below: the
  *  ones where its polling loop or its retry button still matters. */
 export function proofSurfaceNeeded(screen: VerdictScreen): boolean {
-  return !(screen.kind === "won" || screen.kind === "lost" || screen.kind === "cancelled");
+  switch (screen.kind) {
+    case "won":
+    case "lost":
+    case "cancelled":
+    case "settled-final":
+      return false;
+    case "approval-failed":
+      // Once the pool settled there is nothing left to check or retry.
+      return !screen.settled;
+    default:
+      return true;
+  }
 }
 
 export interface VerdictScreening {
@@ -98,6 +109,8 @@ export function useVerdict(input: {
   refunded: boolean;
   runStatus: RunStatus | null;
   ledger: LedgerEntry[] | null;
+  /** The participant's on-chain resultRecorded flag, when read. */
+  resultRecorded?: boolean;
   /** Called when the card reports the human said yes, so the page can wake
    *  the run loop that records the result (docs/WORLD.md step 4). */
   onApproved?: () => void;
@@ -135,6 +148,7 @@ export function useVerdict(input: {
     runStatus: input.runStatus,
     ledger: input.ledger,
     localApproval: local,
+    resultRecorded: input.resultRecorded,
   });
 
   return {
@@ -215,7 +229,10 @@ export default function VerdictStage({
         {/* One card, one position, for the ask and its three refusals: it owns
             the countdown, the fresh verification, and "Ask again" (none after
             the run settled), so it must not remount between those screens. */}
-        {(screen.kind === "confirm-human" || screen.kind === "approval-failed") &&
+        {/* Not mounted once the pool settled: a settle is one-shot, so there
+            is nothing left to ask and the card must not offer "ask again". */}
+        {(screen.kind === "confirm-human" ||
+          (screen.kind === "approval-failed" && !screen.settled)) &&
         goalId !== null ? (
           <HumanApprovalCard
             goalId={goalId}
@@ -239,6 +256,15 @@ export default function VerdictStage({
             ) : null}
             <ClaimPayout address={address} />
           </div>
+        ) : null}
+
+        {/* After a settle, a refund or a share sits in owed[] until the player
+            withdraws. The card renders only when the chain says money is owed,
+            and says so when it cannot read that. */}
+        {screen.kind === "settled-final" ||
+        screen.kind === "lost" ||
+        (screen.kind === "approval-failed" && screen.settled) ? (
+          <ClaimPayout address={address} />
         ) : null}
 
         {ledger !== null && ledger.length > 0 && !proofSurfaceNeeded(screen) ? (
@@ -265,13 +291,17 @@ function spotterLineFor(screen: VerdictScreen): string {
     case "confirmed":
       return "That is you. Writing it down, then the money moves.";
     case "approval-failed":
-      return "Nothing moved. Your result is still here when you are.";
+      return screen.settled
+        ? "No OK from you, no payout. The settle sent your stake home."
+        : "Nothing moved. Your result is still here when you are.";
     case "banked":
-      return "Banked. I pay when the clock runs out. No human in the loop.";
+      return "Banked. I pay when the clock runs out.";
     case "not-yet":
       return "Not yet. Tonight still counts.";
     case "lost":
       return "The data said no. I do not round up.";
+    case "settled-final":
+      return "Books are closed on this one. Whatever is yours is below.";
     case "bad-read":
       return "Bad read on my side. Sync and send me back in.";
     case "stopped":

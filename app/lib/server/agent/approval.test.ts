@@ -122,6 +122,34 @@ describe("completeApproval", () => {
     expect(JSON.stringify(rows)).not.toContain(mockNullifier(USER, record.action));
   });
 
+  it("queues an approved claim for the settlement sweep, due now, so a closed tab cannot strand it", async () => {
+    const { completeApproval, provider, record, proof } = await opened();
+    const lock = await import("@/lib/server/agent/lock");
+    const nowS = Math.floor((T0 + 10_000) / 1000);
+    expect(await lock.listDuePendingSettlements(nowS, 10)).toEqual([]);
+    await completeApproval({
+      requestId: record.requestId,
+      address: USER,
+      decision: { decision: "approve", proof },
+      provider,
+      nowMs: T0 + 10_000,
+    });
+    expect(await lock.listDuePendingSettlements(nowS, 10)).toEqual([GOAL]);
+  });
+
+  it("does not queue a declined claim for the sweep", async () => {
+    const { completeApproval, provider, record } = await opened();
+    const lock = await import("@/lib/server/agent/lock");
+    await completeApproval({
+      requestId: record.requestId,
+      address: USER,
+      decision: { decision: "decline" },
+      provider,
+      nowMs: T0 + 10_000,
+    });
+    expect(await lock.listDuePendingSettlements(Math.floor(T0 / 1000) + 3600, 10)).toEqual([]);
+  });
+
   it("declines without a proof and is idempotent afterwards", async () => {
     const { completeApproval, provider, record, proof, readLedger } = await opened();
     const declined = await completeApproval({
@@ -351,6 +379,29 @@ describe("approvalGate", () => {
     const never = await approvalGate({ goalId: other, poolId: 8n, address: USER, poolSettled: async () => true, nowMs: T0 });
     expect(never).toEqual({ status: "unpayable" });
     expect(await readLedger(other)).toEqual([]);
+  });
+
+  it("reports an approval on a settled pool as unpayable, never approved (the record would revert SETTLED)", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    const mod = await load();
+    const provider = mod.mockApprovalProvider();
+    const asked = await mod.approvalGate({ goalId: GOAL, poolId: 7n, address: USER, poolSettled: settledNo, nowMs: T0 });
+    if (asked.status !== "awaiting") throw new Error("expected awaiting");
+    await mod.completeApproval({
+      requestId: asked.record.requestId,
+      address: USER,
+      decision: { decision: "approve", proof: { kind: mod.MOCK_PROOF_KIND, action: asked.record.action, approve: true } },
+      provider,
+      nowMs: T0 + 1_000,
+    });
+    // Unsettled: approved, the record write may proceed.
+    expect(
+      (await mod.approvalGate({ goalId: GOAL, poolId: 7n, address: USER, poolSettled: settledNo, nowMs: T0 + 2_000 })).status,
+    ).toBe("approved");
+    // Settled underneath it: no record write, no "confirmed" that reverts.
+    expect(
+      await mod.approvalGate({ goalId: GOAL, poolId: 7n, address: USER, poolSettled: async () => true, nowMs: T0 + 3_000 }),
+    ).toEqual({ status: "unpayable" });
   });
 
   it("in world mode with no env, throws with the variable name instead of falling back to mock", async () => {

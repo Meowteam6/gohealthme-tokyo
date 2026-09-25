@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { runStatusFromLedger, type LedgerEntry } from "@/lib/agent-receipt";
 import {
   payDecidedOf,
+  runApprovalLine,
   verdictCopy,
   verdictScreenOf,
+  verdictShowsClaim,
   type VerdictInput,
   type VerdictScreen,
 } from "@/lib/game/verdict";
@@ -117,15 +119,59 @@ describe("verdictScreenOf", () => {
     expect(screenFor([...decided, approval("requested"), approval("declined")])).toEqual({
       kind: "approval-failed",
       outcome: "declined",
+      settled: false,
     });
     expect(screenFor([...decided, approval("requested"), approval("expired")])).toEqual({
       kind: "approval-failed",
       outcome: "expired",
+      settled: false,
     });
     expect(screenFor([...decided, approval("requested"), approval("cancelled")])).toEqual({
       kind: "approval-failed",
       outcome: "cancelled",
+      settled: false,
     });
+  });
+
+  it("marks a missed confirmation as settled once the pool settled under it", () => {
+    expect(
+      screenFor([...decided, approval("requested"), approval("expired")], { poolSettled: true }),
+    ).toEqual({ kind: "approval-failed", outcome: "expired", settled: true });
+    // Still waiting on the human when the settle landed: nothing left to ask.
+    expect(
+      screenFor([...decided, approval("requested")], { poolSettled: true }),
+    ).toEqual({ kind: "approval-failed", outcome: "cancelled", settled: true });
+  });
+
+  it("never asks for a confirmation or shows checking on a settled pool", () => {
+    // Joined, never claimed; still checking; banked without a settle row;
+    // approved but not recorded: all final once the pool settled.
+    const cases: (LedgerEntry[] | null)[] = [
+      null,
+      [spend],
+      [spend, verdict(true), reason("pay"), recordEntry, deferred],
+      [...decided, approval("requested"), approval("approved")],
+    ];
+    for (const ledger of cases) {
+      expect(screenFor(ledger, { poolSettled: true })).toEqual({ kind: "settled-final" });
+    }
+  });
+
+  it("carries the claim inside the Verdict on every settled or cancelled screen", () => {
+    expect(verdictShowsClaim({ kind: "settled-final" })).toBe(true);
+    expect(verdictShowsClaim({ kind: "lost", stakeBack: true })).toBe(true);
+    expect(verdictShowsClaim({ kind: "cancelled", refunded: false })).toBe(true);
+    expect(
+      verdictShowsClaim({ kind: "won", paidUsd: "1.00", txHash: null, selfReported: false }),
+    ).toBe(true);
+    expect(
+      verdictShowsClaim({ kind: "approval-failed", outcome: "expired", settled: true }),
+    ).toBe(true);
+    expect(
+      verdictShowsClaim({ kind: "approval-failed", outcome: "expired", settled: false }),
+    ).toBe(false);
+    expect(verdictShowsClaim({ kind: "banked", selfReported: false })).toBe(false);
+    expect(verdictShowsClaim({ kind: "none" })).toBe(false);
   });
 
   it("shows confirmed while the record lands after an approval", () => {
@@ -138,7 +184,7 @@ describe("verdictScreenOf", () => {
     const asked = [...decided, approval("requested")];
     expect(
       screenFor(asked, { localApproval: { outcome: "declined", ledgerLength: asked.length } }),
-    ).toEqual({ kind: "approval-failed", outcome: "declined" });
+    ).toEqual({ kind: "approval-failed", outcome: "declined", settled: false });
     // A new request row after "ask again": the ledger is the truth again.
     const again = [...asked, approval("declined"), approval("requested")];
     expect(
@@ -184,7 +230,12 @@ describe("verdictScreenOf", () => {
   it("says not yet while later nights can still count, and lost once settled", () => {
     const ledger = [spend, verdict(false), reason("no-pay")];
     expect(screenFor(ledger)).toEqual({ kind: "not-yet" });
-    expect(screenFor(ledger, { poolSettled: true })).toEqual({ kind: "lost" });
+    // No miss is recorded on chain (SPOTTER never writes one), so B-2
+    // refunded the stake at settle.
+    expect(screenFor(ledger, { poolSettled: true })).toEqual({ kind: "lost", stakeBack: true });
+    expect(
+      screenFor(ledger, { poolSettled: true, resultRecorded: true }),
+    ).toEqual({ kind: "lost", stakeBack: false });
   });
 
   it("never calls a bad read or a down verifier a loss", () => {
@@ -231,19 +282,58 @@ describe("verdictScreenOf", () => {
   });
 });
 
+describe("runApprovalLine", () => {
+  const open = { settled: false, cancelled: false, resultRecorded: false };
+
+  it("tells a player who left that SPOTTER is waiting on them", () => {
+    const line = runApprovalLine("pending", open);
+    expect(line?.openRun).toBe(true);
+    expect(line?.text).toContain("waiting on your OK");
+  });
+
+  it("offers ask-again for a decline or an expiry while the run is open", () => {
+    for (const status of ["declined", "expired"] as const) {
+      const line = runApprovalLine(status, open);
+      expect(line?.openRun).toBe(true);
+      expect(line?.text).toMatch(/ask again/);
+      expect(line?.text).toContain("nothing moved");
+    }
+  });
+
+  it("says a confirmed payout is being recorded, with nothing to do", () => {
+    expect(runApprovalLine("approved", open)).toMatchObject({ tone: "accent", openRun: false });
+  });
+
+  it("is never silent about a failed read", () => {
+    expect(runApprovalLine("unknown", open)?.text).toContain("could not check");
+  });
+
+  it("says nothing once recorded, settled or cancelled, or when nobody asked", () => {
+    expect(runApprovalLine("pending", { ...open, resultRecorded: true })).toBeNull();
+    expect(runApprovalLine("pending", { ...open, settled: true })).toBeNull();
+    expect(runApprovalLine("pending", { ...open, cancelled: true })).toBeNull();
+    expect(runApprovalLine("none", open)).toBeNull();
+  });
+});
+
 describe("verdictCopy", () => {
   const screens: VerdictScreen[] = [
     { kind: "checking" },
     { kind: "confirm-human" },
     { kind: "confirmed" },
-    { kind: "approval-failed", outcome: "declined" },
-    { kind: "approval-failed", outcome: "expired" },
-    { kind: "approval-failed", outcome: "cancelled" },
+    { kind: "approval-failed", outcome: "declined", settled: false },
+    { kind: "approval-failed", outcome: "expired", settled: false },
+    { kind: "approval-failed", outcome: "cancelled", settled: false },
+    { kind: "approval-failed", outcome: "declined", settled: true },
+    { kind: "approval-failed", outcome: "expired", settled: true },
+    { kind: "approval-failed", outcome: "cancelled", settled: true },
     { kind: "banked", selfReported: false },
     { kind: "banked", selfReported: true },
     { kind: "won", paidUsd: "1.00", txHash: null, selfReported: false },
     { kind: "not-yet" },
-    { kind: "lost" },
+    { kind: "lost", stakeBack: true },
+    { kind: "lost", stakeBack: false },
+    { kind: "settled-final" },
     { kind: "bad-read" },
     { kind: "stopped", reason: "budget" },
     { kind: "stopped", reason: "not-in-run" },
@@ -265,17 +355,38 @@ describe("verdictCopy", () => {
   });
 
   it("offers no retry once the run settled before the confirmation", () => {
-    const copy = verdictCopy({ kind: "approval-failed", outcome: "cancelled" });
-    expect(copy?.headline).toBe("Run closed before you confirmed");
-    expect(copy?.body).not.toMatch(/ask again/i);
+    for (const outcome of ["declined", "expired", "cancelled"] as const) {
+      const copy = verdictCopy({ kind: "approval-failed", outcome, settled: true });
+      expect(copy?.headline).toBe("Payout not confirmed");
+      expect(copy?.body).not.toMatch(/ask again/i);
+      expect(copy?.body).toContain("credited your stake back");
+    }
+  });
+
+  it("never calls a met goal with a missing confirmation a failed run", () => {
+    for (const outcome of ["declined", "expired", "cancelled"] as const) {
+      for (const settled of [false, true]) {
+        const copy = verdictCopy({ kind: "approval-failed", outcome, settled });
+        expect(copy?.headline).toBe("Payout not confirmed");
+        expect(`${copy?.headline} ${copy?.body}`).not.toMatch(/run failed/i);
+      }
+    }
+    expect(
+      verdictCopy({ kind: "approval-failed", outcome: "expired", settled: false })?.body,
+    ).toMatch(/ask again/i);
+  });
+
+  it("says a settled loss got the stake back unless a miss was recorded", () => {
+    expect(verdictCopy({ kind: "lost", stakeBack: true })?.headline).toBe("Run lost");
+    expect(verdictCopy({ kind: "lost", stakeBack: true })?.body).toContain(
+      "credited your stake back",
+    );
+    expect(verdictCopy({ kind: "lost", stakeBack: false })?.body).toContain(
+      "stake stayed in the pool",
+    );
   });
 
   it("uses the words the game loop promised", () => {
-    expect(verdictCopy({ kind: "approval-failed", outcome: "expired" })?.headline).toBe(
-      "Run failed, ask again",
-    );
-    expect(verdictCopy({ kind: "lost" })?.headline).toBe("Run lost");
-    expect(verdictCopy({ kind: "lost" })?.body).toContain("pays nothing");
     expect(verdictCopy({ kind: "cancelled", refunded: false })?.headline).toBe(
       "Run cancelled, take your stake back",
     );

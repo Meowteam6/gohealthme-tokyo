@@ -586,8 +586,9 @@ function PreviewCard({
                   ? `@${cleanRecipient}`
                   : "whoever opens the link"}
               </span>
-              . Hit it, keep the stake and the reward. Flake, and the money just
-              goes back home.
+              . Hit it, keep the stake and the reward. Flake, and their stake
+              goes back to them and you take the reward back from the run page
+              once it settles.
             </>
           )}
         </p>

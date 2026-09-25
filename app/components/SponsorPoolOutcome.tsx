@@ -28,7 +28,9 @@ import {
   formatUsdc,
   type PoolInfo,
 } from "@/lib/contract";
-import { poolPhase } from "@/lib/pool-lifecycle";
+import { poolIsOver, poolPhase } from "@/lib/pool-lifecycle";
+import SweepLeftover from "@/components/SweepLeftover";
+import { useEmbeddedWallet } from "@/lib/wallet";
 import { poolOutcomeDisplay, type PoolAggregate } from "@/lib/sponsor-metrics";
 
 // The verdict-privacy line. Completion rate is a verdict-derived figure, so any
@@ -71,6 +73,7 @@ export default function SponsorPoolOutcome({
   outcomesUnavailable?: boolean;
 }) {
   const [showTopUp, setShowTopUp] = useState(false);
+  const { address } = useEmbeddedWallet();
   const d = poolOutcomeDisplay(aggregate);
   const phase = poolPhase(pool, nowSeconds);
   const isDocGoal = evidenceTypeOf(pool.goalSpec) === "document";
@@ -85,7 +88,9 @@ export default function SponsorPoolOutcome({
               {isDocGoal ? "Document" : "Wearable"}
             </Badge>
           </div>
-          {phase === "settled" ? (
+          {phase === "cancelled" ? (
+            <Badge tone="warning">Cancelled</Badge>
+          ) : phase === "settled" ? (
             <Badge tone="muted">Settled</Badge>
           ) : phase === "expired" ? (
             <Badge tone="warning">Awaiting settlement</Badge>
@@ -183,7 +188,16 @@ export default function SponsorPoolOutcome({
       {/* Top up: the existing FundPool machinery, reused unchanged. Only offered
           while the pool can still take funds — the contract reverts fundPool on
           a settled pool. */}
-      {phase !== "settled" ? (
+      {/* A finished pool's leftover goes back to its creator through sweep();
+          the card owns every state, including the cancelled pool that waits
+          on its players' refunds. */}
+      {poolIsOver(phase) ? (
+        <div className="border-t border-edge pt-4">
+          <SweepLeftover pool={pool} phase={phase} address={address} />
+        </div>
+      ) : null}
+
+      {!poolIsOver(phase) ? (
         <div className="border-t border-edge pt-4">
           {showTopUp ? (
             <FundPool poolId={pool.id} />

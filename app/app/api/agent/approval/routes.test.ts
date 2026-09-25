@@ -24,6 +24,19 @@ vi.mock("@/lib/server/wallet-auth", () => ({
   authenticateWallet: vi.fn(async () => signer),
 }));
 
+// The request route reads the pool's settled flag from chain before opening a
+// request. Tests flip these to model a settled pool or an RPC failure.
+let poolSettled = false;
+let poolReadFails = false;
+vi.mock("@/lib/server/agent/spotter", () => ({
+  arcReader: vi.fn(() => ({
+    getPoolState: vi.fn(async () => {
+      if (poolReadFails) throw new Error("rpc down");
+      return { settled: poolSettled, periodEnd: 0n, periodStart: 0n };
+    }),
+  })),
+}));
+
 async function load() {
   vi.stubEnv("DATA_DIR", mkdtempSync(path.join(os.tmpdir(), "approval-routes-")));
   vi.resetModules();
@@ -71,6 +84,8 @@ beforeEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
   signer = { ok: false, reason: "missing wallet signature headers" };
+  poolSettled = false;
+  poolReadFails = false;
 });
 
 describe("POST /api/agent/approval/request", () => {
@@ -116,6 +131,33 @@ describe("POST /api/agent/approval/request", () => {
     expect(
       (await requestRoute(post("/api/agent/approval/request", { goalId: GOAL }))).status,
     ).toBe(409);
+  });
+
+  it("refuses with 409 code settled once the pool settled, opening nothing", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    const { requestRoute, appendLedger, readLedger } = await load();
+    await seedPayDecision(appendLedger);
+    signer = { ok: true, address: USER };
+    poolSettled = true;
+    const before = (await readLedger(GOAL)).length;
+    const response = await requestRoute(post("/api/agent/approval/request", { goalId: GOAL }));
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as { error: string; code?: string };
+    expect(body.code).toBe("settled");
+    expect(body.error).toMatch(/already settled/);
+    // No request row: nothing to confirm on a settled run.
+    expect(await readLedger(GOAL)).toHaveLength(before);
+  });
+
+  it("fails closed with a retryable 503 when the pool state cannot be read", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    const { requestRoute, appendLedger } = await load();
+    await seedPayDecision(appendLedger);
+    signer = { ok: true, address: USER };
+    poolReadFails = true;
+    const response = await requestRoute(post("/api/agent/approval/request", { goalId: GOAL }));
+    expect(response.status).toBe(503);
+    expect(((await response.json()) as { error: string }).error).not.toMatch(/rpc down/);
   });
 
   it("world mode without env is an honest 503, never a mock fallback", async () => {

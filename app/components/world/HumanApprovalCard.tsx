@@ -8,8 +8,12 @@
 // by the claim screens when the run reports "awaiting-approval" (and the
 // three refusal states); never edited by the UX lane.
 //
-// WHAT IT DOES. Opens (or picks up) the request through
-// POST /api/agent/approval/request, runs the fresh verification, completes it
+// WHAT IT DOES. On mount it READS GET /api/agent/approval/status first and
+// adopts a finished answer as-is (a reload never undoes a "not now"); only a
+// pending or missing request is picked up through
+// POST /api/agent/approval/request, which answers 409 "settled" once the run
+// settled. "Ask SPOTTER again" is the only thing that opens a fresh attempt.
+// It runs the fresh verification, completes it
 // through POST /api/agent/approval/complete, polls GET /api/agent/approval/
 // status, shows the countdown to expiry, and calls onResult ONCE per request
 // with the outcome. Declined and expired are real screens with "ask again";
@@ -36,7 +40,9 @@ import { useWalletAuth } from "@/lib/useWalletAuth";
 import {
   formatCountdown,
   mockApprovalProof,
+  mountActionFor,
   outcomeCopy,
+  SETTLED_CODE,
   parseOpenRequest,
   parseStatus,
   secondsLeft,
@@ -66,10 +72,20 @@ type CardState =
   | { kind: "pending"; request: OpenApprovalRequest; error: string | null }
   | { kind: "verifying"; request: OpenApprovalRequest }
   | { kind: "done"; outcome: ApprovalOutcome; requestId: string | null }
+  /** The request route answered 409 "settled": the run settled before any
+   *  answer, so there is nothing to confirm and nothing to retry. */
+  | { kind: "settled" }
   /** The ask could not be opened or answered: no signature, a misconfigured
    *  deployment, or a network fault. Retryable unless the server said the
-   *  step is not enabled here at all. */
-  | { kind: "blocked"; message: string; retry: boolean; needsSignature: boolean };
+   *  step is not enabled here at all. `retryLoad` re-reads the status first
+   *  instead of opening a request, for a failure of the mount-time read. */
+  | {
+      kind: "blocked";
+      message: string;
+      retry: boolean;
+      needsSignature: boolean;
+      retryLoad?: boolean;
+    };
 
 type WorldRequest = OpenApprovalRequest & {
   world: NonNullable<OpenApprovalRequest["world"]>;
@@ -90,14 +106,19 @@ function authBlock(auth: ClientAuth): CardState {
   };
 }
 
-async function readError(response: Response): Promise<string> {
+async function readError(
+  response: Response,
+): Promise<{ message: string; code: string | null }> {
   try {
-    const body = (await response.json()) as { error?: unknown };
-    if (typeof body.error === "string" && body.error !== "") return body.error;
+    const body = (await response.json()) as { error?: unknown; code?: unknown };
+    const code = typeof body.code === "string" ? body.code : null;
+    if (typeof body.error === "string" && body.error !== "") {
+      return { message: body.error, code };
+    }
+    return { message: "SPOTTER's confirmation step did not answer cleanly. Try again in a moment.", code };
   } catch {
-    // fall through
+    return { message: "SPOTTER's confirmation step did not answer cleanly. Try again in a moment.", code: null };
   }
-  return `SPOTTER's approval service answered ${response.status}.`;
 }
 
 export default function HumanApprovalCard(props: HumanApprovalCardProps) {
@@ -141,9 +162,12 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     if (sent.auth.kind !== "ok") return authBlock(sent.auth);
     const { response } = sent;
     if (!response.ok) {
+      const { message, code } = await readError(response);
+      // The run settled first: a terminal fact, not an error to retry.
+      if (response.status === 409 && code === SETTLED_CODE) return { kind: "settled" };
       return {
         kind: "blocked",
-        message: await readError(response),
+        message,
         // 409 "not enabled" and 503 "not configured" are deployment facts;
         // retrying changes nothing. Everything else is worth another try.
         retry: response.status !== 409 && response.status !== 503,
@@ -174,20 +198,72 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     });
   }, [openRequest]);
 
-  // First ask on mount. The initial state is already "asking", so nothing is
-  // set synchronously here; the result lands when the request answers.
+  // Mount: READ where the confirmation stands before anything else. A
+  // finished answer is adopted, never re-asked (mountActionFor); only a
+  // pending request or a missing one is fetched with the idempotent POST.
+  const load = useCallback(async (): Promise<CardState> => {
+    let status: ReturnType<typeof parseStatus>;
+    try {
+      const response = await fetch(
+        `/api/agent/approval/status?goalId=${encodeURIComponent(goalId)}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) {
+        const { message } = await readError(response);
+        return {
+          kind: "blocked",
+          message,
+          retry: response.status !== 503,
+          needsSignature: false,
+          retryLoad: true,
+        };
+      }
+      status = parseStatus(await response.json().catch(() => null));
+    } catch {
+      status = null;
+    }
+    if (status === null) {
+      return {
+        kind: "blocked",
+        message: "I could not check where your confirmation stands just now. Nothing moved.",
+        retry: true,
+        needsSignature: false,
+        retryLoad: true,
+      };
+    }
+    if (mountActionFor(status.status) === "adopt" && status.status !== "none" && status.status !== "pending") {
+      return { kind: "done", outcome: status.status, requestId: status.requestId ?? null };
+    }
+    return openRequest();
+  }, [goalId, openRequest]);
+
+  const reload = useCallback(() => {
+    setState({ kind: "asking" });
+    void load().then((next) => {
+      if (mounted.current) setState(next);
+    });
+  }, [load]);
+
+  // The initial state is already "asking", so nothing is set synchronously
+  // here; the result lands when the read answers.
   useEffect(() => {
     let alive = true;
-    void openRequest().then((next) => {
+    void load().then((next) => {
       if (alive && mounted.current) setState(next);
     });
     return () => {
       alive = false;
     };
-  }, [openRequest]);
+  }, [load]);
 
   // Report each terminal outcome exactly once per request id.
   useEffect(() => {
+    if (state.kind === "settled") {
+      if (reportedFor.current === SETTLED_CODE) return;
+      reportedFor.current = SETTLED_CODE;
+      onResult("cancelled");
+      return;
+    }
     if (state.kind !== "done") return;
     if (reportedFor.current === state.requestId) return;
     reportedFor.current = state.requestId;
@@ -277,7 +353,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
           fatal: false,
         };
       }
-      const message = await readError(response);
+      const { message } = await readError(response);
       // 401 with status pending is "proof refused, try again"; a 409 means the
       // request was superseded or the state moved on; 403/404 are dead ends.
       if (response.status === 401) {
@@ -297,12 +373,13 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     });
     if (!mounted.current || result.ok) return;
     if (result.fatal) {
-      // The state may have moved on server-side; re-ask to learn where it is.
-      void ask();
+      // The state may have moved on server-side; READ where it is. Never a
+      // fresh POST here: that would open a new attempt nobody asked for.
+      reload();
       return;
     }
     setState({ kind: "pending", request, error: result.message });
-  }, [state, complete, ask]);
+  }, [state, complete, reload]);
 
   const decline = useCallback(async () => {
     if (state.kind !== "pending") return;
@@ -311,11 +388,11 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     const result = await complete(request, { decline: true });
     if (!mounted.current || result.ok) return;
     if (result.fatal) {
-      void ask();
+      reload();
       return;
     }
     setState({ kind: "pending", request, error: result.message });
-  }, [state, complete, ask]);
+  }, [state, complete, reload]);
 
   // World mode: the widget calls this with the untouched IDKitResult; a throw
   // is what keeps the widget on its error screen, retryable.
@@ -330,8 +407,8 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
 
   const retrySignature = useCallback(async () => {
     await requestAuth({ refresh: true });
-    void ask();
-  }, [requestAuth, ask]);
+    reload();
+  }, [requestAuth, reload]);
 
   // ------------------------------------------------------------- rendering
 
@@ -365,7 +442,13 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
         {state.retry ? (
           <button
             type="button"
-            onClick={() => void (state.needsSignature ? retrySignature() : ask())}
+            onClick={() =>
+              void (state.needsSignature
+                ? retrySignature()
+                : state.retryLoad === true
+                  ? reload()
+                  : ask())
+            }
             className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
           >
             {state.needsSignature ? "Sign and try again" : "Try again"}
@@ -375,6 +458,25 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
             Nothing is recorded or paid until this is fixed on the deployment.
           </p>
         )}
+      </div>
+    );
+  }
+
+  if (state.kind === "settled") {
+    return (
+      <div
+        data-lane="world-agents"
+        data-outcome="settled"
+        className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm"
+        role="status"
+      >
+        <SpotterLabel />
+        <p className="mt-1 font-semibold">the run settled first. nothing to confirm.</p>
+        <p className="mt-1 text-foreground/80">
+          Settle is one-shot, so this payout can no longer happen and there is
+          nothing to ask again. The settle credited your stake back; claim it
+          on this page.
+        </p>
       </div>
     );
   }
