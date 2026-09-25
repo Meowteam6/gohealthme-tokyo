@@ -123,6 +123,26 @@ export function parseStatus(value: unknown): ApprovalStatusResponse | null {
   };
 }
 
+/**
+ * What the card does when it mounts, from the status it read first.
+ *
+ * A mount must never open a new request on its own: POSTing on mount turned a
+ * deliberate "Not now, do not pay" back into a live ask on every reload, and
+ * on a settled pool it showed a countdown for a payout that could not happen.
+ * So a finished record is adopted as-is, and only a pending request (picked up
+ * idempotently, to get what the browser needs to answer it) or no record at
+ * all (SPOTTER's own ask has not landed yet) is fetched with a POST. Only the
+ * "Ask SPOTTER again" button opens a fresh attempt.
+ */
+export function mountActionFor(
+  status: ApprovalStatusResponse["status"],
+): "adopt" | "open" {
+  return status === "pending" || status === "none" ? "open" : "adopt";
+}
+
+/** The request route's 409 when the pool already settled. */
+export const SETTLED_CODE = "settled";
+
 /** Copy for each terminal state. Lives here so the card and any other
  *  surface say the same true thing, and so the wording is testable. */
 export function outcomeCopy(outcome: ApprovalOutcome): {

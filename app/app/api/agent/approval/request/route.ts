@@ -25,6 +25,7 @@ import {
   approvalProviderFor,
 } from "@/lib/server/agent/approval-provider";
 import { authenticateWallet } from "@/lib/server/wallet-auth";
+import { arcReader } from "@/lib/server/agent/spotter";
 import {
   errorMessage,
   jsonError,
@@ -89,6 +90,25 @@ export async function POST(request: Request) {
     }
     if (ledger.some((e) => e.kind === "record")) {
       return jsonError(409, "This claim is already recorded on-chain.");
+    }
+    // A settle is one-shot and already refunded this claim (B-2), so a new
+    // request would show a live countdown for a payout that cannot happen and
+    // a "confirmed" that reverts SETTLED. `code` lets the card say so plainly.
+    let settled: boolean;
+    try {
+      settled = (await arcReader().getPoolState(BigInt(poolId))).settled;
+    } catch (err) {
+      console.error(`[${cid}] pool ${poolId} state read failed: ${errorMessage(err)}`);
+      return jsonError(503, "I could not check this run on Base Sepolia just now. Try again in a moment.");
+    }
+    if (settled) {
+      return Response.json(
+        {
+          error: "This run already settled, so there is no payout left to confirm.",
+          code: "settled",
+        },
+        { status: 409 },
+      );
     }
 
     let provider;
