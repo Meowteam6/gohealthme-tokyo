@@ -344,6 +344,8 @@ export default function PoolDetail({ id }: { id: string }) {
     retry: false,
     staleTime: 5_000,
     refetchInterval: (query) => {
+      // A settled or cancelled run cannot move its claim any more.
+      if (poolQuery.data?.pool.settled === true) return false;
       const data = query.state.data;
       if (data === undefined) return 3_000;
       const status =
@@ -998,6 +1000,11 @@ export default function PoolDetail({ id }: { id: string }) {
               <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
                 Your result
               </p>
+              {claimLedgerQuery.isLoading || participantQuery.isLoading ? (
+                // Hold until the ledger and the chain answer, so a winner
+                // never sees "Run settled" flip to "You won the run".
+                <Skeleton className="h-48" />
+              ) : (
               <VerdictStage
                 pool={pool}
                 address={address}
@@ -1011,6 +1018,7 @@ export default function PoolDetail({ id }: { id: string }) {
                 screening={verdict.screening}
                 onApproval={verdict.onApproval}
               />
+              )}
             </>
           ) : null}
 
