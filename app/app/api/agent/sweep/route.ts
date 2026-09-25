@@ -69,6 +69,13 @@ import {
 import { liveBuyDeps } from "@/lib/server/agent/x402";
 import { requireEnv } from "@/lib/server/env";
 import { errorMessage, jsonError } from "@/lib/server/http";
+// --- ens ---
+import {
+  reconcileSettlementReceipts,
+  writeSettlementReceipt,
+} from "@/lib/server/ens/receipt";
+import { storeSettleTxCache } from "@/lib/server/agent/spotter";
+// --- end ens ---
 
 // One sweep can settle several pools, each a Circle transaction plus an
 // inclusion wait; the default function window is not enough for that.
@@ -238,6 +245,24 @@ async function sweepDuePools(
 
       const outcome = await settleDuePoolAsSpotter(deps, { poolId });
       if (outcome.status === "settled") poolsSettled.count += 1;
+      // --- ens ---
+      // A pool settled for its own sake (refunds, no claim) still gets its
+      // receipt on pool-<id>.gohealthme.eth; achievers are counted from the
+      // settle tx's AchieverPaid logs. Never throws, never blocks the sweep.
+      if (outcome.status === "settled") {
+        let achievers = 0;
+        try {
+          achievers = (await reader.achieverPayouts(outcome.txHash)).length;
+        } catch (err) {
+          console.error(`[agent/sweep] pool ${poolId}: could not count achievers for the ENS receipt: ${errorMessage(err)}`);
+        }
+        await writeSettlementReceipt({
+          poolId,
+          settleTxHash: outcome.txHash,
+          achieverCount: achievers,
+        });
+      }
+      // --- end ens ---
     } catch (err) {
       // Surfaced in the response, never swallowed: an unsettleable pool is a
       // participant whose stake is still stuck.
@@ -326,6 +351,27 @@ async function runSweep(): Promise<SweepCounts> {
   );
   counts.poolsSettled = pools.poolsSettled;
   counts.poolErrors = pools.poolErrors;
+
+  // --- ens ---
+  // Receipts the money path sent without waiting, or failed to send, are
+  // finished here with inclusion asserted on TextUpdated logs. A settled
+  // pool with no known settle tx is listed, never given an invented receipt.
+  try {
+    const receipts = await reconcileSettlementReceipts(
+      deps.spotter.reader,
+      (poolId) => storeSettleTxCache().read(poolId),
+      outOfTime,
+    );
+    if (receipts.checked > 0 || receipts.skipped.length > 0) {
+      console.log(
+        `[agent/sweep] ens receipts: checked ${receipts.checked}, written ${receipts.written}, pending ${receipts.pending}` +
+          (receipts.skipped.length > 0 ? `, skipped: ${receipts.skipped.join("; ")}` : ""),
+      );
+    }
+  } catch (err) {
+    console.error(`[agent/sweep] ens receipt reconciliation failed: ${errorMessage(err)}`);
+  }
+  // --- end ens ---
 
   return counts;
 }

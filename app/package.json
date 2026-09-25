@@ -18,7 +18,9 @@
     "test:explore": "playwright test --config e2e/explorer/explorer.config.ts",
     "test:explore:env": "node -e \"const p = process.env.EXPLORER_ENV_FILE; if (p === undefined || p === '') { console.error('test:explore:env requires EXPLORER_ENV_FILE=<path to a sandbox dotenv file>'); process.exit(1); }\" && playwright test --config e2e/explorer/explorer.config.ts",
     "agent:provision": "node --env-file-if-exists=../.env --env-file-if-exists=.env.local --import tsx scripts/provision-spotter.ts",
-    "agent:verdict-gate": "node --env-file-if-exists=../.env --env-file-if-exists=.env.local --import tsx scripts/verdict-gate-check.ts"
+    "agent:verdict-gate": "node --env-file-if-exists=../.env --env-file-if-exists=.env.local --import tsx scripts/verdict-gate-check.ts",
+    "ens:bootstrap": "node --env-file-if-exists=../contracts/.env --env-file-if-exists=../.env --env-file-if-exists=.env.local --import tsx scripts/ens-bootstrap.ts",
+    "ens:proof": "node --env-file-if-exists=../contracts/.env --env-file-if-exists=../.env --env-file-if-exists=.env.local --import tsx scripts/ens-boundary-proof.ts"
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^10.8.0",

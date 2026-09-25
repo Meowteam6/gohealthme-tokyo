@@ -78,6 +78,9 @@ import {
   reserveDailySpend,
 } from "@/lib/server/agent/budget";
 import { wearableReadQuote } from "@/lib/server/agent/wearable";
+// --- ens ---
+import { writeSettlementReceipt } from "@/lib/server/ens/receipt";
+// --- end ens ---
 import type {
   EscalationContext,
   ReasonFn,
@@ -782,6 +785,18 @@ async function settleClaimUnlocked(
       paidUsd: outcome.participantPaidUsd,
       note: verification.note,
     });
+    // --- ens ---
+    // Settlement receipt on pool-<id>.gohealthme.eth (ENSv2 Sepolia), written
+    // from SPOTTER's delegated key AFTER the payout is asserted above. Sent,
+    // not awaited to inclusion: a naming failure must never read as a payment
+    // failure, so this never throws; the sweep reconciles and asserts the
+    // TextUpdated logs on the next pass.
+    await writeSettlementReceipt({
+      poolId: input.poolId,
+      settleTxHash: outcome.txHash,
+      achieverCount: outcome.payouts.length,
+    });
+    // --- end ens ---
     await removePendingSettlement(input.goalId);
     return { status: "settled", ledger };
   } catch (err) {
