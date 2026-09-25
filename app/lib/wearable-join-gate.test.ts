@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { wearableJoinBlock, joinIsBlocked } from "@/lib/wearable-join-gate";
+import {
+  joinIsBlocked,
+  sensorHoldCopy,
+  uploadFallbackNote,
+  wearableJoinBlock,
+} from "@/lib/wearable-join-gate";
 
 // The join decision, in one place because two surfaces make it. The pool page
 // had a careful version of this and the challenge link had none at all, so a
@@ -139,5 +144,150 @@ describe("wearableJoinBlock", () => {
     });
     expect(block.kind).toBe("unchecked");
     expect(joinIsBlocked(block)).toBe(true);
+  });
+});
+
+describe("linked-but-held devices", () => {
+  it("holds a linked device that has not synced, and says why", () => {
+    // The WHOOP-via-Junction trap: linked, nothing synced, and Junction's
+    // declared union used to read as "measures steps". Now a hold.
+    const block = wearableJoinBlock({
+      ...base,
+      viewerMetrics: null,
+      capabilityPending: true,
+      needsDevice: false,
+      capabilityHold: "awaiting-sync",
+    });
+    expect(block).toEqual({ kind: "unchecked", hold: "awaiting-sync" });
+    expect(joinIsBlocked(block)).toBe(true);
+  });
+
+  it("holds a linked device the provider will not describe, never 'pair a sensor'", () => {
+    const block = wearableJoinBlock({
+      ...base,
+      viewerMetrics: null,
+      capabilityPending: true,
+      needsDevice: false,
+      capabilityHold: "unreadable",
+    });
+    expect(block).toEqual({ kind: "unchecked", hold: "unreadable" });
+  });
+
+  it("still reports an outage ahead of a hold", () => {
+    const block = wearableJoinBlock({
+      ...base,
+      providerDown: "Junction returned 503",
+      viewerMetrics: null,
+      capabilityHold: "unreadable",
+    });
+    expect(block.kind).toBe("outage");
+  });
+
+  it("locks the run for a caller that has not learned about holds", () => {
+    // Fail-safe: holds ride on "unchecked", so a consumer that ignores `hold`
+    // still withholds the join rather than treating an unknown kind as fine.
+    const block = wearableJoinBlock({
+      ...base,
+      viewerMetrics: null,
+      capabilityPending: true,
+      needsDevice: false,
+    });
+    expect(block).toEqual({ kind: "unchecked" });
+  });
+});
+
+describe("hybrid wearable-plus-upload pools", () => {
+  const HYBRID = "[proof=wearable+self] walk 8000 steps a day for 7 days";
+  const HYBRID_DOC = "[proof=wearable+doc] walk 8000 steps a day for 7 days";
+
+  it("stays joinable with no device when the upload path is on", () => {
+    const block = wearableJoinBlock({
+      ...base,
+      goalSpec: HYBRID,
+      viewerMetrics: null,
+      needsDevice: true,
+      uploadAvailable: true,
+    });
+    expect(block).toEqual({ kind: "ok", proof: "upload" });
+    expect(joinIsBlocked(block)).toBe(false);
+  });
+
+  it("stays joinable when the sensor cannot measure it, via the upload", () => {
+    const block = wearableJoinBlock({
+      ...base,
+      goalSpec: HYBRID,
+      viewerMetrics: ["sleep_score", "workouts"],
+      uploadAvailable: true,
+    });
+    expect(block).toEqual({ kind: "ok", proof: "upload" });
+  });
+
+  it("is a plain ok when the sensor measures it", () => {
+    const block = wearableJoinBlock({
+      ...base,
+      goalSpec: HYBRID,
+      uploadAvailable: true,
+    });
+    expect(block).toEqual({ kind: "ok" });
+  });
+
+  it("stays locked when the upload path is paused, because nothing could prove it", () => {
+    const block = wearableJoinBlock({
+      ...base,
+      goalSpec: HYBRID,
+      viewerMetrics: null,
+      needsDevice: true,
+      uploadAvailable: false,
+    });
+    expect(block.kind).toBe("no-device");
+  });
+
+  it("treats a caller that does not say as upload-off", () => {
+    const block = wearableJoinBlock({
+      ...base,
+      goalSpec: HYBRID,
+      viewerMetrics: null,
+      needsDevice: true,
+    });
+    expect(block.kind).toBe("no-device");
+  });
+
+  it("never lets a pure wearable pool through on the upload flag", () => {
+    const block = wearableJoinBlock({
+      ...base,
+      viewerMetrics: null,
+      needsDevice: true,
+      uploadAvailable: true,
+    });
+    expect(block.kind).toBe("no-device");
+  });
+
+  it("words the fallback for the upload the pool actually takes", () => {
+    expect(uploadFallbackNote(HYBRID)).toMatch(/photo/);
+    expect(uploadFallbackNote(HYBRID_DOC)).toMatch(/document/);
+  });
+});
+
+describe("sensorHoldCopy", () => {
+  it.each(["awaiting-sync", "unreadable"] as const)(
+    "gives %s a wait-tone lock with a re-check, in plain words",
+    (hold) => {
+      const copy = sensorHoldCopy(hold, "Junction");
+      expect(copy.tone).toBe("wait");
+      expect(copy.fix).toEqual({ kind: "check-sensor", label: "Check again" });
+      expect(copy.detail).toContain("Junction is linked");
+      // No plumbing reaches a player.
+      expect(`${copy.title} ${copy.detail}`).not.toMatch(
+        /env|api|undefined|null|capability|[A-Z_]{6,}/,
+      );
+      // A linked device is never told to re-pair.
+      expect(copy.detail).not.toMatch(/pair/i);
+    },
+  );
+
+  it("falls back to 'your sensor' with no label", () => {
+    expect(sensorHoldCopy("awaiting-sync", null).detail).toMatch(
+      /^Your sensor is linked/,
+    );
   });
 });

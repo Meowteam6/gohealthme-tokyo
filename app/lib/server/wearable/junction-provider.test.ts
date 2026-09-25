@@ -3,9 +3,9 @@ import { randomUUID } from "crypto";
 
 // The capability probe. It exists because Junction's declared metric list is
 // the UNION of what several brands can do: it offers a proprietary sleep score
-// to a wallet whose tracker has none, and that wallet would be invited to stake
-// on a pool it can never satisfy. Narrowing to what the device has actually
-// produced is what moves that discovery from after the money to before it.
+// to a wallet whose tracker has none, and a steps run to a WHOOP strap with no
+// pedometer. Narrowing to what the device has actually produced is what moves
+// that discovery from after the money to before it.
 
 const getMetricProgress = vi.fn();
 
@@ -34,11 +34,15 @@ function nextAddress(): string {
   return `0x${RUN_SALT}${counter.toString(16).padStart(28, "0")}`;
 }
 
-/** Answer as though only `present` produced any data. */
+/**
+ * Answer as though only `present` produced a non-zero value. The probe asks
+ * with the smallest positive threshold, so qualifyingDays is the count of days
+ * the number was above zero.
+ */
 function onlyPresent(present: string[]): void {
   getMetricProgress.mockImplementation((_addr: string, metric: string) =>
     Promise.resolve({
-      qualifyingDays: 0,
+      qualifyingDays: present.includes(metric) ? 5 : 0,
       daysWithData: present.includes(metric) ? 5 : 0,
       daysWithSource: 5,
     }),
@@ -68,15 +72,82 @@ describe("junctionProvider.observedMetrics", () => {
     expect(metrics).not.toContain("sleep_score");
   });
 
-  it("answers 'declared', not an empty list, when nothing has been observed", async () => {
-    // A wallet that linked ten minutes ago has produced nothing. An empty
-    // array would mean "measures none of these" and hide every wearable pool
-    // on their board; declared is the permissive fallback.
+  it("answers 'awaiting-sync', never the declared union, when nothing has synced", async () => {
+    // The WHOOP-via-Junction trap. Right after linking, nothing has arrived.
+    // "declared" handed this wallet Junction's seven-metric union, so a WHOOP
+    // strap was offered steps runs, the player staked, and the claim failed
+    // closed days later. An empty list would blank their whole board instead.
+    // Neither is true: the join waits for the first sync.
     onlyPresent([]);
 
-    expect((await junctionProvider.observedMetrics(nextAddress())).kind).toBe(
-      "declared",
+    expect(await junctionProvider.observedMetrics(nextAddress())).toEqual({
+      kind: "awaiting-sync",
+    });
+  });
+
+  it("re-probes an awaiting wallet after the short cache, so a sync unlocks it", async () => {
+    vi.useFakeTimers();
+    try {
+      const address = nextAddress();
+      onlyPresent([]);
+      expect((await junctionProvider.observedMetrics(address)).kind).toBe(
+        "awaiting-sync",
+      );
+
+      // The strap syncs. Unlocks within minutes, not the thirty-minute TTL.
+      onlyPresent(["sleep_score", "sleep_hours"]);
+      vi.advanceTimersByTime(4 * 60_000);
+      const synced = await junctionProvider.observedMetrics(address);
+      expect(synced.kind).toBe("observed");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not re-probe an awaiting wallet on every page load", async () => {
+    onlyPresent([]);
+    const address = nextAddress();
+
+    await junctionProvider.observedMetrics(address);
+    const callsAfterFirst = getMetricProgress.mock.calls.length;
+    await junctionProvider.observedMetrics(address);
+
+    expect(getMetricProgress.mock.calls.length).toBe(callsAfterFirst);
+  });
+
+  it("treats a day of zero steps as absent, so a WHOOP strap is not a pedometer", async () => {
+    // Junction may answer a WHOOP activity day with steps: 0 instead of null.
+    // Counting that as "has steps" would put the strap back on a steps run.
+    // The probe only counts a day above zero.
+    getMetricProgress.mockImplementation((_addr: string, metric: string) =>
+      Promise.resolve({
+        qualifyingDays: metric === "sleep_score" ? 4 : 0,
+        // Steps "has data" every day - all zeros.
+        daysWithData: metric === "steps" || metric === "sleep_score" ? 4 : 0,
+        daysWithSource: 4,
+      }),
     );
+
+    const observed = await junctionProvider.observedMetrics(nextAddress());
+
+    expect(observed.kind).toBe("observed");
+    const metrics = observed.kind === "observed" ? observed.metrics : [];
+    expect(metrics).toContain("sleep_score");
+    expect(metrics).not.toContain("steps");
+  });
+
+  it("counts workouts as measurable for any syncing device", async () => {
+    // A day with no workout is a real zero to the verdict. A device syncing
+    // sleep can be judged on workouts even if it logged none this fortnight;
+    // refusing that tells somebody who rested that their strap cannot count.
+    onlyPresent(["sleep_score"]);
+
+    const observed = await junctionProvider.observedMetrics(nextAddress());
+
+    expect(observed).toEqual({
+      kind: "observed",
+      metrics: ["sleep_score", "workouts"],
+    });
   });
 
   it("answers 'unknown' when NO probe could answer, and does not cache it", async () => {
@@ -100,9 +171,10 @@ describe("junctionProvider.observedMetrics", () => {
   it("survives one metric failing while the others answer", async () => {
     getMetricProgress.mockImplementation((_addr: string, metric: string) => {
       if (metric === "steps") return Promise.reject(new Error("boom"));
+      const present = metric === "sleep_hours" ? 3 : 0;
       return Promise.resolve({
-        qualifyingDays: 0,
-        daysWithData: metric === "sleep_hours" ? 3 : 0,
+        qualifyingDays: present,
+        daysWithData: present,
         daysWithSource: 3,
       });
     });
@@ -110,7 +182,10 @@ describe("junctionProvider.observedMetrics", () => {
     const observed = await junctionProvider.observedMetrics(nextAddress());
 
     // One probe threw and the others answered, so this is real evidence.
-    expect(observed).toEqual({ kind: "observed", metrics: ["sleep_hours"] });
+    expect(observed).toEqual({
+      kind: "observed",
+      metrics: ["sleep_hours", "workouts"],
+    });
   });
 
   it("caches per wallet so a browse surface does not re-probe", async () => {
@@ -124,15 +199,15 @@ describe("junctionProvider.observedMetrics", () => {
     expect(getMetricProgress.mock.calls.length).toBe(callsAfterFirst);
   });
 
-  it("asks whether the number EXISTS, not whether it was good", async () => {
+  it("asks whether the number EXISTS above zero, not whether it was good", async () => {
     onlyPresent(["steps"]);
 
     await junctionProvider.observedMetrics(nextAddress());
 
-    // An unreachable threshold: a device that reports 400 steps a day still
-    // proves it can count steps.
+    // The smallest positive threshold: a device that reports 400 steps a day
+    // still proves it can count steps, and a zero proves nothing.
     for (const call of getMetricProgress.mock.calls) {
-      expect(call[2]).toBe(Number.POSITIVE_INFINITY);
+      expect(call[2]).toBe(Number.MIN_VALUE);
     }
   });
 });

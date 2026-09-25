@@ -43,6 +43,14 @@ export type { WearableMetric } from "@/lib/wearable-goal";
 export type ObservedCapability =
   | { kind: "observed"; metrics: readonly WearableMetric[] }
   | { kind: "declared" }
+  /**
+   * Linked, answering, and nothing has arrived from the device yet. Only a
+   * multi-brand provider reports this: its declared list is a union across
+   * brands, so "nothing observed" says nothing about what THIS device can do,
+   * and offering the union is how a WHOOP-via-Junction wallet was invited onto
+   * a steps run it can never win. Withholds the join until the first sync.
+   */
+  | { kind: "awaiting-sync" }
   | { kind: "unknown" };
 
 /**
@@ -219,6 +227,10 @@ export interface WearableProvider {
    *             or nothing has been observed yet and there is nothing to
    *             narrow. Permissive on purpose: a wallet that linked ten
    *             minutes ago must not have its whole board blanked.
+   *   awaiting-sync  multi-brand provider, answering, nothing synced yet.
+   *             The declared union is not evidence about this device, so the
+   *             join is withheld until the first sync shows what it measures.
+   *             Cached briefly at most, so a fresh sync unlocks quickly.
    *   unknown   we could not find out. Withhold the join rather than assume,
    *             and NEVER cache this - a cached unknown is an outage that
    *             outlives itself.
