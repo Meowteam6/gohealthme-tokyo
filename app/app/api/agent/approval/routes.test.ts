@@ -95,7 +95,7 @@ describe("POST /api/agent/approval/request", () => {
     signer = { ok: true, address: USER };
     const response = await requestRoute(post("/api/agent/approval/request", { goalId: GOAL }));
     expect(response.status).toBe(409);
-    expect(((await response.json()) as { error: string }).error).toMatch(/not enabled/);
+    expect(((await response.json()) as { error: string }).error).toMatch(/not switched on/);
   });
 
   it("needs a claim with a pay decision and no record", async () => {
@@ -125,7 +125,10 @@ describe("POST /api/agent/approval/request", () => {
     signer = { ok: true, address: USER };
     const response = await requestRoute(post("/api/agent/approval/request", { goalId: GOAL }));
     expect(response.status).toBe(503);
-    expect(((await response.json()) as { error: string }).error).toMatch(/WORLD_/);
+    const { error } = (await response.json()) as { error: string };
+    expect(error).toMatch(/not available right now/);
+    // The player never reads an env var name.
+    expect(error).not.toMatch(/WORLD_/);
   });
 });
 

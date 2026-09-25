@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       console.error(`[${cid}] ${errorMessage(err)}`);
       return jsonError(
         503,
-        "World ID for Agents is not configured on this deployment; a WORLD_* variable is missing.",
+        "Payout confirmation is not available right now. Nothing was paid; try again later.",
       );
     }
 

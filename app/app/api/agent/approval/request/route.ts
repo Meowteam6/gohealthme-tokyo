@@ -36,7 +36,7 @@ import {
 const GOAL_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 
 export const NOT_ENABLED_MESSAGE =
-  "Human confirmation is not enabled on this deployment (WORLD_APPROVAL_MODE is unset).";
+  "Payout confirmation is not switched on for this build.";
 
 export async function POST(request: Request) {
   const cid = newCorrelationId("approval-request");
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
       console.error(`[${cid}] ${errorMessage(err)}`);
       return jsonError(
         503,
-        "World ID for Agents is not configured on this deployment; a WORLD_* variable is missing.",
+        "Payout confirmation is not available right now. Nothing was paid; try again later.",
       );
     }
 

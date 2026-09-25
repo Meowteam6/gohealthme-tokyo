@@ -11,7 +11,7 @@
 
 import { isAddress, type Address } from "viem";
 import { getBalance } from "@/lib/server/balance";
-import { errorMessage, jsonError } from "@/lib/server/http";
+import { jsonError, newCorrelationId, safeError } from "@/lib/server/http";
 
 export async function GET(request: Request) {
   try {
@@ -24,6 +24,6 @@ export async function GET(request: Request) {
     return Response.json({ balanceUusdc: balanceUusdc.toString() });
   } catch (err) {
     // Last-resort guard -- the route must never crash.
-    return jsonError(500, errorMessage(err));
+    return jsonError(500, safeError(err, newCorrelationId("balance")));
   }
 }
