@@ -9,10 +9,13 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, TAP_TARGET } from "@/components/ui";
+import WhoopReturnNote from "@/components/WhoopReturnNote";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import {
   PhoneLinkRequiredError,
   PopupBlockedError,
+  capabilityHoldOf,
+  currentReturnPath,
   startWearableLink,
   type ProviderOption,
   type WearableProviderId,
@@ -37,8 +40,23 @@ const CTA: Record<WearableProviderId, string> = {
   apple: "Set up on my iPhone",
 };
 
-function metricsOf(option: ProviderOption): WearableMetric[] {
-  return option.observedMetrics ?? option.metrics;
+/**
+ * What an option can measure, worded for how much we actually know. Junction
+ * fronts several brands, so until THIS device has synced its list is only
+ * what some device through it could do. Saying "Measures step count" to a
+ * WHOOP wearer here was the promise the steps-run trap was built on.
+ */
+function measuresLine(option: ProviderOption): string {
+  if (option.capability === "observed" && option.observedMetrics !== null) {
+    return `Measures ${option.observedMetrics.map(metricLabel).join(", ")}`;
+  }
+  const list = option.metrics.map(metricLabel).join(", ");
+  if (option.id === "junction") {
+    return option.connected
+      ? `Linked. I see what your device measures after its first sync. Junction can carry: ${list}`
+      : `Depends on your device. Junction can carry: ${list}`;
+  }
+  return `Measures ${list}`;
 }
 
 function PairButton({
@@ -63,7 +81,9 @@ function PairButton({
       disabled={opening}
       onClick={() => {
         setOpening(true);
-        void startWearableLink(address, requestAuth, option.id)
+        // WHOOP's OAuth takes over this tab; the return path brings the
+        // player back to this step, not a dashboard onboarding would cover.
+        void startWearableLink(address, requestAuth, option.id, currentReturnPath())
           .catch((err: unknown) => {
             if (err instanceof PopupBlockedError) onBlocked(err.linkUrl);
             else if (err instanceof PhoneLinkRequiredError) onPhoneSteps(err.instructions);
@@ -83,6 +103,24 @@ function PairButton({
 }
 
 export default function SensorStep({
+  view,
+  onSkip,
+}: {
+  view: CharacterView;
+  onSkip?: () => void;
+}) {
+  const whoopConnected =
+    view.providers?.providers.some((p) => p.id === "whoop" && p.connected) ??
+    false;
+  return (
+    <div className="space-y-3">
+      <WhoopReturnNote whoopConnected={whoopConnected} />
+      <SensorStepBody view={view} onSkip={onSkip} />
+    </div>
+  );
+}
+
+function SensorStepBody({
   view,
   onSkip,
 }: {
@@ -158,7 +196,15 @@ export default function SensorStep({
     );
   }
 
-  const offered = (view.providers?.providers ?? []).filter((p) => p.configured);
+  const allOptions = view.providers?.providers ?? [];
+  const offered = allOptions.filter((p) => p.configured);
+  // Apple is listed by the server and switched off until the iPhone app
+  // ships. Said plainly, so an Apple Watch wearer is not left wondering.
+  const appleNotYet = allOptions.some((p) => p.id === "apple" && !p.configured);
+  const hold = capabilityHoldOf(view.providers);
+  const holdLabel =
+    allOptions.find((p) => p.id === view.providers?.selected)?.label ??
+    "Your sensor";
   const paired = sensor.kind === "paired" ? sensor.device : null;
   const cannot =
     paired !== null
@@ -179,6 +225,18 @@ export default function SensorStep({
               locked for you in the lobby, before you stake anything.
             </p>
           ) : null}
+        </div>
+      ) : hold === "awaiting-sync" ? (
+        <div className="rounded-lg border-2 border-warning/60 bg-warning/5 p-4" aria-live="polite">
+          <p className="font-semibold text-warning">
+            {holdLabel} is linked. Waiting on its first sync
+          </p>
+          <p className="mt-1 text-sm text-foreground/80">
+            Nothing has come through from your device yet, so I cannot tell
+            what it measures. Open your wearable&apos;s own app so it syncs,
+            then check again. Wearable runs stay locked until I can see it, so
+            you never stake on one your device cannot prove.
+          </p>
         </div>
       ) : sensor.kind === "unreadable" ? (
         <div className="rounded-lg border-2 border-warning/60 bg-warning/5 p-4">
@@ -213,9 +271,7 @@ export default function SensorStep({
                 ) : null}
               </p>
               <p className="mt-1 text-sm text-muted">{BLURB[option.id]}</p>
-              <p className="mt-2 text-sm">
-                Measures {metricsOf(option).map(metricLabel).join(", ")}
-              </p>
+              <p className="mt-2 text-sm">{measuresLine(option)}</p>
               <PairButton
                 address={address}
                 option={option}
@@ -227,6 +283,14 @@ export default function SensorStep({
           ))}
         </ul>
       )}
+
+      {appleNotYet ? (
+        <p className="text-sm text-muted">
+          Apple Watch or iPhone only? The GoHealthMe iPhone app is not out yet
+          in this beta, so Apple Health cannot pair here. If you also wear a
+          WHOOP, Oura, Fitbit or Garmin, pair that instead.
+        </p>
+      ) : null}
 
       {phoneSteps !== null ? (
         <p role="status" className="rounded-lg border-2 border-accent/40 bg-accent/5 p-4 text-sm">
