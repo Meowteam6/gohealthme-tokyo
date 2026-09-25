@@ -229,7 +229,8 @@ function WearableCheckInner({
           body = (await sent.response.json().catch(() => ({}))) as RunResponse;
           if (!sent.response.ok) {
             throw new Error(
-              body.error ?? `SPOTTER responded ${sent.response.status}.`,
+              body.error ??
+                "SPOTTER could not start the check. Nothing was charged. Try again in a moment.",
             );
           }
           screen = nextClaimScreen(screen, body, sent.auth);
@@ -239,7 +240,9 @@ function WearableCheckInner({
           setStatus({
             kind: "error",
             message:
-              err instanceof Error ? err.message : "The agent run failed.",
+              err instanceof Error
+                ? err.message
+                : "SPOTTER could not start the check. Nothing was charged. Try again in a moment.",
             ledger: receiptToKeep(screen),
           });
           return;
@@ -456,13 +459,13 @@ function WearableCheckInner({
       try {
         goalId = await fetchGoalId(poolId, address);
         goalIdRef.current = goalId;
-      } catch (err) {
+      } catch {
+        // The raw read error names contract plumbing; the player needs to
+        // know it was a read and that nothing was spent.
         setStatus({
           kind: "error",
           message:
-            err instanceof Error
-              ? err.message
-              : "Could not derive the goal id from the contract.",
+            "I could not read your entry from Base Sepolia just now. Nothing was charged. Try again in a moment.",
         });
         return;
       }
@@ -938,9 +941,7 @@ function WearableCheckInner({
                   return;
                 }
                 setConnectError(
-                  err instanceof Error
-                    ? err.message
-                    : "Could not open the connect flow.",
+                  "The pairing page would not open. Nothing was linked and nothing was charged. Try again in a moment.",
                 );
               });
             }}

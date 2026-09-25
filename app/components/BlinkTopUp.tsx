@@ -54,8 +54,8 @@ export default function BlinkTopUp({
   if (!BLINK_CONFIGURED) {
     return (
       <ErrorNote
-        title="Top-up is not configured"
-        detail="Set NEXT_PUBLIC_BLINK_USDC_ADDRESS and NEXT_PUBLIC_BLINK_MERCHANT_ADDRESS to enable Blink top-ups."
+        title="Top-up is off on this build"
+        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
   }

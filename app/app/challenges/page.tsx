@@ -669,8 +669,8 @@ export default function ChallengesPage() {
         <MyChallengesContent />
       ) : (
         <EmptyState
-          title="Sign-in is not configured"
-          detail="Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable embedded wallets and peer challenges."
+          title="Sign-in is off on this build"
+          detail="This part is not switched on for this build yet. Nothing is wrong on your side."
           action={
             <Link
               href="/pools"

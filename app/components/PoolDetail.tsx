@@ -58,6 +58,7 @@ import { unsupportedMetricFor } from "@/lib/pool-availability";
 import { wearableJoinBlock } from "@/lib/wearable-join-gate";
 import {
   BOUNTY_MODEL_LABELS,
+  ContractNotConfiguredError,
   displayGoalSpec,
   evidenceTypeOf,
   fetchGoalId,
@@ -422,9 +423,9 @@ export default function PoolDetail({ id }: { id: string }) {
       <ErrorNote
         title="Could not load this pool"
         detail={
-          poolQuery.error instanceof Error
-            ? poolQuery.error.message
-            : "We could not reach the network just now. Give it another try."
+          poolQuery.error instanceof ContractNotConfiguredError
+            ? "Runs are not switched on for this build yet."
+            : "I could not read this run from Base Sepolia just now. Nothing changed on your side."
         }
         onRetry={() => {
           void poolQuery.refetch();

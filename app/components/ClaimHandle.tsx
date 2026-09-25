@@ -243,8 +243,8 @@ export default function ClaimHandle() {
   if (!DYNAMIC_CONFIGURED) {
     return (
       <ErrorNote
-        title="Sign-in is not configured"
-        detail="Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable handle claiming."
+        title="Sign-in is off on this build"
+        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
   }

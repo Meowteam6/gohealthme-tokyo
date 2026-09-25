@@ -498,15 +498,18 @@ function EvidenceUploadInner({
 
       if (res.status === 404) {
         throw new Error(
-          "Document verification is not available right now. Nothing was " +
-            "submitted. Please try again in a few minutes.",
+          "Document checks are not available right now. Nothing was " +
+            "submitted. Try again in a few minutes.",
         );
       }
 
       const body = (await res.json().catch(() => ({}))) as SubmitResponse;
       if (!res.ok || typeof body.attesterId !== "string") {
+        // The route's own error is written for people; a bare status is
+        // not, so it never reaches the screen.
         throw new Error(
-          body.error ?? `Verification service responded ${res.status}.`,
+          body.error ??
+            "SPOTTER could not reach the document checker. Nothing was submitted. Try again in a few minutes.",
         );
       }
       attesterId = body.attesterId;
@@ -955,8 +958,8 @@ export default function EvidenceUpload({
   if (!DYNAMIC_CONFIGURED) {
     return (
       <ErrorNote
-        title="Sign-in is not configured"
-        detail="Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable submitting records with an embedded wallet."
+        title="Sign-in is off on this build"
+        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
   }

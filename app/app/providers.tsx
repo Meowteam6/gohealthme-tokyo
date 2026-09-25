@@ -65,9 +65,9 @@ const wagmiConfig = createConfig({
 
 function DynamicMissingBanner() {
   return (
-    <div className="bg-amber-950 border-b border-amber-700 px-4 py-2 text-sm text-amber-200">
-      Dynamic is not configured. Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to
-      enable sign-in and embedded wallets.
+    <div className="border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning">
+      Sign-in is off on this build, so you can look around but nobody can
+      play here yet.
     </div>
   );
 }
