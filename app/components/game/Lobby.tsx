@@ -171,6 +171,7 @@ export default function Lobby({
               rows={lobby.open}
               returnTo={returnTo}
               onRetry={retryChecks}
+              onCheckSensor={view.checkSensor}
             />
           ) : lobby.highlighted === null ? (
             <section className="rounded-xl border-2 border-dashed border-foreground/30 p-6">

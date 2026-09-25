@@ -27,7 +27,9 @@ function StateTag({ row }: { row: LobbyRow }) {
           : "border-2 border-edge text-muted";
   const label =
     slot.kind === "playable"
-      ? "Playable"
+      ? slot.proof === "upload"
+        ? "Playable by upload"
+        : "Playable"
       : slot.kind === "in-run"
         ? "You are in"
         : slot.kind === "locked"
@@ -147,7 +149,13 @@ export default function RunSlip({
       row.slot.lock.kind !== "sensor-unchecked" &&
       row.slot.lock.kind !== "sign-in" ? (
         <div className="px-4 pb-4 sm:px-5">
-          <LockPanel lock={row.slot.lock} returnTo={returnTo} onRetry={onRetry} compact />
+          <LockPanel
+            lock={row.slot.lock}
+            returnTo={returnTo}
+            onRetry={onRetry}
+            onCheckSensor={onCheckSensor}
+            compact
+          />
         </div>
       ) : null}
       {action === undefined &&

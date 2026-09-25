@@ -28,13 +28,14 @@ import {
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import {
+  capabilityHoldOf,
   capabilityNeedsDevice,
   capabilityUnknown,
   fetchProviderOptions,
   providerOptionsQueryKey,
   viewerMetricsOf,
 } from "@/lib/wearable-connect";
-import { wearableJoinBlock } from "@/lib/wearable-join-gate";
+import { uploadFallbackNote, wearableJoinBlock } from "@/lib/wearable-join-gate";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
 import { needsDocumentVerifier, runSlotOf } from "@/lib/game/lobby";
 import { useCharacter } from "@/lib/game/useCharacter";
@@ -171,6 +172,8 @@ export default function ChallengeAccept({
       viewerMetrics: viewerMetricsOf(capabilityQuery.data),
       capabilityPending: address !== null && capabilityUnknown(capabilityQuery.data),
       needsDevice: capabilityNeedsDevice(capabilityQuery.data),
+      capabilityHold: capabilityHoldOf(capabilityQuery.data),
+      uploadAvailable: checks.verifier === "available",
     }),
     // World, the closed-beta list (this path is public, so AccessGate never
     // ran), the document checker and the payout rule: loading holds the
@@ -227,6 +230,11 @@ export default function ChallengeAccept({
             and it comes back with the prize on top; the challenger never keeps
             it.
           </p>
+          {slot.proof === "upload" ? (
+            <p className="rounded-lg border-2 border-warning/40 bg-warning/5 p-3 text-sm">
+              {uploadFallbackNote(pool.goalSpec)}
+            </p>
+          ) : null}
           <ApprovalNote />
           <JoinPool poolId={poolIdBig} entryFee={pool.entryFee} alreadyJoined={joined} />
         </div>

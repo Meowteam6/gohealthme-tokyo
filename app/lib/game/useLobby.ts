@@ -20,6 +20,7 @@ import {
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import {
+  capabilityHoldOf,
   capabilityNeedsDevice,
   capabilityUnknown,
   fetchProviderOptions,
@@ -139,6 +140,8 @@ export function useLobby(view: CharacterView, highlightId: string | null): Lobby
           viewerMetrics,
           capabilityPending: address !== null && capabilityUnknown(capabilityQuery.data),
           needsDevice: capabilityNeedsDevice(capabilityQuery.data),
+          capabilityHold: capabilityHoldOf(capabilityQuery.data),
+          uploadAvailable: checks.verifier === "available",
           worldLane: checks.worldLane,
           humanVerified: checks.humanVerified,
           deviceLabel,
