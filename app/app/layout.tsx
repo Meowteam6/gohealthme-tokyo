@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
-import { Geist, Geist_Mono, Baloo_2 } from "next/font/google";
+import { Barlow, Big_Shoulders, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 import Header from "@/components/Header";
@@ -15,24 +15,26 @@ import {
   TITLE_TEMPLATE,
 } from "@/lib/site";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Type system (docs/DESIGN.md): Big Shoulders is the scoreboard face for
+// titles and the big stake, prize and night figures; Barlow carries every line
+// of running copy; Geist Mono is kept only for addresses, tx hashes and Money.
+const barlow = Barlow({
+  variable: "--font-barlow",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+const shoulders = Big_Shoulders({
+  variable: "--font-shoulders",
+  subsets: ["latin"],
+  weight: ["600", "700", "800", "900"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-});
-
-// Rounded, friendly display face for headings, section labels, chip/button text
-// and hero amounts (never body, never the mono money figures). This is the
-// single biggest piece of the playful vibe the flat surfaces were missing.
-const baloo = Baloo_2({
-  variable: "--font-baloo",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-  display: "swap",
 });
 
 // Site-wide head defaults. Every route inherits these and overrides only what
@@ -104,7 +106,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${baloo.variable} h-full antialiased`}
+      className={`${barlow.variable} ${shoulders.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <script
@@ -118,32 +120,25 @@ export default function RootLayout({
           </main>
           <footer className="border-t border-edge px-4 py-6 text-center text-xs text-muted">
             <p>
-              GoHealthMe — settled by SPOTTER on Base Sepolia. Your health data
-              never touches the chain.
+              GoHealthMe V4, a hackathon build for ETHGlobal Tokyo 2026. Test
+              money on Base Sepolia, settled by SPOTTER. Your health data never
+              touches the chain.
             </p>
             <nav className="mt-2 flex items-center justify-center gap-4">
-              <Link href="/privacy" className="hover:text-foreground hover:underline">
+              <Link
+                href="/privacy"
+                className="inline-flex min-h-11 items-center hover:text-foreground hover:underline"
+              >
                 Privacy
               </Link>
-              <Link href="/terms" className="hover:text-foreground hover:underline">
+              <Link
+                href="/terms"
+                className="inline-flex min-h-11 items-center hover:text-foreground hover:underline"
+              >
                 Terms
               </Link>
             </nav>
           </footer>
-          {/* SPOTTER occasionally sprints across the bottom of the screen.
-              Decoration only: pointer-events-none, aria-hidden, and stopped
-              entirely under prefers-reduced-motion. */}
-          <div
-            aria-hidden="true"
-            className="otter-dash pointer-events-none fixed bottom-2 left-0 z-30 select-none"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/spotter/spotter-run.png"
-              alt=""
-              className="h-16 w-auto drop-shadow-lg sm:h-20"
-            />
-          </div>
           <HelperWidget />
         </Providers>
         {/* Vercel Web Analytics: anonymous page-view counts so the pilot has a

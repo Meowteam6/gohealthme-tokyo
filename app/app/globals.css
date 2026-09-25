@@ -1,45 +1,43 @@
 @import "tailwindcss";
 
-/* Warm-light theme. Cream canvas, emerald trust, coral human warmth, gold for
-   money in motion. Replaces the original dark green-black. Semantics are held
-   constant so components read the same roles - only the values flip. */
+/* V4 scoreboard theme (docs/DESIGN.md). Concrete paper, navy ink, one accent
+   (varsity cobalt), bulb gold for money only. Semantic names are unchanged so
+   every existing component re-themes from the values alone. */
 :root {
   color-scheme: light;
-  --background: #faf6ee;       /* warm cream canvas */
-  --surface: #ffffff;          /* cards sit above the cream */
-  --surface-raised: #fffdf8;   /* alt sections / raised surfaces */
-  --border: #ece3d2;           /* warm hairline border */
-  --foreground: #16211b;       /* warm near-black text */
-  --muted: #5f6f64;            /* muted secondary text */
-  --accent: #10b981;           /* primary emerald - trust, buttons, marks */
-  --accent-strong: #059669;    /* deeper emerald - hover, emphasis text */
-  --accent-deep: #064e3b;      /* deep emerald - dark accents on light */
-  /* Warm human accent, for celebratory/human touches only (badges, avatar
-     rings). Never on a number, never a verdict - coral is people, not money. */
-  --coral: #ff8a5c;
-  --coral-strong: #f06d3a;
-  --danger: #ef4444;
-  /* Caution / self-reported tone. A muted amber, deliberately NOT gold: a
-     self-reported (unverified) claim must never borrow the money color, and a
-     payout must never read as an alert. */
-  --warning: #b45309;
-  /* Gold, reserved STRICTLY for money in motion: a payout landing or the
-     agent's live spend. Never a static balance, never a verdict, never a
-     generic highlight - emerald owns trust, gold owns movement. */
-  --gold: #f3b13c;
-  --gold-strong: #eaa11f;
-  --gold-deep: #a9760c;        /* rich legible gold: money text on cream, and a soft gold tint at low opacity */
-  /* Warm tan for chips, pills, and "held by SPOTTER" wells - a step warmer than
-     surface so pill fills read tactile, not flat white. */
-  --secondary: #f4ead5;
-  --secondary-foreground: #1f3b25;
-  /* Chunky "pressable" candy depth - the biggest playful signal, and the one
-     the flat surfaces were missing. On-palette (emerald/coral/border), opt-in
-     per component via the shadow utilities below. */
-  --shadow-pop: 0 4px 0 0 var(--accent-strong);
-  --shadow-pop-coral: 0 4px 0 0 var(--coral-strong);
-  --shadow-pop-edge: 0 6px 0 0 var(--border);
-  --radius-card: 1.5rem;       /* rounder, friendlier feature card (rounded-3xl) */
+  --background: #eceef1;       /* concrete paper, cool - never cream */
+  --surface: #ffffff;          /* slips and rows */
+  --surface-raised: #f5f6f8;   /* wells inside a slip */
+  --border: #d3d8df;           /* hairline between slips */
+  --foreground: #0d1b2a;       /* navy ink; also the scoreboard panel */
+  --muted: #4f5d6f;            /* secondary text, AA on paper and surface */
+  --accent: #2346d8;           /* THE accent: varsity cobalt */
+  --accent-strong: #1834b0;    /* hover, emphasis text */
+  --accent-deep: #0e1f6b;      /* text on accent tints */
+  /* Coral is retired as a second accent. Aliased so old call sites render in
+     the one accent instead of breaking. */
+  --coral: #2346d8;
+  --coral-strong: #1834b0;
+  --danger: #c8283a;
+  /* Caution. A locked lobby row, an outage. Never money, never a verdict. */
+  --warning: #9a4a00;
+  /* Money only: bulb yellow for stake and prize on the scoreboard, deep gold
+     for money text on paper. Never a verdict, never decoration. */
+  --gold: #ffc93c;
+  --gold-strong: #f2b321;
+  --gold-deep: #8a5e00;
+  /* Chips and quiet wells. */
+  --secondary: #e3e7ec;
+  --secondary-foreground: #0d1b2a;
+  /* The scoreboard panel and its chalk figures. */
+  --board: #0d1b2a;
+  --board-edge: #243650;
+  --chalk: #f4f6f9;
+  /* A printed-slip offset instead of candy depth. */
+  --shadow-pop: 0 3px 0 0 var(--foreground);
+  --shadow-pop-coral: 0 3px 0 0 var(--foreground);
+  --shadow-pop-edge: 0 2px 0 0 var(--border);
+  --radius-card: 0.75rem;
 }
 
 @theme inline {
@@ -61,43 +59,30 @@
   --color-coral-strong: var(--coral-strong);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-board: var(--board);
+  --color-board-edge: var(--board-edge);
+  --color-chalk: var(--chalk);
+  --font-sans: var(--font-barlow);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-baloo);
+  --font-display: var(--font-shoulders);
+  /* Slips and tickets, not bubbles: every rounded-xl/2xl/3xl in the app
+     tightens from here. Pills stay pills. */
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.625rem;
+  --radius-3xl: 0.75rem;
 }
 
 @layer utilities {
-  /* Opt-in playful backdrop for hero / composer sections only. Emerald dots at
-     low opacity so it never fights body text. */
+  /* Retired decoration: kept as a no-op so old call sites stay valid. */
   .bg-dot-grid {
-    background-image: radial-gradient(
-      circle,
-      rgba(16, 185, 129, 0.1) 1.5px,
-      transparent 1.5px
-    );
-    background-size: 18px 18px;
+    background-image: none;
   }
 }
 
 body {
-  /* Warm cream base with a whisper of nature: a soft emerald light from the top
-     and a faint warm ground tone lower right, kept low-opacity and fixed so the
-     atmosphere reads as outdoors without ever fighting the text on top. */
-  background:
-    /* sky-light overhead */
-    radial-gradient(1200px 520px at 50% -10%, rgba(16, 185, 129, 0.09), transparent 70%),
-    /* warm morning sun, upper right */
-    radial-gradient(900px 520px at 90% 6%, rgba(255, 138, 92, 0.06), transparent 70%),
-    /* scenic foliage tone bleeding in from the left gutter */
-    linear-gradient(to right, rgba(16, 185, 129, 0.11), transparent 20%),
-    /* and the right gutter */
-    linear-gradient(to left, rgba(16, 185, 129, 0.1), transparent 20%),
-    /* soft earthy ground rising from the bottom */
-    linear-gradient(to top, rgba(122, 85, 17, 0.05), transparent 24%),
-    var(--background);
-  background-attachment: fixed;
+  background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-barlow), system-ui, sans-serif;
 }
 
 /* Horizontal-overflow guard. SPOTTER's run-across easter egg is position:fixed
@@ -180,8 +165,27 @@ body {
   }
 }
 
+/* V4: idle floating is decoration, and motion here only answers something the
+   player did (docs/DESIGN.md). The class stays so old call sites are valid. */
 .otter-float {
-  animation: otter-float 4.5s ease-in-out infinite;
+  animation: none;
+}
+
+/* A banked night and a verdict headline stamp in once. That is all the motion
+   the game screens have. */
+@keyframes ghm-stamp {
+  0% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.ghm-stamp {
+  animation: ghm-stamp 160ms ease-out both;
 }
 
 /* The run-across-the-screen Easter egg: SPOTTER dashes left to right along the
@@ -251,6 +255,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .ghm-stamp,
   .animate-stamp-in,
   .animate-rise-in,
   .ghm-rise-in,
