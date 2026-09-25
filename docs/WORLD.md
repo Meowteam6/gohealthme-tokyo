@@ -190,7 +190,7 @@ confirmation uses ONE static action for every payout:
   for a proof against the same action from the request route's response.
 - **Signal: `<goalId lowercase>:<attempt>`.** This is what names the payout.
   The request route returns it as `signal`; the widget passes it as the IDKit
-  signal (`orbLegacy({ signal })`), and World hashes it into
+  signal (`proofOfHuman({ signal })`), and World hashes it into
   `responses[0].signal_hash`. On complete, the server requires
   `responses[0].signal_hash === hashSignal(expectedSignal)` (the same
   `hashSignal` from `@worldcoin/idkit-core/hashing` the prove-human lane uses)
@@ -230,7 +230,7 @@ environment is configured. Never ship it past the hackathon.
 
 `WORLD_APPROVAL_MODE=world` is the live path: `@worldcoin/idkit` 4.3.0
 (`signRequest` from `@worldcoin/idkit/signing` on the server,
-`IDKitRequestWidget` with `orbLegacy({ signal })`, signal `<goalId>:<attempt>`,
+`IDKitRequestWidget` with `proofOfHuman({ signal })`, signal `<goalId>:<attempt>`,
 in the browser),
 and World's v4 verify endpoint. It is built from the docs fetched on
 2026-09-26 (human-in-the-loop integrate and SDK reference, the verify

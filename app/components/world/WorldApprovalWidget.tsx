@@ -12,7 +12,7 @@
 // complete route, which re-verifies it at World's endpoint; throwing here is
 // what makes the widget show its own error screen and stay retryable.
 
-import { IDKitRequestWidget, orbLegacy, type IDKitResult } from "@worldcoin/idkit";
+import { IDKitRequestWidget, proofOfHuman, type IDKitResult } from "@worldcoin/idkit";
 import type { OpenApprovalRequest } from "@/lib/world/approval-client";
 
 export interface WorldApprovalWidgetProps {
@@ -37,7 +37,7 @@ export default function WorldApprovalWidget(props: WorldApprovalWidgetProps) {
       rp_context={world.rpContext}
       environment={world.environment}
       allow_legacy_proofs={world.allowLegacyProofs}
-      preset={orbLegacy({ signal: props.request.signal })}
+      preset={proofOfHuman({ signal: props.request.signal })}
       handleVerify={props.onVerify}
       onSuccess={props.onSuccess}
       onError={(code) => props.onError(`World ID could not complete the check (${String(code)}).`)}
