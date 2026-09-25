@@ -215,6 +215,43 @@ describe("runSlotOf", () => {
     });
   });
 
+  describe("linked sensor holds", () => {
+    it("gives a sensor that has not synced its own lock, not the generic check", () => {
+      expect(
+        runSlotOf(input({ joinBlock: { kind: "unchecked", hold: "awaiting-sync" } })),
+      ).toEqual({
+        kind: "locked",
+        lock: { kind: "sensor-hold", hold: "awaiting-sync", deviceLabel: "WHOOP" },
+      });
+    });
+
+    it("gives an unreadable sensor its own lock", () => {
+      expect(
+        runSlotOf(input({ joinBlock: { kind: "unchecked", hold: "unreadable" } })),
+      ).toEqual({
+        kind: "locked",
+        lock: { kind: "sensor-hold", hold: "unreadable", deviceLabel: "WHOOP" },
+      });
+    });
+
+    it("keeps a bare unchecked block on the one-tap sensor check", () => {
+      expect(runSlotOf(input({ joinBlock: { kind: "unchecked" } }))).toEqual({
+        kind: "locked",
+        lock: { kind: "sensor-unchecked" },
+      });
+    });
+  });
+
+  it("marks a hybrid run joinable by upload, and still ahead of it checks World", () => {
+    expect(runSlotOf(input({ joinBlock: { kind: "ok", proof: "upload" } }))).toEqual({
+      kind: "playable",
+      proof: "upload",
+    });
+    expect(
+      runSlotOf(input({ joinBlock: { kind: "ok", proof: "upload" }, worldLane: "on" })),
+    ).toEqual({ kind: "locked", lock: { kind: "not-human" } });
+  });
+
   it("separates no sensor from a sensor not checked this visit", () => {
     expect(runSlotOf(input({ joinBlock: { kind: "no-device" } }))).toEqual({
       kind: "locked",
@@ -235,6 +272,8 @@ describe("lockCopy", () => {
     { kind: "sensor-unchecked" },
     { kind: "cannot-measure", metric: "steps", deviceLabel: "WHOOP" },
     { kind: "outage" },
+    { kind: "sensor-hold", hold: "awaiting-sync", deviceLabel: "Junction" },
+    { kind: "sensor-hold", hold: "unreadable", deviceLabel: null },
     { kind: "not-approved", pending: false },
     { kind: "not-approved", pending: true },
     { kind: "verifier-off" },
@@ -290,6 +329,17 @@ describe("lockCopy", () => {
     }
   });
 
+  it("words a sensor hold with the wearable lane's copy and a re-check", () => {
+    const copy = lockCopy(
+      { kind: "sensor-hold", hold: "awaiting-sync", deviceLabel: "Junction" },
+      "/pools",
+    );
+    expect(copy.title).toBe("Your sensor has not synced yet");
+    expect(copy.detail).toContain("Junction is linked");
+    expect(copy.fix).toEqual({ kind: "check-sensor", label: "Check again" });
+    expect(copy.tone).toBe("wait");
+  });
+
   it("checks the sensor in place instead of sending the player away", () => {
     expect(lockCopy({ kind: "sensor-unchecked" }, "/pools").fix.kind).toBe("check-sensor");
   });
@@ -327,6 +377,8 @@ describe("buildLobby", () => {
       viewerMetrics: ["steps", "sleep_score"],
       capabilityPending: false,
       needsDevice: false,
+      capabilityHold: null,
+      uploadAvailable: true,
       worldLane: "off",
       humanVerified: false,
       deviceLabel: "Junction",
@@ -444,6 +496,61 @@ describe("buildLobby", () => {
       { kind: "locked", lock: { kind: "payouts-paused" } },
       { kind: "locked", lock: { kind: "payouts-paused" } },
     ]);
+  });
+
+  describe("wearable holds and the upload fallback", () => {
+    const hybrid = "[proof=wearable+self] walk 8000 steps a day for 7 days";
+
+    it("opens a hybrid steps run by upload for a WHOOP wallet while uploads are on", () => {
+      const lobby = buildLobby(
+        lobbyInput({
+          pools: [pool(1, { goalSpec: hybrid })],
+          viewerMetrics: ["sleep_score"],
+          deviceLabel: "WHOOP",
+        }),
+      );
+      expect(lobby.open[0].slot).toEqual({ kind: "playable", proof: "upload" });
+    });
+
+    it("keeps the hybrid run locked when the upload path is off", () => {
+      const lobby = buildLobby(
+        lobbyInput({
+          pools: [pool(1, { goalSpec: hybrid })],
+          viewerMetrics: ["sleep_score"],
+          deviceLabel: "WHOOP",
+          uploadAvailable: false,
+        }),
+      );
+      expect(lobby.open[0].slot).toEqual({
+        kind: "locked",
+        lock: { kind: "cannot-measure", metric: "steps", deviceLabel: "WHOOP" },
+      });
+    });
+
+    it("shows an awaiting-sync lock on wearable runs, not the one-tap check", () => {
+      const lobby = buildLobby(
+        lobbyInput({
+          pools: [pool(1)],
+          viewerMetrics: null,
+          capabilityHold: "awaiting-sync",
+        }),
+      );
+      expect(lobby.open[0].slot).toEqual({
+        kind: "locked",
+        lock: { kind: "sensor-hold", hold: "awaiting-sync", deviceLabel: "Junction" },
+      });
+      expect(lobbyNeedsSensorCheck(lobby)).toBe(false);
+    });
+
+    it("shows an unreadable lock on wearable runs", () => {
+      const lobby = buildLobby(
+        lobbyInput({ pools: [pool(1)], viewerMetrics: null, capabilityHold: "unreadable" }),
+      );
+      expect(lobby.open[0].slot).toEqual({
+        kind: "locked",
+        lock: { kind: "sensor-hold", hold: "unreadable", deviceLabel: "Junction" },
+      });
+    });
   });
 
   it("locks every wearable run for a player with no sensor", () => {

@@ -50,6 +50,7 @@ import {
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import {
+  capabilityHoldOf,
   capabilityNeedsDevice,
   capabilityUnknown,
   fetchProviderOptions,
@@ -57,7 +58,7 @@ import {
   viewerMetricsOf,
 } from "@/lib/wearable-connect";
 import { unsupportedMetricFor } from "@/lib/pool-availability";
-import { wearableJoinBlock } from "@/lib/wearable-join-gate";
+import { uploadFallbackNote, wearableJoinBlock } from "@/lib/wearable-join-gate";
 import {
   BOUNTY_MODEL_LABELS,
   ContractNotConfiguredError,
@@ -541,6 +542,8 @@ export default function PoolDetail({ id }: { id: string }) {
     capabilityPending:
       address !== null && capabilityUnknown(capabilityQuery.data),
     needsDevice: capabilityNeedsDevice(capabilityQuery.data),
+    capabilityHold: capabilityHoldOf(capabilityQuery.data),
+    uploadAvailable: docAvailable,
   });
 
   // The run's one decision, shared with the lobby and the dare link
@@ -864,6 +867,11 @@ export default function PoolDetail({ id }: { id: string }) {
               </p>
               {participantCount === 0 ? (
                 <p className="mb-4 text-sm font-semibold">Nobody is in yet. You would be first.</p>
+              ) : null}
+              {slot.proof === "upload" ? (
+                <p className="mb-4 rounded-lg border-2 border-warning/40 bg-warning/5 p-3 text-sm">
+                  {uploadFallbackNote(pool.goalSpec)}
+                </p>
               ) : null}
               <div className="mb-4">
                 <ApprovalNote />

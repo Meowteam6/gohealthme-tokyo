@@ -11,7 +11,12 @@
 import { proofPolicyOf, type PoolInfo } from "@/lib/contract";
 import { poolCanPay, poolPhase, type PoolPhase } from "@/lib/pool-lifecycle";
 import { hideDocumentPools, hideEmptyCancelledPools } from "@/lib/pool-visibility";
-import { wearableJoinBlock, type JoinBlock } from "@/lib/wearable-join-gate";
+import {
+  sensorHoldCopy,
+  wearableJoinBlock,
+  type JoinBlock,
+  type SensorHold,
+} from "@/lib/wearable-join-gate";
 import { metricLabel, type WearableMetric } from "@/lib/wearable-goal";
 
 export type RunLock =
@@ -23,6 +28,11 @@ export type RunLock =
   /** A wallet is connected and SPOTTER has not looked at the sensor this
    *  visit. One signature, free, answers it for every run at once. */
   | { kind: "sensor-unchecked" }
+  /** A sensor IS linked and cannot be judged yet: nothing has synced from it,
+   *  or the provider will not say what it measures right now. Its own copy
+   *  (lib/wearable-join-gate.ts sensorHoldCopy), never the generic "sign so I
+   *  can look" or "pair a sensor", because neither of those would help. */
+  | { kind: "sensor-hold"; hold: SensorHold; deviceLabel: string | null }
   | { kind: "cannot-measure"; metric: WearableMetric; deviceLabel: string | null }
   /** The wearable provider is refusing SPOTTER right now. Not the player's
    *  hardware, and it clears on its own. */
@@ -62,7 +72,9 @@ export type VerifierState = "available" | "off" | "loading" | "error";
 export type PayoutState = "ready" | "misconfigured" | "loading" | "error";
 
 export type RunSlot =
-  | { kind: "playable" }
+  /** `proof: "upload"`: playable only by the pool's upload path, because this
+   *  player's wearable cannot carry it (a hybrid wearable-plus-photo run). */
+  | { kind: "playable"; proof?: "upload" }
   | { kind: "in-run" }
   | { kind: "locked"; lock: RunLock }
   | { kind: "closed"; joined: boolean }
@@ -163,8 +175,15 @@ export function runSlotOf(input: RunSlotInput): RunSlot {
 
   if (block.kind === "no-device") return { kind: "locked", lock: { kind: "no-sensor" } };
   if (block.kind === "unchecked") {
+    if (block.hold !== undefined) {
+      return locked({ kind: "sensor-hold", hold: block.hold, deviceLabel: input.deviceLabel });
+    }
     return { kind: "locked", lock: { kind: "sensor-unchecked" } };
   }
+  // A hybrid run this player's wearable cannot carry, joinable because the
+  // pool also takes an upload and the upload path is on. Surfaces say so next
+  // to the join (uploadFallbackNote), before the stake.
+  if (block.proof === "upload") return { kind: "playable", proof: "upload" };
   return { kind: "playable" };
 }
 
@@ -222,6 +241,8 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
         },
         tone: "fixable",
       };
+    case "sensor-hold":
+      return sensorHoldCopy(lock.hold, lock.deviceLabel);
     case "sensor-unchecked":
       return {
         title: "I have not looked at your sensor this visit",
@@ -326,6 +347,12 @@ export interface LobbyInput {
   viewerMetrics: readonly WearableMetric[] | null;
   capabilityPending: boolean;
   needsDevice: boolean;
+  /** capabilityHoldOf (lib/wearable-connect.ts): why a linked device has no
+   *  capability answer yet, or null. */
+  capabilityHold: SensorHold | null;
+  /** The upload path (document or photo) is on right now: a hybrid run stays
+   *  joinable by upload when the wearable cannot carry it. */
+  uploadAvailable: boolean;
   worldLane: HumanLane;
   humanVerified: boolean;
   deviceLabel: string | null;
@@ -373,6 +400,8 @@ export function buildLobby(input: LobbyInput): Lobby {
       viewerMetrics: input.viewerMetrics,
       capabilityPending: input.capabilityPending,
       needsDevice: input.needsDevice,
+      capabilityHold: input.capabilityHold,
+      uploadAvailable: input.uploadAvailable,
     });
     return {
       pool,
