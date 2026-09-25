@@ -38,7 +38,12 @@ import {
   Money,
   PoolCardSkeleton,
 } from "@/components/ui";
-import { fetchPools, formatUsdc, type PoolInfo } from "@/lib/contract";
+import {
+  ContractNotConfiguredError,
+  fetchPools,
+  formatUsdc,
+  type PoolInfo,
+} from "@/lib/contract";
 import { toPoolAggregate, type PoolEventTotals } from "@/lib/sponsor-data";
 import {
   portfolioAggregate,
@@ -50,6 +55,9 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 interface ConsoleData {
   pools: PoolInfo[];
   totals: Record<string, PoolEventTotals>;
+  /** True when the outcome scan could not be read; totals is then empty and
+   *  must not be shown as zeros. */
+  outcomesUnavailable: boolean;
   asOfSeconds: bigint;
 }
 
@@ -237,11 +245,20 @@ export default function SponsorConsole() {
       // cannot run from the browser (Arc's public RPCs prune history and cap
       // getLogs), so it runs server-side against the archival ARC_RPC_URL and
       // returns bigints as strings, which we parse back here.
+      // A failed outcome read (503, a 429 from the rate limiter, a network
+      // error) is flagged, never parsed as an empty map: {} would render as
+      // $0.00 funded and "Fewer than 5" for a pool with forty joiners.
       const [pools, totalsRes] = await Promise.all([
         fetchPools(),
-        fetch("/api/sponsor/outcomes").then((r) => r.json()),
+        fetch("/api/sponsor/outcomes")
+          .then(async (r) => (r.ok ? ((await r.json()) as { totals?: unknown }) : null))
+          .catch(() => null),
       ]);
-      const raw = (totalsRes?.totals ?? {}) as Record<
+      const outcomesUnavailable =
+        totalsRes === null ||
+        typeof totalsRes.totals !== "object" ||
+        totalsRes.totals === null;
+      const raw = (outcomesUnavailable ? {} : totalsRes.totals) as Record<
         string,
         {
           joined: number;
@@ -262,6 +279,7 @@ export default function SponsorConsole() {
       return {
         pools,
         totals,
+        outcomesUnavailable,
         asOfSeconds: BigInt(Math.floor(Date.now() / 1000)),
       };
     },
@@ -397,9 +415,9 @@ export default function SponsorConsole() {
         <ErrorNote
           title="Could not load your pools"
           detail={
-            consoleQuery.error instanceof Error
-              ? consoleQuery.error.message
-              : "Unknown error reading from Base Sepolia."
+            consoleQuery.error instanceof ContractNotConfiguredError
+              ? "Runs are not open on this build yet."
+              : "Base Sepolia did not answer just now. Your pools and money are unaffected; try again."
           }
           onRetry={() => {
             void consoleQuery.refetch();
@@ -412,7 +430,17 @@ export default function SponsorConsole() {
         />
       ) : (
         <>
-          <PortfolioSummary aggregates={aggregates} />
+          {consoleQuery.data?.outcomesUnavailable === true ? (
+            <ErrorNote
+              title="Outcomes could not be read right now."
+              detail="Your pools are listed below with their live balances. Joined, completion and payout figures are hidden until the outcome read works again, rather than shown as zeros."
+              onRetry={() => {
+                void consoleQuery.refetch();
+              }}
+            />
+          ) : (
+            <PortfolioSummary aggregates={aggregates} />
+          )}
           <section id="pools" className="space-y-5">
             <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
               Your <span className="text-accent">pools</span>
@@ -423,6 +451,7 @@ export default function SponsorConsole() {
                   key={pool.id.toString()}
                   pool={pool}
                   aggregate={aggregates[i]}
+                  outcomesUnavailable={consoleQuery.data?.outcomesUnavailable === true}
                   nowSeconds={consoleQuery.data?.asOfSeconds ?? 0n}
                 />
               ))}
