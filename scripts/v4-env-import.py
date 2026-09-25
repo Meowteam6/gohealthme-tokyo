@@ -35,6 +35,9 @@ SHAPES = {
     "CIRCLE_WALLET_ID": r"^[0-9a-f-]{36}$",
     "CIRCLE_WALLET_SET_ID": r"^[0-9a-f-]{36}$",
     "CDP_API_KEY_ID": r"^[0-9a-f-]{36}$",
+    "HEALTH_POOLS_ADDRESS": r"^0x(?!66815e3AC541eB18d01D2aed25D0D9779583D832)[0-9a-fA-F]{40}$",
+    "NEXT_PUBLIC_HEALTH_POOLS_ADDRESS": r"^0x(?!66815e3AC541eB18d01D2aed25D0D9779583D832)[0-9a-fA-F]{40}$",
+    "ENS_AGENT_PRIVATE_KEY": r"^(0x)?[0-9a-fA-F]{64}$",
     "NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID": r"^[0-9a-f-]{36}$",
 }
 
@@ -93,6 +96,10 @@ def main():
         "JUNCTION_REGION": "us",
         "JUNCTION_API_KEY": local.get("JUNCTION_API_KEY", ""),
         "INTERCEPTA_API_KEY": local.get("INTERCEPTA_API_KEY", ""),
+        "HEALTH_POOLS_ADDRESS": local.get("HEALTH_POOLS_ADDRESS", ""),
+        "NEXT_PUBLIC_HEALTH_POOLS_ADDRESS": local.get("NEXT_PUBLIC_HEALTH_POOLS_ADDRESS", ""),
+        "HEALTH_POOLS_FROM_BLOCK": local.get("HEALTH_POOLS_FROM_BLOCK", ""),
+        "NEXT_PUBLIC_HEALTH_POOLS_FROM_BLOCK": local.get("NEXT_PUBLIC_HEALTH_POOLS_FROM_BLOCK", ""),
         "CDP_API_KEY_ID": local.get("CDP_API_KEY_ID", ""),
         "CDP_API_KEY_SECRET": local.get("CDP_API_KEY_SECRET", ""),
         "NEXT_PUBLIC_CDP_PAYMASTER_URL": local.get("NEXT_PUBLIC_CDP_PAYMASTER_URL", ""),

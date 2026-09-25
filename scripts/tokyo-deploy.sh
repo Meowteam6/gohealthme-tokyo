@@ -88,9 +88,20 @@ tx_hash() {
   sed -n 's/.*"transactionHash":"\(0x[0-9a-fA-F]*\)".*/\1/p' | head -1
 }
 
+# sepolia.base.org is load-balanced: a nonce read right after a mined tx can hit
+# a lagging node and return the old nonce ("replacement transaction
+# underpriced"). Track the nonce here: start from the pending nonce, never go
+# below what this run already used.
+NEXT_NONCE=""
 send() {
   # send <to> <sig> <args...>
-  cast send "$@" --private-key "$PRIVATE_KEY" --rpc-url "$RPC" --json | tx_hash
+  local chain_nonce
+  chain_nonce="$(cast nonce "$DEPLOYER" --rpc-url "$RPC" --block pending)"
+  if [ -z "$NEXT_NONCE" ] || [ "$chain_nonce" -gt "$NEXT_NONCE" ]; then
+    NEXT_NONCE="$chain_nonce"
+  fi
+  cast send "$@" --nonce "$NEXT_NONCE" --private-key "$PRIVATE_KEY" --rpc-url "$RPC" --json | tx_hash
+  NEXT_NONCE=$((NEXT_NONCE + 1))
 }
 
 log() { echo "$*" >> "$LOG_TMP"; }

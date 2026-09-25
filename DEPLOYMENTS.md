@@ -55,6 +55,16 @@ project; both values are the new contract address, never `0x66815e3A…`):
 
 ### Deploy log
 <!-- tokyo-deploy-log -->
+- 2026-09-25T20:40:37Z reuse: HealthPoolsV3 `0x0B6E8D477313599aBB746218a1AE45BAb333A12F` (seed-only run)
+- 2026-09-25T20:40:37Z pool 0: **Sleep 7 hours tonight** | goalSpec "Sleep at least 7 hours for 1 night" | model 2 (commitment) | entry 1000000 uUSDC | sponsor pot 2000000 uUSDC
+  - periodStart 1790368846 (Sat 2026-09-26 05:40 JST), periodEnd 1790416800 (Sat 2026-09-26 19:00 JST); settler-only until 1790503200 (Sun 2026-09-27 19:00 JST), then anyone
+  - create tx https://sepolia.basescan.org/tx/0x491fa335b47cdbb6606b966cb4c135cc2dfb52c40ad8cbadcf534ab10e9c54b7
+- 2026-09-25T20:40:37Z pool 1: **One workout today** | goalSpec "Complete at least 1 workout for 1 day" | model 2 (commitment) | entry 1000000 uUSDC | sponsor pot 2000000 uUSDC
+  - periodStart 1790368848 (Sat 2026-09-26 05:40 JST), periodEnd 1790463600 (Sun 2026-09-27 08:00 JST); settler-only until 1790550000 (Mon 2026-09-28 08:00 JST), then anyone
+  - create tx https://sepolia.basescan.org/tx/0x6481c03acdda763ffbe9337861ea32765b4f29e20b609af45b45d01af6595519
+- 2026-09-25T20:40:37Z pool 2: **Walk 8k steps today** | goalSpec "Walk at least 8,000 steps for 1 day" | model 2 (commitment) | entry 1000000 uUSDC | sponsor pot 2000000 uUSDC
+  - periodStart 1790368851 (Sat 2026-09-26 05:40 JST), periodEnd 1790472600 (Sun 2026-09-27 10:30 JST); settler-only until 1790559000 (Mon 2026-09-28 10:30 JST), then anyone
+  - create tx https://sepolia.basescan.org/tx/0x9a2c22e4d866263b758a76702688c59587be05d7c36656e760affc5b83abe0f8
 
 ## Tokyo 2026 (ENSv2 Sepolia)
 
@@ -72,6 +82,12 @@ Contracts used (verified against docs.ens.domains/learn/deployments and cast cod
 Transactions written by `app/scripts/ens-bootstrap.ts` (append-only):
 
 - 2026-09-26: none yet. gohealthme.eth is still available; bootstrap pending the owner key (see docs/ENS.md).
+- 2026-09-25 deploy UserRegistry proxy (VerifiableFactory): [`0xfb70e369e7adadbfa60744217c3d4f8a55a229e5419c8284719c65340ed32d88`](https://sepolia.etherscan.io/tx/0xfb70e369e7adadbfa60744217c3d4f8a55a229e5419c8284719c65340ed32d88) (gas 178021)
+  - UserRegistry proxy: `0xD6cD9911a15c43a9afD5AD4e68B92DaAbb08A299`
+- 2026-09-25 deploy PermissionedResolver proxy (VerifiableFactory): [`0x362070bedc31f7c8f1bb724d5c349731954c67f6e240db79f5dbdbe40d1ce5fd`](https://sepolia.etherscan.io/tx/0x362070bedc31f7c8f1bb724d5c349731954c67f6e240db79f5dbdbe40d1ce5fd) (gas 178240)
+  - PermissionedResolver proxy: `0x708A9AB8085a3fdb97a80F4BC0A2738541b7aFfc`
+- 2026-09-25 mint MockUSDC for the registration fee: [`0x31ce44df3b9bf7c8ed16616423554bc8b061b5cb9bac80ba368301b2fe94f85f`](https://sepolia.etherscan.io/tx/0x31ce44df3b9bf7c8ed16616423554bc8b061b5cb9bac80ba368301b2fe94f85f) (gas 51369)
+- 2026-09-25 approve ETHRegistrar for MockUSDC: [`0xe8f61b9faacc3aae77b69b7d3bb91e878823aa57d590bd0997e27ad8aafa1348`](https://sepolia.etherscan.io/tx/0xe8f61b9faacc3aae77b69b7d3bb91e878823aa57d590bd0997e27ad8aafa1348) (gas 46354)
 
 ---
 
