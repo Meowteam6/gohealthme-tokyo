@@ -120,7 +120,29 @@ export type LedgerEntry = Stamped &
         periodEndIso?: string;
         note?: string;
       }
-    /** stage vocabulary: "buy" | "attester" | "record" | "settle". */
+    | {
+        /**
+         * World ID for Agents (ETHGlobal Tokyo 2026): SPOTTER asked the
+         * achiever to confirm a payout, and what the human did about it.
+         * An approved row proves one human consented to THIS payout. It never
+         * proves the goal: that stays with the wearable read and the verdict
+         * row above. Written only by lib/server/agent/approval.ts.
+         */
+        kind: "approval";
+        status: "requested" | "approved" | "declined" | "expired" | "cancelled";
+        requestId: string;
+        /** Action the proof is bound to: `settle:<goalId>:<attempt>`. */
+        action: string;
+        /** "mock" is the event environment (mocked proofs, never production);
+         *  "world" is the live World verify endpoint. */
+        provider: "mock" | "world";
+        expiresAtIso?: string;
+        /** First 10 hex chars of the nullifier, approved rows only: enough to
+         *  show one human consented, never enough to identify them. */
+        nullifierStub?: string;
+        note?: string;
+      }
+    /** stage vocabulary: "buy" | "attester" | "record" | "settle" | "approval". */
     | { kind: "error"; stage: string; message: string }
   );
 
