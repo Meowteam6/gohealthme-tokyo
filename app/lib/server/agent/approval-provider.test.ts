@@ -220,6 +220,20 @@ describe("world provider", () => {
     vi.stubEnv("WORLD_ENVIRONMENT", "staging");
     expect(worldApprovalProviderFromEnv().name).toBe("world");
   });
+
+  it("from env: refuses staging (the simulator) on a production deployment", async () => {
+    const { worldApprovalProviderFromEnv } = await load();
+    vi.stubEnv("NEXT_PUBLIC_WORLD_APP_ID", "app_1");
+    vi.stubEnv("WORLD_RP_ID", "rp_1");
+    vi.stubEnv("WORLD_SIGNING_KEY", "0x" + "22".repeat(32));
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("WORLD_ENVIRONMENT", "staging");
+    expect(() => worldApprovalProviderFromEnv()).toThrow(/refused on a production deployment/);
+    vi.stubEnv("WORLD_ENVIRONMENT", "");
+    expect(() => worldApprovalProviderFromEnv()).toThrow(/refused on a production deployment/);
+    vi.stubEnv("WORLD_ENVIRONMENT", "production");
+    expect(worldApprovalProviderFromEnv().name).toBe("world");
+  });
 });
 
 describe("normalizeNullifier", () => {

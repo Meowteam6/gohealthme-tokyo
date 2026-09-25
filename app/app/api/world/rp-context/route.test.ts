@@ -20,7 +20,9 @@ async function load(env: Record<string, string>) {
 describe("/api/world/rp-context", () => {
   it("reports off, with the problem, when the mode is unset or broken", async () => {
     const off = await load({ WORLD_VERIFY_MODE: "" });
-    expect(await (await off.GET()).json()).toEqual({ mode: "off", problem: null });
+    const offBody = await (await off.GET()).json();
+    expect(offBody.mode).toBe("off");
+    expect(offBody.problem).toMatch(/not switched on/);
 
     const broken = await load({
       WORLD_VERIFY_MODE: "live",
@@ -28,9 +30,14 @@ describe("/api/world/rp-context", () => {
       WORLD_RP_ID: "",
       WORLD_RP_SIGNING_KEY: "",
     });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const body = await (await broken.POST()).json();
     expect(body.mode).toBe("off");
-    expect(body.problem).toContain("WORLD_RP_SIGNING_KEY");
+    // Player copy on the wire; the env var names go to the server log only.
+    expect(body.problem).toMatch(/paused on this build/);
+    expect(body.problem).not.toMatch(/WORLD_/);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("WORLD_RP_SIGNING_KEY"));
+    spy.mockRestore();
   });
 
   it("reports mock with the action and no credentials", async () => {

@@ -301,6 +301,14 @@ export function worldApprovalProvider(
 
 function worldEnvironmentFromEnv(): WorldEnvironment {
   const raw = optionalEnv("WORLD_ENVIRONMENT", "staging").toLowerCase();
+  if (raw !== "production" && process.env.VERCEL_ENV === "production") {
+    // Staging and sandbox proofs come from World's simulator, which mints any
+    // number of identities: on the deployment real beta users hit that is a
+    // mock by another name. Fails closed like WORLD_APPROVAL_MODE=mock.
+    throw new Error(
+      `WORLD_ENVIRONMENT=${raw} is refused on a production deployment; set production`,
+    );
+  }
   if (raw === "production" || raw === "staging" || raw === "sandbox") {
     return raw;
   }

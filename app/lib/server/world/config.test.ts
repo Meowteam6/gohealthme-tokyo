@@ -28,6 +28,54 @@ describe("worldSetup", () => {
     expect(worldEnabled()).toBe(false);
   });
 
+  it("refuses live on staging (the simulator) on a production deployment", async () => {
+    const { worldSetup, worldNamespace, playerWorldProblem } = await load({
+      WORLD_VERIFY_MODE: "live",
+      WORLD_APP_ID: "app_abc",
+      WORLD_RP_ID: "rp_abc",
+      WORLD_RP_SIGNING_KEY: "0x11",
+      WORLD_ENVIRONMENT: "",
+      VERCEL_ENV: "production",
+    });
+    const setup = worldSetup();
+    expect(setup.mode).toBe("off");
+    expect(setup.problem).toMatch(/WORLD_ENVIRONMENT must be production/);
+    expect(worldNamespace(setup)).toBeNull();
+    // The player never sees the env var name.
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const line = playerWorldProblem(setup, "cid-1");
+    expect(line).not.toMatch(/WORLD_|VERCEL_/);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("WORLD_ENVIRONMENT"));
+    spy.mockRestore();
+  });
+
+  it("runs live production on a production deployment, in its own namespace", async () => {
+    const { worldSetup, worldNamespace } = await load({
+      WORLD_VERIFY_MODE: "live",
+      WORLD_APP_ID: "app_abc",
+      WORLD_RP_ID: "rp_abc",
+      WORLD_RP_SIGNING_KEY: "0x11",
+      WORLD_ENVIRONMENT: "production",
+      VERCEL_ENV: "production",
+    });
+    expect(worldSetup().mode).toBe("live");
+    expect(worldNamespace()).toBe("live-production");
+  });
+
+  it("namespaces mock and live-staging apart on a preview", async () => {
+    const mock = await load({ WORLD_VERIFY_MODE: "mock", VERCEL_ENV: "preview" });
+    expect(mock.worldNamespace()).toBe("mock");
+    const live = await load({
+      WORLD_VERIFY_MODE: "live",
+      WORLD_APP_ID: "app_abc",
+      WORLD_RP_ID: "rp_abc",
+      WORLD_RP_SIGNING_KEY: "0x11",
+      WORLD_ENVIRONMENT: "staging",
+      VERCEL_ENV: "preview",
+    });
+    expect(live.worldNamespace()).toBe("live-staging");
+  });
+
   it("keeps mock on a preview deployment", async () => {
     const { worldSetup } = await load({ WORLD_VERIFY_MODE: "mock", VERCEL_ENV: "preview" });
     expect(worldSetup().mode).toBe("mock");

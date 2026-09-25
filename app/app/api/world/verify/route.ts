@@ -26,7 +26,11 @@
 import { isAddress } from "viem";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
 import { LockUnavailableError } from "@/lib/server/store";
-import { worldSetup } from "@/lib/server/world/config";
+import {
+  playerWorldProblem,
+  worldNamespace,
+  worldSetup,
+} from "@/lib/server/world/config";
 import { bindHuman } from "@/lib/server/world/human";
 import { parseIdkitPayload } from "@/lib/server/world/payload";
 import { verifyLive, verifyMock } from "@/lib/server/world/verify";
@@ -66,12 +70,8 @@ export async function POST(request: Request) {
 
     const setup = worldSetup();
     if (setup.mode === "off") {
-      return jsonError(
-        503,
-        setup.problem === null
-          ? "Prove-human is not enabled on this deployment."
-          : `Prove-human is not enabled on this deployment: ${setup.problem}`,
-      );
+      // Player copy only; the operator detail (env names) goes to the log.
+      return jsonError(503, playerWorldProblem(setup, cid));
     }
 
     const verified =
@@ -100,6 +100,9 @@ export async function POST(request: Request) {
         nullifierHash: verified.nullifierHash,
         mode: setup.mode,
         protocolVersion: verified.protocolVersion,
+        // Bound where this deployment reads: a mock bind never lands where
+        // live reads, and a staging bind never where production reads.
+        namespace: worldNamespace(setup) ?? undefined,
       });
     } catch (err) {
       if (err instanceof LockUnavailableError) {

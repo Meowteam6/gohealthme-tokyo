@@ -16,9 +16,20 @@
 //          the closed-beta allowlist behaviour, so nobody hits a new dead end.
 //
 // A "live" that is missing a required variable, or an unrecognised value,
-// resolves to "off" WITH a problem string. That string is returned by the
-// rp-context route and rendered by ProveHuman, so a misconfigured deployment
-// says what is wrong instead of failing every verification with a 500.
+// resolves to "off" WITH a problem string. The problem string is OPERATOR
+// detail (it names env vars): routes log it and hand the player
+// PLAYER_WORLD_PROBLEM instead, so a misconfigured deployment fails closed,
+// visibly, without printing configuration to a stranger.
+//
+// Production refusals (VERCEL_ENV=production, fail closed to "off"):
+//   - WORLD_VERIFY_MODE=mock (typed identities are not people)
+//   - live with WORLD_ENVIRONMENT anything but "production": staging proofs
+//     come from the public simulator, which mints unlimited identities.
+//
+// NAMESPACES. Human records are stored per namespace (human.ts): "mock",
+// "live-staging" or "live-production". A binding made in one namespace never
+// satisfies a read in another, so a mocked identity typed on a preview that
+// shares the store with production can never count as a real human there.
 
 import { optionalEnv } from "@/lib/server/env";
 
@@ -58,6 +69,45 @@ export function worldEnvironment(): WorldEnvironment {
     : "staging";
 }
 
+/** True on the Vercel production deployment, the one real beta users hit. */
+export function isProductionDeployment(): boolean {
+  return process.env.VERCEL_ENV === "production";
+}
+
+/** Where a World human record lives. See the header. */
+export type WorldNamespace = "mock" | "live-staging" | "live-production";
+
+export function namespaceFor(
+  mode: Exclude<WorldMode, "off">,
+  environment: WorldEnvironment,
+): WorldNamespace {
+  return mode === "mock" ? "mock" : `live-${environment}`;
+}
+
+/** The namespace this deployment reads and writes, or null when prove-human
+ *  is off (nothing is enforced, so no record is consulted). */
+export function worldNamespace(setup: WorldSetup = worldSetup()): WorldNamespace | null {
+  if (setup.mode === "off") return null;
+  if (setup.mode === "mock") return "mock";
+  return namespaceFor("live", setup.live?.environment ?? worldEnvironment());
+}
+
+/** What a player sees when prove-human is off because of a misconfiguration.
+ *  The operator detail (setup.problem) goes to the server log only. */
+export const PLAYER_WORLD_PROBLEM =
+  "Proving you're one human is paused on this build while we fix its setup. Nothing was recorded. Check back soon.";
+
+/** What a player sees when prove-human is simply not switched on. */
+export const PLAYER_WORLD_OFF =
+  "Proving you're one human is not switched on for this build, so the closed-beta list decides who plays.";
+
+/** The player-safe line for an "off" setup; logs the operator detail. */
+export function playerWorldProblem(setup: WorldSetup, correlationId: string): string {
+  if (setup.problem === null) return PLAYER_WORLD_OFF;
+  console.error(`[${correlationId}] world config: ${setup.problem}`);
+  return PLAYER_WORLD_PROBLEM;
+}
+
 export function worldSetup(): WorldSetup {
   const action = worldAction();
   const raw = optionalEnv("WORLD_VERIFY_MODE", "").toLowerCase();
@@ -68,7 +118,7 @@ export function worldSetup(): WorldSetup {
     // Hard rule (2026-09-26): V4 serves real beta users, so a production
     // deployment never runs on typed identities. Mock stays for tests, local
     // runs and preview deployments.
-    if (process.env.VERCEL_ENV === "production") {
+    if (isProductionDeployment()) {
       return {
         mode: "off",
         action,
@@ -105,6 +155,20 @@ export function worldSetup(): WorldSetup {
     };
   }
 
+  const environment = worldEnvironment();
+  if (isProductionDeployment() && environment !== "production") {
+    // Staging proofs come from simulator.worldcoin.org, which mints any
+    // number of identities. On the deployment real beta users hit that is a
+    // mock by another name, so it is refused the same way (fail closed).
+    return {
+      mode: "off",
+      action,
+      problem:
+        "WORLD_ENVIRONMENT must be production on a production deployment (staging proofs come from the simulator). Prove-human is off.",
+      live: null,
+    };
+  }
+
   return {
     mode: "live",
     action,
@@ -114,7 +178,7 @@ export function worldSetup(): WorldSetup {
       rpId,
       signingKeyHex,
       action,
-      environment: worldEnvironment(),
+      environment,
     },
   };
 }
