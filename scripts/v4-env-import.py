@@ -92,6 +92,7 @@ def main():
         "ENS_AGENT_PRIVATE_KEY": local.get("ENS_AGENT_PRIVATE_KEY", ""),
         "CRON_SECRET": secrets.token_urlsafe(32),
         "WEARABLE_PROVIDER_DEFAULT": "junction",
+        "WEARABLE_TOKEN_KEY": local.get("WEARABLE_TOKEN_KEY", ""),
         "JUNCTION_ENV": "sandbox",
         "JUNCTION_REGION": "us",
         "JUNCTION_API_KEY": local.get("JUNCTION_API_KEY", ""),
