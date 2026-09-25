@@ -299,8 +299,13 @@ describe("createChallenge", () => {
     expect(result).toEqual({
       ok: false,
       status: 503,
-      reason: mod.CHALLENGES_UNAVAILABLE_MESSAGE,
+      reason: mod.CHALLENGE_LINK_UNAVAILABLE_MESSAGE,
     });
-    if (!result.ok) expect(result.reason).not.toMatch(/[A-Z_]{6,}/);
+    if (!result.ok) {
+      expect(result.reason).not.toMatch(/[A-Z_]{6,}/);
+      // The link write can run after the reward landed, so it must never say
+      // nothing was charged.
+      expect(result.reason).not.toMatch(/nothing was charged/i);
+    }
   });
 });

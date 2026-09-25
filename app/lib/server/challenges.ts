@@ -85,6 +85,11 @@ export function challengesContract(
 export const CHALLENGES_UNAVAILABLE_MESSAGE =
   "Dares are not live on this build yet. Nothing was charged.";
 
+/** The same refusal at the link write. That write can run AFTER a reward
+ *  landed (a link-only retry), so it must never claim nothing was charged. */
+export const CHALLENGE_LINK_UNAVAILABLE_MESSAGE =
+  "Dare links are not available on this build right now.";
+
 export type ChallengesHealth =
   | { ok: true; contract: string }
   | { ok: false; code: ChallengesUnavailableCode };
@@ -304,7 +309,7 @@ export async function createChallenge(params: {
   const scope = challengesContract();
   const supabase = scope.ok ? getSupabaseServiceRole() : null;
   if (!scope.ok || supabase === null) {
-    return { ok: false, status: 503, reason: CHALLENGES_UNAVAILABLE_MESSAGE };
+    return { ok: false, status: 503, reason: CHALLENGE_LINK_UNAVAILABLE_MESSAGE };
   }
 
   // pool_id is written as a decimal string so a value beyond 2^53 is not
