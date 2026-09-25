@@ -94,7 +94,7 @@ export default async function Image() {
               Testnet, play-money USDC on Base Sepolia
             </div>
             <div style={{ display: "flex", fontSize: 22, color: MUTED }}>
-              Paid in USDC the second you hit your health goal.
+              Stake on your health goal. Hit it, get paid in USDC.
             </div>
           </div>
         </div>

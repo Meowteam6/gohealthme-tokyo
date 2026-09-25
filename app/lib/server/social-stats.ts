@@ -56,10 +56,10 @@ export interface SocialStats {
   poolsJoined: number;
   winStreak: number;
   recentWins: SocialWin[]; // newest first, capped at WINS_LIMIT
-  /** False when the chain could not be read (no pools contract on this build,
-   *  or a failed scan). The counters are then zeros that mean "unknown", and
-   *  the profile must say so instead of printing them as fact. */
-  readable: boolean;
+  /** False when the chain could not be read: the counters above are then
+   *  placeholders, and the profile must say so instead of showing zeros as
+   *  fact. True for a real (possibly empty) answer. */
+  readOk: boolean;
 }
 
 export const EMPTY_STATS: SocialStats = {
@@ -70,11 +70,10 @@ export const EMPTY_STATS: SocialStats = {
   poolsJoined: 0,
   winStreak: 0,
   recentWins: [],
-  readable: true,
+  readOk: true,
 };
 
-/** Zeros that mean "could not read", never "nothing happened". */
-const UNREADABLE_STATS: SocialStats = { ...EMPTY_STATS, readable: false };
+const UNREADABLE_STATS: SocialStats = { ...EMPTY_STATS, readOk: false };
 
 // How many recent payout rows the paid-wall shows. Block timestamps for these
 // are fetched one block at a time, so the cap also bounds that fan-out.
@@ -204,21 +203,24 @@ async function achieverTierByPool(
   return out;
 }
 
-/** The tier of SPOTTER's newest PASSING verdict for a goal, or null when the
- *  ledger holds none. Exported for tests. */
-export function tierFromLedger(entries: LedgerEntry[]): ProofTier | null {
-  for (let i = entries.length - 1; i >= 0; i -= 1) {
-    const entry = entries[i];
-    if (entry.kind === "verdict" && entry.verified === true) {
-      return entry.selfReported === true ? "self-reported" : "verified";
-    }
+/**
+ * The tier of an oracle-only win, from SPOTTER's own record of it: the newest
+ * verified verdict entry. A self-reported verdict is the low tier; any other
+ * verified verdict (wearable or document) is the verified tier. No verified
+ * verdict on file means the win cannot be classified, so null ("unknown").
+ */
+export function tierFromLedger(ledger: LedgerEntry[]): ProofTier | null {
+  let tier: ProofTier | null = null;
+  for (const entry of ledger) {
+    if (entry.kind !== "verdict" || entry.verified !== true) continue;
+    tier = entry.selfReported === true ? "self-reported" : "verified";
   }
-  return null;
+  return tier;
 }
 
 /**
  * Compute a wallet's public stats. Never throws: a dead RPC or a rejected log
- * query yields zeroed counters with readable: false, so the profile still
+ * query yields placeholder counters with readOk false, so the profile still
  * renders its identity and says the stats could not be read (never prints the
  * zeros as fact). The failure is logged server-side. A failed read is not
  * cached, so the next view retries.
@@ -349,7 +351,7 @@ export async function getSocialStats(rawAddress: string): Promise<SocialStats> {
       poolsJoined: joined.length,
       winStreak: streak,
       recentWins,
-      readable: true,
+      readOk: true,
     };
 
     cache.set(lower, { at: Date.now(), stats });

@@ -60,7 +60,7 @@ const META: Record<
 };
 
 export default function HeroActivityTicker() {
-  const { data, isPending, isError } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     queryKey: ["hero-activity"],
     queryFn: async () => {
       const res = await fetch("/api/activity");
@@ -81,27 +81,41 @@ export default function HeroActivityTicker() {
         <p className="text-sm font-semibold text-muted">What just happened on chain</p>
       </div>
 
+      {/* Loading and a failed read each get their own state: an RPC outage
+          must never read as a quiet, empty testnet. "Quiet" is only for a
+          confirmed empty answer. */}
       {isPending ? (
-        <div className="space-y-2" aria-busy="true" aria-label="Reading the chain">
+        <div className="space-y-2" aria-busy="true">
+          <p className="sr-only" aria-live="polite">
+            Reading the chain
+          </p>
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-12 w-full" />
         </div>
-      ) : isError && data === undefined ? (
-        // Only a confirmed empty answer may say "quiet". A failed read says so.
-        <div role="status" className="rounded-lg border-2 border-dashed border-warning/50 px-4 py-6">
+      ) : isError && events.length === 0 ? (
+        <div className="rounded-lg border-2 border-dashed border-warning/40 px-4 py-6" role="status">
           <p className="text-sm font-bold text-foreground">
-            Could not read chain activity just now.
+            Could not read the chain right now.
           </p>
           <p className="mt-1 text-sm text-muted">
-            This is a read problem, not an empty chain. It tries again in a few seconds.
+            This is a read problem, not an empty chain. It tries again on its own.
           </p>
+          <button
+            type="button"
+            onClick={() => {
+              void refetch();
+            }}
+            className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-accent underline underline-offset-4"
+          >
+            Try again
+          </button>
         </div>
       ) : events.length === 0 ? (
         <div className="rounded-lg border-2 border-dashed border-edge px-4 py-6">
           <p className="text-sm font-bold text-foreground">Quiet right now.</p>
           <p className="mt-1 text-sm text-muted">
-            Be the first. Enter a run or dare a friend and it shows up here the
-            second it happens.
+            Be the first. Enter a run or dare a friend and it shows up here
+            once it lands on chain.
           </p>
         </div>
       ) : (

@@ -5,11 +5,11 @@ import { Badge } from "@/components/ui";
 export const metadata: Metadata = {
   title: "Terms",
   description:
-    "The rules of the GoHealthMe testnet demo: play-money, not advice, no guarantees. A plain-language, pre-launch notice.",
+    "The rules of the GoHealthMe testnet beta: play-money, not advice, no guarantees. A plain-language, pre-launch notice.",
   alternates: { canonical: "/terms" },
 };
 
-const EFFECTIVE_DATE = "2026-08-20";
+const EFFECTIVE_DATE = "2026-09-26";
 const CONTACT_EMAIL = "andre102599@gmail.com";
 
 /**
@@ -21,18 +21,18 @@ export default function TermsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl py-4">
       <header className="space-y-3">
-        <Badge tone="warning">Testnet demo</Badge>
+        <Badge tone="warning">Beta, testnet</Badge>
         <h1 className="text-3xl font-bold tracking-tight">Terms of Use</h1>
         <p className="text-sm text-muted">
           Effective {EFFECTIVE_DATE}. These are the plain-language rules for
-          trying a pre-launch testnet demo. By using GoHealthMe you agree to
+          trying a pre-launch testnet beta. By using GoHealthMe you agree to
           them.
         </p>
       </header>
 
       <div className="mt-6 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-relaxed text-foreground/90">
         This is not legal advice, and it is not medical, health, financial,
-        investment, or tax advice. It is an honest description of a testnet demo,
+        investment, or tax advice. It is an honest description of a testnet beta,
         not a finished legal agreement. Before any real-money launch it will be
         replaced by terms reviewed by a lawyer.
       </div>
@@ -56,7 +56,7 @@ export default function TermsPage() {
           <p>
             Nothing in this app is medical, health, financial, investment, tax,
             or legal advice. The goals, verdicts, and payouts are part of a
-            product demo, not guidance for your life. You are responsible for
+            product beta, not guidance for your life. You are responsible for
             your own health decisions. Talk to a qualified professional - a
             doctor, a financial advisor, a lawyer - before acting on anything
             you see here.
@@ -66,7 +66,7 @@ export default function TermsPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-foreground">18 and over</h2>
           <p>
-            This demo is for adults. You must be at least 18 years old to use
+            This beta is for adults. You must be at least 18 years old to use
             it.
           </p>
         </section>
@@ -79,7 +79,7 @@ export default function TermsPage() {
             The app is provided as-is, with no warranty of any kind. It may be
             wrong, incomplete, or unavailable. Verification can fail, be
             delayed, or reach the wrong result. Payouts are not guaranteed. Do
-            not rely on this demo for anything that matters.
+            not rely on this beta for anything that matters.
           </p>
         </section>
 
@@ -103,26 +103,29 @@ export default function TermsPage() {
           </h2>
           <p>
             When you create a challenge, you fund the pot. If the person you
-            challenged hits the goal, they collect the pot. If they miss it, the
-            entire remaining pot - including anything other people contributed -
-            returns to you, the challenge creator. It is not split back to
-            contributors pro-rata.
+            challenged hits the goal, they collect the pot when the run
+            settles. If they miss it, the entire remaining pot, including
+            anything other people contributed, can only be taken back by you,
+            the challenge creator, through the contract&apos;s sweep. It is not
+            split back to contributors pro-rata, and it does not move on its
+            own: until the app offers the sweep as a button, it stays in the
+            pool.
           </p>
           <p>
             Anyone who chips into someone else&apos;s challenge should
             understand this before contributing: you are adding to a reward for
             the person taking the goal, not placing a refundable bet. If they
-            miss, your contribution goes to the challenge creator, not back to
+            miss, your contribution belongs to the challenge creator, not to
             you.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-foreground">
-            We may change or end the demo at any time
+            We may change or end the beta at any time
           </h2>
           <p>
-            This is an early demo. We may modify it, pause it, reset the
+            This is an early beta. We may modify it, pause it, reset the
             testnet, or shut it down entirely at any time, without notice.
           </p>
         </section>
@@ -144,7 +147,7 @@ export default function TermsPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-foreground">Contact</h2>
           <p>
-            This demo is operated by Meowteam6. Questions go to{" "}
+            This beta is operated by Meowteam6. Questions go to{" "}
             <a
               href={`mailto:${CONTACT_EMAIL}`}
               className="text-accent underline"

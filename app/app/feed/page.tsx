@@ -5,7 +5,7 @@ import NamedPayoutFeed from "@/components/NamedPayoutFeed";
 export const metadata: Metadata = {
   title: "Who got paid",
   description:
-    "Every health-goal payout SPOTTER has settled on Base Sepolia, by handle. Amounts and transactions are public; the health category never is. Testnet play money.",
+    "Recent health-goal payouts SPOTTER has settled on Base Sepolia, by handle. Amounts and transactions are public; the health category never is. Testnet play money.",
   alternates: { canonical: "/feed" },
 };
 
@@ -18,9 +18,10 @@ export default function FeedPage() {
             Who got paid
           </h1>
           <p className="text-sm text-muted">
-            Every win SPOTTER has settled on Base, named by handle where
-            the wallet has claimed one. The amount and the settlement tx are
-            public; the health category behind each goal never is.
+            Recent payouts SPOTTER has settled on Base Sepolia, named by
+            handle where the wallet has claimed one. The amount and the
+            settlement tx are public; the health goal behind each one never
+            is. Test USDC, not real money.
           </p>
         </div>
         {/* SPOTTER on payday - eslint-disable-next-line @next/next/no-img-element */}
@@ -36,10 +37,10 @@ export default function FeedPage() {
 
       <p className="text-center text-sm text-muted">
         <Link
-          href="/handle"
-          className="text-accent underline-offset-4 hover:underline"
+          href="/character"
+          className="inline-flex min-h-11 items-center text-accent underline-offset-4 hover:underline"
         >
-          Claim your handle
+          Pick a name
         </Link>{" "}
         to show up here by name.
       </p>

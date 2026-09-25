@@ -78,10 +78,11 @@ export async function fetchPoolEventTotals(): Promise<
 
   // Historical event scanning is unreliable from the browser: the primary Arc
   // RPC prunes deploy-era history and the archival one caps eth_getLogs well
-  // below a full scan and rate-limits bursts. If the scan cannot complete this
-  // throws OutcomesUnavailableError; the console still lists the sponsor's
-  // pools (from the poolCount read) and says outcomes could not be read,
-  // rather than showing zeros.
+  // below a full scan and rate-limits bursts. A scan that cannot complete
+  // throws OutcomesUnavailableError: the outcomes route answers 503 and the
+  // console lists the sponsor's pools (from the poolCount read) with an
+  // "outcomes could not be read" state. Returning {} here used to render as $0.00 funded and "Fewer than
+  // 5" on pools with forty joiners, a confident wrong answer.
   try {
     const latest = await client.getBlockNumber();
     const logs = await scanInWindows(poolsScanFromBlock(), latest, (fromBlock, toBlock) =>

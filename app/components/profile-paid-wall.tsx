@@ -9,8 +9,10 @@
 //
 // THE HONESTY RULE: a self-reported win (a photo/screenshot we cannot confirm
 // is real, recent, or theirs) is a real win paid at 1x, but it must NEVER carry
-// a check/shield or read "Verified". The trust tier comes from the on-chain
-// HealthVerdict facet bitmap, resolved upstream in lib/server/social-stats.
+// a check/shield or read "Verified". The trust tier is resolved upstream in
+// lib/server/social-stats (the facet bitmap, or SPOTTER's ledger verdict on an
+// oracle-only pool). When the chain read fails, readOk is false and the page
+// says so instead of rendering zeros as fact.
 
 import { arcTxUrl } from "@/lib/chains";
 import { profileWinPresentation, type ProofTier } from "@/lib/proof-tier";
@@ -30,16 +32,18 @@ export interface ProfileData {
   handle: string;
   emoji: string; // avatar glyph (render as-is, it is user data)
   address: string;
+  goalsHit: number; // every achiever win, all tiers
   verifiedWins: number; // verified-tier only; excludes self-reported
   selfReportedWins: number; // real wins, counted separately, never "verified"
   usdcEarned: string; // "1240.00"
   winStreak: number;
   wins: Win[]; // most recent first
-  /** The chain could not be read: the counters are unknown, not zero. */
-  statsUnavailable?: boolean;
+  /** False when the chain could not be read; the figures above are then
+   *  placeholders and are not rendered. */
+  readOk: boolean;
 }
 
-const PRIVACY_COPY = "Verified privately. The health category is never shown.";
+const PRIVACY_COPY = "The health goal behind a win is never shown.";
 
 /* ---------- inline SVG icons (no icon library, no emoji) ---------- */
 
@@ -274,24 +278,23 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
             >
               {truncateAddress(profile.address)}
             </p>
-            <span className="mt-0.5 inline-flex w-fit items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent-strong">
-              <CheckBadgeIcon className="h-3.5 w-3.5" />
-              verified on GoHealthMe
-            </span>
           </div>
         </header>
 
-        {/* 2. Hero stat rail */}
-        <section className="rounded-2xl border border-edge bg-surface p-5">
-          {profile.statsUnavailable === true ? (
-            <p role="status" className="flex items-start gap-2 text-sm text-warning">
-              <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>
-                Stats could not be read from the chain right now. Nothing is
-                shown rather than a zero that might be wrong. Reload in a moment.
-              </span>
+        {/* 2. Hero stat rail. A failed chain read replaces the figures with
+            a plain note: zeros here would be a false statement. */}
+        {!profile.readOk ? (
+          <section
+            role="status"
+            className="rounded-2xl border border-warning/40 bg-surface p-5 text-sm text-muted"
+          >
+            <p className="font-semibold text-foreground">
+              Could not read this player&apos;s wins from the chain right now.
             </p>
-          ) : (
+            <p className="mt-1">Refresh in a minute to try again.</p>
+          </section>
+        ) : (
+        <section className="rounded-2xl border border-edge bg-surface p-5">
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-3 flex flex-col gap-1 sm:col-span-1 sm:border-r sm:border-edge sm:pr-4">
               <span className="text-xs uppercase tracking-wider text-muted">
@@ -304,11 +307,10 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-xs uppercase tracking-wider text-muted">
-                Verified wins
+                Wins
               </span>
-              <span className="flex items-center gap-1.5 text-2xl font-semibold text-accent">
-                <CheckBadgeIcon className="h-5 w-5" />
-                {profile.verifiedWins}
+              <span className="text-2xl font-semibold text-foreground">
+                {profile.goalsHit}
               </span>
             </div>
             <div className="flex flex-col gap-1">
@@ -321,10 +323,17 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
               </span>
             </div>
           </div>
-          )}
-          {/* Self-reported wins are counted separately and never folded into
-              the "Verified wins" figure above. */}
-          {profile.statsUnavailable !== true && profile.selfReportedWins > 0 ? (
+          {/* The tier split. Only wins proven verified carry the check;
+              self-reported wins are counted separately and never folded in. */}
+          {profile.verifiedWins > 0 ? (
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-accent-strong">
+              <CheckBadgeIcon className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                {profile.verifiedWins} verified by a sensor or a record
+              </span>
+            </p>
+          ) : null}
+          {profile.selfReportedWins > 0 ? (
             <p className="mt-3 flex items-center gap-1.5 text-xs text-warning">
               <AlertIcon className="h-3.5 w-3.5 shrink-0" />
               <span>
@@ -336,6 +345,7 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
           ) : null}
           <PrivacyLine className="mt-4" />
         </section>
+        )}
 
         {/* 3. Wins feed - each row carries its own trust tier, so a
             self-reported win reads as self-reported, never verified. */}
@@ -346,9 +356,9 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
             </h2>
             <PrivacyLine />
           </div>
-          {profile.statsUnavailable === true ? (
+          {!profile.readOk ? (
             <p className="rounded-2xl border border-dashed border-warning/50 bg-surface p-5 text-sm text-muted">
-              Wins could not be read right now.
+              Wins will show here once the chain answers.
             </p>
           ) : profile.wins.length === 0 ? (
             <p className="rounded-2xl border border-edge bg-surface p-5 text-sm text-muted">
@@ -365,7 +375,8 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
 
         {/* 4. Footer */}
       <footer className="pt-2 text-center text-xs text-muted">
-        GoHealthMe &mdash; get paid the instant you hit a verified goal.
+        GoHealthMe: stake on your health goal, get paid in test USDC when the
+        run settles.
       </footer>
     </div>
   );

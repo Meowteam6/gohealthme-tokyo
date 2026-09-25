@@ -52,9 +52,12 @@ function poisonedProfile(): ProfileData {
     handle: HANDLE,
     emoji: "G",
     address: ADDRESS,
+    goalsHit: 3,
     verifiedWins: 3,
+    selfReportedWins: 0,
     usdcEarned: "120.00",
     winStreak: 2,
+    readOk: true,
     wins: [
       {
         id: "w1",
@@ -100,5 +103,26 @@ describe("ProfilePaidWall redaction", () => {
 
   it("never renders the document marker or a raw goalSpec", () => {
     expect(html).not.toContain("[doc]");
+  });
+});
+
+describe("ProfilePaidWall when the chain could not be read", () => {
+  const html = renderToStaticMarkup(
+    createElement(ProfilePaidWall, {
+      profile: {
+        ...poisonedProfile(),
+        goalsHit: 0,
+        verifiedWins: 0,
+        usdcEarned: "0.00",
+        wins: [],
+        readOk: false,
+      },
+    }),
+  );
+
+  it("says so instead of rendering zeros and 'No wins yet' as fact", () => {
+    expect(html).toContain("Could not read");
+    expect(html).not.toContain("0.00");
+    expect(html).not.toContain("No wins yet");
   });
 });

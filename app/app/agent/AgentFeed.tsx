@@ -6,12 +6,21 @@
 // does the redaction). Split out of the identity card so the page can render
 // SPOTTER's real settler identity server-side while this section streams the
 // ledger on the client.
+//
+// Each card shows the whole public journey of a claim: what SPOTTER bought,
+// its decision, whether it asked the winner to confirm with World ID and what
+// came back, whether the payout wallet cleared screening, and where the money
+// went. A declined, expired or held claim must never read as a pending payout.
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { baseTxUrl } from "@/lib/chains";
 import { toUsd2 } from "@/lib/agent-receipt";
-import type { PublicFeedClaim } from "@/lib/server/agent/feed-view";
+import type {
+  PublicFeedApproval,
+  PublicFeedClaim,
+  PublicFeedScreen,
+} from "@/lib/server/agent/feed-view";
 import { settleMomentLine } from "@/components/AgentReceipt";
 import { EmptyState, ErrorNote, Money, Skeleton } from "@/components/ui";
 import SpotterSays from "@/components/SpotterSays";
@@ -27,16 +36,43 @@ const STAGE_LABEL: Record<string, string> = {
   other: "an internal step",
 };
 
-const APPROVAL_LINE: Record<string, string> = {
-  requested: "asked the winner to confirm the payout",
-  approved: "winner confirmed the payout",
-  declined: "winner declined, nothing moved",
-  expired: "confirmation window closed, nothing moved",
-  cancelled: "confirmation cancelled, nothing moved",
-};
-
 function shortGoal(goalId: string): string {
   return `${goalId.slice(0, 10)}…${goalId.slice(-6)}`;
+}
+
+/** The human step, in public third-person words. */
+const APPROVAL_LINE: Record<
+  PublicFeedApproval["status"],
+  { text: string; tone: "accent" | "warning" | "muted" }
+> = {
+  requested: { text: "asked the winner to confirm with World ID", tone: "muted" },
+  approved: { text: "winner confirmed with World ID", tone: "accent" },
+  declined: { text: "winner declined. Nothing moved.", tone: "warning" },
+  expired: { text: "confirmation window closed. Nothing moved.", tone: "warning" },
+  cancelled: { text: "run settled before the winner confirmed. Nothing moved.", tone: "warning" },
+};
+
+const SCREEN_LINE: Record<
+  PublicFeedScreen["status"],
+  { text: string; tone: "accent" | "warning" | "muted" }
+> = {
+  clear: { text: "payout wallet screened: clear", tone: "muted" },
+  blocked: { text: "payout blocked by wallet screening", tone: "warning" },
+  unavailable: { text: "payout held: wallet screening did not answer", tone: "warning" },
+};
+
+const TONE_CLASS = {
+  accent: "text-accent",
+  warning: "text-warning",
+  muted: "text-muted",
+} as const;
+
+function Tag({ children }: { children: string }) {
+  return (
+    <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 font-sans text-[10px] font-semibold uppercase tracking-wide text-warning">
+      {children}
+    </span>
+  );
 }
 
 function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
@@ -47,17 +83,18 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
     settle.periodEndIso !== null
       ? settleMomentLine(new Date(settle.periodEndIso))
       : null;
+  const approval =
+    claim.approval !== null ? APPROVAL_LINE[claim.approval.status] : null;
+  const screen = claim.screen !== undefined ? SCREEN_LINE[claim.screen.status] : null;
+  const resultTx = claim.recordTxs?.resultTx ?? null;
 
   return (
     <li className="rounded-3xl border border-edge bg-surface-raised p-4 sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="flex flex-wrap items-center gap-2 font-mono text-xs text-muted">
           {shortGoal(claim.goalId)}
-          {claim.selfReported ? (
-            <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 font-sans text-[10px] font-semibold uppercase tracking-wide text-warning">
-              self-reported
-            </span>
-          ) : null}
+          {claim.selfReported ? <Tag>self-reported</Tag> : null}
+          {claim.approval?.provider === "mock" ? <Tag>mocked World ID</Tag> : null}
         </span>
         <span className="text-xs text-muted">
           {new Date(claim.at).toLocaleString()}
@@ -66,7 +103,7 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
       <div className="mt-2 space-y-1 text-sm">
         {claim.spends.map((spend, index) => (
           <p key={index} className="flex items-baseline justify-between gap-3">
-            <span>
+            <span className="min-w-0">
               {spend.label}
               <span className="ml-2 text-xs text-muted">
                 {spend.settlement === "x402" ? "paid via x402" : "metered"}
@@ -76,18 +113,34 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
           </p>
         ))}
         {claim.decision !== null ? (
-          <p>
+          <p className="flex flex-wrap items-baseline gap-x-2">
             <span className="text-xs uppercase tracking-wide text-muted">
               decision
-            </span>{" "}
+            </span>
             <span
               className={
                 claim.decision === "pay" ? "text-accent" : "text-warning"
               }
             >
-              {claim.decision}
+              {claim.decision === "pay" ? "pay" : "no pay"}
             </span>
+            {resultTx !== null ? (
+              <a
+                href={baseTxUrl(resultTx)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-accent underline"
+              >
+                verdict tx
+              </a>
+            ) : null}
           </p>
+        ) : null}
+        {approval !== null ? (
+          <p className={`text-xs ${TONE_CLASS[approval.tone]}`}>{approval.text}</p>
+        ) : null}
+        {screen !== null ? (
+          <p className={`text-xs ${TONE_CLASS[screen.tone]}`}>{screen.text}</p>
         ) : null}
         {settle !== null &&
         settle.status === "settled" &&
@@ -107,25 +160,10 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
               </a>
             ) : null}
           </p>
+        ) : settle !== null && settle.status === "already-settled" ? (
+          <p className="text-xs text-muted">paid in the pool&apos;s settle</p>
         ) : deferredLine !== null ? (
           <p className="text-xs text-muted">{deferredLine}</p>
-        ) : null}
-        {claim.approval !== null ? (
-          <p className="text-xs text-muted">
-            {APPROVAL_LINE[claim.approval.status] ?? claim.approval.status}
-            {claim.approval.provider === "mock" ? (
-              <span className="ml-2 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
-                mocked World ID
-              </span>
-            ) : null}
-          </p>
-        ) : null}
-        {claim.screen !== undefined && claim.screen.status !== "clear" ? (
-          <p className="text-xs text-warning">
-            {claim.screen.status === "blocked"
-              ? "payout held: the wallet failed screening"
-              : "payout held: screening could not answer yet"}
-          </p>
         ) : null}
         {claim.problem !== undefined ? (
           <p className="text-xs text-warning">
@@ -144,8 +182,8 @@ export default function AgentFeed() {
     queryFn: async (): Promise<PublicFeedClaim[]> => {
       const res = await fetch("/api/agent/feed");
       // A failed read is an error, never an empty ledger: "SPOTTER has done
-      // nothing yet" must only ever mean exactly that.
-      if (!res.ok) throw new Error(`agent feed ${res.status}`);
+      // nothing yet" on an outage would be a false statement about the chain.
+      if (!res.ok) throw new Error(`agent feed responded ${res.status}`);
       const body = (await res.json()) as { claims?: PublicFeedClaim[] };
       return body.claims ?? [];
     },
@@ -154,34 +192,36 @@ export default function AgentFeed() {
   });
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-3" aria-live="polite">
       <h2 className="font-display text-lg font-bold">Recent claims</h2>
       {feed.isPending ? (
         <Skeleton className="h-24 w-full" />
-      ) : feed.isError && feed.data === undefined ? (
-        <ErrorNote
-          title="Could not read SPOTTER's claims right now."
-          detail="This is a read problem on our side, not an empty ledger. It retries on its own."
-          onRetry={() => void feed.refetch()}
-        />
       ) : feed.data !== undefined && feed.data.length > 0 ? (
         <ol className="space-y-3">
           {feed.data.map((claim) => (
             <ClaimCard key={claim.goalId} claim={claim} />
           ))}
         </ol>
+      ) : feed.isError ? (
+        <ErrorNote
+          title="Could not read SPOTTER's claims right now"
+          detail="This is a read problem on our side, not an empty ledger. It retries on its own every few seconds."
+          onRetry={() => {
+            void feed.refetch();
+          }}
+        />
       ) : (
         <div className="space-y-4">
           <SpotterSays surface="agent-empty" state="empty" size="md" />
           <EmptyState
-            title="SPOTTER has done nothing yet."
-            detail="Join a run and prove it, from your wearable or an uploaded record, and SPOTTER checks it and pays out here."
+            title="SPOTTER has not settled a claim yet."
+            detail="Enter a run, prove it from your wearable or an uploaded record, and SPOTTER checks the result and pays out here when the run settles."
             action={
               <Link
                 href="/pools"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none"
               >
-                Give it something to verify
+                See the open runs
               </Link>
             }
           />

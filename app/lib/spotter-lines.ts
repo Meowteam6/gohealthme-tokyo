@@ -67,7 +67,7 @@ export const SPOTTER_LINES: SpotterLine[] = [
   { id: "pools-h2", surface: "pools-header", state: "idle", tone: "deadpan", text: { en: "Pick one. Do the thing. Get paid. In that order." } },
 
   { id: "agent-h1", surface: "agent-header", state: "idle", tone: "deadpan", text: { en: "I buy the proof, I make the call, I move the money." } },
-  { id: "agent-h2", surface: "agent-header", state: "idle", tone: "deadpan", text: { en: "No human touches the checkout. That's the whole bit." } },
+  { id: "agent-h2", surface: "agent-header", state: "idle", tone: "deadpan", text: { en: "The verdict goes on chain. Your health data never does." } },
 
   { id: "feed-h1", surface: "feed-header", state: "idle", tone: "deadpan", text: { en: "Real payouts, flowing downstream. None of them fake." } },
   { id: "feed-h2", surface: "feed-header", state: "idle", tone: "deadpan", text: { en: "Everybody here already got paid. Catch up." } },

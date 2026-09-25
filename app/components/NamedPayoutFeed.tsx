@@ -2,7 +2,8 @@
 
 // The human named Payout Feed. Each row is one settled payout: who got paid
 // (their handle, or a truncated address when unclaimed), how much in USDC, when,
-// and a link to the settlement tx on Arcscan. Nothing else.
+// a link to the settlement tx on Basescan, and a self-reported tag when the win
+// rested on a photo. Nothing else.
 //
 // THE REDACTION RULE holds here because the row has nowhere to put a health
 // category: the API (/api/social/feed) returns handle + address + amount + tx +
@@ -19,13 +20,18 @@ interface NamedPayout {
   address: string | null;
   amountUsd: string;
   txHash: string;
+  /** Absent on an older API response; read as not self-reported only when
+   *  explicitly false, so an unknown tier never earns a "verified" framing. */
+  selfReported?: boolean;
 }
 
 interface FeedResponse {
   payouts: NamedPayout[];
 }
 
-const PRIVACY_COPY = "Verified privately. The health category is never shown.";
+// Privacy only. The feed carries self-reported payouts too, so it never calls
+// a row "verified"; the tier is tagged per row instead.
+const PRIVACY_COPY = "Amounts are public. The health goal behind them never is.";
 
 function ShieldLockIcon({ className }: { className?: string }) {
   return (
@@ -83,7 +89,12 @@ function PayoutRow({ payout, index }: { payout: NamedPayout; index: number }) {
           <span className="font-semibold">{nameOf(payout)}</span>
           <span className="text-muted"> got paid</span>
         </span>
-        <span className="flex items-center gap-2 text-xs text-muted">
+        <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
+          {payout.selfReported === true ? (
+            <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
+              self-reported
+            </span>
+          ) : null}
           <span>{relativeTime(payout.at)}</span>
           <span aria-hidden="true">&middot;</span>
           <a
@@ -131,12 +142,25 @@ export default function NamedPayoutFeed() {
           <div className="h-16 animate-pulse rounded-2xl bg-surface-raised" />
         </div>
       ) : query.isError ? (
-        <p className="rounded-2xl border border-edge bg-surface p-5 text-sm text-muted">
-          The payout feed is unavailable right now.
-        </p>
+        <div
+          role="status"
+          className="rounded-2xl border border-warning/40 bg-surface p-5 text-sm text-muted"
+        >
+          <p>Could not read the payout feed right now.</p>
+          <button
+            type="button"
+            onClick={() => {
+              void query.refetch();
+            }}
+            className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-4"
+          >
+            Try again
+          </button>
+        </div>
       ) : payouts.length === 0 ? (
         <p className="rounded-2xl border border-edge bg-surface p-5 text-sm text-muted">
-          No payouts yet. The first win lands here.
+          No recent payouts to show. Runs pay when they settle, and the next
+          one lands here.
         </p>
       ) : (
         <ul className="flex flex-col gap-3">

@@ -37,7 +37,7 @@ import { poolOutcomeDisplay, type PoolAggregate } from "@/lib/sponsor-metrics";
 // card that can show outcomes carries this, matching every other verdict
 // surface in the app.
 const PRIVACY_LINE =
-  "SPOTTER verifies in a confidential enclave. Only the pass or fail verdict ever leaves it, never your health data.";
+  "Only the pass or fail verdict leaves SPOTTER's check. Nobody's health data reaches the chain or this console.";
 
 // A tan-well mini stat. `paid` marks the money-in-motion figure (achiever
 // payouts) with a leading plus. Every dollar renders through Money — monospace,
@@ -64,13 +64,14 @@ export default function SponsorPoolOutcome({
   pool,
   aggregate,
   nowSeconds,
-  outcomesUnavailable = false,
+  outcomesOk = true,
 }: {
   pool: PoolInfo;
   aggregate: PoolAggregate;
   nowSeconds: bigint;
-  /** The outcome scan failed: event-derived figures are unknown, not zero. */
-  outcomesUnavailable?: boolean;
+  /** False when the outcome scan failed: every event-derived figure is then
+   *  unknown and says so, instead of rendering as zero or held. */
+  outcomesOk?: boolean;
 }) {
   const [showTopUp, setShowTopUp] = useState(false);
   const { address } = useEmbeddedWallet();
@@ -95,7 +96,7 @@ export default function SponsorPoolOutcome({
           ) : phase === "expired" ? (
             <Badge tone="warning">Awaiting settlement</Badge>
           ) : (
-            <Badge tone="accent">Live</Badge>
+            <Badge tone="accent">Open</Badge>
           )}
         </div>
         {/* Health label with no wallet or handle beside it, by rule. */}
@@ -114,28 +115,25 @@ export default function SponsorPoolOutcome({
         <WellStat label="In the pool now">
           <Money usd={formatUsdc(d.balanceUsdc)} />
         </WellStat>
-        <WellStat label="You funded">
-          {outcomesUnavailable ? (
-            <span className="text-sm text-muted">Could not read</span>
-          ) : (
-            <Money usd={formatUsdc(d.toppedUpUsdc)} />
+        {/* Top-ups only (the create-time seed emits no PoolFunded), from any
+            funder. Named for what it is. */}
+        <WellStat label="Top-ups, any funder">
+          {outcomesOk ? <Money usd={formatUsdc(d.toppedUpUsdc)} /> : (
+            <span className="text-muted">Unknown</span>
           )}
         </WellStat>
       </div>
 
-      {/* Outcomes: gated by the k-anonymity floor. A failed read says so
-          instead of falling through to "fewer than five". */}
-      {outcomesUnavailable ? (
-        <div
+      {/* Outcomes: gated by the k-anonymity floor, and blanked (not zeroed)
+          when the scan could not be read. */}
+      {!outcomesOk ? (
+        <p
           role="status"
-          className="rounded-2xl border border-dashed border-warning/50 bg-surface-raised p-4"
+          className="rounded-2xl border border-dashed border-warning/40 bg-surface-raised p-4 text-sm text-muted"
         >
-          <p className="text-sm font-semibold">Outcomes could not be read right now</p>
-          <p className="mt-1 text-sm text-muted">
-            Joined, completion and payout figures come back when the outcome
-            read works again. The balance above is live.
-          </p>
-        </div>
+          Joins, completions and payouts for this pool could not be read right
+          now. The balance above is live.
+        </p>
       ) : d.belowFloor ? (
         <div className="rounded-2xl border border-dashed border-edge bg-surface-raised p-4">
           <p className="inline-flex items-center gap-1.5 text-sm font-semibold">

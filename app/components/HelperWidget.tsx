@@ -4,31 +4,33 @@
 // tabs: Coach (scripted, state-aware, no LLM), Ask (guarded Gemini), Feedback
 // (Supabase). Dismissible, mobile-first, never a trapping modal.
 //
-// It reuses the app's existing reads rather than rebuilding them:
-//   - auth + address         from useEmbeddedWallet (safe in both provider
-//     branches: the stub answers signed-out when Dynamic is unconfigured).
-//     Sign-in itself is email-first: the coach renders SignInPanel for the
-//     signIn step instead of opening the raw wallet modal.
-//   - on-chain USDC balance    from the SAME react-query key + fn as
-//     TestUsdcChip, so the cache is shared and nothing double-fetches
-//   - handle-claimed           from the existing /api/social/resolve lookup
-//   - one-tap funding          from useTestUsdcFunding, the chip's own chain
+// It never opens by itself. An auto-opened panel sat on top of the landing
+// hero and the sign-in call to action for every first-time visitor; the
+// bubble's gold dot is the nudge, and the player opens it when they want it.
+//
+// The coach reads the SAME character state as the gate (useCharacter: sign
+// in, prove human, pick a name, pair a sensor) plus the onboarding skips, so
+// it can never tell a player to do a step character creation does not have.
+// Sign-in stays email-first: the coach renders SignInPanel for that step
+// instead of opening the raw wallet modal. Every other step hands off to the
+// /character flow that owns it.
 //
 // The coach's decision lives in lib/help/coach.ts (pure, tested); this file
 // only wires the returned step to a real handler and paints it.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Address } from "viem";
-import { useEmbeddedWallet } from "@/lib/wallet";
-import { fetchWalletUsdc, useTestUsdcFunding } from "@/lib/faucet-funding";
+import { useCharacter } from "@/lib/game/useCharacter";
+import { useOnboarding } from "@/lib/game/onboarding-store";
 import {
-  COACH_CHECKLIST,
+  coachChecklist,
   coachCopy,
   resolveCoachStep,
+  type ChecklistRow,
   type CoachStep,
 } from "@/lib/help/coach";
+import type { HumanMode } from "@/lib/game/character";
 import {
   ASK_PER_SESSION_CAP,
   MAX_QUESTION_CHARS,
@@ -39,32 +41,7 @@ type Tab = "coach" | "ask" | "feedback";
 type AskMessage = { role: "you" | "spotter"; text: string };
 type Rating = "easy" | "confusing";
 
-const STORE_KEY = "ghm-helper";
 const SESSION_KEY = "ghm-helper-session";
-
-interface Persisted {
-  autoOpened?: boolean;
-  dismissed?: boolean;
-}
-
-function readPersisted(): Persisted {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(STORE_KEY);
-    return raw !== null ? (JSON.parse(raw) as Persisted) : {};
-  } catch {
-    return {};
-  }
-}
-
-function writePersisted(next: Persisted): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORE_KEY, JSON.stringify(next));
-  } catch {
-    // A private-mode storage failure must not break the widget.
-  }
-}
 
 /** A stable per-browser id for anonymous rate-limiting on Ask and Feedback. */
 function ensureSessionId(): string {
@@ -130,10 +107,10 @@ function DotIcon({ gold }: { gold?: boolean }) {
 
 // ------------------------------------------------------------------- checklist
 
-function Checklist({ step }: { step: CoachStep }) {
+function Checklist({ step, rows }: { step: CoachStep; rows: ChecklistRow[] }) {
   return (
     <ul className="mt-4 space-y-2">
-      {COACH_CHECKLIST.map((row, i) => {
+      {rows.map((row, i) => {
         const done = i < step.index;
         const current = i === step.index;
         return (
@@ -176,26 +153,47 @@ function Checklist({ step }: { step: CoachStep }) {
 
 function CoachTab({
   step,
+  humanMode,
   onPrimary,
   onSecondary,
-  funding,
+  onRetry,
 }: {
   step: CoachStep;
+  humanMode: HumanMode;
   onPrimary: () => void;
   onSecondary: () => void;
-  funding: boolean;
+  onRetry: () => void;
 }) {
-  const copy = coachCopy(step.id);
-  const busy = step.loading || (step.id === "getUsdc" && funding);
-  const primaryLabel =
-    step.id === "getUsdc" && funding ? "Getting..." : copy.primary;
+  const copy = coachCopy(step.id, humanMode);
+  const rows = coachChecklist(humanMode);
+
+  // A failed read or an allowlist wait replaces the step's pitch with what is
+  // actually going on, and the one action that can move it.
+  const blocked = step.error ?? step.waiting;
+  const headline =
+    step.error !== null
+      ? "Could not check this step"
+      : step.waiting !== null
+        ? "You are on the list"
+        : copy.headline;
+  const body = blocked ?? copy.body;
 
   return (
-    <div>
-      <p className="text-sm font-semibold text-accent">{copy.headline}</p>
-      <p className="mt-1 text-sm leading-relaxed text-muted">{copy.body}</p>
+    <div aria-live="polite">
+      <p className="text-sm font-semibold text-accent">{headline}</p>
+      <p className="mt-1 text-sm leading-relaxed text-muted">{body}</p>
 
-      {step.id === "signIn" ? (
+      {blocked !== null ? (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="min-h-11 rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent"
+          >
+            {step.error !== null ? "Try again" : "Check my spot"}
+          </button>
+        </div>
+      ) : step.id === "signIn" ? (
         // Email-first in the coach too: render the SignInPanel in place of a
         // bare login() button so the provisioned embedded wallet stays the
         // default here and the raw wallet modal never opens.
@@ -207,10 +205,10 @@ function CoachTab({
           <button
             type="button"
             onClick={onPrimary}
-            disabled={busy}
+            disabled={step.loading}
             className="min-h-11 rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {primaryLabel}
+            {copy.primary}
           </button>
           {copy.secondary !== undefined ? (
             <button
@@ -225,12 +223,12 @@ function CoachTab({
       )}
 
       {step.loading ? (
-        <p className="mt-2 animate-pulse text-xs text-muted">
-          Checking your balance...
+        <p className="mt-2 animate-pulse text-xs text-muted motion-reduce:animate-none">
+          Checking where you are...
         </p>
       ) : null}
 
-      <Checklist step={step} />
+      <Checklist step={step} rows={rows} />
     </div>
   );
 }
@@ -475,71 +473,32 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export default function HelperWidget() {
-  const { authenticated, address } = useEmbeddedWallet();
   const router = useRouter();
   const pathname = usePathname();
-  const queryClient = useQueryClient();
-  const { fund, funding } = useTestUsdcFunding();
+  const view = useCharacter();
+  const onboarding = useOnboarding(view.address);
+  const address: Address | null = view.address;
 
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("coach");
 
-  // First-visit auto-open, client-only. Reads localStorage in an effect (not a
-  // lazy initializer) on purpose: the server renders the closed bubble, so the
-  // panel only opens after hydration and there is no server/client mismatch.
-  useEffect(() => {
-    const persisted = readPersisted();
-    if (persisted.autoOpened === true || persisted.dismissed === true) return;
-    // Do not auto-open on phones: the panel is ~full width and up to 70vh tall
-    // there, so it would bury the hero and the sign-in CTA the instant a
-    // first-time visitor lands. Desktop has room for the corner panel; a phone
-    // visitor taps the bubble if they want help. matchMedia is client-only and
-    // this effect runs after hydration, so the server still renders the closed
-    // bubble (no hydration mismatch).
-    if (!window.matchMedia("(min-width: 640px)").matches) return;
-    writePersisted({ ...persisted, autoOpened: true });
-    // Syncing from an external store (localStorage) after hydration is the
-    // intended use of an effect here, and opening post-hydration is what
-    // avoids a server/client mismatch; the heuristic cannot tell.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOpen(true);
-  }, []);
-
-  // Same key + fn as TestUsdcChip: the cache is shared, so no double fetch.
-  const balanceQuery = useQuery({
-    queryKey: ["wallet-usdc", address],
-    queryFn: () => fetchWalletUsdc(address as Address),
-    enabled: authenticated && address !== null,
-    staleTime: 15_000,
-    retry: false,
-  });
-
-  const handleQuery = useQuery({
-    queryKey: ["help-handle", address],
-    enabled: authenticated && address !== null,
-    staleTime: 60_000,
-    retry: false,
-    queryFn: async (): Promise<boolean> => {
-      const res = await fetch(`/api/social/resolve?addresses=${address}`);
-      if (!res.ok) return false;
-      const data = (await res.json()) as {
-        profiles?: Record<string, unknown>;
-      };
-      const key = (address as string).toLowerCase();
-      return data.profiles !== undefined && data.profiles[key] !== undefined;
-    },
-  });
-
   const step = useMemo(
     () =>
       resolveCoachStep({
-        authenticated,
-        balance: authenticated && address !== null ? balanceQuery.data : 0n,
-        handleClaimed: handleQuery.data === true,
-        pathname,
+        steps: view.steps,
+        humanMode: view.humanMode,
+        skipped: onboarding.skipped,
       }),
-    [authenticated, address, balanceQuery.data, handleQuery.data, pathname],
+    [view.steps, view.humanMode, onboarding.skipped],
   );
+
+  // Every character step is owned by /character; send the player there and
+  // bring them back to where they were (the lobby when they came from home).
+  const toCharacter = useCallback(() => {
+    const back = pathname === "/" || pathname === "/character" ? "/pools" : pathname;
+    setOpen(false);
+    router.push(`/character?next=${encodeURIComponent(back)}`);
+  }, [pathname, router]);
 
   const onPrimary = useCallback(() => {
     switch (step.id) {
@@ -547,44 +506,43 @@ export default function HelperWidget() {
         // Sign-in is handled inline by the SignInPanel the coach renders for
         // this step, not by this button - kept in the union for exhaustiveness.
         break;
-      case "getUsdc":
-        if (address !== null) {
-          void (async () => {
-            await fund(address);
-            await queryClient.invalidateQueries({
-              queryKey: ["wallet-usdc", address],
-            });
-          })();
-        }
+      case "proveHuman":
+      case "pickName":
+      case "pairSensor":
+        toCharacter();
         break;
-      case "claimHandle":
+      case "enterRun":
         setOpen(false);
-        router.push("/handle");
+        router.push("/pools");
         break;
-      case "doTheThing":
+    }
+  }, [step.id, toCharacter, router]);
+
+  const { skip } = onboarding;
+  const onSecondary = useCallback(() => {
+    switch (step.id) {
+      case "pickName":
+        // The same skip character creation records, so the two agree.
+        skip("name");
+        break;
+      case "pairSensor":
+        setOpen(false);
+        router.push("/pools");
+        break;
+      case "enterRun":
         setOpen(false);
         router.push("/challenge/new");
         break;
-      case "uploadProof":
-        document
-          .getElementById("proof-upload")
-          ?.scrollIntoView({ behavior: "smooth", block: "center" });
-        setOpen(false);
+      default:
         break;
     }
-  }, [step.id, address, fund, queryClient, router]);
-
-  const onSecondary = useCallback(() => {
-    setOpen(false);
-    router.push("/pools");
-  }, [router]);
+  }, [step.id, skip, router]);
 
   const close = useCallback(() => {
     setOpen(false);
-    writePersisted({ ...readPersisted(), dismissed: true });
   }, []);
 
-  const pending = step.id !== "doTheThing";
+  const pending = step.id !== "enterRun";
 
   if (!open) {
     return (
@@ -603,7 +561,14 @@ export default function HelperWidget() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-[360px] flex-col rounded-2xl border border-edge bg-surface shadow-xl shadow-black/50">
+    <div
+      role="dialog"
+      aria-label="GoHealthMe helper"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") close();
+      }}
+      className="fixed bottom-4 right-4 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-[360px] flex-col rounded-2xl border border-edge bg-surface shadow-xl shadow-black/50"
+    >
       <div className="flex items-center justify-between border-b border-edge px-4 py-3">
         <div className="flex items-center gap-2 text-accent">
           <CompassGlyph />
@@ -615,7 +580,7 @@ export default function HelperWidget() {
           type="button"
           aria-label="Close the helper"
           onClick={close}
-          className="rounded-lg px-2 py-1 text-lg leading-none text-muted hover:text-foreground"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-lg leading-none text-muted hover:text-foreground"
         >
           &times;
         </button>
@@ -627,7 +592,8 @@ export default function HelperWidget() {
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+            aria-pressed={tab === t.id}
+            className={`min-h-11 rounded-full px-3 text-xs font-semibold ${
               tab === t.id
                 ? "bg-accent/10 text-accent-strong"
                 : "text-muted hover:text-foreground"
@@ -642,9 +608,10 @@ export default function HelperWidget() {
         {tab === "coach" ? (
           <CoachTab
             step={step}
+            humanMode={view.humanMode}
             onPrimary={onPrimary}
             onSecondary={onSecondary}
-            funding={funding}
+            onRetry={view.refresh}
           />
         ) : tab === "ask" ? (
           <AskTab address={address} />

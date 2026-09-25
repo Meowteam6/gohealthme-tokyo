@@ -7,7 +7,7 @@
 
 import { getCircleClient, getSpotterWallet, getSpotterUsdcBalance } from "@/lib/server/agent/wallet";
 import { arcAddressUrl } from "@/lib/chains";
-import { jsonError, newCorrelationId, safeError } from "@/lib/server/http";
+import { errorMessage, jsonError, newCorrelationId } from "@/lib/server/http";
 
 export async function GET() {
   try {
@@ -23,6 +23,10 @@ export async function GET() {
       explorerUrl: arcAddressUrl(wallet.address),
     });
   } catch (err) {
-    return jsonError(500, safeError(err, newCorrelationId("agent-wallet")));
+    // The detail names env vars and the wallet id; it stays in the log. The
+    // browser gets a product state (fetchAgentWallet reads non-ok as unknown).
+    const cid = newCorrelationId("agent-wallet");
+    console.error(`[${cid}] ${errorMessage(err)}`);
+    return jsonError(503, `SPOTTER's wallet is unavailable right now. Reference ${cid}.`);
   }
 }

@@ -5,11 +5,9 @@
 // public one caps getLogs well below a full scan and rate-limits bursts. Run it
 // here instead, where getArcPublicClient() uses the archival ARC_RPC_URL
 // override that can serve the logs, then hand the client JSON-safe totals
-// (bigints as strings).
-//
-// A failed scan is a 503 with a plain line, never {totals:{}}: an empty map
-// reads in the console as zero joiners and $0.00 funded, a confident wrong
-// answer to a sponsor. The console shows "outcomes could not be read" instead.
+// (bigints as strings). If even the archival scan cannot complete, this
+// answers 503 and the console shows the sponsor's pools with an honest
+// "outcomes could not be read" state, never an empty map read as zeros.
 
 import { NextResponse } from "next/server";
 import { ContractNotConfiguredError } from "@/lib/contract";
@@ -45,7 +43,7 @@ export async function GET() {
     const error =
       err instanceof ContractNotConfiguredError
         ? "Runs are not open on this build yet."
-        : `Outcomes could not be read right now. Reference ${cid}.`;
+        : `Pool outcomes could not be read right now. Reference ${cid}.`;
     return NextResponse.json({ error }, { status: 503 });
   }
 }

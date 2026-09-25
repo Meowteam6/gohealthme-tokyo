@@ -18,9 +18,10 @@ import { arcAddressUrl } from "@/lib/chains";
 import { formatUsdc } from "@/lib/contract";
 import { fetchWalletUsdc } from "@/lib/faucet-funding";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { useDisplayNames } from "@/lib/use-display-names";
+import { useCharacter, type CharacterView } from "@/lib/game/useCharacter";
 import { Badge, Skeleton } from "@/components/ui";
 import { CopyAddressButton } from "@/components/FundingHelp";
+import DisconnectDeviceButton from "@/components/DisconnectDeviceButton";
 import SignInPanel from "@/components/SignInPanel";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -106,10 +107,144 @@ function BackupSection() {
   );
 }
 
+/**
+ * The player's name, the same way character creation sees it: the ENS name on
+ * a build with ENS on, the @handle otherwise. The fix for "no name yet" is the
+ * character name step (/character), which runs whichever claim this build
+ * actually supports; the Supabase-only /handle page cannot mint an ENS name.
+ */
+function NameValue({ view }: { view: CharacterView }) {
+  const step = view.steps.name;
+  if (step.status === "loading") {
+    return <span className="text-muted">Reading...</span>;
+  }
+  if (view.ensLane === "error") {
+    return (
+      <button
+        type="button"
+        onClick={view.refresh}
+        className="inline-flex min-h-11 items-center text-accent underline underline-offset-2"
+      >
+        Could not read your name - retry
+      </button>
+    );
+  }
+  const name = view.character?.name ?? null;
+  if (step.status === "done" && name !== null) {
+    if (view.nameMode === "handle" && name.startsWith("@")) {
+      return (
+        <Link
+          href={`/u/${name.slice(1)}`}
+          className="font-semibold text-foreground hover:text-accent"
+        >
+          {name}
+        </Link>
+      );
+    }
+    return <span className="break-all font-semibold">{name}</span>;
+  }
+  return (
+    <Link
+      href="/character"
+      className="inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-2"
+    >
+      Pick a name
+    </Link>
+  );
+}
+
+/**
+ * The paired sensor and the one control that revokes it. The privacy notice
+ * promises disconnect "from your account"; this is where that lives for every
+ * paired player, whether or not they are in a run.
+ */
+function DeviceSection({
+  address,
+  view,
+}: {
+  address: `0x${string}`;
+  view: CharacterView;
+}) {
+  const connected =
+    view.providers?.providers.find((p) => p.connected) ?? null;
+
+  let body: React.ReactNode;
+  if (view.sensor.kind === "loading") {
+    body = <Skeleton className="h-11 w-48" />;
+  } else if (view.sensor.kind === "unchecked") {
+    body = (
+      <>
+        <p className="text-sm text-muted">
+          Sign once with your wallet to see which sensor is paired. It costs
+          nothing and moves no money.
+        </p>
+        <button
+          type="button"
+          disabled={view.checkingSensor}
+          onClick={() => {
+            void view.checkSensor();
+          }}
+          className="mt-3 min-h-11 rounded-xl border border-edge px-5 py-3 text-sm font-semibold text-foreground hover:border-accent/50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {view.checkingSensor ? "Waiting for your signature" : "Show my sensor"}
+        </button>
+      </>
+    );
+  } else if (view.sensor.kind === "unavailable") {
+    body = (
+      <p role="status" className="text-sm text-muted">
+        Could not read your sensor right now. Nothing is wrong with the
+        device; try again in a minute.
+      </p>
+    );
+  } else if (connected === null) {
+    body = (
+      <>
+        <p className="text-sm text-muted">
+          No sensor paired. Runs are checked against a paired wearable.
+        </p>
+        <Link
+          href="/character"
+          className="mt-3 inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-2"
+        >
+          Pair a sensor
+        </Link>
+      </>
+    );
+  } else {
+    body = (
+      <>
+        <p className="text-sm text-foreground">
+          <span className="font-semibold">{connected.label}</span>
+          <span className="text-muted"> is paired to this wallet.</span>
+        </p>
+        <p className="mt-1 text-sm text-muted">
+          Disconnecting stops SPOTTER reading it. A run you are in can only be
+          checked while a sensor is paired.
+        </p>
+        <DisconnectDeviceButton address={address} />
+      </>
+    );
+  }
+
+  return (
+    <section
+      aria-labelledby="sensor-heading"
+      className="rounded-2xl border border-edge bg-surface p-5"
+    >
+      <h2 id="sensor-heading" className="text-lg font-semibold">
+        Your sensor
+      </h2>
+      <div className="mt-2" aria-live="polite">
+        {body}
+      </div>
+    </section>
+  );
+}
+
 function WalletDetail({ address }: { address: `0x${string}` }) {
   const { isEmbedded, connectorName, logout } = useEmbeddedWallet();
-  const { handleFor } = useDisplayNames([address]);
-  const handle = handleFor(address);
+  const view = useCharacter();
 
   const balanceQuery = useQuery({
     queryKey: ["wallet-usdc", address],
@@ -147,22 +282,8 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
         </div>
 
         <div className="mt-2">
-          <Row label="Handle">
-            {handle !== null ? (
-              <Link
-                href={`/u/${handle}`}
-                className="font-semibold text-foreground hover:text-accent"
-              >
-                @{handle}
-              </Link>
-            ) : (
-              <Link
-                href="/handle"
-                className="font-medium text-accent underline underline-offset-2"
-              >
-                Claim a name
-              </Link>
-            )}
+          <Row label="Name">
+            <NameValue view={view} />
           </Row>
           <Row label="Mode">
             Practice
@@ -199,6 +320,8 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
           </Row>
         </div>
       </section>
+
+      <DeviceSection address={address} view={view} />
 
       {/* Self-serve top-up. The in-app faucet grants a small amount from a
           shared treasury; Circle's testnet faucet lets a user pull 20 USDC

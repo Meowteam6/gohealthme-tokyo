@@ -1,90 +1,90 @@
 // The onboarding coach's state machine. Pure and client-safe: no hooks, no
-// network, no LLM. It reads the three signals the widget already has - auth,
-// on-chain USDC balance, whether a handle is claimed - plus the current path,
-// and returns the SINGLE next step to surface. The widget wires the returned
-// action id to a real handler (login, fund, route, scroll); this module only
-// decides which step is current, so the decision is unit-testable in isolation.
+// network, no LLM. It reads the character-creation steps the gate already
+// computes (lib/game/character.ts: sign in, prove human, pick a name, pair a
+// sensor) and returns the SINGLE next step to surface, then "enter a run" once
+// the player exists. The widget wires the returned step to a real handler
+// (sign-in panel, route, re-read); this module only decides which step is
+// current, so the decision is unit-testable in isolation.
+//
+// It must never disagree with character creation. Same steps, same order,
+// same meaning of done: a coach that said "claim a handle" while the name step
+// ran ENS, or "get test USDC" before the player could even stake, sent people
+// down a path the product no longer has.
 //
 // Reliability over cleverness: first match wins, there is exactly one current
-// step, and the balance-loading case is explicit so the UI never flashes the
-// wrong step while the balance query is still resolving.
+// step, and a step that is still loading holds instead of skipping ahead.
+
+import type { HumanMode, StepId, StepState } from "@/lib/game/character";
 
 /** The actionable steps, in order. `paid` is the terminal goal, never current. */
 export type CoachAction =
   | "signIn"
-  | "getUsdc"
-  | "claimHandle"
-  | "doTheThing"
-  | "uploadProof";
+  | "proveHuman"
+  | "pickName"
+  | "pairSensor"
+  | "enterRun";
 
 export interface CoachInputs {
-  authenticated: boolean;
-  /** On-chain Arc USDC in base units, or undefined while the query loads. */
-  balance: bigint | undefined;
-  handleClaimed: boolean;
-  pathname: string;
+  steps: Record<StepId, StepState>;
+  humanMode: HumanMode;
+  /** Steps the player skipped in character creation (lib/game/onboarding-
+   *  store). Only the soft steps (name, sensor) can be skipped; the hard
+   *  steps are never walked past on a skip. */
+  skipped?: ReadonlySet<StepId>;
 }
+
+const SKIPPABLE: ReadonlySet<StepId> = new Set<StepId>(["name", "sensor"]);
 
 export interface CoachStep {
   id: CoachAction;
-  /** Position in COACH_CHECKLIST (0..4). */
+  /** Position in the checklist (0..4). */
   index: number;
-  /** Balance is still resolving: hold this step, do not auto-advance or fire. */
+  /** The step is still being read: hold it, do not advance or fire. */
   loading: boolean;
+  /** The read failed; the primary action becomes a retry. */
+  error: string | null;
+  /** Waiting on something the player cannot speed up (allowlist review). */
+  waiting: string | null;
+}
+
+const ORDER: { step: StepId; action: CoachAction }[] = [
+  { step: "sign-in", action: "signIn" },
+  { step: "human", action: "proveHuman" },
+  { step: "name", action: "pickName" },
+  { step: "sensor", action: "pairSensor" },
+];
+
+/** A step the flow walks past: finished, or switched off for this build. */
+function passed(state: StepState): boolean {
+  return state.status === "done" || state.status === "off";
 }
 
 /**
- * A pool DETAIL page (/pools/<id>), not the list and not /pools/create. This is
- * where proof gets uploaded, so it is the one place the coach overrides its
- * linear flow with a contextual nudge.
- */
-export function isPoolDetailPath(pathname: string): boolean {
-  const match = /^\/pools\/([^/]+)\/?$/.exec(pathname);
-  return match !== null && match[1] !== "create";
-}
-
-/**
- * The current step. First match wins.
- *
- *   override  on a funded pool-detail page   -> uploadProof
- *   1         not signed in                  -> signIn
- *   (hold)    signed in, balance unknown      -> getUsdc, loading
- *   2         signed in, balance 0            -> getUsdc
- *   3         funded, no handle               -> claimHandle
- *   4         funded, handle claimed          -> doTheThing
+ * The current step: the first character step that is not done (or off for
+ * this build), else enterRun. A loading step holds with loading true so the
+ * widget pulses instead of flashing a later step.
  */
 export function resolveCoachStep(input: CoachInputs): CoachStep {
-  const { authenticated, balance, handleClaimed, pathname } = input;
-
-  if (!authenticated) {
-    return { id: "signIn", index: 0, loading: false };
+  for (let index = 0; index < ORDER.length; index += 1) {
+    const { step, action } = ORDER[index];
+    const state = input.steps[step];
+    if (passed(state)) continue;
+    if (SKIPPABLE.has(step) && input.skipped?.has(step) === true) continue;
+    return {
+      id: action,
+      index,
+      loading: state.status === "loading",
+      error: state.status === "error" ? state.note : null,
+      waiting: state.status === "waiting" ? state.note : null,
+    };
   }
-
-  const balanceKnown = balance !== undefined;
-  const funded = balanceKnown && balance > 0n;
-
-  // Contextual override: a funded user reading a specific pool is here to claim,
-  // so point at the proof upload rather than the linear next step. Gated on
-  // funded so an unfunded visitor is never told to upload before they can join.
-  if (funded && isPoolDetailPath(pathname)) {
-    return { id: "uploadProof", index: 4, loading: false };
-  }
-
-  if (!balanceKnown) {
-    // Signed in but the balance query has not answered yet. Hold on the funding
-    // step and let the widget show a pulse instead of firing a premature fund.
-    return { id: "getUsdc", index: 1, loading: true };
-  }
-
-  if (!funded) {
-    return { id: "getUsdc", index: 1, loading: false };
-  }
-
-  if (!handleClaimed) {
-    return { id: "claimHandle", index: 2, loading: false };
-  }
-
-  return { id: "doTheThing", index: 3, loading: false };
+  return {
+    id: "enterRun",
+    index: ORDER.length,
+    loading: false,
+    error: null,
+    waiting: null,
+  };
 }
 
 export interface ChecklistRow {
@@ -94,60 +94,70 @@ export interface ChecklistRow {
   gold?: boolean;
 }
 
-/** Always six rows, always the same order. */
-export const COACH_CHECKLIST: ChecklistRow[] = [
-  { id: "signIn", label: "Sign in" },
-  { id: "getUsdc", label: "Get test USDC" },
-  { id: "claimHandle", label: "Claim your handle" },
-  { id: "doTheThing", label: "Create or join" },
-  { id: "uploadProof", label: "Upload your proof" },
-  { id: "paid", label: "Get paid", gold: true },
-];
+/** Always six rows, always the same order as character creation. */
+export function coachChecklist(humanMode: HumanMode): ChecklistRow[] {
+  return [
+    { id: "signIn", label: "Sign in" },
+    {
+      id: "proveHuman",
+      label: humanMode === "world" ? "Prove you are human" : "Get your spot",
+    },
+    { id: "pickName", label: "Pick a name" },
+    { id: "pairSensor", label: "Pair your sensor" },
+    { id: "enterRun", label: "Enter a run" },
+    { id: "paid", label: "Get paid", gold: true },
+  ];
+}
 
 export interface CoachCopy {
   headline: string;
   body: string;
-  primary: string;
-  /** Only doTheThing offers a real either/or. */
+  /** Absent for signIn, which renders the sign-in panel instead. */
+  primary?: string;
+  /** Only the skippable steps and enterRun offer a second path. */
   secondary?: string;
 }
 
 /** Scripted copy per step. GoHealthMe voice: direct, no emoji, no exclamations. */
-export function coachCopy(id: CoachAction): CoachCopy {
+export function coachCopy(id: CoachAction, humanMode: HumanMode): CoachCopy {
   switch (id) {
     case "signIn":
       return {
         headline: "Start here",
-        body: "Sign in with an email address. We create the wallet for you - no seed phrase, no extension, nothing to install.",
-        primary: "Sign in",
+        body: "Sign in with an email address. We make the wallet for you: no seed phrase, no extension, nothing to install.",
       };
-    case "getUsdc":
+    case "proveHuman":
+      return humanMode === "world"
+        ? {
+            headline: "Prove you are one human",
+            body: "One scan with World ID. One human, one entry per run. We never see your face or your name, just a yes.",
+            primary: "Prove I am human",
+          }
+        : {
+            headline: "Get your spot",
+            body: "The beta is invite-only on this build. Ask for a spot and you are in once it is approved.",
+            primary: "Ask for a spot",
+          };
+    case "pickName":
       return {
-        headline: "Grab some test USDC",
-        // TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
-        // "Arc pays gas in USDC" is false on Base (gas is ETH / paymaster-sponsored).
-        // User-facing coach copy; left verbatim so a human writes the real Base gas story.
-        body: "Arc pays gas in USDC, so your wallet needs a little to move. One tap gets you test funds. Play-money, no real value.",
-        primary: "Get test USDC",
+        headline: "Pick a name",
+        body: "So friends and the payout feed show a name, not a wallet address. Optional. Your health data stays private either way.",
+        primary: "Pick a name",
+        secondary: "Skip for now",
       };
-    case "claimHandle":
+    case "pairSensor":
       return {
-        headline: "Claim your handle",
-        body: "Pick a public handle so friends can find you. Your health data stays private either way.",
-        primary: "Claim your handle",
+        headline: "Pair your sensor",
+        body: "Your wearable is the referee. Once it is paired, the lobby shows which runs it can actually measure before you stake anything.",
+        primary: "Pair my sensor",
+        secondary: "Look at the runs first",
       };
-    case "doTheThing":
+    case "enterRun":
       return {
-        headline: "Now the fun part",
-        body: "Start a challenge and dare a friend, or join a sponsor pool and go earn.",
-        primary: "Create a challenge",
-        secondary: "Browse pools",
-      };
-    case "uploadProof":
-      return {
-        headline: "Upload your proof",
-        body: "Drop your proof on this pool. SPOTTER verifies it inside the enclave and pays you the moment it checks out.",
-        primary: "Upload your proof",
+        headline: "Now pick a run",
+        body: "Stake test USDC on yourself, bank your nights, and SPOTTER pays when the run settles. Or dare a friend.",
+        primary: "Open the lobby",
+        secondary: "Dare a friend",
       };
   }
 }

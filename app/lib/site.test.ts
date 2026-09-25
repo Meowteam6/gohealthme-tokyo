@@ -31,6 +31,12 @@ describe("site head copy", () => {
       expect(text).not.toMatch(/\b(bet|wager|odds)\b/i);
     }
   });
+
+  it("never promises an instant payout (the run settles at its end)", () => {
+    for (const text of [DEFAULT_TITLE, DEFAULT_DESCRIPTION]) {
+      expect(text).not.toMatch(/\b(instant|the second)\b/i);
+    }
+  });
 });
 
 describe("robots.txt", () => {
@@ -60,7 +66,6 @@ describe("sitemap.xml", () => {
       "https://www.gohealthme.app",
       "https://www.gohealthme.app/pools",
       "https://www.gohealthme.app/feed",
-      "https://www.gohealthme.app/sponsor",
       "https://www.gohealthme.app/privacy",
       "https://www.gohealthme.app/terms",
     ]);

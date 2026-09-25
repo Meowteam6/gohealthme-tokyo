@@ -106,8 +106,10 @@ describe("humanizeTxError", () => {
   it("maps the viem insufficient-funds dump to the funding message", () => {
     const result = humanizeTxError(viemError(INSUFFICIENT_FUNDS_FIXTURE));
     expect(result.title).toBe("Not enough USDC");
-    expect(result.detail).toContain("Arc testnet pays gas in USDC");
+    expect(result.detail).toContain("Base Sepolia");
     expect(result.detail).toContain("faucet.circle.com");
+    // Base pays the fee in ETH; the Arc-era "gas is USDC" line is gone.
+    expect(result.detail).not.toMatch(/gas in USDC|Arc/i);
     expect(result.detail).not.toContain("viem");
   });
 
@@ -416,7 +418,9 @@ describe("funding help copy", () => {
     const steps = FUNDING_STEPS.join(" ").toLowerCase();
     expect(steps).toContain("copy");
     expect(steps).toContain("faucet.circle.com");
-    expect(steps).toContain("arc testnet");
+    // Pools and USDC are on Base Sepolia; USDC requested on Arc never arrives.
+    expect(steps).toContain("base sepolia");
+    expect(steps).not.toContain("arc");
     expect(steps).toContain("paste");
     // At faucet.circle.com you paste an address and pick a network. Telling
     // someone to "send" test USDC to their own address is the wrong mental
@@ -428,10 +432,10 @@ describe("funding help copy", () => {
     expect(FAUCET_URL).toBe("https://faucet.circle.com");
   });
 
-  it("explains that Arc gas is USDC in the one-line detail", () => {
-    expect(FUNDING_HELP_DETAIL).toContain("gas in USDC");
-    expect(FUNDING_HELP_DETAIL).toContain("Arc Testnet");
+  it("sends the one-line detail to Base Sepolia, not the Arc-era gas story", () => {
+    expect(FUNDING_HELP_DETAIL).toContain("Base Sepolia");
     expect(FUNDING_HELP_DETAIL).toContain("faucet.circle.com");
+    expect(FUNDING_HELP_DETAIL).not.toMatch(/gas in USDC|Arc/i);
   });
 
   it("puts the balance and the requirement in the shortfall detail", () => {

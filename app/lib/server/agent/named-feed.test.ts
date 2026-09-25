@@ -120,8 +120,26 @@ describe("toNamedPayouts", () => {
         address: PARTICIPANT,
         amountUsd: "50.00",
         txHash: "0xsettletx",
+        selfReported: false,
       },
     ]);
+  });
+
+  it("carries the self-reported tier so the feed never calls it verified", () => {
+    const ledger = sensitiveSettledLedger().map((entry) =>
+      entry.kind === "verdict" ? { ...entry, selfReported: true } : entry,
+    );
+    const rows = toNamedPayouts(
+      [
+        {
+          claim: toPublicFeedClaim(GOAL, AT, ledger),
+          participant: participantOf(ledger),
+        },
+      ],
+      () => "ironhabit",
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].selfReported).toBe(true);
   });
 
   it("leaks no health category next to the handle", () => {
