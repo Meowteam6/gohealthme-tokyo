@@ -81,13 +81,18 @@ Contracts used (verified against docs.ens.domains/learn/deployments and cast cod
 
 Transactions written by `app/scripts/ens-bootstrap.ts` (append-only):
 
-- 2026-09-26: none yet. gohealthme.eth is still available; bootstrap pending the owner key (see docs/ENS.md).
 - 2026-09-25 deploy UserRegistry proxy (VerifiableFactory): [`0xfb70e369e7adadbfa60744217c3d4f8a55a229e5419c8284719c65340ed32d88`](https://sepolia.etherscan.io/tx/0xfb70e369e7adadbfa60744217c3d4f8a55a229e5419c8284719c65340ed32d88) (gas 178021)
   - UserRegistry proxy: `0xD6cD9911a15c43a9afD5AD4e68B92DaAbb08A299`
 - 2026-09-25 deploy PermissionedResolver proxy (VerifiableFactory): [`0x362070bedc31f7c8f1bb724d5c349731954c67f6e240db79f5dbdbe40d1ce5fd`](https://sepolia.etherscan.io/tx/0x362070bedc31f7c8f1bb724d5c349731954c67f6e240db79f5dbdbe40d1ce5fd) (gas 178240)
   - PermissionedResolver proxy: `0x708A9AB8085a3fdb97a80F4BC0A2738541b7aFfc`
 - 2026-09-25 mint MockUSDC for the registration fee: [`0x31ce44df3b9bf7c8ed16616423554bc8b061b5cb9bac80ba368301b2fe94f85f`](https://sepolia.etherscan.io/tx/0x31ce44df3b9bf7c8ed16616423554bc8b061b5cb9bac80ba368301b2fe94f85f) (gas 51369)
 - 2026-09-25 approve ETHRegistrar for MockUSDC: [`0xe8f61b9faacc3aae77b69b7d3bb91e878823aa57d590bd0997e27ad8aafa1348`](https://sepolia.etherscan.io/tx/0xe8f61b9faacc3aae77b69b7d3bb91e878823aa57d590bd0997e27ad8aafa1348) (gas 46354)
+- 2026-09-25 commit gohealthme.eth: [`0x92d7e9d11e527b1b65c51921c38885e4c7e0d9836c176d74ca0c8e10d0943c0b`](https://sepolia.etherscan.io/tx/0x92d7e9d11e527b1b65c51921c38885e4c7e0d9836c176d74ca0c8e10d0943c0b) (gas 45438)
+- 2026-09-25 register gohealthme.eth (ETHRegistrar, subregistry + resolver set): [`0x247ca4b13c5734623f8b2b6550cf240f79b521d1705a2706fc5e1e141568807c`](https://sepolia.etherscan.io/tx/0x247ca4b13c5734623f8b2b6550cf240f79b521d1705a2706fc5e1e141568807c) (gas 243412)
+- 2026-09-25 register spotter.gohealthme.eth to the agent, roleBitmap 0: [`0xa5b400a9ad194aa0ad7d556f0bc960549a96d5f0eed325b7d16e41d9ce88afdf`](https://sepolia.etherscan.io/tx/0xa5b400a9ad194aa0ad7d556f0bc960549a96d5f0eed325b7d16e41d9ce88afdf) (gas 125413)
+- 2026-09-25 set spotter.gohealthme.eth addr(60) = agent, addr(84532) = Base settler: [`0x62b871bfe7e925e3127d54da12334a8010d5ea3b4d73c9ae7160a19e20341f24`](https://sepolia.etherscan.io/tx/0x62b871bfe7e925e3127d54da12334a8010d5ea3b4d73c9ae7160a19e20341f24) (gas 150608)
+- 2026-09-25 grant the agent ROLE_SET_TEXT on 4 receipt keys (grantSetterRoles): [`0x876065748c80881a20779ba15884ba1c19baf4b557480e25ef75c383cc1b8ff2`](https://sepolia.etherscan.io/tx/0x876065748c80881a20779ba15884ba1c19baf4b557480e25ef75c383cc1b8ff2) (gas 269648)
+- 2026-09-25 fund the agent with 0.003 Sepolia ETH: [`0xb55cfd67e3ee42a0ede08dcf1c42c34b37f3485242af20e578fd8a15c16ff7b5`](https://sepolia.etherscan.io/tx/0xb55cfd67e3ee42a0ede08dcf1c42c34b37f3485242af20e578fd8a15c16ff7b5) (gas 21000)
 
 ---
 
