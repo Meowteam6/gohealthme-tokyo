@@ -53,6 +53,7 @@ describe("status view", () => {
     expect(await access.getAccessStatus(USER)).toEqual({
       status: "none",
       isAdmin: false,
+      source: "none",
     });
   });
 
@@ -61,7 +62,91 @@ describe("status view", () => {
     expect(await access.getAccessStatus(ADMIN)).toEqual({
       status: "approved",
       isAdmin: true,
+      source: "admin",
     });
+  });
+
+  it("reports a stored request with source request", async () => {
+    const access = await load("");
+    await access.requestAccess({ address: USER });
+    expect(await access.getAccessStatus(USER)).toEqual({
+      status: "pending",
+      isAdmin: false,
+      source: "request",
+    });
+  });
+});
+
+describe("approval by World ID (prove-human)", () => {
+  const NULLIFIER = `0x${"7".padStart(64, "0")}`;
+
+  async function loadWithWorld(mode: string, admins = "") {
+    vi.stubEnv("WORLD_VERIFY_MODE", mode);
+    const access = await load(admins);
+    const human = await import("@/lib/server/world/human");
+    return { access, human };
+  }
+
+  it("counts a proven human as approved, source world, when the mode is on", async () => {
+    const { access, human } = await loadWithWorld("mock");
+    expect(await access.isAllowed(USER)).toBe(false);
+    await human.bindHuman({
+      address: USER,
+      nullifierHash: NULLIFIER,
+      mode: "mock",
+      protocolVersion: "4.0",
+    });
+    expect(await access.getAccessStatus(USER)).toEqual({
+      status: "approved",
+      isAdmin: false,
+      source: "world",
+    });
+    expect(await access.isAllowed(USER)).toBe(true);
+    // A wallet that has not proven anything is still outside.
+    expect(await access.isAllowed(OTHER)).toBe(false);
+    expect((await access.getAccessStatus(OTHER)).status).toBe("none");
+  });
+
+  it("ignores the human record when the mode is unset (allowlist behaviour unchanged)", async () => {
+    const { access, human } = await loadWithWorld("");
+    await human.bindHuman({
+      address: USER,
+      nullifierHash: NULLIFIER,
+      mode: "mock",
+      protocolVersion: "4.0",
+    });
+    expect(await access.getAccessStatus(USER)).toEqual({
+      status: "none",
+      isAdmin: false,
+      source: "none",
+    });
+    expect(await access.isAllowed(USER)).toBe(false);
+  });
+
+  it("keeps the admin allowlist as the owner switch alongside World", async () => {
+    const { access } = await loadWithWorld("mock", ADMIN);
+    expect(await access.getAccessStatus(ADMIN)).toEqual({
+      status: "approved",
+      isAdmin: true,
+      source: "admin",
+    });
+    expect(await access.isAllowed(ADMIN)).toBe(true);
+  });
+
+  it("does not let a World approval overwrite a stored denial record", async () => {
+    const { access, human } = await loadWithWorld("mock", ADMIN);
+    await access.requestAccess({ address: USER });
+    await access.decideAccess({ address: USER, decision: "deny", adminAddress: ADMIN });
+    await human.bindHuman({
+      address: USER,
+      nullifierHash: NULLIFIER,
+      mode: "mock",
+      protocolVersion: "4.0",
+    });
+    // The proven human is let in (the World step is the new door), but the
+    // admin's record is still there for when the mode is turned off.
+    expect((await access.getAccessStatus(USER)).source).toBe("world");
+    expect((await access.getAccessRecord(USER))?.status).toBe("denied");
   });
 });
 
@@ -83,6 +168,7 @@ describe("requestAccess idempotency", () => {
     expect(await access.getAccessStatus(USER)).toEqual({
       status: "pending",
       isAdmin: false,
+      source: "request",
     });
   });
 

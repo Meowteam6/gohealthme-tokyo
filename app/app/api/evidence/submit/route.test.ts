@@ -17,6 +17,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const submitInference = vi.fn();
 const fetchPool = vi.fn();
 const participantJoined = vi.fn();
+// world-idkit: the prove-human gate, pinned on its own in
+// lib/server/world/require-human.test.ts; a switch here for route ordering.
+const requireHuman = vi.fn();
 
 vi.mock("@/lib/server/judge", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/server/judge")>()),
@@ -33,6 +36,9 @@ vi.mock("@/lib/server/pools", () => ({
 // these tests exercise the attester/drain-vector logic, not the closed-beta gate.
 vi.mock("@/lib/server/access", () => ({
   isAllowed: () => Promise.resolve(true),
+}));
+vi.mock("@/lib/server/world/require-human", () => ({
+  requireHuman: (...args: unknown[]) => requireHuman(...args),
 }));
 
 const { MAX_EVIDENCE_BASE64_CHARS, attesterJobIsForClaim } = await import(
@@ -90,10 +96,24 @@ beforeEach(() => {
   vi.clearAllMocks();
   fetchPool.mockResolvedValue(pool());
   participantJoined.mockResolvedValue(true);
+  requireHuman.mockResolvedValue({ ok: true, enforced: false });
   submitInference.mockResolvedValue("att-1");
 });
 
 describe("POST /api/evidence/submit", () => {
+  it("buys no inference for a wallet that has not proven it is one human when prove-human is on", async () => {
+    requireHuman.mockResolvedValue({
+      ok: false,
+      status: 403,
+      reason: "Prove you're one human before playing this pool.",
+    });
+    const res = await submit(GOOD_BODY);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatch(/one human/);
+    expect(requireHuman).toHaveBeenCalledWith(USER);
+    expect(submitInference).not.toHaveBeenCalled();
+  });
+
   it("asks the enclave about the pool's on-chain goal, not the caller's", async () => {
     const res = await submit({ ...GOOD_BODY, goalSpec: FORGED_GOAL });
 

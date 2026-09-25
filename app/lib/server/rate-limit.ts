@@ -151,6 +151,12 @@ const TIER_RULES: ReadonlyArray<{ prefix: string; tier: RouteTier }> = [
   { prefix: "/api/junction/", tier: "expensive" },
   { prefix: "/api/goals/match", tier: "expensive" },
   { prefix: "/api/balance", tier: "expensive" },
+  // --- world-idkit ---
+  // verify calls World's cloud API per request; rp-context mints an RP
+  // signature. Neither moves money, so expensive rather than money.
+  { prefix: "/api/world/verify", tier: "expensive" },
+  { prefix: "/api/world/rp-context", tier: "expensive" },
+  // --- end world-idkit ---
 ];
 
 /**

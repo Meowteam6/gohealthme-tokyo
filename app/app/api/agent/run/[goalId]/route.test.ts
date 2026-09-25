@@ -32,6 +32,10 @@ const runAgentForGoal = vi.fn();
 const computeGoalId = vi.fn();
 const fetchPool = vi.fn();
 const participantJoined = vi.fn();
+// world-idkit: the prove-human gate. Its own behaviour (on, off, verified) is
+// pinned in lib/server/world/require-human.test.ts; here it is a switch so
+// the route's ordering (before any spend) can be asserted.
+const requireHuman = vi.fn();
 
 vi.mock("@/lib/server/agent/run", () => ({
   runAgentForGoal: (...args: unknown[]) => runAgentForGoal(...args),
@@ -67,6 +71,9 @@ vi.mock("@/lib/contract", async (importOriginal) => ({
 }));
 vi.mock("@/lib/server/pools", () => ({
   participantJoined: (...args: unknown[]) => participantJoined(...args),
+}));
+vi.mock("@/lib/server/world/require-human", () => ({
+  requireHuman: (...args: unknown[]) => requireHuman(...args),
 }));
 
 const { appendLedger } = await import("@/lib/server/agent/ledger");
@@ -177,6 +184,8 @@ beforeEach(async () => {
   runAgentForGoal.mockResolvedValue({ status: "verifying", ledger: [] });
   fetchPool.mockResolvedValue(pool());
   participantJoined.mockResolvedValue(true);
+  // Prove-human off by default, as on a deployment without WORLD_VERIFY_MODE.
+  requireHuman.mockResolvedValue({ ok: true, enforced: false });
   // "att-1" is the job GOOD_BODY's claim submitted: pool 7, this address.
   await rememberAttesterJob("att-1", 7n, USER);
 });
@@ -336,6 +345,26 @@ describe("POST /api/agent/run/[goalId]", () => {
     const res = await post(GOAL, GOOD_BODY);
     expect(res.status).toBe(403);
     expect(runAgentForGoal).not.toHaveBeenCalled();
+  });
+
+  it("turns away a wallet that has not proven it is one human when prove-human is on, before any spend", async () => {
+    requireHuman.mockResolvedValue({
+      ok: false,
+      status: 403,
+      reason: "Prove you're one human before playing this pool.",
+    });
+    const res = await post(GOAL, GOOD_BODY);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatch(/one human/);
+    expect(requireHuman).toHaveBeenCalledWith(USER);
+    expect(runAgentForGoal).not.toHaveBeenCalled();
+  });
+
+  it("runs as before for a proven human when prove-human is on", async () => {
+    requireHuman.mockResolvedValue({ ok: true, enforced: true });
+    const res = await post(GOAL, GOOD_BODY);
+    expect(res.status).toBe(200);
+    expect(runAgentForGoal).toHaveBeenCalledTimes(1);
   });
 
   it("refuses another participant's attester job for the same pool", async () => {
