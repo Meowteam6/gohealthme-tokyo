@@ -1111,7 +1111,21 @@ async function runClaimUnlocked(
         }
       }
 
-      if (await spotterHoldsRole(deps, "attester")) {
+      // --- foundation ---
+      // The registry write exists only when the POOL gates on a registry. Its
+      // own healthVerdict() decides that (read from chain, cached per pool
+      // address); address(0) is oracle-only, so there is no attester role to
+      // read and no registry to write - settle() pays on the recordResult
+      // above alone. Reading the attester role here on an oracle-only pool was
+      // the V3 P19 failure: the read threw, the run errored after recordResult
+      // had landed, and the first achiever was never settled.
+      if ((await deps.spotter.reader.verdictRegistry()) === null) {
+        registryStatus = "skipped";
+        console.log(
+          `[spotter] pool ${input.poolId} is oracle-only (healthVerdict() = 0x0): ` +
+            "no registry write; settle gates on the recorded result",
+        );
+      } else if (await spotterHoldsRole(deps, "attester")) {
         const r = await recordVerdictAsSpotter(deps.spotter, {
           goalId: input.goalId,
           verified: true,
@@ -1133,6 +1147,7 @@ async function runClaimUnlocked(
         registryStatus = r.status === "skipped" ? "skipped" : r.status;
         registryTx = r.status === "recorded" ? r.txHash : undefined;
       }
+      // --- end foundation ---
 
       ledger = await appendLedger(input.goalId, {
         kind: "record",
