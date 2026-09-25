@@ -64,13 +64,17 @@ import {
   evidenceTypeOf,
   fetchGoalId,
   fetchParticipant,
+  fetchParticipantResults,
   fetchParticipants,
   fetchPool,
   formatUsdc,
   proofPolicyOf,
   type Modality,
 } from "@/lib/contract";
-import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
+import { poolCanPay, poolIsOver, poolPhase } from "@/lib/pool-lifecycle";
+import { runEndCopy, settleTallyOf } from "@/lib/game/run-end";
+import { verdictShowsClaim } from "@/lib/game/verdict";
+import SweepLeftover from "@/components/SweepLeftover";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useDisplayNames } from "@/lib/use-display-names";
 
@@ -389,10 +393,27 @@ export default function PoolDetail({ id }: { id: string }) {
     refunded: participantQuery.data?.refunded === true,
     runStatus,
     ledger: claimLedger,
+    resultRecorded: participantQuery.data?.resultRecorded,
     onApproved: () => {
       setProofRun((n) => n + 1);
       void claimLedgerQuery.refetch();
     },
+  });
+
+  // Every participant's on-chain result, read only once the pool settled, so
+  // the finished-run card says who hit it instead of assuming a payout.
+  const settledNow =
+    poolQuery.data !== undefined &&
+    poolQuery.data.pool.settled &&
+    !poolQuery.data.pool.cancelled;
+  const resultsQuery = useQuery({
+    queryKey: ["participant-results", id],
+    queryFn: () => {
+      if (poolId === null) throw new Error("Invalid pool id.");
+      return fetchParticipantResults(poolId);
+    },
+    enabled: poolId !== null && settledNow,
+    staleTime: 60_000,
   });
 
   // Resolve the funder address to a handle when it has claimed one. Called
@@ -575,6 +596,16 @@ export default function PoolDetail({ id }: { id: string }) {
   const screen = verdict.screen;
   const showProofSurface = proofSurfaceNeeded(screen);
   const verdictShown = screen.kind !== "none";
+  // The Verdict is mounted for a joined player on a finished run, and on a
+  // live or ended run whenever the claim surface is (not while the document
+  // verifier is paused). When it carries its own claim card, the page-level
+  // one stays hidden so there is never a second withdraw button.
+  const over = poolIsOver(phase);
+  const verdictHoldsClaim =
+    joined &&
+    address !== null &&
+    verdictShowsClaim(screen) &&
+    (over || (canPay && !(isDocGoal && !docAvailable)));
 
   // The single mounted claim surface. Wearable pools default to the wearable
   // check with the document upload one tap away; document pools upload only.
@@ -716,7 +747,9 @@ export default function PoolDetail({ id }: { id: string }) {
         <div className="flex flex-wrap items-center gap-2">
           <Badge>{pool.initiative}</Badge>
           <ProofTierBadges policy={policy} />
-          {phase === "settled" ? (
+          {phase === "cancelled" ? (
+            <Badge tone="warning">Cancelled</Badge>
+          ) : phase === "settled" ? (
             <Badge tone="muted">Settled</Badge>
           ) : phase === "expired" ? (
             <Badge tone="warning">Ended</Badge>
@@ -761,7 +794,13 @@ export default function PoolDetail({ id }: { id: string }) {
           <Scoreboard
             caption="Run scoreboard"
             cells={[
-              { label: "Prize pool", value: formatUsdc(pool.balance), tone: "money", unit: "test USDC" },
+              {
+                // After a settle the balance is what was not paid out, not a prize.
+                label: over ? "Left in pool" : "Prize pool",
+                value: formatUsdc(pool.balance),
+                tone: "money",
+                unit: "test USDC",
+              },
               {
                 label: pool.bountyModel === 2 ? "Stake to enter" : "Entry",
                 value: formatUsdc(pool.entryFee),
@@ -791,9 +830,10 @@ export default function PoolDetail({ id }: { id: string }) {
         </p>
       </header>
 
-      {/* A win credited on chain from ANY run shows here until it is claimed,
-          unless this run's own win screen is already showing the claim. */}
-      {address !== null && screen.kind !== "won" && screen.kind !== "cancelled" ? (
+      {/* A win or refund credited on chain from ANY run shows here until it
+          is claimed, unless this run's own Verdict is already showing the
+          claim (a win, a settled result, or a cancelled run's refund). */}
+      {address !== null && !verdictHoldsClaim ? (
         <ClaimPayout address={address} />
       ) : null}
 
@@ -895,28 +935,101 @@ export default function PoolDetail({ id }: { id: string }) {
           ) : null}
         </div>
       ) : (
-        <Card>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            <SpotterMascot
-              pose="nature"
-              size="sm"
-              className="mx-auto sm:mx-0"
-            />
-            <div className="min-w-0">
-              <h2 className="font-display text-lg font-semibold">
-                This pool has settled
-              </h2>
-              <p className="mt-1 text-sm text-muted">
-                I paid the verified achievers. Nothing more happens on this pool
-                - the next payout is on a pool that is still open.
+        // Settled or cancelled. What happened is read from the chain
+        // (lib/game/run-end.ts), never assumed: a pool nobody hit, a cancelled
+        // pool and a pool with winners each say what is true. A joined player
+        // gets their Verdict with the claim folded in (refund, share or win);
+        // the creator gets the leftover.
+        <div className="space-y-4">
+          {(() => {
+            const endPhase = phase === "cancelled" ? "cancelled" : "settled";
+            const tally =
+              resultsQuery.data !== undefined ? settleTallyOf(resultsQuery.data) : null;
+            const copy = runEndCopy({
+              phase: endPhase,
+              bountyModel: pool.bountyModel,
+              joined,
+              tally,
+            });
+            return (
+              <Card>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                  <SpotterMascot
+                    pose="nature"
+                    size="sm"
+                    className="mx-auto sm:mx-0"
+                  />
+                  <div className="min-w-0">
+                    <h2 className="font-display text-lg font-semibold">
+                      {copy.headline}
+                    </h2>
+                    {endPhase === "settled" && resultsQuery.isLoading ? (
+                      <Skeleton className="mt-2 h-10" />
+                    ) : (
+                      <p className="mt-1 text-sm text-muted">{copy.body}</p>
+                    )}
+                    {endPhase === "settled" && resultsQuery.isError ? (
+                      <div className="mt-3">
+                        <ErrorNote
+                          title="Could not read who hit it"
+                          detail="I could not read the results on this run from Base Sepolia just now. Nothing changed; anything credited to you is still claimable."
+                          onRetry={() => {
+                            void resultsQuery.refetch();
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                    {!joined && !isCreator ? (
+                      <>
+                        <p className="mt-2 text-sm text-muted">
+                          You were not in this run, so nothing here is yours.
+                        </p>
+                        <BrowsePoolsLink label="Find an open run" />
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </Card>
+            );
+          })()}
+
+          {joined && address !== null ? (
+            <>
+              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
+                Your result
               </p>
-              <BrowsePoolsLink />
-            </div>
-          </div>
-        </Card>
+              <VerdictStage
+                pool={pool}
+                address={address}
+                joined={joined}
+                refunded={participantQuery.data?.refunded === true}
+                runStatus={runStatus}
+                ledger={claimLedger}
+                hasClaim={hasClaim}
+                screen={screen}
+                goalId={verdict.goalId}
+                screening={verdict.screening}
+                onApproval={verdict.onApproval}
+              />
+            </>
+          ) : null}
+
+          <SweepLeftover pool={pool} phase={phase} address={address} />
+
+          {/* Secondary on purpose: the claim or the take-back above is the one
+              primary action on this screen. */}
+          {joined || isCreator ? (
+            <Link
+              href="/pools"
+              className={`inline-flex items-center text-sm font-semibold text-muted underline decoration-edge underline-offset-2 hover:text-foreground ${TAP_TARGET}`}
+            >
+              Find an open run
+            </Link>
+          ) : null}
+        </div>
       )}
 
-      {phase !== "settled" && canPay ? (
+      {!over && canPay ? (
         isChallenge ? (
           // A challenge pool's top-up must carry the sweep disclosure: miss the
           // goal and sweep() returns the whole pot to the challenger, not

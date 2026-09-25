@@ -177,6 +177,16 @@ export const healthPoolsAbi = [
     inputs: [{ name: "poolId", type: "uint256" }],
     outputs: [],
   },
+  // B-1: the entry-fee refunds still owed on a cancelled pool. sweep() reverts
+  // REFUNDS_PENDING until this is zero, so the creator's "take back the
+  // leftover" action reads it to say why it is not available yet.
+  {
+    type: "function",
+    name: "refundLiability",
+    stateMutability: "view",
+    inputs: [{ name: "poolId", type: "uint256" }],
+    outputs: [{ type: "uint256" }],
+  },
   {
     type: "function",
     name: "getPool",
@@ -937,6 +947,46 @@ export function claimModalityFor(
     return { ok: false, reason: "not-accepted" };
   }
   return { ok: true, modality };
+}
+
+/** FundsSwept is what sweep() emits when the leftover USDC actually leaves the
+ *  contract for the creator. The sweep hook asserts on it, never on tx success. */
+export const FUNDS_SWEPT_ABI = [
+  {
+    type: "event",
+    name: "FundsSwept",
+    inputs: [
+      { name: "poolId", type: "uint256", indexed: true },
+      { name: "creator", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+] as const;
+
+/**
+ * The entry-fee refunds still owed on a cancelled pool, in 6-decimal base
+ * units. Zero on any pool that was never cancelled (the contract only sets it
+ * in cancelPool).
+ */
+export async function fetchRefundLiability(id: bigint): Promise<bigint> {
+  const address = getHealthPoolsAddress();
+  if (address === null) throw new ContractNotConfiguredError();
+  const client = getArcPublicClient();
+  return client.readContract({
+    address,
+    abi: healthPoolsAbi,
+    functionName: "refundLiability",
+    args: [id],
+  });
+}
+
+/** Every participant's on-chain result for one pool, read after it closes so
+ *  the settled screen can say what actually happened instead of guessing. */
+export async function fetchParticipantResults(
+  id: bigint,
+): Promise<ParticipantInfo[]> {
+  const addresses = await fetchParticipants(id);
+  return Promise.all(addresses.map((user) => fetchParticipant(id, user)));
 }
 
 /** Just the RefundCredited event, for parsing receipts in isolation. */

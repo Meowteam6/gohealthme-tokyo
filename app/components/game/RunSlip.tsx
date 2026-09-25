@@ -11,6 +11,7 @@ import { displayGoalSpec, formatUsdc } from "@/lib/contract";
 import { formatRunClock, runClock } from "@/lib/game/tally";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
 import type { LobbyRow } from "@/lib/game/lobby";
+import { closedRunTag } from "@/lib/game/run-end";
 import LockPanel from "@/components/game/LockPanel";
 
 function StateTag({ row }: { row: LobbyRow }) {
@@ -33,9 +34,7 @@ function StateTag({ row }: { row: LobbyRow }) {
             ? "Sign in to play"
             : "Locked for you"
           : slot.kind === "closed"
-            ? row.pool.settled
-              ? "Paid out"
-              : "Ended"
+            ? closedRunTag(row.phase)
             : "Cannot pay";
   return (
     <span className={`inline-flex shrink-0 items-center rounded-md px-2 py-1 text-xs font-bold ${tone}`}>

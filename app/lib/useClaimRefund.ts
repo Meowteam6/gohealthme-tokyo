@@ -75,8 +75,9 @@ export function useClaimRefund(): UseClaimRefundResult {
     async (poolId: bigint): Promise<{ amount: bigint; txHash: Hash }> => {
       const poolsAddress = getHealthPoolsAddress();
       if (poolsAddress === null) {
+        // Player copy, never an env-var name: RefundClaim renders this.
         const message =
-          "HealthPools contract address is not configured. Set NEXT_PUBLIC_HEALTH_POOLS_ADDRESS.";
+          "Runs are not switched on for this build yet, so there is no refund to claim here.";
         setStatus({ kind: "error", message });
         throw new Error(message);
       }
