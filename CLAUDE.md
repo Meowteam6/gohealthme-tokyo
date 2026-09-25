@@ -1,6 +1,8 @@
 # GoHealthMe V4 (ETHGlobal Tokyo 2026, Continuity track)
 
-Verified health goals, paid in USDC the instant a wearable proves you did the thing, and nobody sees your health data. This repo is the **ETHGlobal Tokyo 2026** build (Sep 25-27 2026, Tokyo, JST). Andre Chuabio and Nikki Hu, on site. Stage word: **hackathon build**. Never "live", never "production".
+Verified health goals, paid in USDC the instant a wearable proves you did the thing, and nobody sees your health data. This repo is the **ETHGlobal Tokyo 2026** build (Sep 25-27 2026, Tokyo, JST). Andre Chuabio and Nikki Hu, on site.
+
+> **HARD RULE (Andre, 2026-09-26): this is the Continuity track, not a demo. V4 must actually work for real beta users, the same bar V3 already met.** No demo-only paths, no mock that can reach a production deployment, no hard-coded happy path, no "works for the video". Every flow is driven end to end against the real services before it is called done. Mock modes exist only for tests, local runs and preview deployments, and production code refuses them (`WORLD_VERIFY_MODE=mock` and `WORLD_APPROVAL_MODE=mock` are refused when `VERCEL_ENV=production`). Stage word stays honest: V4 is in **beta** on testnet, never "production" in copy.
 
 ## What this repo is
 

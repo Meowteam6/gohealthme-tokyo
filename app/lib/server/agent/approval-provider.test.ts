@@ -19,6 +19,15 @@ beforeEach(() => {
 });
 
 describe("approvalMode", () => {
+  it("throws on mock in a production deployment, so no mocked human gates a real payout", async () => {
+    const { approvalMode } = await load();
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    vi.stubEnv("VERCEL_ENV", "production");
+    expect(() => approvalMode()).toThrow(/refused on a production deployment/);
+    vi.stubEnv("WORLD_APPROVAL_MODE", "world");
+    expect(approvalMode()).toBe("world");
+  });
+
   it("is off when WORLD_APPROVAL_MODE is unset or blank", async () => {
     const { approvalMode } = await load();
     expect(approvalMode()).toBe("off");

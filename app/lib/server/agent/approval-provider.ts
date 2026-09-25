@@ -88,6 +88,14 @@ export interface ApprovalProvider {
 export function approvalMode(): ApprovalMode {
   const raw = optionalEnv("WORLD_APPROVAL_MODE", "").toLowerCase();
   if (raw === "") return "off";
+  if (raw === "mock" && process.env.VERCEL_ENV === "production") {
+    // Hard rule (2026-09-26): a production deployment serves real beta users,
+    // so a mocked human confirmation can never gate a real payout. Fails
+    // closed like any other misconfiguration.
+    throw new Error(
+      "WORLD_APPROVAL_MODE=mock is refused on a production deployment; set world",
+    );
+  }
   if (raw === "mock" || raw === "world") return raw;
   throw new Error(
     `WORLD_APPROVAL_MODE must be "mock", "world" or unset; got ${JSON.stringify(raw)}`,

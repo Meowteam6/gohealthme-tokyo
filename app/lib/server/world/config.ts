@@ -64,7 +64,21 @@ export function worldSetup(): WorldSetup {
 
   if (raw === "") return { mode: "off", action, problem: null, live: null };
 
-  if (raw === "mock") return { mode: "mock", action, problem: null, live: null };
+  if (raw === "mock") {
+    // Hard rule (2026-09-26): V4 serves real beta users, so a production
+    // deployment never runs on typed identities. Mock stays for tests, local
+    // runs and preview deployments.
+    if (process.env.VERCEL_ENV === "production") {
+      return {
+        mode: "off",
+        action,
+        problem:
+          "WORLD_VERIFY_MODE=mock is refused on a production deployment. Set live.",
+        live: null,
+      };
+    }
+    return { mode: "mock", action, problem: null, live: null };
+  }
 
   if (raw !== "live") {
     return {

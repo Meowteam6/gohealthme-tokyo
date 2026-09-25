@@ -17,6 +17,22 @@ async function load(env: Record<string, string>) {
 }
 
 describe("worldSetup", () => {
+  it("refuses mock on a production deployment: off, with a problem string", async () => {
+    const { worldSetup, worldEnabled } = await load({
+      WORLD_VERIFY_MODE: "mock",
+      VERCEL_ENV: "production",
+    });
+    const setup = worldSetup();
+    expect(setup.mode).toBe("off");
+    expect(setup.problem).toMatch(/refused on a production deployment/);
+    expect(worldEnabled()).toBe(false);
+  });
+
+  it("keeps mock on a preview deployment", async () => {
+    const { worldSetup } = await load({ WORLD_VERIFY_MODE: "mock", VERCEL_ENV: "preview" });
+    expect(worldSetup().mode).toBe("mock");
+  });
+
   it("is off with no problem when WORLD_VERIFY_MODE is unset", async () => {
     const { worldSetup, worldEnabled } = await load({ WORLD_VERIFY_MODE: "" });
     expect(worldSetup()).toEqual({
