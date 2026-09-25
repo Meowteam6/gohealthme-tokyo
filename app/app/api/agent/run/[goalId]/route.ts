@@ -99,6 +99,7 @@ import {
   safeError,
 } from "@/lib/server/http";
 import { authenticateWallet } from "@/lib/server/wallet-auth";
+import { requireHuman } from "@/lib/server/world/require-human"; // world-idkit
 
 // A run can hold a Circle transaction poll plus two RPC inclusion waits;
 // Vercel's default function window cuts that off mid-settlement.
@@ -279,6 +280,18 @@ export async function POST(request: Request, ctx: Ctx) {
     if (!(await participantJoined(BigInt(poolId), address as Address))) {
       return jsonError(403, "That address has not joined this pool.");
     }
+
+    // --- world-idkit ---
+    // One human, one entry. When WORLD_VERIFY_MODE is set, SPOTTER refuses to
+    // verify or pay a wallet that has not proven it is one human. Checked
+    // before the plan entry, so nothing is spent for an unproven wallet; the
+    // join surfaces withhold the stake until this passes, so only a caller
+    // who staked by hand ever sees it. A no-op when the mode is unset.
+    const human = await requireHuman(address);
+    if (!human.ok) {
+      return jsonError(human.status, human.reason);
+    }
+    // --- end world-idkit ---
 
     // Logged only for a caller who got this far: the supplied text is
     // untrusted, and a stranger must not be able to write lines into the log.

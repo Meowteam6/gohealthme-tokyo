@@ -29,14 +29,30 @@
 // client form pre-checks the same function for a fast, honest message, but the
 // server refusal is the real one — a hand-built POST from a blocked state is
 // rejected here, not merely hidden in the UI. Admins bypass the geo gate.
+//
+// APPROVAL BY WORLD ID (ETHGlobal Tokyo 2026). When WORLD_VERIFY_MODE is set
+// (lib/server/world/config.ts), a wallet that has proven it is one human
+// (lib/server/world/human.ts) counts as approved, with `source: "world"`. That
+// is character creation step 2 replacing the wait for Andre at /admin. The
+// admin allowlist stays as the owner switch, and the stored request records
+// are untouched, so unsetting the mode returns the gate to exactly the
+// closed-beta behaviour above. In "mock" mode (event build, proofs mocked) this
+// opens the beta to anyone who completes the mock step: deliberate for the
+// hackathon deployment, never for one with the pilot's real users.
 
 import { getAddress, isAddress } from "viem";
 import { optionalEnv } from "@/lib/server/env";
 import { readJson, writeJson, zaddNx, zrevrange } from "@/lib/server/store";
 import { stateBlockReason } from "@/lib/geo-blocklist";
+import { worldEnabled } from "@/lib/server/world/config";
+import { isVerifiedHuman } from "@/lib/server/world/human";
 
 /** "none" means no request has ever been made for this address. */
 export type AccessStatus = "none" | "pending" | "approved" | "denied";
+
+/** Why the gate answered the way it did. "world" is a proven human on a
+ *  deployment with prove-human enabled; "request" is the closed-beta record. */
+export type AccessSource = "admin" | "world" | "request" | "none";
 
 export interface AccessRecord {
   /** Checksummed address the record belongs to. */
@@ -64,6 +80,7 @@ export interface AccessRecord {
 export interface AccessStatusView {
   status: AccessStatus;
   isAdmin: boolean;
+  source: AccessSource;
 }
 
 export type RequestResult =
@@ -123,16 +140,31 @@ export async function getAccessRecord(
 }
 
 /**
- * The gate's read: an admin always resolves to "approved", everyone else to
- * their stored status ("none" when they have never asked).
+ * True when prove-human is enabled on this deployment AND this wallet has
+ * proven it is one human. False, without touching the store, when the mode is
+ * off, so a deployment without World configured never pays for the read.
+ */
+async function approvedByWorld(address: string): Promise<boolean> {
+  if (!worldEnabled()) return false;
+  return isVerifiedHuman(address);
+}
+
+/**
+ * The gate's read: an admin always resolves to "approved", a proven human
+ * resolves to "approved" when prove-human is on, everyone else to their
+ * stored status ("none" when they have never asked).
  */
 export async function getAccessStatus(
   address: string,
 ): Promise<AccessStatusView> {
-  if (!isAddress(address)) return { status: "none", isAdmin: false };
-  if (isAdmin(address)) return { status: "approved", isAdmin: true };
+  if (!isAddress(address)) return { status: "none", isAdmin: false, source: "none" };
+  if (isAdmin(address)) return { status: "approved", isAdmin: true, source: "admin" };
+  if (await approvedByWorld(address)) {
+    return { status: "approved", isAdmin: false, source: "world" };
+  }
   const record = await getAccessRecord(address);
-  return { status: record?.status ?? "none", isAdmin: false };
+  if (record === null) return { status: "none", isAdmin: false, source: "none" };
+  return { status: record.status, isAdmin: false, source: "request" };
 }
 
 /**
@@ -246,7 +278,8 @@ export async function listAccessRequests(limit = 250): Promise<AccessRecord[]> {
 
 /**
  * The real gate. True when the address may use gated features. Admins always
- * pass; everyone else must be explicitly approved. Fails closed on anything else.
+ * pass; a proven human passes when prove-human is on; everyone else must be
+ * explicitly approved. Fails closed on anything else.
  */
 export async function isAllowed(address: string | null | undefined): Promise<boolean> {
   if (typeof address !== "string" || !isAddress(address)) return false;
@@ -257,6 +290,7 @@ export async function isAllowed(address: string | null | undefined): Promise<boo
   // client and server agree.
   if (process.env.NEXT_PUBLIC_ACCESS_GATE_DISABLED === "1") return true;
   if (isAdmin(address)) return true;
+  if (await approvedByWorld(address)) return true;
   const record = await getAccessRecord(address);
   return record?.status === "approved";
 }

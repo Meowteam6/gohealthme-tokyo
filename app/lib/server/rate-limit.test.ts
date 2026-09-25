@@ -48,6 +48,12 @@ describe("classifyPath", () => {
     expect(classifyPath("/api/goals/match")).toBe("expensive");
   });
 
+  it("treats the World verify and rp-context routes as expensive, and the status read as read", () => {
+    expect(classifyPath("/api/world/verify")).toBe("expensive");
+    expect(classifyPath("/api/world/rp-context")).toBe("expensive");
+    expect(classifyPath("/api/world/status")).toBe("read");
+  });
+
   it("defaults unknown routes to the read tier", () => {
     expect(classifyPath("/api/agent/feed")).toBe("read");
     expect(classifyPath("/api/agent/wallet")).toBe("read");
