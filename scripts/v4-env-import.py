@@ -107,6 +107,7 @@ def main():
         "NEXT_PUBLIC_CDP_PAYMASTER_URL": local.get("NEXT_PUBLIC_CDP_PAYMASTER_URL", ""),
         "GOOGLE_CLOUD_PROJECT": local.get("GOOGLE_CLOUD_PROJECT", ""),
         "GOOGLE_CREDENTIALS_JSON": local.get("GOOGLE_CREDENTIALS_JSON", ""),
+        "WORLD_ACTION": local.get("WORLD_ACTION", ""),
         "WORLD_APP_ID": local.get("WORLD_APP_ID", ""),
         "WORLD_RP_ID": local.get("WORLD_RP_ID", ""),
         "WORLD_RP_SIGNING_KEY": local.get("WORLD_RP_SIGNING_KEY", ""),
