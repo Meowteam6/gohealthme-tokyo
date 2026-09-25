@@ -68,7 +68,18 @@ export type ReceiptRow =
       reason: string;
       toxicScore: number | null;
       traits: string[];
+    }
+  // --- world-agents ---
+  /** SPOTTER asked the achiever to confirm the payout; what the human did. */
+  | {
+      kind: "approval";
+      status: "requested" | "approved" | "declined" | "expired" | "cancelled";
+      provider: "mock" | "world";
+      expiresAtIso: string | null;
+      nullifierStub: string | null;
+      note: string | null;
     };
+  // --- end world-agents ---
 
 export interface Receipt {
   rows: ReceiptRow[];
@@ -204,6 +215,19 @@ export function projectReceipt(ledger: LedgerEntry[]): Receipt {
         });
         break;
       }
+      // --- world-agents ---
+      case "approval": {
+        rows.push({
+          kind: "approval",
+          status: entry.status,
+          provider: entry.provider,
+          expiresAtIso: entry.expiresAtIso ?? null,
+          nullifierStub: entry.nullifierStub ?? null,
+          note: entry.note ?? null,
+        });
+        break;
+      }
+      // --- end world-agents ---
     }
   }
 
@@ -411,6 +435,30 @@ export function runStatusFromLedger(ledger: LedgerEntry[]): RunStatus | null {
   if (ledger.some((e) => e.kind === "settle" && e.status === "deferred")) {
     return "recorded";
   }
+  // --- world-agents ---
+  // Nothing recorded yet and SPOTTER has asked the human: the newest
+  // approval row is the state. An approved row falls through: recording is
+  // next, which the run reports as verifying until the write lands.
+  if (!ledger.some((e) => e.kind === "record")) {
+    const approval = lastWhere(ledger, (e) => e.kind === "approval") as
+      | Extract<LedgerEntry, { kind: "approval" }>
+      | undefined;
+    if (approval !== undefined) {
+      switch (approval.status) {
+        case "requested":
+          return "awaiting-approval";
+        case "declined":
+          return "approval-declined";
+        case "expired":
+          return "approval-expired";
+        case "cancelled":
+          return "approval-cancelled";
+        case "approved":
+          break;
+      }
+    }
+  }
+  // --- end world-agents ---
   const reason = currentReasonEntry(ledger, currentAttesterIdOf(ledger));
   if (reason !== undefined && reason.decision === "no-pay") return "no-pay";
   return "verifying";

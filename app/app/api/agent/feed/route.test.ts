@@ -102,6 +102,7 @@ describe("GET /api/agent/feed", () => {
         periodEndIso: null,
       },
       selfReported: false,
+      approval: null,
     });
   });
 
