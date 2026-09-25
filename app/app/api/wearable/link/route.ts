@@ -1,5 +1,5 @@
 // POST /api/wearable/link
-// Body: { address, provider? }
+// Body: { address, provider?, next? }   next: in-app path WHOOP returns to
 // Returns: { provider, linkUrl } — open linkUrl to connect a device.
 //
 // Replaces /api/junction/link, and now covers both paths:
@@ -29,6 +29,7 @@ import {
   setProviderId,
 } from "@/lib/server/wearable";
 import { mintLinkTicket } from "@/lib/server/wearable/link-ticket";
+import { safeReturnPath } from "@/lib/server/wearable/return-path";
 
 export async function POST(request: Request) {
   try {
@@ -81,10 +82,16 @@ export async function POST(request: Request) {
       // their claims and the dashboard tells them to connect a device they
       // already have. Abandoning a flow must change nothing.
       const ticket = mintLinkTicket(address);
+      // The page the connect started on, so WHOOP's redirect comes back there
+      // (character creation, a pool) instead of a dashboard the onboarding
+      // gate covers. Validated here and again at /login and /callback.
+      const returnPath = safeReturnPath(body.next);
+      const nextParam =
+        returnPath === null ? "" : `&next=${encodeURIComponent(returnPath)}`;
       return Response.json({
         provider: providerId,
         kind: "oauth",
-        linkUrl: `/api/whoop/login?ticket=${encodeURIComponent(ticket)}`,
+        linkUrl: `/api/whoop/login?ticket=${encodeURIComponent(ticket)}${nextParam}`,
       });
     }
 

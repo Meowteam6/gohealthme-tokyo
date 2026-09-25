@@ -438,7 +438,12 @@ describe("observedMetrics, the join gate's device truth", () => {
 
     expect(observed.kind).toBe("observed");
     if (observed.kind !== "observed") throw new Error("expected observed");
-    expect([...observed.metrics].sort()).toEqual(["distance_km", "steps"]);
+    expect([...observed.metrics].sort()).toEqual([
+      "distance_km",
+      "steps",
+      "workouts",
+    ]);
+    expect(observed.metrics).not.toContain("sleep_hours");
   });
 
   it("returns DECLARED, never an empty observed list, when nothing has synced", async () => {
@@ -488,7 +493,26 @@ describe("observedMetrics, the join gate's device truth", () => {
 
     const observed = await appleProvider.observedMetrics(ADDRESS);
 
-    expect(observed).toEqual({ kind: "observed", metrics: ["steps"] });
+    expect(observed).toEqual({
+      kind: "observed",
+      metrics: ["steps", "workouts"],
+    });
+  });
+
+  it("counts workouts as measurable for a syncing phone with no workout rows", async () => {
+    // The phone writes a workouts row only on a day with a session, and the
+    // verdict reads a missing row as a real zero. The capability probe must
+    // agree, or a person who rested for a month is told their hardware cannot
+    // count workouts and is refused a workouts run on that false reason.
+    supabaseWith((metric) =>
+      metric === "steps" ? [{ day: "2026-09-01", value: 8000 }] : [],
+    );
+
+    const observed = await appleProvider.observedMetrics(ADDRESS);
+
+    expect(observed.kind).toBe("observed");
+    if (observed.kind !== "observed") throw new Error("expected observed");
+    expect(observed.metrics).toContain("workouts");
   });
 });
 

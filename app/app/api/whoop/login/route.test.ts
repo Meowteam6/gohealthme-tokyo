@@ -25,8 +25,9 @@ vi.mock("@/lib/server/wearable/whoop", () => ({
   buildAuthorizeUrl: (...args: unknown[]) => buildAuthorizeUrl(...args),
 }));
 
-const { GET, WHOOP_NONCE_COOKIE } = await import(
-  "@/app/api/whoop/login/route"
+const { GET } = await import("@/app/api/whoop/login/route");
+const { WHOOP_NONCE_COOKIE, WHOOP_RETURN_COOKIE } = await import(
+  "@/lib/server/wearable/whoop-cookies"
 );
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -134,6 +135,44 @@ describe("GET /api/whoop/login", () => {
     const res = await login("?ticket=good");
 
     expect(outcomeOf(res)).toBe("failed");
+  });
+
+  it("carries an in-app return path to the callback in an httpOnly cookie", async () => {
+    // Pairing from character creation must come back there: the onboarding
+    // gate covers /dashboard, so the outcome was never shown.
+    const next = encodeURIComponent("/character?step=sensor&next=/pools/3");
+    const cookie = cookieOf(await login(`?ticket=good&next=${next}`));
+
+    const value = decodeURIComponent(
+      new RegExp(`${WHOOP_RETURN_COOKIE}=([^;]*)`).exec(cookie)?.[1] ?? "",
+    );
+    const parsed = new URL(value, "https://app.test");
+    expect(parsed.pathname).toBe("/character");
+    expect(parsed.searchParams.get("step")).toBe("sensor");
+    expect(parsed.searchParams.get("next")).toBe("/pools/3");
+  });
+
+  it("falls back to the dashboard for an off-site return path", async () => {
+    const next = encodeURIComponent("https://evil.test/phish");
+    const cookie = cookieOf(await login(`?ticket=good&next=${next}`));
+
+    const value = decodeURIComponent(
+      new RegExp(`${WHOOP_RETURN_COOKIE}=([^;]*)`).exec(cookie)?.[1] ?? "",
+    );
+    expect(value).toBe("/dashboard");
+    expect(cookie).not.toContain("evil.test");
+  });
+
+  it("sends an early failure back to the page it started on", async () => {
+    readLinkTicket.mockReturnValue(null);
+    const next = encodeURIComponent("/character?step=sensor");
+
+    const res = await login(`?ticket=bad&next=${next}`);
+
+    const location = new URL(res.headers.get("location") ?? "https://x/");
+    expect(location.pathname).toBe("/character");
+    expect(location.searchParams.get("step")).toBe("sensor");
+    expect(location.searchParams.get("whoop")).toBe("expired");
   });
 
   it("mints a different nonce every time", async () => {

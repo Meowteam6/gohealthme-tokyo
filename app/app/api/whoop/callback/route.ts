@@ -24,18 +24,34 @@ import { isAddress } from "viem";
 import { setProviderId } from "@/lib/server/wearable";
 import { writeTokens } from "@/lib/server/wearable/tokens";
 import { exchangeCode } from "@/lib/server/wearable/whoop";
-import { WHOOP_NONCE_COOKIE } from "@/app/api/whoop/login/route";
+import {
+  WHOOP_NONCE_COOKIE,
+  WHOOP_RETURN_COOKIE,
+} from "@/lib/server/wearable/whoop-cookies";
+import {
+  DEFAULT_RETURN_PATH,
+  safeReturnPath,
+} from "@/lib/server/wearable/return-path";
 
+/**
+ * Back to the page the connect started on (character creation, a pool, the
+ * dashboard), with the outcome in ?whoop=. The path comes from the httpOnly
+ * cookie /login set, and is validated again here: a cookie is still input.
+ */
 function backToDashboard(
   request: NextRequest,
   params: Record<string, string>,
 ): NextResponse {
-  const target = new URL("/dashboard", request.nextUrl.origin);
+  const returnPath =
+    safeReturnPath(request.cookies.get(WHOOP_RETURN_COOKIE)?.value) ??
+    DEFAULT_RETURN_PATH;
+  const target = new URL(returnPath, request.nextUrl.origin);
   for (const [key, value] of Object.entries(params)) {
     target.searchParams.set(key, value);
   }
   const response = NextResponse.redirect(target);
   response.cookies.delete(WHOOP_NONCE_COOKIE);
+  response.cookies.delete(WHOOP_RETURN_COOKIE);
   return response;
 }
 

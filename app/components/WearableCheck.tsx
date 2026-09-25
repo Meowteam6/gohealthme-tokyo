@@ -27,7 +27,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { displayGoalSpec, fetchGoalId, fetchPool } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
+import {
+  PopupBlockedError,
+  currentReturnPath,
+  startWearableLink,
+} from "@/lib/wearable-connect";
+import WhoopReturnNote from "@/components/WhoopReturnNote";
 import { classifyWearableGoal } from "@/lib/wearable-goal";
 import {
   deferredPeriodEndMs,
@@ -779,6 +784,7 @@ function WearableCheckInner({
 
   return (
     <div className="space-y-3">
+      <WhoopReturnNote whoopConnected={connected} />
       <h3 className="text-lg font-semibold">Verify from your wearable</h3>
       <p className="text-sm text-muted">
         {readableGoal === ""
@@ -945,7 +951,14 @@ function WearableCheckInner({
             onClick={() => {
               setConnectError(null);
               setConnectFallbackUrl(null);
-              void startWearableLink(address, requestAuth).catch((err: unknown) => {
+              // A same-tab OAuth (WHOOP) comes back to this pool, not the
+              // dashboard, so the player lands where they were about to claim.
+              void startWearableLink(
+                address,
+                requestAuth,
+                undefined,
+                currentReturnPath(),
+              ).catch((err: unknown) => {
                 if (err instanceof PopupBlockedError) {
                   // Not a failure - the URL is good, the browser just refused
                   // the auto-open. Offer a link the user taps directly.

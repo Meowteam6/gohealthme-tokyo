@@ -26,6 +26,7 @@ import {
 } from "@/lib/client-auth";
 import { isProviderId, type ProviderId } from "@/lib/wearable-providers";
 import type { WearableMetric } from "@/lib/wearable-goal";
+import type { SensorHold } from "@/lib/wearable-join-gate";
 // Re-exported so existing callers keep importing it from here, while the
 // server routes import the same implementation from the pure module.
 export { metricLabel } from "@/lib/wearable-goal";
@@ -82,15 +83,19 @@ export async function fetchLinkTarget(
   address: `0x${string}`,
   requestAuth: WalletAuthRequester,
   provider?: ProviderId,
+  returnTo?: string,
 ): Promise<LinkTarget> {
+  const payload: Record<string, string> = { address };
+  if (provider !== undefined) payload.provider = provider;
+  // Where WHOOP's redirect should land. The server validates it as an
+  // in-app path and ignores anything else.
+  if (returnTo !== undefined) payload.next = returnTo;
   const sent = await fetchWithWalletAuth(
     "/api/wearable/link",
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(
-        provider === undefined ? { address } : { address, provider },
-      ),
+      body: JSON.stringify(payload),
     },
     requestAuth,
   );
@@ -152,6 +157,8 @@ export async function startWearableLink(
   address: `0x${string}`,
   requestAuth: WalletAuthRequester,
   provider?: ProviderId,
+  /** In-app path a same-tab OAuth (WHOOP) returns to. Defaults to /dashboard. */
+  returnTo?: string,
 ): Promise<void> {
   const popup = window.open("about:blank", "_blank");
   if (popup !== null) {
@@ -171,7 +178,7 @@ export async function startWearableLink(
 
   let target: LinkTarget;
   try {
-    target = await fetchLinkTarget(address, requestAuth, provider);
+    target = await fetchLinkTarget(address, requestAuth, provider, returnTo);
   } catch (err) {
     if (popup !== null && !popup.closed) popup.close();
     throw err;
@@ -235,14 +242,33 @@ export interface ProviderOption {
    * How much the server could establish about this wallet's hardware.
    *
    *   observed  observedMetrics is the narrowed truth for this wallet.
-   *   declared  the declared list is accurate - uniform hardware, or nothing
-   *             observed yet and nothing to narrow.
+   *   declared  the declared list is accurate for this wallet's hardware
+   *             (every WHOOP strap is the same device).
+   *   awaiting-sync  linked, answering, and nothing has arrived yet from a
+   *             multi-brand provider, so its declared union says nothing about
+   *             this device. Withholds the join until the first sync. Was
+   *             "declared", which offered a WHOOP-via-Junction wallet steps
+   *             runs it can never win.
    *   unknown   we could not find out. Withholds the join. This used to be
    *             collapsed into "declared", so a Junction outage offered a
    *             wallet the whole declared union on no evidence, cached for
    *             thirty minutes.
    */
-  capability: "observed" | "declared" | "unknown";
+  capability: ProviderCapability;
+}
+
+export type ProviderCapability =
+  | "observed"
+  | "declared"
+  | "awaiting-sync"
+  | "unknown";
+
+function capabilityOf(value: unknown): ProviderCapability {
+  return value === "observed" ||
+    value === "awaiting-sync" ||
+    value === "unknown"
+    ? value
+    : "declared";
 }
 
 /**
@@ -292,10 +318,7 @@ function parseOptions(payload: unknown): ProviderOptions {
         connected: item.connected === true,
         metrics: metricList(item.metrics) ?? [],
         observedMetrics: metricList(item.observedMetrics),
-        capability:
-          item.capability === "observed" || item.capability === "unknown"
-            ? item.capability
-            : "declared",
+        capability: capabilityOf(item.capability),
       },
     ];
   });
@@ -339,6 +362,16 @@ export async function fetchProviderOptions(
   } catch {
     return { providers: [], selected: null, status: "unavailable" };
   }
+}
+
+/**
+ * This page as an in-app path, for a same-tab OAuth to come back to. Drops a
+ * leftover ?whoop= so a new outcome is the only one the page reads.
+ */
+export function currentReturnPath(): string {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("whoop");
+  return `${url.pathname}${url.search}`;
 }
 
 /**
@@ -410,9 +443,46 @@ export function viewerMetricsOf(
   // back to the declared union here is what let a Junction outage offer a
   // wallet all seven metrics on no evidence at all.
   if (active.capability === "unknown") return null;
+  // Nothing has synced from a multi-brand provider. Its declared list is a
+  // union across brands, not a fact about this device, so it is not an answer.
+  if (active.capability === "awaiting-sync") return null;
   // Observed beats declared. The declared list is what the integration can
   // serve; the gate has to answer for the device this person is wearing.
   return active.observedMetrics ?? active.metrics;
+}
+
+/**
+ * Why a LINKED device has no capability answer yet. Null when there is an
+ * answer, or when nothing is linked (that is capabilityNeedsDevice's case).
+ *
+ *   awaiting-sync  linked, and nothing has arrived from the device yet.
+ *                  Syncing the device fixes it.
+ *   unreadable     linked, and the provider would not tell us what it
+ *                  measures right now. Waiting fixes it; the device is fine.
+ *
+ * Both are holds, not refusals, and both are different from "pair a sensor":
+ * sending somebody with a working, linked device to re-pair it is the
+ * contradiction this exists to stop.
+ */
+export function capabilityHoldOf(
+  options: ProviderOptions | undefined,
+): SensorHold | null {
+  if (options === undefined || options.status !== "known") return null;
+  const active = linkedActive(options);
+  if (active === null) return null;
+  if (active.capability === "awaiting-sync") return "awaiting-sync";
+  if (active.capability === "unknown") return "unreadable";
+  return null;
+}
+
+/** The selected provider when it is configured AND linked, else null. */
+function linkedActive(options: ProviderOptions): ProviderOption | null {
+  if (options.selected === null) return null;
+  const active = options.providers.find((o) => o.id === options.selected);
+  if (active === undefined || !active.configured || !active.connected) {
+    return null;
+  }
+  return active;
 }
 
 
@@ -491,6 +561,11 @@ export function capabilityUnknown(
  * True when the capability is unknown because nothing is linked, rather than
  * because we have not asked. Different problem, different next action: signing
  * cannot help somebody who has no device.
+ *
+ * A linked device that has not synced, or that the provider will not describe
+ * right now, is NOT this case (see capabilityHoldOf). It used to be, and the
+ * lobby told a player with a working Junction link to "pair a sensor" while
+ * the character card beside it said the sensor was linked.
  */
 export function capabilityNeedsDevice(
   options: ProviderOptions | undefined,
@@ -498,7 +573,8 @@ export function capabilityNeedsDevice(
   return (
     options !== undefined &&
     options.status === "known" &&
-    viewerMetricsOf(options) === null
+    viewerMetricsOf(options) === null &&
+    capabilityHoldOf(options) === null
   );
 }
 

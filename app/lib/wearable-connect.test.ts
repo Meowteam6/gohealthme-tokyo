@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ClientAuth, WalletAuthRequester } from "@/lib/client-auth";
 import {
+  capabilityHoldOf,
+  capabilityNeedsDevice,
+  capabilityUnknown,
   disconnectWearable,
   fetchProviderOptions,
   metricLabel,
@@ -131,6 +134,26 @@ describe("startWearableLink", () => {
     expect(assignedHref).toEqual(["/api/whoop/login?ticket=abc"]);
     expect(popup?.closed).toBe(true);
     expect(replaced).toEqual([]);
+  });
+
+  it("sends the page's return path to the link route", async () => {
+    respond({
+      provider: "whoop",
+      kind: "oauth",
+      linkUrl: "/api/whoop/login?ticket=abc&next=%2Fcharacter",
+    });
+
+    await startWearableLink(ADDRESS, auth, "whoop", "/character?step=sensor");
+
+    const fetchMock = globalThis.fetch as unknown as {
+      mock: { calls: Array<[string, RequestInit | undefined]> };
+    };
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      address: ADDRESS,
+      provider: "whoop",
+      next: "/character?step=sensor",
+    });
   });
 
   it("raises phone-link guidance, not an error, for a phone-only provider", async () => {
@@ -373,4 +396,69 @@ describe("providerOptionsQueryKey", () => {
     );
   });
 
+});
+
+describe("linked-but-held capability", () => {
+  const junction = (over: Record<string, unknown> = {}) => ({
+    id: "junction" as const,
+    label: "Junction",
+    configured: true,
+    connected: true,
+    metrics: ["sleep_score" as const, "steps" as const, "workouts" as const],
+    observedMetrics: null,
+    capability: "awaiting-sync" as const,
+    ...over,
+  });
+  const known = (over: Record<string, unknown> = {}) => ({
+    providers: [junction(over)],
+    selected: "junction" as const,
+    status: "known" as const,
+  });
+
+  it("does not hand an unsynced Junction wallet the declared union", () => {
+    // The WHOOP-via-Junction trap: the union includes steps, and a WHOOP
+    // strap has no pedometer. No answer until the first sync.
+    expect(viewerMetricsOf(known())).toBeNull();
+    expect(capabilityHoldOf(known())).toBe("awaiting-sync");
+    // A linked device is never "pair a sensor".
+    expect(capabilityNeedsDevice(known())).toBe(false);
+    expect(capabilityUnknown(known())).toBe(true);
+  });
+
+  it("reports a linked device the provider will not describe as unreadable", () => {
+    const options = known({ capability: "unknown" });
+    expect(viewerMetricsOf(options)).toBeNull();
+    expect(capabilityHoldOf(options)).toBe("unreadable");
+    expect(capabilityNeedsDevice(options)).toBe(false);
+  });
+
+  it("still says 'needs a device' when nothing is linked", () => {
+    const options = known({ connected: false, capability: "declared" });
+    expect(capabilityHoldOf(options)).toBeNull();
+    expect(capabilityNeedsDevice(options)).toBe(true);
+  });
+
+  it("has no hold once the device has synced", () => {
+    const options = known({
+      capability: "observed",
+      observedMetrics: ["sleep_score", "workouts"],
+    });
+    expect(capabilityHoldOf(options)).toBeNull();
+    expect(viewerMetricsOf(options)).toEqual(["sleep_score", "workouts"]);
+  });
+
+  it("has no hold before a signature, because that is a different question", () => {
+    expect(
+      capabilityHoldOf({ providers: [], selected: null, status: "unauthenticated" }),
+    ).toBeNull();
+  });
+
+  it("parses awaiting-sync off the wire instead of widening it to declared", async () => {
+    respond({ providers: [junction()], selected: "junction" });
+
+    const options = await fetchProviderOptions(ADDRESS, auth);
+
+    expect(options.providers[0]?.capability).toBe("awaiting-sync");
+    expect(viewerMetricsOf(options)).toBeNull();
+  });
 });

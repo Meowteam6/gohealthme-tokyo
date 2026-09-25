@@ -84,6 +84,7 @@ All server-only. Nothing here is exposed to the browser.
 | `WHOOP_CLIENT_SECRET` | for WHOOP | Same. Shown once. |
 | `WHOOP_REDIRECT_URI` | for WHOOP | The exact absolute callback URL registered with WHOOP. See below. |
 | `WHOOP_TIMEOUT_MS` | optional | Defaults to 15000. |
+| `APPLE_APP_AVAILABLE` | optional | `1` offers Apple Health in the picker. Leave unset until the GoHealthMe iPhone app has a build real users can install; the sync endpoint works without it. |
 | `WEARABLE_TOKEN_KEY` | **whenever WHOOP is on** | 32 bytes, base64 or hex. Encrypts the per-wallet OAuth records at rest. Generate with `openssl rand -base64 32`. |
 
 `WEARABLE_TOKEN_KEY` has **no plaintext fallback by design**. A direct provider
@@ -295,13 +296,39 @@ a wallet is probed once, cached for 30 minutes, and asked only whether each
 number EXISTS for that wallet - not whether it was any good. The narrowed list
 is what the pool list and pool page gate on.
 
-Two safeguards, because getting this wrong would hide somebody's whole board:
+Safeguards, because getting this wrong either hides somebody's board or
+invites them onto a run they cannot win:
 
-- A wallet that has observed **nothing** narrows to nothing at all. A person who
-  linked ten minutes ago falls back to the declared list rather than being told
-  their brand-new device measures none of these.
-- An upstream failure narrows nothing. A provider hiccup can never take pools
-  off the board.
+- **Superseded 2026-09-26 (QA item 11).** A Junction wallet that has observed
+  nothing used to fall back to the declared list. That list is Junction's union
+  across brands, so a WHOOP strap linked through Junction was offered steps
+  runs until its first sync, staked, and failed closed at the claim. It is now
+  an **awaiting-sync hold**: wearable runs stay locked with "your sensor has not
+  synced yet, check again", re-probed on a 3 minute cache so a sync unlocks
+  within minutes. Apple still falls back to declared on nothing observed (a
+  single brand; its declared list is already device-accurate per metric).
+- A metric counts as observed only on a day **above zero**. Junction can answer
+  a WHOOP activity day with `steps: 0`; that zero is not a pedometer.
+- Workouts count as measurable for any device that is syncing anything, on both
+  Junction and Apple. A day with no workout is a real zero to the verdict, so a
+  person who rested for two weeks is not told their hardware cannot count them.
+- An upstream failure narrows nothing and offers nothing: a linked device the
+  provider will not describe is an **unreadable hold** ("I cannot read your
+  sensor right now"), never "pair a sensor".
+- A hybrid pool (`[proof=wearable+self]` or `+doc`) stays joinable without a
+  working wearable while the upload path is on; the gate returns
+  `{ kind: "ok", proof: "upload" }` so the surface can say the photo or
+  document is the proof for this player.
+
+Apple is offered in the picker only when `APPLE_APP_AVAILABLE=1`. The iPhone app
+has no public build, and offering Apple because the database exists sent beta
+users to install an app they could not get. `/api/wearable/apple/sync` still
+accepts days from development builds whenever Supabase is configured.
+
+WHOOP OAuth carries an in-app return path (`next`) through `/api/wearable/link`,
+`/api/whoop/login` (httpOnly cookie) and `/api/whoop/callback`, validated at
+each hop as a same-origin non-API path, so a connect started in character
+creation or on a pool page comes back there with `?whoop=<outcome>`.
 
 WHOOP is not probed: every strap is the same hardware, so its declared list is
 already device-accurate and probing would spend requests against a shared daily

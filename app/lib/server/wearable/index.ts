@@ -20,6 +20,7 @@
 
 import { readJson, writeJson } from "@/lib/server/store";
 import {
+  appleAppAvailable,
   appleConfigured,
   appleProvider,
 } from "@/lib/server/wearable/apple";
@@ -68,8 +69,11 @@ export function providerConfigured(id: ProviderId): boolean {
     // without the key it is not available, rather than available-and-refusing.
     whoop: () => whoopConfigured() && tokenStorageConfigured(),
     // Apple holds no per-wallet credential: the phone pushes daily aggregates
-    // into our own table, so there is nothing to encrypt at rest.
-    apple: appleConfigured,
+    // into our own table, so there is nothing to encrypt at rest. It is
+    // offered only when the phone app actually ships to players: a database
+    // alone made Apple look pairable to people with no app to install, which
+    // was a dead end in front of every wearable run.
+    apple: () => appleConfigured() && appleAppAvailable(),
   };
   return checks[id]();
 }

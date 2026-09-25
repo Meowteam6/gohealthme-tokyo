@@ -51,6 +51,89 @@ export function junctionConfigured(): boolean {
  */
 const PROBE_DAYS = 14;
 
+/**
+ * The probe's own short cache. Holds an "awaiting-sync" answer for a few
+ * minutes (the long cache refuses it), so a brand-new wallet browsing the
+ * lobby is not re-probed seven times per page load.
+ */
+const PROBE_TTL_MS = 3 * 60_000;
+const probeCache = ttlCache<ObservedCapability>({
+  ttlMs: PROBE_TTL_MS,
+  maxEntries: 512,
+});
+
+/** Thrown inside the long cache so an awaiting-sync answer is never held there. */
+class AwaitingSync extends Error {
+  constructor() {
+    super("awaiting first sync");
+    this.name = "AwaitingSync";
+  }
+}
+
+/**
+ * The smallest positive threshold. The probe counts a metric as PRESENT only
+ * on a day it was above zero: a brand with no pedometer can come back from
+ * Junction as `steps: 0` rather than null, and reading that zero as "this
+ * device counts steps" is the WHOOP-on-a-steps-run trap all over again. A real
+ * pedometer never reports a whole day of zero steps, and a sleep tracker never
+ * scores a night it tracked at zero.
+ */
+const PRESENT_THRESHOLD = Number.MIN_VALUE;
+
+/**
+ * Probe every metric family once and reduce the answers to a capability.
+ * Throws when no probe answered, so neither cache ever stores that.
+ */
+async function probeJunction(address: string): Promise<ObservedCapability> {
+  const today = new Date();
+  const from = new Date(today.getTime() - PROBE_DAYS * 86_400_000);
+  const start = from.toISOString().slice(0, 10);
+  const end = today.toISOString().slice(0, 10);
+
+  // Each probe reports whether it ANSWERED as well as what it found. A probe
+  // that threw is not evidence of absence, and treating it as one is how an
+  // outage came to look like a device with no sensors.
+  const probes = await Promise.all(
+    PROBED_METRICS.map(async (metric) => {
+      try {
+        const progress = await junctionGetMetricProgress(
+          address,
+          metric,
+          PRESENT_THRESHOLD,
+          start,
+          end,
+        );
+        return { answered: true, metric, present: progress.qualifyingDays > 0 };
+      } catch {
+        return { answered: false, metric, present: false };
+      }
+    }),
+  );
+
+  if (!probes.some((probe) => probe.answered)) {
+    throw new Error("no Junction probe answered");
+  }
+
+  const observed = probes
+    .filter((probe) => probe.present)
+    .map((probe) => probe.metric);
+
+  // Answered, and this device has produced nothing in the window. That is a
+  // device that has not synced, not one that measures nothing. An empty list
+  // would take every wearable pool off the board; the declared union would
+  // put runs on it this device can never win. The join waits for the sync.
+  if (observed.length === 0) return { kind: "awaiting-sync" };
+
+  // Every brand Junction fronts logs workouts, and a day with no workout is a
+  // real zero rather than a missing sensor (the verdict counts it that way).
+  // A device syncing anything at all can be judged on workouts even if it
+  // logged none in the probe window; leaving it out would refuse a workouts
+  // run to somebody who rested for two weeks.
+  if (!observed.includes("workouts")) observed.push("workouts");
+
+  return { kind: "observed", metrics: observed };
+}
+
 /** Probed one call per family; the response covers the metrics beside it. */
 const PROBED_METRICS: readonly WearableMetric[] = [
   "sleep_score",
@@ -139,65 +222,34 @@ export const junctionProvider: WearableProvider = {
    *
    * Junction fronts several brands and its declared list is the union of what
    * they can do, so a tracker with no proprietary sleep score is still offered
-   * sleep-score pools. Probing once per wallet turns that into a refusal at
-   * the join instead of a rejection after the stake.
+   * sleep-score pools, and a WHOOP strap is offered steps runs. Probing once
+   * per wallet turns that into a refusal at the join instead of a rejection
+   * after the stake.
    *
-   * Each metric family is probed independently and a failure narrows nothing:
-   * an upstream error returns null, which falls back to the declared list, so
-   * a Junction hiccup can never take pools off somebody's board.
+   * A device that has synced nothing yet is "awaiting-sync", never the
+   * declared union. The union is a statement about brands, not about the
+   * strap on this person's wrist, and reading it as the device's capability
+   * is how a WHOOP-via-Junction wallet was offered a steps run it cannot win.
+   *
+   * Each metric family is probed independently. A probe that threw is not
+   * evidence of absence; only when NO probe answered is the result "unknown".
    */
   async observedMetrics(address: string): Promise<ObservedCapability> {
+    const key = address.toLowerCase();
     try {
-      return await observedCache.get(address.toLowerCase(), async () => {
-        const today = new Date();
-        const from = new Date(today.getTime() - PROBE_DAYS * 86_400_000);
-        const start = from.toISOString().slice(0, 10);
-        const end = today.toISOString().slice(0, 10);
-
-        // Each probe reports whether it ANSWERED as well as what it found.
-        // A probe that threw is not evidence of absence, and treating it as
-        // one is how an outage came to look like a device with no sensors.
-        const probes = await Promise.all(
-          PROBED_METRICS.map(async (metric) => {
-            try {
-              const progress = await junctionGetMetricProgress(
-                address,
-                metric,
-                // A threshold nothing can meet: we are asking whether the
-                // number EXISTS, not whether it was good.
-                Number.POSITIVE_INFINITY,
-                start,
-                end,
-              );
-              return { answered: true, metric, present: progress.daysWithData > 0 };
-            } catch {
-              return { answered: false, metric, present: false };
-            }
-          }),
-        );
-
-        // Nothing answered: Junction is refusing us, and we know nothing about
-        // this device. Withhold rather than hand back the declared union on no
-        // evidence - and throw, so the cache never stores it.
-        if (!probes.some((probe) => probe.answered)) {
-          throw new Error("no Junction probe answered");
-        }
-
-        const observed = probes
-          .filter((probe) => probe.present)
-          .map((probe) => probe.metric);
-
-        // Answered, and this device has produced nothing in the window. That
-        // is a device that has not synced, not one that measures nothing:
-        // narrowing to an empty list would take every wearable pool off a new
-        // user's board.
-        return observed.length === 0
-          ? { kind: "declared" }
-          : { kind: "observed", metrics: observed };
+      return await observedCache.get(key, async () => {
+        // The short probe cache sits under the long one, so a wallet still
+        // awaiting its first sync is re-probed every few minutes rather than
+        // on every page load, and unlocks within minutes of syncing rather
+        // than half an hour later.
+        const probed = await probeCache.get(key, () => probeJunction(address));
+        if (probed.kind === "awaiting-sync") throw new AwaitingSync();
+        return probed;
       });
-    } catch {
-      // Includes the deliberate throw above, so an all-probes-failed answer is
-      // never cached: a cached unknown is an outage that outlives itself.
+    } catch (err) {
+      if (err instanceof AwaitingSync) return { kind: "awaiting-sync" };
+      // Includes the all-probes-failed throw, so an unknown is never cached:
+      // a cached unknown is an outage that outlives itself.
       return { kind: "unknown" };
     }
   },

@@ -198,6 +198,28 @@ describe("POST /api/wearable/link", () => {
     );
   });
 
+  it("carries an in-app return path into the WHOOP login link", async () => {
+    const res = await post({
+      address: USER,
+      provider: "whoop",
+      next: "/character?step=sensor",
+    });
+    const body = (await res.json()) as { linkUrl: string };
+    const url = new URL(body.linkUrl, "https://app.test");
+    expect(url.pathname).toBe("/api/whoop/login");
+    expect(url.searchParams.get("next")).toBe("/character?step=sensor");
+  });
+
+  it("drops an off-site return path rather than forwarding it", async () => {
+    const res = await post({
+      address: USER,
+      provider: "whoop",
+      next: "https://evil.test/",
+    });
+    const body = (await res.json()) as { linkUrl: string };
+    expect(body.linkUrl).toBe("/api/whoop/login?ticket=cGF5bG9hZA.c2ln");
+  });
+
   it("sends the WHOOP path through this app's own login with a wallet-bound ticket", async () => {
     const res = await post({ address: USER, provider: "whoop" });
     expect(res.status).toBe(200);
