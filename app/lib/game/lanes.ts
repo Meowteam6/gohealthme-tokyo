@@ -52,18 +52,27 @@ export type ApprovalStatus =
   | "pending"
   | "approved"
   | "declined"
-  | "expired";
+  | "expired"
+  | "cancelled";
 
-/** `GET /api/agent/approval/status` -> `{ status, expiresAt? }`. */
+/** `GET /api/agent/approval/status` -> `{ status, mode, expiresAt? }`. */
 export function parseApprovalStatus(payload: unknown): ApprovalStatus | null {
   const status = recordOf(payload).status;
   return status === "none" ||
     status === "pending" ||
     status === "approved" ||
     status === "declined" ||
-    status === "expired"
+    status === "expired" ||
+    status === "cancelled"
     ? status
     : null;
+}
+
+/** Whether SPOTTER asks for a World ID OK before it pays on this deployment.
+ *  "off" when the step is not switched on; null when the answer is unusable. */
+export function parseApprovalMode(payload: unknown): "off" | "mock" | "world" | null {
+  const mode = recordOf(payload).mode;
+  return mode === "off" || mode === "mock" || mode === "world" ? mode : null;
 }
 
 export type ScreeningStatus =

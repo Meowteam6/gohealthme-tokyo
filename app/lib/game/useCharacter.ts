@@ -37,7 +37,7 @@ import {
   type StepId,
   type StepState,
 } from "@/lib/game/character";
-import { parseEnsName, parseHumanStatus } from "@/lib/game/lanes";
+import { parseEnsName } from "@/lib/game/lanes";
 import { useLaneProbe } from "@/lib/game/useLaneProbe";
 
 export interface CharacterView {
@@ -72,11 +72,20 @@ export function useCharacter(): CharacterView {
   const humanHook = useHumanStatus(address);
 
   const addressParam = address !== null ? encodeURIComponent(address) : null;
-  const worldProbe = useLaneProbe(
-    ["world-status", address],
-    addressParam !== null ? `/api/world/status?address=${addressParam}` : null,
-    parseHumanStatus,
-  );
+  // World's own hook is the source for both answers: whether this wallet is a
+  // verified human, and whether prove-human is on for this deployment at all
+  // ("off" keeps the closed-beta allowlist, exactly as before V4). A failed
+  // read is an error state, never a silent "on".
+  const worldLane: CharacterInputs["world"]["lane"] =
+    address === null
+      ? "off"
+      : humanHook.mode === "off"
+        ? "off"
+        : humanHook.mode === "live" || humanHook.mode === "mock"
+          ? "on"
+          : humanHook.error
+            ? "error"
+            : "loading";
   const ensProbe = useLaneProbe(
     ["ens-resolve", address],
     addressParam !== null ? `/api/ens/resolve?address=${addressParam}` : null,
@@ -114,13 +123,7 @@ export function useCharacter(): CharacterView {
     }
   }, [queryClient, requestAuth]);
 
-  // World's own hook is the contract; the probe says whether the lane is on.
-  // Either reporting verified is enough, and the hook wins when it has an
-  // answer because it is the lane's own source of truth.
-  const human: HumanStatus =
-    humanHook.status !== "unknown"
-      ? humanHook.status
-      : (worldProbe.value ?? "unknown");
+  const human: HumanStatus = humanHook.status;
 
   const inputs: CharacterInputs = {
     ready,
@@ -133,7 +136,7 @@ export function useCharacter(): CharacterView {
       error: access.error,
     },
     world: {
-      lane: worldProbe.lane,
+      lane: worldLane,
       human,
     },
     ens: { lane: ensProbe.lane, name: ensProbe.value },
@@ -150,21 +153,18 @@ export function useCharacter(): CharacterView {
     !ready ||
     (authenticated &&
       !gate &&
-      (worldProbe.lane === "loading" ||
-        (worldProbe.lane !== "on" && access.loading)));
+      (worldLane === "loading" || (worldLane !== "on" && access.loading)));
 
   const { refetch: refetchAccess } = access;
   const { refresh: refreshHuman } = humanHook;
-  const { refetch: refetchWorld } = worldProbe;
   const { refetch: refetchEns } = ensProbe;
   const refresh = useCallback(() => {
     refreshHuman();
-    refetchWorld();
     refetchEns();
     refetchAccess();
     void queryClient.invalidateQueries({ queryKey: ["social-resolve"] });
     void queryClient.invalidateQueries({ queryKey: ["wearable-providers"] });
-  }, [queryClient, refetchAccess, refreshHuman, refetchWorld, refetchEns]);
+  }, [queryClient, refetchAccess, refreshHuman, refetchEns]);
 
   const character = characterOf(inputs);
 
@@ -178,7 +178,7 @@ export function useCharacter(): CharacterView {
     gateLoading,
     humanMode: humanModeOf(inputs),
     nameMode: nameModeOf(inputs),
-    worldLane: worldProbe.lane,
+    worldLane,
     ensLane: ensProbe.lane,
     sensor: inputs.sensor,
     providers: sensorQuery.data,

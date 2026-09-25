@@ -59,7 +59,7 @@ SPOTTER is deadpan and dry (`lib/spotter-lines.ts`). The game screens use fixed 
 
 - Money, verdict and health-data copy is plain and exact. "Run lost. The goal was not met, so this run pays nothing." Never softened, never hyped.
 - No plumbing reaches the player: no env var names, no raw provider strings, no "unexpected response", no "Stopped before payout". A deployment that lacks a lane says "not switched on for this build" and keeps going.
-- Testnet stays visible (the "Base Sepolia test money" slip marker) and "hackathon build" stays in the footer.
+- Testnet stays visible (the "Base Sepolia test money" slip marker) and the stage word stays honest: V4 is in beta on testnet (CLAUDE.md hard rule, 2026-09-26), never "production", with the ETHGlobal Tokyo origin in the footer.
 - No wager or odds language. It is a stake on yourself, a run, a dare. No emojis, no exclamation marks.
 - Buttons are verbs with objects: "Pair my sensor", "Check my sensor", "Enter the run", "Claim my USDC", "Take my stake back".
 

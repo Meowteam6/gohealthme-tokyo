@@ -45,9 +45,9 @@ export default function Home() {
           </p>
           <LandingCta />
           <p className="max-w-xl text-sm text-muted">
-            Hackathon build for ETHGlobal Tokyo 2026. Test USDC on Base
-            Sepolia: nothing here can cost you real money. Not medical or
-            financial advice.{" "}
+            In beta on Base Sepolia test USDC, built at ETHGlobal Tokyo 2026:
+            nothing here can cost you real money. Not medical or financial
+            advice.{" "}
             <Link href="/privacy" className="underline hover:text-foreground">
               Privacy
             </Link>{" "}

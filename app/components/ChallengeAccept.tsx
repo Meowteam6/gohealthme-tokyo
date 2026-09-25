@@ -17,6 +17,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import JoinPool from "@/components/JoinPool";
+import ApprovalNote from "@/components/game/ApprovalNote";
 import LockPanel from "@/components/game/LockPanel";
 import { fetchParticipant, fetchPool, formatUsdc } from "@/lib/contract";
 import { useWalletAuth } from "@/lib/useWalletAuth";
@@ -125,7 +126,13 @@ export default function ChallengeAccept({
       </div>
     );
   }
-  if (poolQuery.data === undefined || now === null || (address !== null && participantQuery.isLoading)) {
+  if (
+    poolQuery.data === undefined ||
+    now === null ||
+    (address !== null && participantQuery.isLoading) ||
+    // Prove-human mode not known yet: hold the stake, never offer it early.
+    (address !== null && view.worldLane === "loading")
+  ) {
     return <Skeleton className="h-12 w-full rounded-lg" />;
   }
 
@@ -190,6 +197,7 @@ export default function ChallengeAccept({
             and it comes back with the prize on top; the challenger never keeps
             it.
           </p>
+          <ApprovalNote />
           <JoinPool poolId={poolIdBig} entryFee={pool.entryFee} alreadyJoined={joined} />
         </div>
       );

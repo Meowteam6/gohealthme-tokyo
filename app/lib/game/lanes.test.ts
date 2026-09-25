@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   laneAvailabilityFromStatus,
+  parseApprovalMode,
   parseApprovalStatus,
   parseEnsName,
   parseHumanStatus,
@@ -40,8 +41,13 @@ describe("lane payload parsers", () => {
     expect(parseEnsName({ name: null })).toBeNull();
     expect(parseEnsName("nope")).toBeNull();
   });
+  it("reads whether the payout confirmation is on", () => {
+    expect(parseApprovalMode({ status: "none", mode: "world" })).toBe("world");
+    expect(parseApprovalMode({ status: "none", mode: "off" })).toBe("off");
+    expect(parseApprovalMode({ status: "none" })).toBeNull();
+  });
   it("parses the approval status", () => {
-    for (const s of ["none", "pending", "approved", "declined", "expired"]) {
+    for (const s of ["none", "pending", "approved", "declined", "expired", "cancelled"]) {
       expect(parseApprovalStatus({ status: s })).toBe(s);
     }
     expect(parseApprovalStatus({ status: "maybe" })).toBeNull();

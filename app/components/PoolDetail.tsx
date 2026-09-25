@@ -22,6 +22,7 @@ import {
   Skeleton,
   TAP_TARGET,
 } from "@/components/ui";
+import ApprovalNote from "@/components/game/ApprovalNote";
 import LockPanel from "@/components/game/LockPanel";
 import RunBoard from "@/components/game/RunBoard";
 import Scoreboard from "@/components/game/Scoreboard";
@@ -378,6 +379,9 @@ export default function PoolDetail({ id }: { id: string }) {
 
   // The Verdict: the ledger, the chain and the World approval status mapped
   // to one screen (lib/game/verdict.ts). Called before any early return.
+  // A yes from the player wakes the run loop: WearableCheck remounts, restores
+  // the ledger (now approved) and polls the run, which records the result.
+  const [proofRun, setProofRun] = useState(0);
   const verdict = useVerdict({
     pool: poolQuery.data?.pool ?? null,
     address,
@@ -385,6 +389,10 @@ export default function PoolDetail({ id }: { id: string }) {
     refunded: participantQuery.data?.refunded === true,
     runStatus,
     ledger: claimLedger,
+    onApproved: () => {
+      setProofRun((n) => n + 1);
+      void claimLedgerQuery.refetch();
+    },
   });
 
   // Resolve the funder address to a handle when it has claimed one. Called
@@ -654,6 +662,7 @@ export default function PoolDetail({ id }: { id: string }) {
           </div>
         ) : proofPath === "wearable" ? (
           <WearableCheck
+            key={proofRun}
             poolId={pool.id}
             goalSpec={pool.goalSpec}
             verdictShown={verdictShown}
@@ -806,6 +815,10 @@ export default function PoolDetail({ id }: { id: string }) {
               </p>
               <BrowsePoolsLink label="Back to the lobby" />
             </section>
+          ) : address !== null && character.worldLane === "loading" ? (
+            // Prove-human mode is not known yet: hold the stake rather than
+            // offer it and take it back a moment later.
+            <Skeleton className="h-40" />
           ) : slot.kind === "locked" ? (
             <LockPanel
               lock={slot.lock}
@@ -827,6 +840,9 @@ export default function PoolDetail({ id }: { id: string }) {
               {participantCount === 0 ? (
                 <p className="mb-4 text-sm font-semibold">Nobody is in yet. You would be first.</p>
               ) : null}
+              <div className="mb-4">
+                <ApprovalNote />
+              </div>
               <JoinPool
                 poolId={pool.id}
                 entryFee={pool.entryFee}

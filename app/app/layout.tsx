@@ -120,9 +120,9 @@ export default function RootLayout({
           </main>
           <footer className="border-t border-edge px-4 py-6 text-center text-xs text-muted">
             <p>
-              GoHealthMe V4, a hackathon build for ETHGlobal Tokyo 2026. Test
-              money on Base Sepolia, settled by SPOTTER. Your health data never
-              touches the chain.
+              GoHealthMe V4 is in beta on Base Sepolia test money, built at
+              ETHGlobal Tokyo 2026 and settled by SPOTTER. Your health data
+              never touches the chain.
             </p>
             <nav className="mt-2 flex items-center justify-center gap-4">
               <Link
