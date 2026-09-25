@@ -23,12 +23,20 @@ import {
 } from "@/lib/contract";
 import { poolsScanFromBlock, scanInWindows } from "@/lib/server/chunked-logs";
 
+export interface PoolFunding {
+  /** Unique funders, first-contribution first. */
+  funders: Address[];
+  /** Sum of every fundPool top-up, in USDC base units. The dare landing
+   *  subtracts it from the prize to name the challenger's own seed. */
+  total: bigint;
+}
+
 /**
- * Unique funder addresses for a pool, first-contribution first. A wallet that
- * chips in more than once appears once. The event carries no health data, so
- * the addresses are safe to return and name.
+ * Unique funder addresses for a pool, first-contribution first, and the sum
+ * of what they added. A wallet that chips in more than once appears once. The
+ * event carries no health data, so the addresses are safe to return and name.
  */
-export async function fetchPoolFunders(poolId: bigint): Promise<Address[]> {
+export async function fetchPoolFunding(poolId: bigint): Promise<PoolFunding> {
   const address = getHealthPoolsAddress();
   if (address === null) throw new ContractNotConfiguredError();
   const client = getArcPublicClient();
@@ -49,7 +57,9 @@ export async function fetchPoolFunders(poolId: bigint): Promise<Address[]> {
 
   const seen = new Set<string>();
   const funders: Address[] = [];
+  let total = 0n;
   for (const log of logs) {
+    total += log.args.amount ?? 0n;
     const funder = log.args.funder;
     if (funder === undefined) continue;
     const key = funder.toLowerCase();
@@ -57,5 +67,5 @@ export async function fetchPoolFunders(poolId: bigint): Promise<Address[]> {
     seen.add(key);
     funders.push(funder);
   }
-  return funders;
+  return { funders, total };
 }

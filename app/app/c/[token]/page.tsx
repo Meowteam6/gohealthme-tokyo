@@ -6,10 +6,16 @@ import ShareChallenge from "@/components/ShareChallenge";
 import SpotterSays from "@/components/SpotterSays";
 import Lobby from "@/components/game/Lobby";
 import { TAP_TARGET } from "@/components/ui";
-import { fetchPool, formatUsdc } from "@/lib/contract";
+import {
+  fetchParticipants,
+  fetchPool,
+  formatUsdc,
+  type PoolInfo,
+} from "@/lib/contract";
+import { darePot, isBackerView, type DarePot } from "@/lib/challenges";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
 import { getChallengeByToken } from "@/lib/server/challenges";
-import { fetchPoolFunders } from "@/lib/server/pool-funders";
+import { fetchPoolFunding, type PoolFunding } from "@/lib/server/pool-funders";
 import {
   getProfileByAddress,
   resolveProfiles,
@@ -60,12 +66,37 @@ function InvalidLink() {
   );
 }
 
+/** The one money line under the headline. pool.balance counts every player's
+ *  own stake, so the prize is stated net of stakes and the challenger's seed
+ *  is split from friends' top-ups. No figure at all when it cannot be stated
+ *  honestly (settled, cancelled, or a read missed). */
+function PrizeLine({ pot, backer }: { pot: DarePot; backer: boolean }) {
+  if (pot.prize === null) return null;
+  const fromFriends =
+    pot.seed !== null && pot.prize > pot.seed ? pot.prize - pot.seed : 0n;
+  return (
+    <p className="text-base text-foreground/80">
+      Prize:{" "}
+      <span className="font-mono font-semibold text-foreground">
+        {formatUsdc(pot.prize)} USDC
+      </span>
+      {fromFriends > 0n ? ` (${formatUsdc(fromFriends)} of it from backers)` : ""}
+      {backer
+        ? ", paid on top of their own lock-in when they hit the goal."
+        : ", paid on top of your own lock-in back when you hit the goal."}
+    </p>
+  );
+}
+
 export default async function ChallengeLandingPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { token } = await params;
+  const backer = isBackerView((await searchParams).as);
 
   const challenge = await getChallengeByToken(token);
   if (challenge === null) return <InvalidLink />;
@@ -80,12 +111,11 @@ export default async function ChallengeLandingPage({
   // The goal and the reward are read LIVE from the chain, never from the
   // challenges row. If the pool cannot be read, treat the link as unresolvable
   // rather than rendering a challenge with no goal or reward.
-  let rewardUsd: string;
+  let pool: PoolInfo;
   let phase: ReturnType<typeof poolPhase>;
   let canPay: boolean;
   try {
-    const pool = await fetchPool(poolIdBig);
-    rewardUsd = formatUsdc(pool.balance);
+    pool = await fetchPool(poolIdBig);
     canPay = poolCanPay(pool);
     phase = poolPhase(pool, nowUnixSeconds());
   } catch {
@@ -100,26 +130,129 @@ export default async function ChallengeLandingPage({
     challengerProfile?.handle ?? null,
   );
 
+  // Best-effort reads for the money line. A miss leaves that figure unknown
+  // (PrizeLine then says less), never wrong.
+  const [participantCount, funding] = await Promise.all([
+    fetchParticipants(poolIdBig)
+      .then((list) => list.length)
+      .catch(() => null),
+    fetchPoolFunding(poolIdBig).catch((): PoolFunding | null => null),
+  ]);
+  const pot = darePot({
+    balance: pool.balance,
+    entryFee: pool.entryFee,
+    participantCount,
+    settled: pool.settled,
+    cancelled: pool.cancelled,
+    contributed: funding?.total ?? null,
+  });
+
   // Contributors who chipped in via fundPool, named by @handle. createPool does
   // NOT emit PoolFunded, so this is only the friends who sweetened the pot AFTER
-  // creation - never the challenger, who is already named above. Best-effort:
-  // any read failure just hides the strip rather than failing the landing.
+  // creation - never the challenger, who is already named above.
   let contributorNames: string[] = [];
-  try {
-    const funders = await fetchPoolFunders(poolIdBig);
-    if (funders.length > 0) {
-      const resolved = await resolveProfiles(funders);
-      contributorNames = funders.map((funder) =>
+  if (funding !== null && funding.funders.length > 0) {
+    try {
+      const resolved = await resolveProfiles(funding.funders);
+      contributorNames = funding.funders.map((funder) =>
         displayNameFor(funder, resolved.get(funder.toLowerCase())?.handle ?? null),
       );
+    } catch {
+      contributorNames = [];
     }
-  } catch {
-    contributorNames = [];
   }
 
   // Friends can grow the pot and rally more friends only while the challenge is
   // live and can actually pay. The same gate the accept block uses.
   const canGrow = phase === "live" && canPay;
+
+  const headline =
+    pot.seed !== null && pot.seed > 0n
+      ? `${challengerName} put ${formatUsdc(pot.seed)} USDC on you`
+      : `${challengerName} dared you`;
+  const target =
+    challenge.targetHandle !== null ? `@${challenge.targetHandle}` : "their friend";
+
+  const backedBy =
+    contributorNames.length > 0 ? (
+      <p className="text-sm text-muted">
+        Backed by{" "}
+        <span className="font-semibold text-foreground">
+          {contributorNames.slice(0, 3).join(", ")}
+        </span>
+        {contributorNames.length > 3 ? ` and ${contributorNames.length - 3} more` : ""}
+      </p>
+    ) : null;
+
+  const rally = (
+    <div className="space-y-3 rounded-xl border-2 border-foreground/15 bg-surface p-5">
+      <div className="space-y-1">
+        <h2 className="font-display text-2xl font-extrabold">Rally your boys</h2>
+        <p className="text-sm text-muted">
+          This link opens as a backer page: friends can chip in to grow the
+          prize, and it never signs them up for the dare.
+        </p>
+      </div>
+      <ShareChallenge
+        token={token}
+        backer
+        title="Back this dare on GoHealthMe"
+        message="Back this dare - there is USDC riding on hitting the goal. Chip in and grow the prize:"
+        emailSubject="Back this dare"
+        shareLabel="Rally friends"
+      />
+    </div>
+  );
+
+  // BACKER VIEW: the rally link. Leads with chipping in, never offers accept,
+  // so a friend who came to help is never staked into the dare as a player.
+  if (backer) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-8">
+        <header className="space-y-4">
+          <p className="text-sm font-semibold text-accent">Back the dare</p>
+          <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl">
+            {challengerName} dared {target}
+          </h1>
+          {challenge.message !== null ? (
+            <blockquote className="border-l-4 border-accent pl-4 text-lg text-foreground/90">
+              {challenge.message}
+            </blockquote>
+          ) : null}
+          <PrizeLine pot={pot} backer />
+          {backedBy}
+        </header>
+
+        {canGrow ? (
+          <>
+            <ChallengeContribute
+              poolId={poolIdBig}
+              prizeUsd={pot.prize !== null ? formatUsdc(pot.prize) : null}
+            />
+            {rally}
+          </>
+        ) : (
+          <div className="rounded-xl border border-edge bg-surface-raised p-5 text-sm">
+            <p className="font-semibold">This dare is not taking backers anymore</p>
+            <p className="mt-1 text-foreground/80">
+              Its window has closed or it has already paid out, so nothing can be
+              added. Nothing was charged.
+            </p>
+          </div>
+        )}
+
+        <p className="text-sm text-muted">
+          Are you the one who got dared?{" "}
+          <Link
+            href={`/c/${token}`}
+            className="font-semibold text-accent-strong underline underline-offset-2"
+          >
+            Open the dare to accept it
+          </Link>
+        </p>
+      </div>
+    );
+  }
 
   // The dare leads the same Lobby component /pools renders, with this run
   // highlighted and its accept control inside the slip. The lock logic is the
@@ -128,7 +261,7 @@ export default async function ChallengeLandingPage({
     <header className="space-y-4">
       <p className="text-sm font-semibold text-accent">You have been dared</p>
       <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl">
-        {challengerName} put {rewardUsd} USDC on you
+        {headline}
       </h1>
       {challenge.targetHandle !== null ? (
         <p className="text-sm text-muted">For {challenge.targetHandle}</p>
@@ -138,15 +271,8 @@ export default async function ChallengeLandingPage({
           {challenge.message}
         </blockquote>
       ) : null}
-      {contributorNames.length > 0 ? (
-        <p className="text-sm text-muted">
-          Backed by{" "}
-          <span className="font-semibold text-foreground">
-            {contributorNames.slice(0, 3).join(", ")}
-          </span>
-          {contributorNames.length > 3 ? ` and ${contributorNames.length - 3} more` : ""}
-        </p>
-      ) : null}
+      <PrizeLine pot={pot} backer={false} />
+      {backedBy}
       <SpotterSays
         surface="join"
         state="joined"
@@ -169,24 +295,11 @@ export default async function ChallengeLandingPage({
 
       {canGrow ? (
         <>
-          <ChallengeContribute poolId={poolIdBig} potUsd={rewardUsd} />
-
-          <div className="space-y-3 rounded-xl border-2 border-foreground/15 bg-surface p-5">
-            <div className="space-y-1">
-              <h2 className="font-display text-2xl font-extrabold">Rally your boys</h2>
-              <p className="text-sm text-muted">
-                Send this to people who want you to win. They can chip in and
-                grow the prize you collect when you hit the goal.
-              </p>
-            </div>
-            <ShareChallenge
-              token={token}
-              title="Back me on GoHealthMe"
-              message="Back me on this - I've got USDC riding on hitting my goal. Chip in and help me get there:"
-              emailSubject="Back me on this"
-              shareLabel="Rally friends"
-            />
-          </div>
+          <ChallengeContribute
+            poolId={poolIdBig}
+            prizeUsd={pot.prize !== null ? formatUsdc(pot.prize) : null}
+          />
+          {rally}
         </>
       ) : null}
     </div>

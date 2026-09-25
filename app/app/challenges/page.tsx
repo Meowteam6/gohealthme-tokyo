@@ -53,6 +53,7 @@ import {
   TAP_TARGET,
 } from "@/components/ui";
 import {
+  ContractNotConfiguredError,
   displayGoalSpec,
   fetchGoalId,
   fetchParticipant,
@@ -65,7 +66,7 @@ import {
   type PoolInfo,
 } from "@/lib/contract";
 import { challengeAwaitingSettleStatus, type ProofTier } from "@/lib/proof-tier";
-import { challengeShareUrl } from "@/lib/challenges";
+import { challengeShareUrl, darePot } from "@/lib/challenges";
 import { fetchWithWalletAuth, type WalletAuthRequester } from "@/lib/client-auth";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
@@ -78,6 +79,9 @@ const CHALLENGE_INITIATIVE = "challenge";
 interface InChallenge {
   pool: PoolInfo;
   participant: ParticipantInfo;
+  /** Players in the pool, so the reward is shown net of their own stakes.
+   *  null when the count read missed. */
+  participantCount: number | null;
   /** On-chain trust tier for a recorded-but-unsettled challenge, so its status
    *  badge never reads "Verified" for a self-reported claim. null when the
    *  challenge has no pending passing verdict (status does not need it). */
@@ -111,6 +115,8 @@ interface RawInvite {
 /** A dare aimed at you that you have NOT yet accepted, resolved against chain. */
 interface InvitedChallenge {
   pool: PoolInfo;
+  /** Players already in, so the reward excludes their stakes. */
+  participantCount: number | null;
   inviteToken: string;
   challengerAddress: string;
   message: string | null;
@@ -118,6 +124,48 @@ interface InvitedChallenge {
 
 function sameAddress(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
+}
+
+/** Accepter count for a pool, or null on a read miss (the card still renders,
+ *  it just states no reward figure). */
+function participantCountOf(poolId: bigint): Promise<number | null> {
+  return fetchParticipants(poolId)
+    .then((list) => list.length)
+    .catch(() => null);
+}
+
+/** The reward figure for a challenge card. pool.balance includes every
+ *  player's own stake, so the reward is balance minus stakes (darePot). A
+ *  settled or cancelled pool's balance is payouts and refunds, not a reward,
+ *  so it gets a state word instead of a number. */
+function RewardFigure({
+  pool,
+  participantCount,
+}: {
+  pool: PoolInfo;
+  participantCount: number | null;
+}) {
+  if (pool.cancelled) return <span>Cancelled, stakes refundable</span>;
+  if (pool.settled) return <span>Settled</span>;
+  const { prize } = darePot({
+    balance: pool.balance,
+    entryFee: pool.entryFee,
+    participantCount,
+    settled: pool.settled,
+    cancelled: pool.cancelled,
+  });
+  return (
+    <>
+      {prize !== null ? (
+        <span>
+          Reward <Money usd={formatUsdc(prize)} size="sm" />
+        </span>
+      ) : null}
+      <span>
+        Lock-in <Money usd={formatUsdc(pool.entryFee)} size="sm" />
+      </span>
+    </>
+  );
 }
 
 /**
@@ -155,15 +203,16 @@ async function fetchMyChallenges(
   // verified). Every other challenge needs no tier and carries null.
   const inChallenges: InChallenge[] = await Promise.all(
     joinedChallenges.map(async (entry): Promise<InChallenge> => {
+      const participantCount = await participantCountOf(entry.pool.id);
       const p = entry.participant;
       if (!(p.resultRecorded && p.verdict && !entry.pool.settled)) {
-        return { ...entry, tier: null };
+        return { ...entry, participantCount, tier: null };
       }
       try {
         const goalId = await fetchGoalId(entry.pool.id, address);
-        return { ...entry, tier: await fetchProofTier(goalId) };
+        return { ...entry, participantCount, tier: await fetchProofTier(goalId) };
       } catch {
-        return { ...entry, tier: "unknown" };
+        return { ...entry, participantCount, tier: "unknown" };
       }
     }),
   );
@@ -182,11 +231,7 @@ async function fetchMyChallenges(
   // Accepter count per sent challenge (getParticipants view call - reliable, no
   // logs). A read miss leaves the count null rather than dropping the card.
   const counts = await Promise.all(
-    sentPools.map((pool) =>
-      fetchParticipants(pool.id)
-        .then((list) => list.length)
-        .catch(() => null),
-    ),
+    sentPools.map((pool) => participantCountOf(pool.id)),
   );
   const sentChallenges: SentChallenge[] = sentPools.map((pool, i) => ({
     pool,
@@ -245,6 +290,7 @@ async function fetchInvitedChallenges(
         if (participant.joined) return null;
         return {
           pool,
+          participantCount: await participantCountOf(poolId),
           inviteToken: invite.inviteToken,
           challengerAddress: invite.challengerAddress,
           message: invite.message,
@@ -309,9 +355,7 @@ function InvitedChallengeCard({
         <p className="mt-2 text-sm italic text-muted">{message}</p>
       ) : null}
       <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
-        <span>
-          Reward <Money usd={formatUsdc(pool.balance)} size="sm" />
-        </span>
+        <RewardFigure pool={pool} participantCount={entry.participantCount} />
         <Countdown periodStart={pool.periodStart} periodEnd={pool.periodEnd} />
       </div>
       <Link
@@ -351,9 +395,7 @@ function InChallengeCard({
         {displayGoalSpec(pool.goalSpec)}
       </h3>
       <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
-        <span>
-          Reward <Money usd={formatUsdc(pool.balance)} size="sm" />
-        </span>
+        <RewardFigure pool={pool} participantCount={entry.participantCount} />
         <Countdown periodStart={pool.periodStart} periodEnd={pool.periodEnd} />
       </div>
       <Link
@@ -378,7 +420,21 @@ function SentChallengeCard({ entry }: { entry: SentChallenge }) {
   // zero at creation, so a zero-balance pool you made is an unlocked commitment
   // waiting for your stake). Best-effort display only; the money reads honestly
   // either way - your own stake, never a "reward" that is not there.
-  const commitment = selfStaked || (!pool.settled && pool.balance === 0n);
+  //
+  // "No reward" is balance net of every player's stake, not a raw zero
+  // balance: friends who staked on a commitment before its creator did put
+  // their own money in, and that money is never a reward you put up.
+  const netReward = darePot({
+    balance: pool.balance,
+    entryFee: pool.entryFee,
+    participantCount,
+    settled: pool.settled,
+    cancelled: pool.cancelled,
+  }).prize;
+  const commitment =
+    selfStaked ||
+    (!pool.settled &&
+      (netReward !== null ? netReward === 0n : pool.balance === 0n));
   const stakerWord = commitment ? "staked" : "accepted";
   const countLabel =
     participantCount === null
@@ -415,9 +471,7 @@ function SentChallengeCard({ entry }: { entry: SentChallenge }) {
             Your stake <Money usd={formatUsdc(pool.entryFee)} size="sm" />
           </span>
         ) : (
-          <span>
-            Reward <Money usd={formatUsdc(pool.balance)} size="sm" />
-          </span>
+          <RewardFigure pool={pool} participantCount={participantCount} />
         )}
         <Countdown periodStart={pool.periodStart} periodEnd={pool.periodEnd} />
         {countLabel !== null ? <span>{countLabel}</span> : null}
@@ -538,10 +592,12 @@ function MyChallengesContent() {
     return (
       <ErrorNote
         title="Could not load your challenges"
-        detail={
-          query.error instanceof Error
+        detail="We could not read your challenges from Base Sepolia. Try again."
+        raw={
+          query.error instanceof Error &&
+          !(query.error instanceof ContractNotConfiguredError)
             ? query.error.message
-            : "Unknown error reading from Base Sepolia."
+            : undefined
         }
         onRetry={() => {
           void query.refetch();

@@ -137,3 +137,65 @@ export function checkTargetHandle(
 export function challengeShareUrl(origin: string, inviteToken: string): string {
   return `${origin.replace(/\/+$/, "")}/c/${inviteToken}`;
 }
+
+/** The query flag that marks the rally (backer) variant of a dare link. */
+export const BACKER_PARAM = "as";
+export const BACKER_VALUE = "backer";
+
+/** The rally link friends are sent from the landing. Same token, but the page
+ *  leads with "chip in" and hides accept, so a backer is never staked into
+ *  the dare as a player. */
+export function challengeBackerUrl(origin: string, inviteToken: string): string {
+  return `${challengeShareUrl(origin, inviteToken)}?${BACKER_PARAM}=${BACKER_VALUE}`;
+}
+
+/** Whether a /c/[token] request is the backer variant. */
+export function isBackerView(raw: string | string[] | undefined): boolean {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value === BACKER_VALUE;
+}
+
+// ---------------------------------------------------------------- dare money
+
+export interface DarePotInput {
+  /** pool.balance: the seed reward + every fundPool top-up + every stake. */
+  balance: bigint;
+  entryFee: bigint;
+  /** Accepted players, or null when the count could not be read. */
+  participantCount: number | null;
+  settled: boolean;
+  cancelled: boolean;
+  /** Sum of fundPool top-ups (PoolFunded), or null when not read. */
+  contributed?: bigint | null;
+}
+
+export interface DarePot {
+  /** What a winner collects on top of their own stake back: balance minus
+   *  every player's stake. null when it cannot be stated honestly. */
+  prize: bigint | null;
+  /** The players' own money in the pool. */
+  stakes: bigint | null;
+  /** The challenger's own seed reward: prize minus friends' top-ups. */
+  seed: bigint | null;
+}
+
+const clampZero = (v: bigint): bigint => (v < 0n ? 0n : v);
+
+/**
+ * Split a dare pool's balance into what is actually a reward and what is the
+ * players' own stake. pool.balance counts both (joinPool adds the entry fee),
+ * so showing it as "Reward" credits the challenger with the dared player's own
+ * lock-in. Once a pool is settled or cancelled its balance tracks payouts and
+ * refunds, not the reward, so every figure is null and the caller shows state
+ * instead of a number.
+ */
+export function darePot(input: DarePotInput): DarePot {
+  if (input.settled || input.cancelled || input.participantCount === null) {
+    return { prize: null, stakes: null, seed: null };
+  }
+  const stakes = input.entryFee * BigInt(input.participantCount);
+  const prize = clampZero(input.balance - stakes);
+  const contributed = input.contributed ?? null;
+  const seed = contributed === null ? null : clampZero(prize - contributed);
+  return { prize, stakes, seed };
+}
