@@ -4,6 +4,8 @@ Verified health goals, paid in USDC the instant a wearable proves you did the th
 
 > **HARD RULE (Andre, 2026-09-26): this is the Continuity track, not a demo. V4 must actually work for real beta users, the same bar V3 already met.** No demo-only paths, no mock that can reach a production deployment, no hard-coded happy path, no "works for the video". Every flow is driven end to end against the real services before it is called done. Mock modes exist only for tests, local runs and preview deployments, and production code refuses them (`WORLD_VERIFY_MODE=mock` and `WORLD_APPROVAL_MODE=mock` are refused when `VERCEL_ENV=production`). Stage word stays honest: V4 is in **beta** on testnet, never "production" in copy.
 
+> **HARD RULE (Andre, 2026-09-26): SEAMLESS UX.** Every added step must be invisible or obvious, never hidden, never a dead end. No Orb gate (any World App credential), no prompt that renders behind another modal, no refusal after a stake. If a step adds friction, it happens once per session and in plain sight, with a retry. Drive it on a real phone before calling it done.
+
 ## What this repo is
 
 A full-history clone of `Meowteam6/gohealthme-base` (V3, the Base Sepolia pilot) taken 2026-09-25 at `a86387d` on `feat/pilot-compliance-guardrails`, renamed `main`. Everything before that commit is the existing product the Continuity track expects; everything after it is what judges score. **Commit small and often, with real messages.** Judges read the history to see what the weekend added.
