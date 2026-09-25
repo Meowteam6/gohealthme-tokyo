@@ -145,9 +145,9 @@ function Money({
   className?: string;
 }) {
   return (
-    <span className={`font-mono tabular-nums text-gold ${className}`}>
+    <span className={`font-mono tabular-nums text-gold-deep ${className}`}>
       {amount}
-      <span className="text-gold/80"> USDC</span>
+      <span className="text-gold-deep/80"> USDC</span>
     </span>
   );
 }
@@ -194,7 +194,7 @@ function relativeTime(iso: string): string {
 // Icon container tones per trust tier. Self-reported and unknown wins carry NO
 // check badge — a self-reported photo cannot be presented as verified.
 const WIN_ICON_TONE: Record<"accent" | "warning" | "muted", string> = {
-  accent: "bg-accent-deep text-accent",
+  accent: "bg-accent/10 text-accent-strong",
   warning: "bg-warning/10 text-warning",
   muted: "bg-surface-raised text-muted",
 };
@@ -272,7 +272,7 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
             >
               {truncateAddress(profile.address)}
             </p>
-            <span className="mt-0.5 inline-flex w-fit items-center gap-1.5 rounded-full bg-accent-deep px-2.5 py-0.5 text-xs font-medium text-accent">
+            <span className="mt-0.5 inline-flex w-fit items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent-strong">
               <CheckBadgeIcon className="h-3.5 w-3.5" />
               verified on GoHealthMe
             </span>

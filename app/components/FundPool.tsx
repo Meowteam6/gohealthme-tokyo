@@ -106,7 +106,7 @@ function FundPoolInner({
               }
               void submit();
             }}
-            className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3.5 text-base font-semibold text-accent hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3.5 text-base font-semibold text-accent hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {primaryLabel}
           </button>

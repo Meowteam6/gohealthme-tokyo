@@ -685,7 +685,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={unlockClaim}
-              className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Sign and show the rows
             </button>
@@ -754,7 +754,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={resetUpload}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Upload a different file
             </button>
@@ -777,7 +777,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={resetUpload}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Submit new evidence
             </button>
@@ -811,7 +811,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={resetUpload}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
             >
               Try again
             </button>

@@ -116,7 +116,7 @@ export default function HeroActivityTicker() {
                   <p className="text-xs text-muted">{relativeTime(e.at)}</p>
                 </div>
                 {amt !== "" ? (
-                  <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-gold">
+                  <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-gold-deep">
                     +{amt} USDC
                   </span>
                 ) : null}

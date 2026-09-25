@@ -291,7 +291,7 @@ function CreatePoolInner() {
               onClick={() => setFloor("wearable")}
               className={`rounded-xl border p-3 text-left ${
                 floor === "wearable"
-                  ? "border-accent/50 bg-accent-deep text-accent"
+                  ? "border-accent/50 bg-accent/10 text-accent-strong"
                   : "border-edge bg-surface-raised text-muted hover:text-foreground"
               }`}
             >
@@ -307,7 +307,7 @@ function CreatePoolInner() {
               aria-disabled={!docAvailable}
               className={`rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-60 ${
                 floor === "document"
-                  ? "border-accent/50 bg-accent-deep text-accent"
+                  ? "border-accent/50 bg-accent/10 text-accent-strong"
                   : "border-edge bg-surface-raised text-muted hover:text-foreground"
               }`}
             >
@@ -467,7 +467,7 @@ function CreatePoolInner() {
                 onClick={() => setDurationDays(opt.days)}
                 className={`rounded-xl border px-4 py-2 text-sm font-medium ${
                   durationDays === opt.days
-                    ? "border-accent/50 bg-accent-deep text-accent"
+                    ? "border-accent/50 bg-accent/10 text-accent-strong"
                     : "border-edge bg-surface-raised text-muted hover:text-foreground"
                 }`}
               >

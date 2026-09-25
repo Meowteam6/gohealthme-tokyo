@@ -132,13 +132,13 @@ export default function ShareChallenge({
         ) : null}
         <a
           href={smsHref(body)}
-          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent hover:bg-accent-deep ${TAP_TARGET}`}
+          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent hover:bg-accent/10 ${TAP_TARGET}`}
         >
           Text
         </a>
         <a
           href={mailtoHref(emailSubject, body)}
-          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent hover:bg-accent-deep ${TAP_TARGET}`}
+          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent hover:bg-accent/10 ${TAP_TARGET}`}
         >
           Email
         </a>
