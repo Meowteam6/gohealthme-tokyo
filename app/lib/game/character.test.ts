@@ -136,12 +136,12 @@ describe("characterSteps and currentStep", () => {
 
   it("starts at sign-in for a judge with a fresh browser", () => {
     const i = inputs({ authenticated: false, address: null });
-    expect(currentStep(characterSteps(i), gatePassed(i), none)).toBe("sign-in");
+    expect(currentStep(characterSteps(i), gatePassed(i), none, false)).toBe("sign-in");
   });
 
   it("holds on the human step until the gate passes, and it cannot be skipped", () => {
     const i = inputs();
-    expect(currentStep(characterSteps(i), gatePassed(i), new Set(["human"]))).toBe("human");
+    expect(currentStep(characterSteps(i), gatePassed(i), new Set(["human"]), false)).toBe("human");
   });
 
   it("shows the allowlist wait as waiting, not todo, with World off", () => {
@@ -155,9 +155,9 @@ describe("characterSteps and currentStep", () => {
   it("moves to name, then sensor, and both are skippable", () => {
     const i = inputs({ world: { lane: "on", human: "verified" } });
     const steps = characterSteps(i);
-    expect(currentStep(steps, true, none)).toBe("name");
-    expect(currentStep(steps, true, new Set(["name"]))).toBe("sensor");
-    expect(currentStep(steps, true, new Set(["name", "sensor"]))).toBeNull();
+    expect(currentStep(steps, true, none, false)).toBe("name");
+    expect(currentStep(steps, true, new Set(["name"]), false)).toBe("sensor");
+    expect(currentStep(steps, true, new Set(["name", "sensor"]), false)).toBeNull();
   });
 
   it("uses the existing @handle as the name when ENS is off", () => {
@@ -168,6 +168,19 @@ describe("characterSteps and currentStep", () => {
     });
     expect(characterSteps(i).name).toEqual({ status: "done", summary: "@dre" });
     expect(characterOf(i)?.name).toBe("@dre");
+  });
+
+  it("never interrupts a player who already finished onboarding on this device", () => {
+    const i = inputs({ world: { lane: "on", human: "verified" } });
+    expect(currentStep(characterSteps(i), true, none, true)).toBeNull();
+    // ...but the hard gate still holds for them.
+    const signedOut = inputs({ authenticated: false, address: null });
+    expect(currentStep(characterSteps(signedOut), false, none, true)).toBe("sign-in");
+  });
+
+  it("asks a returning player to check the sensor, not to pair it again", () => {
+    const i = inputs({ sensor: { kind: "unchecked" } });
+    expect(characterSteps(i).sensor).toEqual({ status: "check" });
   });
 
   it("finishes when every step is done", () => {
@@ -181,7 +194,7 @@ describe("characterSteps and currentStep", () => {
     });
     const steps = characterSteps(i);
     expect(steps.sensor).toEqual({ status: "done", summary: "Junction: sleep score" });
-    expect(currentStep(steps, true, none)).toBeNull();
+    expect(currentStep(steps, true, none, false)).toBeNull();
   });
 
   it("offers World once to an allowlisted player, skippably", () => {
@@ -193,8 +206,8 @@ describe("characterSteps and currentStep", () => {
         device: { provider: "junction", label: "Junction", metrics: ["steps"] },
       },
     });
-    expect(currentStep(characterSteps(i), gatePassed(i), none)).toBe("human");
-    expect(currentStep(characterSteps(i), gatePassed(i), new Set(["human"]))).toBeNull();
+    expect(currentStep(characterSteps(i), gatePassed(i), none, false)).toBe("human");
+    expect(currentStep(characterSteps(i), gatePassed(i), new Set(["human"]), false)).toBeNull();
   });
 });
 

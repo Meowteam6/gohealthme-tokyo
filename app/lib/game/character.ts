@@ -118,6 +118,9 @@ export const STEP_ORDER: StepId[] = ["sign-in", "human", "name", "sensor"];
 export type StepState =
   | { status: "done"; summary: string }
   | { status: "todo" }
+  /** Something is probably there and one signature would tell (a sensor after
+   *  a reload). Never a wall: the lobby shows the same one-tap check. */
+  | { status: "check" }
   | { status: "loading" }
   /** Waiting on something the player cannot speed up (allowlist review). */
   | { status: "waiting"; note: string }
@@ -222,8 +225,9 @@ function sensorStep(i: CharacterInputs): StepState {
         summary: `${i.sensor.device.label}: ${measurableGoalsOf(i.sensor.device).join(", ")}`,
       };
     case "none":
-    case "unchecked":
       return { status: "todo" };
+    case "unchecked":
+      return { status: "check" };
     case "unreadable":
       return {
         status: "waiting",
@@ -255,25 +259,28 @@ export function characterSteps(i: CharacterInputs): Record<StepId, StepState> {
 export const HARD_STEPS: StepId[] = ["sign-in", "human"];
 
 /**
- * The step character creation should show, or null when creation is finished.
- * Hard steps come first and cannot be skipped. Soft steps are shown once and
- * can be skipped; `skipped` is the player's own choice, kept per device.
+ * The step character creation should show, or null when there is nothing to
+ * show. Hard steps come first and cannot be skipped. Soft steps are an
+ * onboarding pass shown once per device: after the player finishes or skips
+ * them (`onboarded`), creation never interrupts again and the lobby carries
+ * any lock that is left, with its fix, on the run it affects.
  */
 export function currentStep(
   steps: Record<StepId, StepState>,
   gate: boolean,
   skipped: ReadonlySet<StepId>,
+  onboarded: boolean,
 ): StepId | null {
   if (steps["sign-in"].status !== "done") return "sign-in";
   if (!gate) return "human";
+  if (onboarded) return null;
   for (const id of STEP_ORDER) {
     if (HARD_STEPS.includes(id)) continue;
-    const s = steps[id];
-    if (s.status === "done" || skipped.has(id)) continue;
+    if (steps[id].status === "done" || skipped.has(id)) continue;
     return id;
   }
   // A World-on build where the player got in through the allowlist: offer the
-  // proof once, skippable, because one-human-one-entry is checked at the join.
+  // proof once, skippably, because one-human-one-entry is checked at the join.
   if (steps.human.status === "todo" && !skipped.has("human")) return "human";
   return null;
 }

@@ -1,26 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { DynamicConnectButton } from "@dynamic-labs/sdk-react-core";
 import { DEMO_CHROME, DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { useBaseAccountConnect } from "@/lib/useBaseAccountConnect";
 import { useDisplayNames } from "@/lib/use-display-names";
-import AgentStrip from "@/components/AgentStrip";
+import EnsName from "@/components/ens/EnsName";
+import SpotterStatusLine from "@/components/game/SpotterStatusLine";
 import TestUsdcChip from "@/components/TestUsdcChip";
 import { CopyAddressButton } from "@/components/FundingHelp";
 
 // "Create pool" is deliberately NOT here. It is the sponsor's action - it
 // costs money and a first-time visitor has none - so it lives one level down,
 // as the primary button on /pools. The route is unchanged.
+// Named for the game loop: the lobby is where runs are, "My runs" is the
+// scoreboard for the ones you entered. Routes are unchanged.
 const NAV_ITEMS: { href: string; label: string }[] = [
-  { href: "/pools", label: "Pools" },
+  { href: "/pools", label: "Lobby" },
+  { href: "/dashboard", label: "My runs" },
+  { href: "/challenges", label: "Dares" },
   { href: "/agent", label: "SPOTTER" },
   { href: "/sponsor", label: "Sponsor" },
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/challenges", label: "Challenges" },
   { href: "/settings", label: "Wallet" },
 ];
 
@@ -65,52 +66,28 @@ function NavLinks({
 }
 
 function AuthControls() {
+  const pathname = usePathname();
   const { ready, authenticated, logout } = useEmbeddedWallet();
-  const { connectBase, baseBusy } = useBaseAccountConnect();
 
   if (!ready) {
     return (
-      <div className="h-9 w-24 animate-pulse rounded-lg bg-surface-raised" />
+      <div className="h-11 w-24 animate-pulse rounded-lg bg-surface-raised" />
     );
   }
 
   if (!authenticated) {
-    // DynamicConnectButton, NOT a bare button calling setShowAuthFlow.
-    // setShowAuthFlow only toggles state on the DynamicAuthFlow SDK component,
-    // and this app mounts no Dynamic UI component anywhere — so the old custom
-    // button flipped a flag nothing was listening to. No modal, no network
-    // call, no thrown error: sign-in was silently dead in every build.
-    // DynamicConnectButton owns the flow and still takes our own styling.
-    //
-    // The Base Account button is the PREFERRED option and leads. Brand-correct
-    // light treatment per Base's guidelines - white surface, near-black label,
-    // the #0000FF Base Square, and the "Base" label (Base's guidance: use "Base"
-    // when a "Sign in" control is already present, which it is). The email
-    // "Sign in" beside it drops to a secondary outline so Base reads as the one
-    // to reach for. Base stays hidden below sm so the 375px header keeps room
-    // for the nav toggle; the SignInPanel carries the primary Base button on
-    // every screen size.
+    // One way in. Character creation owns sign-in (email makes the wallet,
+    // your own wallet is a quiet link inside it), so the header no longer
+    // offers two competing buttons that each open a different flow.
+    const next =
+      pathname === "/character" ? "" : `?next=${encodeURIComponent(pathname)}`;
     return (
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={baseBusy}
-          aria-busy={baseBusy}
-          onClick={() => {
-            void connectBase();
-          }}
-          className="hidden min-h-11 items-center gap-2 rounded-xl border-2 border-foreground/20 bg-surface px-5 py-2.5 text-base font-bold text-foreground shadow-[var(--shadow-pop-edge)] transition hover:-translate-y-0.5 hover:border-foreground/35 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60 sm:inline-flex"
-        >
-          <span
-            aria-hidden="true"
-            className="h-4 w-4 shrink-0 rounded-[3px] bg-[#0000FF]"
-          />
-          {baseBusy ? "Opening..." : "Sign in or create a wallet with Base"}
-        </button>
-        <DynamicConnectButton buttonClassName="min-h-11 rounded-lg border border-edge px-4 py-2 text-sm font-semibold text-foreground hover:border-accent/50 hover:bg-surface-raised">
-          Sign in
-        </DynamicConnectButton>
-      </div>
+      <Link
+        href={`/character${next}`}
+        className="inline-flex min-h-11 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+      >
+        Sign in
+      </Link>
     );
   }
 
@@ -135,49 +112,32 @@ function AuthControls() {
  */
 function WalletNote() {
   const { authenticated, address } = useEmbeddedWallet();
-  // Resolve the signed-in wallet to its claimed @handle. The hook is disabled
-  // when the array is empty, so it costs nothing before a wallet exists.
+  // The ENS name leads; the off-chain @handle is its fallback, then the short
+  // address. Disabled until a wallet exists, so it costs nothing signed out.
   const { handleFor } = useDisplayNames(address !== null ? [address] : []);
 
   if (!authenticated) {
-    // Rendered while the SDK is still loading too - that window is exactly
-    // when a first-time visitor is reading the header.
     return (
       <p className="py-2 text-xs leading-relaxed text-muted">
-        Sign in with an email address - we create the wallet for you. No seed
-        phrase, no extension, nothing to install.
+        Sign in with an email and a wallet is made for you. No seed phrase.
       </p>
     );
   }
 
   if (address === null) return null;
-
   const handle = handleFor(address);
 
-  // Claimed: show @handle (linked to the public profile) and keep the copy
-  // chip as a secondary control. Unclaimed: keep the copy chip and nudge the
-  // wallet toward claiming a name, so a bare 0x8a39...6141 is never the whole
-  // identity on the header.
   return (
     <div className="flex items-center gap-2 py-1">
-      <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted">
-        Your wallet
-      </span>
-      {handle !== null ? (
-        <Link
-          href={`/u/${handle}`}
-          className="text-xs font-semibold text-foreground hover:text-accent"
-        >
-          @{handle}
-        </Link>
-      ) : (
-        <Link
-          href="/handle"
-          className="text-xs font-medium text-accent underline underline-offset-2"
-        >
-          Claim a name
-        </Link>
-      )}
+      <Link
+        href="/character"
+        className="min-w-0 truncate text-sm font-semibold text-foreground hover:text-accent"
+      >
+        <EnsName
+          address={address}
+          fallback={handle !== null ? `@${handle}` : undefined}
+        />
+      </Link>
       <CopyAddressButton address={address} compact />
     </div>
   );
@@ -186,23 +146,23 @@ function WalletNote() {
 /**
  * The row under the header bar. It exists because the 64px bar cannot hold an
  * address, an explanation, and SPOTTER's balance at 375px without crushing the
- * nav to nothing. AgentStrip lives here rather than in the bar so it can be
- * shown on small screens (another surface owns that decision) without taking
- * space from the nav. Vertical padding sits on the children, so the row
- * collapses to a hairline when every child renders null.
+ * nav to nothing. SPOTTER's wallet status is one line here on every screen
+ * size, which replaced the out-of-budget wall on each pool. Vertical padding
+ * sits on the children, so the row collapses to a hairline when every child
+ * renders null.
  */
 function HeaderNote() {
   return (
     <div className="border-t border-edge bg-surface/60">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-3 px-3 sm:px-4">
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-3 px-4">
         {DYNAMIC_CONFIGURED ? (
           <div className="flex flex-wrap items-center gap-x-3">
             <WalletNote />
             <TestUsdcChip />
           </div>
         ) : null}
-        <div className="ml-auto shrink-0">
-          <AgentStrip />
+        <div className="w-full sm:ml-auto sm:w-auto">
+          <SpotterStatusLine />
         </div>
       </div>
     </div>
@@ -217,7 +177,7 @@ function AuthOrPill() {
   // exactly its charter. The join panel's fail-closed refusal is untouched.
   return (
     <span className="rounded-lg border border-edge px-3 py-2 text-xs text-muted">
-      Sign-in unavailable
+      Sign-in is off on this build
     </span>
   );
 }
@@ -228,20 +188,21 @@ export default function Header() {
   // scroll strip is undiscoverable on a phone and left Challenges/Wallet
   // unreachable); at `sm` and up the inline nav returns. The menu closes on
   // navigation (pathname effect) and on any link tap.
+  // The menu is open FOR a path, so navigating anywhere closes it without an
+  // effect that sets state after render.
   const pathname = usePathname();
-  const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const menuOpen = menuFor === pathname;
+  const setMenuOpen = (open: boolean) => setMenuFor(open ? pathname : null);
 
   return (
     <header className="sticky top-0 z-40 border-b border-edge bg-background/90 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-5xl items-center gap-2 px-3 sm:gap-3 sm:px-4">
+      <div className="mx-auto flex h-16 max-w-5xl items-center gap-2 px-4 sm:gap-3">
         <Link
           href="/"
-          className="shrink-0 font-display text-lg font-extrabold tracking-tight sm:text-xl"
+          className="shrink-0 font-display text-2xl font-black tracking-tight"
         >
-          Go<span className="text-accent">Health</span>Me
+          GoHealthMe
         </Link>
         {/* Desktop nav: inline, right-aligned, scrolls only if it must. */}
         <nav className="hidden min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] sm:block [&::-webkit-scrollbar]:hidden">
@@ -254,7 +215,7 @@ export default function Header() {
           {/* Mobile menu toggle: only below `sm`, where the inline nav hides. */}
           <button
             type="button"
-            onClick={() => setMenuOpen((open) => !open)}
+            onClick={() => setMenuOpen(!menuOpen)}
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
             aria-controls="mobile-nav"
