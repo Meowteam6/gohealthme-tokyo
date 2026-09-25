@@ -25,11 +25,6 @@ export interface PayoutScreeningProps {
   reason?: string;
 }
 
-/** Mirror of lib/server/screening/gate.ts SCREEN_HELD_PREFIX. Kept local so
- *  the receipt can recognise a screening hold without importing server code;
- *  gate.test.ts pins the two strings equal. */
-export const SCREEN_HELD_PREFIX = "payout held by screening:";
-
 const COPY: Record<ScreeningStatus, string> = {
   pending: "Payout screening: checking this wallet against mainnet risk data (Intercepta).",
   clear: "Payout screening: clear. Intercepta found no sanctions or scam traits on this wallet.",

@@ -36,7 +36,9 @@ import { screenAddress, type ScreeningResult } from "@/lib/server/screening/inte
  *  screening hold without parsing the rest. */
 export const SCREEN_HELD_PREFIX = "payout held by screening:";
 
-export type ScreenPurpose = "record" | "settle";
+/** record and settle are the payout signatures in spotter.ts; x402 is the
+ *  agent-to-agent buy side in x402.ts (the seller's payTo is the payee). */
+export type ScreenPurpose = "record" | "settle" | "x402";
 
 export class PayoutScreeningHold extends Error {
   constructor(

@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import type { Address, Hex } from "viem";
 import type { ScreeningResult } from "@/lib/server/screening/intercepta";
-import { SCREEN_HELD_PREFIX as CLIENT_PREFIX } from "@/components/intercepta/PayoutScreening";
+import { SCREEN_HELD_PREFIX as CLIENT_PREFIX } from "@/lib/agent-receipt";
 
 // The gate SPOTTER passes before it signs. Pinned here, against the real
 // spotter functions with a fake executor and a fake screener:

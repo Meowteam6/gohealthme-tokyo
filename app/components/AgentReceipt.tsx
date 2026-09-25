@@ -14,13 +14,12 @@
 
 import {
   projectReceipt,
+  SCREEN_HELD_PREFIX,
   type LedgerEntry,
   type ReceiptRow,
 } from "@/lib/agent-receipt";
 import { ArcTxLink, Money, Verdict } from "@/components/ui";
-import PayoutScreening, {
-  SCREEN_HELD_PREFIX,
-} from "@/components/intercepta/PayoutScreening";
+import PayoutScreening from "@/components/intercepta/PayoutScreening";
 
 type SpendReceiptRow = Extract<ReceiptRow, { kind: "spend" }>;
 

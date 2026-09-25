@@ -21,6 +21,12 @@ import type { RunStatus } from "@/lib/server/agent/run";
 
 export type { LedgerEntry, RunStatus };
 
+/** Mirror of lib/server/screening/gate.ts SCREEN_HELD_PREFIX: every error
+ *  row a payout screening hold produces starts with it. Mirrored, not
+ *  imported, for the same client-safety reason as FAIL_PREFIX below;
+ *  gate.test.ts pins the two equal. */
+export const SCREEN_HELD_PREFIX = "payout held by screening:";
+
 export type ReceiptRow =
   | {
       kind: "spend";
@@ -57,7 +63,7 @@ export type ReceiptRow =
   | { kind: "error"; stage: string; message: string }
   | {
       kind: "screen";
-      purpose: "record" | "settle";
+      purpose: "record" | "settle" | "x402";
       status: "clear" | "blocked" | "unavailable";
       reason: string;
       toxicScore: number | null;
@@ -393,7 +399,10 @@ export function runStatusFromLedger(ledger: LedgerEntry[]): RunStatus | null {
   }
   const last = ledger[ledger.length - 1];
   if (last.kind === "error") {
-    if (last.stage === "buy") return "cap-exceeded";
+    // A seller refused by payout screening is a hold, not a cap breach.
+    if (last.stage === "buy") {
+      return last.message.startsWith(SCREEN_HELD_PREFIX) ? "error" : "cap-exceeded";
+    }
     if (last.stage === "record" && last.message.includes("NOT_PARTICIPANT")) {
       return "blocked";
     }

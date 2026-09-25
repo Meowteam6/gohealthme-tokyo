@@ -133,9 +133,9 @@ export type LedgerEntry = Stamped &
     | {
         kind: "screen";
         provider: "intercepta";
-        /** Which signature the screen guarded: the achiever record or the
-         *  pool settlement. */
-        purpose: "record" | "settle";
+        /** Which signature the screen guarded: the achiever record, the
+         *  pool settlement, or an x402 purchase (the seller's payTo). */
+        purpose: "record" | "settle" | "x402";
         address: string;
         status: "clear" | "blocked" | "unavailable";
         /** The provider's toxicScore when it answered; absent on unavailable. */

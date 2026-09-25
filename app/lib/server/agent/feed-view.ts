@@ -37,7 +37,7 @@ export interface PublicFeedSettle {
  *  those names, and nothing here derives from health data. */
 export interface PublicFeedScreen {
   at: string;
-  purpose: "record" | "settle";
+  purpose: "record" | "settle" | "x402";
   status: "clear" | "blocked" | "unavailable";
   toxicScore: number | null;
   traits: string[];
