@@ -31,7 +31,7 @@
 // satisfies a read in another, so a mocked identity typed on a preview that
 // shares the store with production can never count as a real human there.
 
-import { optionalEnv } from "@/lib/server/env";
+import { isProductionDeployment, optionalEnv } from "@/lib/server/env";
 
 export type WorldMode = "live" | "mock" | "off";
 export type WorldEnvironment = "staging" | "production";
@@ -69,10 +69,7 @@ export function worldEnvironment(): WorldEnvironment {
     : "staging";
 }
 
-/** True on the Vercel production deployment, the one real beta users hit. */
-export function isProductionDeployment(): boolean {
-  return process.env.VERCEL_ENV === "production";
-}
+export { isProductionDeployment };
 
 /** Where a World human record lives. See the header. */
 export type WorldNamespace = "mock" | "live-staging" | "live-production";
