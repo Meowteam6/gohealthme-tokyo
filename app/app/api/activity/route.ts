@@ -54,9 +54,13 @@ interface RawItem {
 
 let cache: { at: number; events: ActivityItem[] } | null = null;
 
+/** No pools contract on this build (unset, malformed or the refused V3
+ *  address). Reported as an error, never as an empty chain. */
+class NoPoolsContractError extends Error {}
+
 async function buildActivity(): Promise<ActivityItem[]> {
   const poolsAddress = getHealthPoolsAddress();
-  if (poolsAddress === null) return [];
+  if (poolsAddress === null) throw new NoPoolsContractError();
 
   const client = getArcPublicClient();
   const latest = await client.getBlockNumber();
@@ -178,6 +182,11 @@ export async function GET() {
     cache = { at: now, events };
     return Response.json({ events });
   } catch (err) {
+    if (err instanceof NoPoolsContractError) {
+      // "Quiet right now" would be a lie: nothing is being read at all.
+      console.error(`[${cid}] no HealthPools contract configured for this build`);
+      return jsonError(503, "Runs are not open on this build yet.");
+    }
     if (cache !== null) return Response.json({ events: cache.events });
     return jsonError(500, safeError(err, cid));
   }
