@@ -15,7 +15,7 @@
 // so a row is keyed (contract_address, pool_id) and every read and write below
 // filters on the contract this deployment is configured for
 // (challengesContract()). A V3 row can never reach a V4 pool, and the reverse.
-// The schema is committed in supabase/migrations/20260926_challenges.sql.
+// The schema is committed in supabase/migrations/20260926095900_challenges.sql.
 //
 // A challenge row is a pool id, who created it, an unguessable token, and the
 // challenger's framing text. There is NO health column anywhere: the goal

@@ -64,6 +64,10 @@ create table if not exists public.wearable_days (
 -- Anon gets no read policy, so health data is never publicly readable.
 alter table public.wearable_days enable row level security;
 
+-- Explicit privileges: service role is the only reader and writer.
+revoke all on table public.wearable_days from anon, authenticated;
+grant all on table public.wearable_days to service_role;
+
 comment on table public.wearable_days is
   'Daily wearable aggregates per wallet, pushed from a device (Apple Health). THE ONLY TABLE HERE THAT HOLDS HEALTH DATA. One number per wallet/metric/day, never a raw sample: the phone aggregates on device and posts only the daily total. Service-role-write only after an EIP-191 signature proving wallet control; no anon read policy. Retention: rows are swept once no open pool window can reference them.';
 
@@ -101,3 +105,7 @@ $$;
 
 comment on function public.sweep_wearable_days is
   'Deletes wearable aggregates older than the retention window (default 120 days, comfortably past the longest pool period). Returns the number of rows removed.';
+
+-- Only the service role (the cron) may run the sweep.
+revoke execute on function public.sweep_wearable_days(integer) from public, anon, authenticated;
+grant execute on function public.sweep_wearable_days(integer) to service_role;

@@ -114,6 +114,10 @@ create index if not exists challenges_contract_target_idx
 
 alter table public.challenges enable row level security;
 
+-- Explicit privileges: service role is the only reader and writer.
+revoke all on table public.challenges from anon, authenticated;
+grant all on table public.challenges to service_role;
+
 comment on table public.challenges is
   'Peer challenges: one row per challenge pool, keyed (contract_address, pool_id). Invite token is a bearer capability for the /c/<token> landing. NO health data: the goal lives on-chain. Service-role only (RLS on, no policies).';
 comment on column public.challenges.contract_address is

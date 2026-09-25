@@ -7,7 +7,7 @@ pull`, so they cannot be copied; this script uses what exists locally instead:
 
   - app/.env.local of V4 (Dynamic env id, oracle key, Circle ids)
   - contracts/.env PRIVATE_KEY (the 0xc278 deployer) as treasury and ENS owner
-  - the Supabase CLI for the GoHealthMe project's URL and keys
+  - the Supabase CLI for V4's own Supabase project's URL and keys (never V3's)
   - generated values (CRON_SECRET) and known constants (Junction sandbox host)
 
 Anything that is missing or still a placeholder is listed at the end as a
@@ -22,7 +22,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = os.path.join(ROOT, "app")
-SUPABASE_REF = "lynhrbkspjsmqzywfhht"  # the GoHealthMe project (testnet handles only)
+SUPABASE_REF = "ecuzwwgatvqtuvsivnyi"  # V4's own project
 SPOTTER_SETTLER = "0x5BECa2BCe03ef2D8d91091744b2CfD6d1A5cd483"  # Circle EOA, read from V3 chain
 
 # Shape checks so a placeholder is never pushed as if it were real.
@@ -58,7 +58,7 @@ def parse(path):
 
 
 def supabase_values():
-    """URL and keys for the GoHealthMe Supabase project via the CLI."""
+    """URL and keys for V4's own Supabase project via the CLI."""
     r = subprocess.run(
         ["supabase", "projects", "api-keys", "--project-ref", SUPABASE_REF, "-o", "json"],
         capture_output=True, text=True,

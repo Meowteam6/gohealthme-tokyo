@@ -5,7 +5,7 @@
 // route, and the token-gated landing.
 //
 // The shapes mirror the Supabase schema exactly (table public.challenges,
-// committed in supabase/migrations/20260926_challenges.sql; V3's copy lives in
+// committed in supabase/migrations/20260926095900_challenges.sql; V3's copy lives in
 // project lynhrbkspjsmqzywfhht):
 //   contract_address   text  check ~ '^0x[0-9a-f]{40}$'  (half of the key)
 //   invite_token       text  check ~ '^[A-Za-z0-9_-]{32,64}$'  (URL-safe)
