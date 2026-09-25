@@ -28,6 +28,10 @@ export interface NamedPayout {
   address: string | null;
   amountUsd: string;
   txHash: string;
+  /** True when the win rests on self-reported evidence (a photo), the
+   *  low-trust tier. A machine-state boolean, carried so the feed never
+   *  presents a self-reported payout as verified. */
+  selfReported: boolean;
 }
 
 /** One claim plus the participant address for it (from the ledger's plan). */
@@ -91,6 +95,7 @@ export function toNamedPayouts(
       address: participant,
       amountUsd: settle.paidUsd,
       txHash: settle.txHash,
+      selfReported: claim.selfReported,
     });
   }
   rows.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
