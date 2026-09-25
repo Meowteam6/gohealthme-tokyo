@@ -74,7 +74,21 @@ export interface PublicFeedClaim {
   /** Newest human-confirmation state, or null when SPOTTER never asked. */
   approval: PublicFeedApproval | null;
   // --- end world-agents ---
+  /** Present only when SPOTTER hit an error on this claim and the claim has
+   *  not settled since: the stage it stopped at (machine vocabulary: buy,
+   *  attester, record, settle, approval), never the error prose. Without it a
+   *  stalled claim reads as a bare "decision pay" that will never pay. */
+  problem?: PublicFeedProblem;
 }
+
+export interface PublicFeedProblem {
+  at: string;
+  stage: string;
+}
+
+/** The error stages the ledger writes. Anything else is reported as "other"
+ *  so a corrupt or future stage string can never carry prose to the feed. */
+const KNOWN_STAGES = new Set(["buy", "attester", "record", "settle", "approval"]);
 
 /** Runtime string check. The store returns whatever JSON it holds, so the
  *  redaction boundary is also the validation boundary: a corrupt field must
@@ -95,11 +109,23 @@ export function toPublicFeedClaim(
   let settle: PublicFeedSettle | null = null;
   let selfReported = false;
   let screen: PublicFeedScreen | undefined;
+  let problem: PublicFeedProblem | undefined;
   // --- world-agents ---
   let approval: PublicFeedApproval | null = null;
   // --- end world-agents ---
 
   for (const entry of ledger) {
+    // Progress after an error (a retry that got a verdict, a decision, a
+    // record, a settle or a human answer) means the claim moved on.
+    if (
+      entry.kind === "verdict" ||
+      entry.kind === "reason" ||
+      entry.kind === "record" ||
+      entry.kind === "settle" ||
+      entry.kind === "approval"
+    ) {
+      problem = undefined;
+    }
     switch (entry.kind) {
       case "screen":
         // The newest verdict wins: a hold that later cleared must read as
@@ -170,9 +196,20 @@ export function toPublicFeedClaim(
         };
         break;
       }
-      // plan and error entries carry prose (goal specs, engineer diagnostics)
-      // and never leave the server. verdict is handled above for its tier flag
-      // only; its reason prose is likewise never copied.
+      case "error": {
+        // The message is engineer prose and stays server-side; only the
+        // stage (a fixed vocabulary) crosses, so the feed can say a claim
+        // is stuck instead of implying a payout is on its way.
+        const stage = asString(entry.stage);
+        problem = {
+          at: entry.at,
+          stage: stage !== null && KNOWN_STAGES.has(stage) ? stage : "other",
+        };
+        break;
+      }
+      // plan entries carry prose (goal specs) and never leave the server.
+      // verdict is handled above for its tier flag only; its reason prose is
+      // likewise never copied.
       default:
         break;
     }
@@ -191,5 +228,9 @@ export function toPublicFeedClaim(
     // --- end world-agents ---
   };
   if (screen !== undefined) claim.screen = screen;
+  // A settled claim is done; an older error on its way there is history.
+  if (problem !== undefined && settle?.status !== "settled") {
+    claim.problem = problem;
+  }
   return claim;
 }

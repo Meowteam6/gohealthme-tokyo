@@ -257,4 +257,27 @@ describe("toPublicFeedClaim", () => {
     // The tier flag crosses, but the verdict prose never does.
     expect(JSON.stringify(claim)).not.toContain("gym selfie");
   });
+
+  it("flags a stalled claim by stage only, never the error prose", () => {
+    const ledger: LedgerEntry[] = [
+      { kind: "reason", at: AT, decision: "pay", note: REASON_PROSE, ref: "a1" },
+      { kind: "error", at: "2026-08-01T00:01:00.000Z", stage: "settle", message: ERROR_PROSE },
+    ];
+    const claim = toPublicFeedClaim(GOAL, AT, ledger);
+    expect(claim.problem).toEqual({ at: "2026-08-01T00:01:00.000Z", stage: "settle" });
+    expect(JSON.stringify(claim)).not.toContain("canSettle");
+  });
+
+  it("maps an unknown stage to other, and clears the flag once the claim moves on", () => {
+    const stuck = toPublicFeedClaim(GOAL, AT, [
+      { kind: "error", at: AT, stage: "WORLD_SIGNING_KEY missing", message: "x" },
+    ]);
+    expect(stuck.problem?.stage).toBe("other");
+
+    const recovered = toPublicFeedClaim(GOAL, AT, [
+      { kind: "error", at: AT, stage: "attester", message: "x" },
+      { kind: "reason", at: AT, decision: "pay", note: "n", ref: "a2" },
+    ]);
+    expect(recovered.problem).toBeUndefined();
+  });
 });
