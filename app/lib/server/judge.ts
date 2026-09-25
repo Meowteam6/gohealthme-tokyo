@@ -48,7 +48,7 @@ import {
   type Hex,
 } from "viem";
 import type { Modality } from "@/lib/contract";
-import { optionalEnv } from "@/lib/server/env";
+import { demoModeEnabled, optionalEnv } from "@/lib/server/env";
 import {
   isRetryableStatus,
   isTransportError,
@@ -318,8 +318,10 @@ export function isFailId(id: string): boolean {
  * unverified result instead of minting a free verified verdict.
  */
 function demoMode(): boolean {
-  const value = optionalEnv("DEMO_MODE", "").toLowerCase();
-  return value === "true" || value === "1";
+  // Refused on VERCEL_ENV=production (lib/server/env.ts): a production
+  // deployment serves real beta users, so it verifies documents with the real
+  // attester or fails closed. Mock verdicts stay for tests, local and preview.
+  return demoModeEnabled();
 }
 
 const SYSTEM_PROMPT =
@@ -784,7 +786,7 @@ function mockVerdict(goalSpec: string): Verdict {
   return {
     verified: true,
     confidence: "high",
-    reason: `Mock attester: assuming the uploaded document satisfies the goal '${goal}'. Set CONFIDENTIAL_AI_API_KEY for a real TEE verdict.`,
+    reason: `Mocked verification (test build only, never real users): assuming the uploaded document satisfies the goal '${goal}'. No attester read it.`,
   };
 }
 

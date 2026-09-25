@@ -58,7 +58,7 @@ function useStubWallet(): EmbeddedWalletState {
     logout: async () => {},
     getArcWalletClient: async () => {
       throw new Error(
-        "Dynamic is not configured. Set NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID to enable wallets.",
+        "Sign-in is not set up on this build yet, so no wallet can sign.",
       );
     },
   };

@@ -14,7 +14,7 @@
 import { type Hex, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcPublicClient, arcWalletClient } from "@/lib/server/arc-client";
-import { requireEnv } from "@/lib/server/env";
+import { requireEnv, requireHealthPoolsAddress } from "@/lib/server/env";
 
 const HEALTH_POOLS_ABI = [
   {
@@ -68,7 +68,7 @@ export async function recordResult(
   verdict: boolean,
   multiplierBps: bigint,
 ): Promise<Hex> {
-  const contract = requireEnv("HEALTH_POOLS_ADDRESS") as Address;
+  const contract = requireHealthPoolsAddress() as Address;
   const account = oracleAccount();
   const wallet = arcWalletClient(account);
   const publicClient = arcPublicClient();

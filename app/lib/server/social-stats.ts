@@ -27,8 +27,9 @@ import {
 } from "@/lib/contract";
 import { proofTierFromVerdict, type ProofTier } from "@/lib/proof-tier";
 import { normalizeAddress } from "@/lib/social";
-import { optionalEnv } from "@/lib/server/env";
 import { scanInWindows, poolsScanFromBlock } from "@/lib/server/chunked-logs";
+import { poolVerdictRegistry } from "@/lib/server/verdict";
+import { readLedger, type LedgerEntry } from "@/lib/server/agent/ledger";
 
 export interface SocialWin {
   /** ISO-8601 block time, or "" when the block time could not be read. */
@@ -55,6 +56,10 @@ export interface SocialStats {
   poolsJoined: number;
   winStreak: number;
   recentWins: SocialWin[]; // newest first, capped at WINS_LIMIT
+  /** False when the chain could not be read (no pools contract on this build,
+   *  or a failed scan). The counters are then zeros that mean "unknown", and
+   *  the profile must say so instead of printing them as fact. */
+  readable: boolean;
 }
 
 export const EMPTY_STATS: SocialStats = {
@@ -65,7 +70,11 @@ export const EMPTY_STATS: SocialStats = {
   poolsJoined: 0,
   winStreak: 0,
   recentWins: [],
+  readable: true,
 };
+
+/** Zeros that mean "could not read", never "nothing happened". */
+const UNREADABLE_STATS: SocialStats = { ...EMPTY_STATS, readable: false };
 
 // How many recent payout rows the paid-wall shows. Block timestamps for these
 // are fetched one block at a time, so the cap also bounds that fan-out.
@@ -132,9 +141,16 @@ async function resolveBlockTimes(
  * bitmap says whether the win is verified-tier or the low-trust self-reported
  * tier (bitmap 0). No getLogs — this is a plain view read per distinct pool.
  *
- * Best-effort and fail-safe: with the registry unset, or on any read failure,
- * the pool is left OUT of the map and the caller treats it as "unknown" (never
- * verified). A win is only ever counted as verified when the chain proves it.
+ * Which record decides the tier follows the pool contract itself, never an
+ * env var (the V3 P19 pattern): poolVerdictRegistry() reads the pool's own
+ * healthVerdict(). With a registry, its facet bitmap decides. An oracle-only
+ * pool (healthVerdict() == 0x0, V4's default) has no on-chain bitmap at all,
+ * so the tier comes from SPOTTER's own ledger verdict for that goal (the
+ * selfReported flag it wrote when it verified the claim).
+ *
+ * Best-effort and fail-safe: on any read failure, or with no passing verdict
+ * on record, the pool is left OUT of the map and the caller treats it as
+ * "unknown" (never verified).
  */
 async function achieverTierByPool(
   poolsAddress: Address,
@@ -142,13 +158,18 @@ async function achieverTierByPool(
   achieverPoolIds: bigint[],
 ): Promise<Map<string, ProofTier>> {
   const out = new Map<string, ProofTier>();
-  const registry = optionalEnv("HEALTH_VERDICT_ADDRESS", "");
-  if (registry === "" || !/^0x[0-9a-fA-F]{40}$/.test(registry)) return out;
-
   const distinct = Array.from(
     new Set(achieverPoolIds.map((id) => id.toString())),
   ).map((s) => BigInt(s));
   if (distinct.length === 0) return out;
+
+  let registry: Address | null;
+  try {
+    registry = await poolVerdictRegistry(poolsAddress);
+  } catch (err) {
+    console.warn("[social-stats] healthVerdict() read failed; tiers unknown", err);
+    return out;
+  }
 
   const client = getArcPublicClient();
   await Promise.all(
@@ -160,16 +181,21 @@ async function achieverTierByPool(
           functionName: "computeGoalId",
           args: [poolId, account],
         })) as Hex;
-        const verdict = await client.readContract({
-          address: registry as Address,
-          abi: healthVerdictReadAbi,
-          functionName: "getVerdict",
-          args: [goalId],
-        });
-        out.set(
-          poolId.toString(),
-          proofTierFromVerdict(verdict.verified, Number(verdict.bitmap)),
-        );
+        if (registry !== null) {
+          const verdict = await client.readContract({
+            address: registry,
+            abi: healthVerdictReadAbi,
+            functionName: "getVerdict",
+            args: [goalId],
+          });
+          out.set(
+            poolId.toString(),
+            proofTierFromVerdict(verdict.verified, Number(verdict.bitmap)),
+          );
+          return;
+        }
+        const tier = tierFromLedger(await readLedger(goalId));
+        if (tier !== null) out.set(poolId.toString(), tier);
       } catch {
         // Leave this pool out; the caller reads it as "unknown" (not verified).
       }
@@ -178,14 +204,28 @@ async function achieverTierByPool(
   return out;
 }
 
+/** The tier of SPOTTER's newest PASSING verdict for a goal, or null when the
+ *  ledger holds none. Exported for tests. */
+export function tierFromLedger(entries: LedgerEntry[]): ProofTier | null {
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const entry = entries[i];
+    if (entry.kind === "verdict" && entry.verified === true) {
+      return entry.selfReported === true ? "self-reported" : "verified";
+    }
+  }
+  return null;
+}
+
 /**
  * Compute a wallet's public stats. Never throws: a dead RPC or a rejected log
- * query yields zeroed counters so the profile still renders its identity, and
- * the failure is loud server-side only.
+ * query yields zeroed counters with readable: false, so the profile still
+ * renders its identity and says the stats could not be read (never prints the
+ * zeros as fact). The failure is logged server-side. A failed read is not
+ * cached, so the next view retries.
  */
 export async function getSocialStats(rawAddress: string): Promise<SocialStats> {
   const lower = normalizeAddress(rawAddress);
-  if (lower === null) return EMPTY_STATS;
+  if (lower === null) return UNREADABLE_STATS;
 
   const cached = cache.get(lower);
   if (cached !== undefined && Date.now() - cached.at < CACHE_TTL_MS) {
@@ -193,7 +233,7 @@ export async function getSocialStats(rawAddress: string): Promise<SocialStats> {
   }
 
   const poolsAddress = getHealthPoolsAddress();
-  if (poolsAddress === null) return EMPTY_STATS;
+  if (poolsAddress === null) return UNREADABLE_STATS;
   const account = getAddress(lower) as Address;
   const client = getArcPublicClient();
   const start = poolsScanFromBlock();
@@ -309,12 +349,13 @@ export async function getSocialStats(rawAddress: string): Promise<SocialStats> {
       poolsJoined: joined.length,
       winStreak: streak,
       recentWins,
+      readable: true,
     };
 
     cache.set(lower, { at: Date.now(), stats });
     return stats;
   } catch (err) {
     console.error("[social-stats] log scan failed", err);
-    return EMPTY_STATS;
+    return UNREADABLE_STATS;
   }
 }

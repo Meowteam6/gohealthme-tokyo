@@ -7,7 +7,7 @@
 
 import { getCircleClient, getSpotterWallet, getSpotterUsdcBalance } from "@/lib/server/agent/wallet";
 import { arcAddressUrl } from "@/lib/chains";
-import { errorMessage, jsonError } from "@/lib/server/http";
+import { jsonError, newCorrelationId, safeError } from "@/lib/server/http";
 
 export async function GET() {
   try {
@@ -23,6 +23,6 @@ export async function GET() {
       explorerUrl: arcAddressUrl(wallet.address),
     });
   } catch (err) {
-    return jsonError(500, errorMessage(err));
+    return jsonError(500, safeError(err, newCorrelationId("agent-wallet")));
   }
 }

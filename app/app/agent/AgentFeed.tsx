@@ -13,16 +13,27 @@ import { baseTxUrl } from "@/lib/chains";
 import { toUsd2 } from "@/lib/agent-receipt";
 import type { PublicFeedClaim } from "@/lib/server/agent/feed-view";
 import { settleMomentLine } from "@/components/AgentReceipt";
-import { EmptyState, Money, Skeleton } from "@/components/ui";
+import { EmptyState, ErrorNote, Money, Skeleton } from "@/components/ui";
 import SpotterSays from "@/components/SpotterSays";
 
-// Where the empty state sends a first-time visitor. Pool 13 is picked
-// deliberately: it is a [doc] pool with bountyModel = 1 (pro-rata split) and a
-// funded balance, so a verified claim actually pays. The bountyModel = 0 pools
-// were created with entryFee = 0, which makes totalOwed zero and settles to
-// nobody - never point this at one of those. Verify the pool is still unsettled
-// with periodEnd in the future before a demo.
-const CLAIMABLE_POOL_ID = 13;
+// The feed's human-readable stage names for a stalled claim. The feed-view
+// only ever sends this fixed vocabulary (or "other"), never error prose.
+const STAGE_LABEL: Record<string, string> = {
+  buy: "buying the check",
+  attester: "reading the evidence",
+  record: "recording the result on-chain",
+  settle: "settling the pool",
+  approval: "the payout confirmation",
+  other: "an internal step",
+};
+
+const APPROVAL_LINE: Record<string, string> = {
+  requested: "asked the winner to confirm the payout",
+  approved: "winner confirmed the payout",
+  declined: "winner declined, nothing moved",
+  expired: "confirmation window closed, nothing moved",
+  cancelled: "confirmation cancelled, nothing moved",
+};
 
 function shortGoal(goalId: string): string {
   return `${goalId.slice(0, 10)}…${goalId.slice(-6)}`;
@@ -99,6 +110,29 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
         ) : deferredLine !== null ? (
           <p className="text-xs text-muted">{deferredLine}</p>
         ) : null}
+        {claim.approval !== null ? (
+          <p className="text-xs text-muted">
+            {APPROVAL_LINE[claim.approval.status] ?? claim.approval.status}
+            {claim.approval.provider === "mock" ? (
+              <span className="ml-2 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
+                mocked World ID
+              </span>
+            ) : null}
+          </p>
+        ) : null}
+        {claim.screen !== undefined && claim.screen.status !== "clear" ? (
+          <p className="text-xs text-warning">
+            {claim.screen.status === "blocked"
+              ? "payout held: the wallet failed screening"
+              : "payout held: screening could not answer yet"}
+          </p>
+        ) : null}
+        {claim.problem !== undefined ? (
+          <p className="text-xs text-warning">
+            SPOTTER hit a problem at {STAGE_LABEL[claim.problem.stage] ?? STAGE_LABEL.other}.
+            Nothing has been paid on this claim yet.
+          </p>
+        ) : null}
       </div>
     </li>
   );
@@ -109,7 +143,9 @@ export default function AgentFeed() {
     queryKey: ["agent-feed"],
     queryFn: async (): Promise<PublicFeedClaim[]> => {
       const res = await fetch("/api/agent/feed");
-      if (!res.ok) return [];
+      // A failed read is an error, never an empty ledger: "SPOTTER has done
+      // nothing yet" must only ever mean exactly that.
+      if (!res.ok) throw new Error(`agent feed ${res.status}`);
       const body = (await res.json()) as { claims?: PublicFeedClaim[] };
       return body.claims ?? [];
     },
@@ -122,6 +158,12 @@ export default function AgentFeed() {
       <h2 className="font-display text-lg font-bold">Recent claims</h2>
       {feed.isPending ? (
         <Skeleton className="h-24 w-full" />
+      ) : feed.isError && feed.data === undefined ? (
+        <ErrorNote
+          title="Could not read SPOTTER's claims right now."
+          detail="This is a read problem on our side, not an empty ledger. It retries on its own."
+          onRetry={() => void feed.refetch()}
+        />
       ) : feed.data !== undefined && feed.data.length > 0 ? (
         <ol className="space-y-3">
           {feed.data.map((claim) => (
@@ -133,10 +175,10 @@ export default function AgentFeed() {
           <SpotterSays surface="agent-empty" state="empty" size="md" />
           <EmptyState
             title="SPOTTER has done nothing yet."
-            detail="Join a pool, upload a record, and SPOTTER buys the verification and pays out here."
+            detail="Join a run and prove it, from your wearable or an uploaded record, and SPOTTER checks it and pays out here."
             action={
               <Link
-                href={`/pools/${CLAIMABLE_POOL_ID}`}
+                href="/pools"
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 Give it something to verify

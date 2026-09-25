@@ -17,21 +17,40 @@ describe("documentProofStatus", () => {
     expect(documentProofStatus()).toEqual({
       available: false,
       reason: "no document verifier is configured",
+      mocked: false,
     });
   });
 
   it("is available when an attester key is set", () => {
     vi.stubEnv("CONFIDENTIAL_AI_API_KEY", "key-1");
     vi.stubEnv("DEMO_MODE", "");
-    expect(documentProofStatus().available).toBe(true);
+    expect(documentProofStatus()).toMatchObject({ available: true, mocked: false });
   });
 
-  it("is available in DEMO_MODE, and says so", () => {
+  it("is available in DEMO_MODE off production, and says it is mocked", () => {
     vi.stubEnv("CONFIDENTIAL_AI_API_KEY", "");
     vi.stubEnv("DEMO_MODE", "true");
+    vi.stubEnv("VERCEL_ENV", "preview");
     expect(documentProofStatus()).toEqual({
       available: true,
-      reason: "DEMO_MODE: verdicts are mocked",
+      reason: "verdicts on this test build are mocked",
+      mocked: true,
     });
+  });
+
+  it("refuses DEMO_MODE on a production deployment: fails closed, no env name in the reason", () => {
+    vi.stubEnv("CONFIDENTIAL_AI_API_KEY", "");
+    vi.stubEnv("DEMO_MODE", "true");
+    vi.stubEnv("VERCEL_ENV", "production");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const status = documentProofStatus();
+    expect(status).toEqual({
+      available: false,
+      reason: "no document verifier is configured",
+      mocked: false,
+    });
+    expect(status.reason).not.toMatch(/[A-Z]{2,}_[A-Z]/);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

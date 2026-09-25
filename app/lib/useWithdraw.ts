@@ -7,6 +7,7 @@ import {
   getArcPublicClient,
   getHealthPoolsAddress,
   healthPoolsAbi,
+  POOLS_NOT_CONFIGURED_COPY,
 } from "@/lib/contract";
 import { humanizeTxError } from "@/lib/tx-errors";
 import { useEmbeddedWallet } from "@/lib/wallet";
@@ -95,7 +96,7 @@ export function useWithdraw(): UseWithdrawResult {
     const poolsAddress = getHealthPoolsAddress();
     if (poolsAddress === null) {
       const message =
-        "HealthPools contract address is not configured. Set NEXT_PUBLIC_HEALTH_POOLS_ADDRESS.";
+        POOLS_NOT_CONFIGURED_COPY;
       setStatus({ kind: "error", message });
       throw new Error(message);
     }

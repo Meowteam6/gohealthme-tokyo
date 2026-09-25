@@ -1,9 +1,21 @@
 // The human <-> wallet binding: one human, one wallet; one wallet, one human.
 //
-// STORAGE (lib/server/store.ts primitives only):
+// STORAGE (lib/server/store.ts primitives only), per namespace <ns>
+// ("mock", "live-staging", "live-production"; see config.ts):
 //
-//   world:nullifier:<nullifierHash>.json   { address }   the human's wallet
-//   world:human:<addr>.json                HumanRecord   the wallet's human
+//   world:<ns>:nullifier:<nullifierHash>.json   { address }   the human's wallet
+//   world:<ns>:human:<addr>.json                HumanRecord   the wallet's human
+//
+// A record in one namespace never answers a read in another. That is the
+// whole point: a preview and production can share one KV, and a mock identity
+// typed on the preview must never count as a real human on production.
+//
+// LEGACY keys (world:nullifier:..., world:human:..., written before the
+// namespaces existed) are still honoured so nobody already verified is sent
+// back through the step, but only where they can have come from: a legacy
+// record with mode "mock" belongs to "mock", one with mode "live" to
+// "live-staging" (production never ran World before the split). The
+// "live-production" namespace never reads a legacy key.
 //
 // Every bind runs under ONE named lock (store.withLock, SET NX PX in Redis
 // and a process-local map in the file fallback), so the read-check-write
@@ -28,7 +40,13 @@
 
 import { getAddress, isAddress } from "viem";
 import { readJson, withLock, writeJson } from "@/lib/server/store";
-import type { WorldMode } from "@/lib/server/world/config";
+import {
+  namespaceFor,
+  worldEnvironment,
+  worldNamespace,
+  type WorldMode,
+  type WorldNamespace,
+} from "@/lib/server/world/config";
 import type { ProtocolVersion } from "@/lib/server/world/payload";
 
 export interface HumanRecord {
@@ -65,6 +83,9 @@ export type BindResult =
 export interface HumanStatusView {
   human: "verified" | "unverified";
   verifiedAt?: string;
+  /** The mode the RECORD was proven in (not the deployment's), so a mocked
+   *  verification is always labelled as mocked. */
+  proofMode?: Exclude<WorldMode, "off">;
 }
 
 /** One lock for every bind. A bind is a handful of small reads and writes,
@@ -72,11 +93,68 @@ export interface HumanStatusView {
 const BIND_LOCK = "world-bind";
 const BIND_LOCK_TTL_MS = 5_000;
 
-function nullifierKey(nullifierHash: string): string {
+function nullifierKey(ns: WorldNamespace, nullifierHash: string): string {
+  return `world:${ns}:nullifier:${nullifierHash}.json`;
+}
+function recordKey(ns: WorldNamespace, lowerAddress: string): string {
+  return `world:${ns}:human:${lowerAddress}.json`;
+}
+function legacyNullifierKey(nullifierHash: string): string {
   return `world:nullifier:${nullifierHash}.json`;
 }
-function recordKey(lowerAddress: string): string {
+function legacyRecordKey(lowerAddress: string): string {
   return `world:human:${lowerAddress}.json`;
+}
+
+/** The namespace a legacy record belongs to (see the header). */
+function legacyNamespaceOf(mode: unknown): WorldNamespace | null {
+  if (mode === "mock") return "mock";
+  if (mode === "live") return "live-staging";
+  return null;
+}
+
+/** The wallet's record in `ns`, falling back to a legacy record that belongs
+ *  to `ns`. */
+async function readRecord(
+  ns: WorldNamespace,
+  lower: string,
+): Promise<HumanRecord | null> {
+  const current = await readJson<HumanRecord | null>(recordKey(ns, lower), null);
+  if (current !== null || ns === "live-production") return current;
+  const legacy = await readJson<HumanRecord | null>(legacyRecordKey(lower), null);
+  if (legacy === null || legacyNamespaceOf(legacy.mode) !== ns) return null;
+  return legacy;
+}
+
+/** The nullifier holder in `ns`, falling back to a legacy holder whose own
+ *  record belongs to `ns`. A legacy holder with no record (a crash between the
+ *  two writes) is honoured in both pre-split namespaces, so the uniqueness
+ *  guard never opens a gap. */
+async function readHolder(
+  ns: WorldNamespace,
+  nullifierHash: string,
+): Promise<NullifierRecord | null> {
+  const current = await readJson<NullifierRecord | null>(
+    nullifierKey(ns, nullifierHash),
+    null,
+  );
+  if (current !== null || ns === "live-production") return current;
+  const legacy = await readJson<NullifierRecord | null>(
+    legacyNullifierKey(nullifierHash),
+    null,
+  );
+  if (legacy === null || typeof legacy.address !== "string") return null;
+  const legacyRecord = await readJson<HumanRecord | null>(
+    legacyRecordKey(legacy.address.toLowerCase()),
+    null,
+  );
+  if (legacyRecord === null) return legacy;
+  return legacyNamespaceOf(legacyRecord.mode) === ns ? legacy : null;
+}
+
+/** The namespace a read uses: the caller's, else this deployment's. */
+function resolveNamespace(ns: WorldNamespace | undefined): WorldNamespace | null {
+  return ns ?? worldNamespace();
 }
 
 function shortAddress(address: string): string {
@@ -86,11 +164,11 @@ function shortAddress(address: string): string {
 /** The wallet a nullifier is bound to, checksummed, or null. */
 export async function walletForHuman(
   nullifierHash: string,
+  namespace?: WorldNamespace,
 ): Promise<string | null> {
-  const holder = await readJson<NullifierRecord | null>(
-    nullifierKey(nullifierHash),
-    null,
-  );
+  const ns = resolveNamespace(namespace);
+  if (ns === null) return null;
+  const holder = await readHolder(ns, nullifierHash);
   return holder === null ? null : getAddress(holder.address);
 }
 
@@ -99,15 +177,22 @@ export async function bindHuman(params: {
   nullifierHash: string;
   mode: Exclude<WorldMode, "off">;
   protocolVersion: ProtocolVersion;
+  /** Defaults to the mode's namespace in this deployment's World environment. */
+  namespace?: WorldNamespace;
   now?: () => number;
 }): Promise<BindResult> {
   const now = params.now ?? Date.now;
   const address = getAddress(params.address);
   const lower = address.toLowerCase();
   const { nullifierHash } = params;
+  const ns = params.namespace ?? namespaceFor(params.mode, worldEnvironment());
+  if ((ns === "mock") !== (params.mode === "mock")) {
+    // A mock proof can never be written where live reads, or the reverse.
+    throw new Error(`bindHuman: mode ${params.mode} cannot bind in namespace ${ns}`);
+  }
 
   return withLock(BIND_LOCK, BIND_LOCK_TTL_MS, async (): Promise<BindResult> => {
-    const existing = await readJson<HumanRecord | null>(recordKey(lower), null);
+    const existing = await readRecord(ns, lower);
     if (existing !== null && existing.nullifierHash !== nullifierHash) {
       return {
         ok: false,
@@ -118,10 +203,7 @@ export async function bindHuman(params: {
       };
     }
 
-    const holder = await readJson<NullifierRecord | null>(
-      nullifierKey(nullifierHash),
-      null,
-    );
+    const holder = await readHolder(ns, nullifierHash);
     if (holder !== null && holder.address.toLowerCase() !== lower) {
       const otherWallet = getAddress(holder.address);
       return {
@@ -141,7 +223,7 @@ export async function bindHuman(params: {
     const verifiedAt = new Date(now()).toISOString();
     // Uniqueness guard first (see the header for why).
     if (holder === null) {
-      await writeJson<NullifierRecord>(nullifierKey(nullifierHash), {
+      await writeJson<NullifierRecord>(nullifierKey(ns, nullifierHash), {
         address,
         verifiedAt,
       });
@@ -153,25 +235,36 @@ export async function bindHuman(params: {
       mode: params.mode,
       protocolVersion: params.protocolVersion,
     };
-    await writeJson(recordKey(lower), record);
+    await writeJson(recordKey(ns, lower), record);
     return { ok: true, record, created: true };
   });
 }
 
+/** The wallet's human record in `namespace` (default: this deployment's).
+ *  Null when prove-human is off, the address is not one, or nothing is bound. */
 export async function getHumanRecord(
   address: string,
+  namespace?: WorldNamespace,
 ): Promise<HumanRecord | null> {
   if (!isAddress(address)) return null;
-  return readJson<HumanRecord | null>(recordKey(address.toLowerCase()), null);
+  const ns = resolveNamespace(namespace);
+  if (ns === null) return null;
+  return readRecord(ns, address.toLowerCase());
 }
 
-/** True when this wallet is bound to a human. */
-export async function isVerifiedHuman(address: string): Promise<boolean> {
-  return (await getHumanRecord(address)) !== null;
+/** True when this wallet is bound to a human in this deployment's namespace. */
+export async function isVerifiedHuman(
+  address: string,
+  namespace?: WorldNamespace,
+): Promise<boolean> {
+  return (await getHumanRecord(address, namespace)) !== null;
 }
 
-export async function humanStatus(address: string): Promise<HumanStatusView> {
-  const record = await getHumanRecord(address);
+export async function humanStatus(
+  address: string,
+  namespace?: WorldNamespace,
+): Promise<HumanStatusView> {
+  const record = await getHumanRecord(address, namespace);
   if (record === null) return { human: "unverified" };
-  return { human: "verified", verifiedAt: record.verifiedAt };
+  return { human: "verified", verifiedAt: record.verifiedAt, proofMode: record.mode };
 }

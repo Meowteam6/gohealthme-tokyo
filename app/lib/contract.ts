@@ -12,6 +12,7 @@ import {
 import { baseSepolia } from "@/lib/chains";
 import { poolsScanFromBlock } from "@/lib/server/chunked-logs";
 import { proofTierFromVerdict, type ProofTier } from "@/lib/proof-tier";
+import { isFrozenV3Pools } from "@/lib/frozen-pools";
 
 export { proofTierFromVerdict, type ProofTier };
 
@@ -27,11 +28,21 @@ export const USDC_DECIMALS = 6;
  * HealthPools deployment address. Set NEXT_PUBLIC_HEALTH_POOLS_ADDRESS once
  * the contract agent deploys; pages surface a visible configuration error
  * until then rather than failing silently.
+ *
+ * The frozen V3 pilot address is refused (null, the same "not configured"
+ * state every surface already renders honestly): V4 must never show V3 users'
+ * activity as its own, or let a V4 player join or fund a V3 pool.
  */
 export function getHealthPoolsAddress(): Address | null {
   const raw = process.env.NEXT_PUBLIC_HEALTH_POOLS_ADDRESS;
   if (raw === undefined || raw === "") return null;
   if (!/^0x[0-9a-fA-F]{40}$/.test(raw)) return null;
+  if (isFrozenV3Pools(raw)) {
+    console.error(
+      "NEXT_PUBLIC_HEALTH_POOLS_ADDRESS is the frozen V3 pilot contract; refusing it. Point it at the Tokyo HealthPoolsV3.",
+    );
+    return null;
+  }
   return raw as Address;
 }
 
@@ -456,12 +467,18 @@ export interface ParticipantInfo {
   multiplierBps: number;
 }
 
+/** What a player reads when this build has no pools contract. Plain words:
+ *  the env var name goes to the console, never onto the screen. */
+export const POOLS_NOT_CONFIGURED_COPY =
+  "Runs are not open on this build yet. Nothing was sent.";
+
 export class ContractNotConfiguredError extends Error {
   constructor() {
-    super(
-      "HealthPools contract address is not configured. Set NEXT_PUBLIC_HEALTH_POOLS_ADDRESS and redeploy.",
-    );
+    super(POOLS_NOT_CONFIGURED_COPY);
     this.name = "ContractNotConfiguredError";
+    console.error(
+      "HealthPools contract address is not configured (or is the refused V3 address). Set NEXT_PUBLIC_HEALTH_POOLS_ADDRESS to the Tokyo HealthPoolsV3 and redeploy.",
+    );
   }
 }
 

@@ -62,10 +62,13 @@ export default function SponsorPoolOutcome({
   pool,
   aggregate,
   nowSeconds,
+  outcomesUnavailable = false,
 }: {
   pool: PoolInfo;
   aggregate: PoolAggregate;
   nowSeconds: bigint;
+  /** The outcome scan failed: event-derived figures are unknown, not zero. */
+  outcomesUnavailable?: boolean;
 }) {
   const [showTopUp, setShowTopUp] = useState(false);
   const d = poolOutcomeDisplay(aggregate);
@@ -107,12 +110,28 @@ export default function SponsorPoolOutcome({
           <Money usd={formatUsdc(d.balanceUsdc)} />
         </WellStat>
         <WellStat label="You funded">
-          <Money usd={formatUsdc(d.toppedUpUsdc)} />
+          {outcomesUnavailable ? (
+            <span className="text-sm text-muted">Could not read</span>
+          ) : (
+            <Money usd={formatUsdc(d.toppedUpUsdc)} />
+          )}
         </WellStat>
       </div>
 
-      {/* Outcomes: gated by the k-anonymity floor. */}
-      {d.belowFloor ? (
+      {/* Outcomes: gated by the k-anonymity floor. A failed read says so
+          instead of falling through to "fewer than five". */}
+      {outcomesUnavailable ? (
+        <div
+          role="status"
+          className="rounded-2xl border border-dashed border-warning/50 bg-surface-raised p-4"
+        >
+          <p className="text-sm font-semibold">Outcomes could not be read right now</p>
+          <p className="mt-1 text-sm text-muted">
+            Joined, completion and payout figures come back when the outcome
+            read works again. The balance above is live.
+          </p>
+        </div>
+      ) : d.belowFloor ? (
         <div className="rounded-2xl border border-dashed border-edge bg-surface-raised p-4">
           <p className="inline-flex items-center gap-1.5 text-sm font-semibold">
             <Icon name="eyeOff" className="h-4 w-4 text-muted" />

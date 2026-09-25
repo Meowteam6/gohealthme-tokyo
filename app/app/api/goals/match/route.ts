@@ -5,8 +5,8 @@
 // load-bearing. Scores are token overlap between the query and each pool's
 // initiative + goal text; unfunded and settled pools rank last.
 
-import { fetchPools } from "@/lib/contract";
-import { errorMessage, jsonError } from "@/lib/server/http";
+import { ContractNotConfiguredError, fetchPools } from "@/lib/contract";
+import { jsonError, newCorrelationId, safeError } from "@/lib/server/http";
 
 const STOP_WORDS = new Set([
   "a", "an", "and", "at", "be", "do", "for", "get", "going", "i", "in",
@@ -55,6 +55,11 @@ export async function GET(request: Request) {
 
     return Response.json({ matches });
   } catch (err) {
-    return jsonError(500, errorMessage(err));
+    const cid = newCorrelationId("goals-match");
+    if (err instanceof ContractNotConfiguredError) {
+      console.error(`[${cid}] ${err.message}`);
+      return jsonError(503, "Runs are not open on this build yet.");
+    }
+    return jsonError(500, safeError(err, cid));
   }
 }

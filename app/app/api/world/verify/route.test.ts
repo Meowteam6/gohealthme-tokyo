@@ -195,7 +195,7 @@ describe("POST /api/world/verify (event mode)", () => {
       await signedHeaders(A),
     );
     expect(res.status).toBe(503);
-    expect((await res.json()).error).toMatch(/not enabled/);
+    expect((await res.json()).error).toMatch(/not switched on/);
     expect(await statusOf(status, A.address)).toEqual({ human: "unverified", mode: "off" });
   });
 

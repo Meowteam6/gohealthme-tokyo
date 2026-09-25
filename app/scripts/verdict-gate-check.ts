@@ -10,10 +10,10 @@
 // non-zero only when the read itself fails.
 
 import { poolVerdictRegistry } from "../lib/server/verdict";
-import { requireEnv } from "../lib/server/env";
+import { requireHealthPoolsAddress } from "../lib/server/env";
 
 async function main(): Promise<void> {
-  const pools = requireEnv("HEALTH_POOLS_ADDRESS");
+  const pools = requireHealthPoolsAddress();
   const registry = await poolVerdictRegistry(pools as `0x${string}`);
 
   console.log(`pool:      ${pools}`);

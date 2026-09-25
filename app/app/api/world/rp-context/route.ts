@@ -13,22 +13,23 @@
 // opens (an expired one fails inside World App as rp_signature_expired).
 //
 // Response JSON, by mode (lib/server/world/config.ts):
-//   off   { mode: "off", problem: string | null }
+//   off   { mode: "off", problem: string }   (player copy, never env names)
 //   mock  { mode: "mock", action }                 (event mode, proofs mocked)
 //   live  { mode: "live", app_id, action, environment, rp_context? }
 //         rp_context = { rp_id, nonce, created_at, expires_at, signature }
 //         (POST only)
 
 import { signRequest } from "@worldcoin/idkit-core/signing";
-import { worldSetup } from "@/lib/server/world/config";
+import { playerWorldProblem, worldSetup } from "@/lib/server/world/config";
 import { jsonError, newCorrelationId, safeError } from "@/lib/server/http";
 
 export const runtime = "nodejs";
 
-function describe(mint: boolean) {
+function describe(mint: boolean, cid: string) {
   const setup = worldSetup();
   if (setup.mode === "off") {
-    return { mode: "off" as const, problem: setup.problem };
+    // Player copy only; the operator detail (env names) goes to the log.
+    return { mode: "off" as const, problem: playerWorldProblem(setup, cid) };
   }
   if (setup.mode === "mock") {
     return { mode: "mock" as const, action: setup.action };
@@ -36,7 +37,10 @@ function describe(mint: boolean) {
   const live = setup.live;
   if (live === null) {
     // worldSetup guarantees live is set for mode "live"; keep the type honest.
-    return { mode: "off" as const, problem: "live config missing" };
+    return {
+      mode: "off" as const,
+      problem: playerWorldProblem({ ...setup, problem: "live config missing" }, cid),
+    };
   }
   const base = {
     mode: "live" as const,
@@ -64,7 +68,7 @@ function describe(mint: boolean) {
 export async function GET() {
   const cid = newCorrelationId("world-rp-context");
   try {
-    return Response.json(describe(false));
+    return Response.json(describe(false, cid));
   } catch (err) {
     return jsonError(500, safeError(err, cid));
   }
@@ -73,7 +77,7 @@ export async function GET() {
 export async function POST() {
   const cid = newCorrelationId("world-rp-context");
   try {
-    return Response.json(describe(true));
+    return Response.json(describe(true, cid));
   } catch (err) {
     return jsonError(500, safeError(err, cid));
   }

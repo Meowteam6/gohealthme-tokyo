@@ -56,9 +56,22 @@ vi.mock("@/lib/contract", () => ({
   achieverPaidEvent: { name: "AchieverPaid" },
   poolJoinedEvent: { name: "PoolJoined" },
   resultRecordedEvent: { name: "ResultRecorded" },
+  healthPoolsAbi: [],
+  healthVerdictReadAbi: [],
 }));
 
-const { getSocialStats, clearSocialStatsCache } = await import(
+// V4 pools are oracle-only (healthVerdict() == 0x0): the tier comes from
+// SPOTTER's ledger, never from a HEALTH_VERDICT_ADDRESS env var.
+const poolVerdictRegistry = vi.fn<(pools: string) => Promise<string | null>>(async () => null);
+vi.mock("@/lib/server/verdict", () => ({
+  poolVerdictRegistry: (pools: string) => poolVerdictRegistry(pools),
+}));
+const readLedger = vi.fn<(goalId: string) => Promise<unknown[]>>(async () => []);
+vi.mock("@/lib/server/agent/ledger", () => ({
+  readLedger: (goalId: string) => readLedger(goalId),
+}));
+
+const { getSocialStats, clearSocialStatsCache, tierFromLedger } = await import(
   "@/lib/server/social-stats"
 );
 
@@ -104,6 +117,67 @@ describe("getSocialStats", () => {
     const stats = await getSocialStats("not-an-address");
     expect(stats.goalsHit).toBe(0);
     expect(stats.usdcEarned).toBe(0n);
+    expect(stats.readable).toBe(false);
     expect(fakeClient.getLogs).not.toHaveBeenCalled();
+  });
+
+  it("marks a successful read readable", async () => {
+    expect((await getSocialStats(ADDRESS)).readable).toBe(true);
+  });
+
+  it("marks a failed scan unreadable instead of presenting zeros as fact", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    fakeClient.getBlockNumber.mockRejectedValueOnce(new Error("rpc down"));
+    const stats = await getSocialStats(ADDRESS);
+    expect(stats.readable).toBe(false);
+    expect(stats.goalsHit).toBe(0);
+    // Not cached: the next view retries and reads the real numbers.
+    expect((await getSocialStats(ADDRESS)).readable).toBe(true);
+  });
+
+  it("takes an oracle-only pool's tier from SPOTTER's ledger verdict", async () => {
+    const withPool = fakeClient.getLogs.getMockImplementation();
+    fakeClient.getLogs.mockImplementation(async (arg: { event: { name: string } }) => {
+      if (arg.event.name === "AchieverPaid") {
+        return [
+          fakeLog({ amount: 1n, poolId: 1n }, 10, "0xp1"),
+          fakeLog({ amount: 1n, poolId: 2n }, 11, "0xp2"),
+          fakeLog({ amount: 1n, poolId: 3n }, 12, "0xp3"),
+        ];
+      }
+      return withPool!(arg);
+    });
+    (fakeClient as unknown as { readContract: unknown }).readContract = vi.fn(
+      async ({ args }: { args: [bigint, string] }) => `0xgoal${args[0].toString()}`,
+    );
+    readLedger.mockImplementation(async (goalId: string) => {
+      if (goalId === "0xgoal1") return [{ kind: "verdict", verified: true }];
+      if (goalId === "0xgoal2") return [{ kind: "verdict", verified: true, selfReported: true }];
+      return [];
+    });
+    const stats = await getSocialStats(ADDRESS);
+    expect(poolVerdictRegistry).toHaveBeenCalled();
+    expect(stats.verifiedWins).toBe(1);
+    expect(stats.selfReportedWins).toBe(1);
+    // Pool 3 has no passing ledger verdict: unknown, never counted verified.
+    expect(stats.goalsHit).toBe(3);
+    fakeClient.getLogs.mockImplementation(withPool!);
+  });
+});
+
+describe("tierFromLedger", () => {
+  it("reads the newest passing verdict and never promotes a self-reported one", () => {
+    expect(tierFromLedger([])).toBeNull();
+    expect(
+      tierFromLedger([
+        { kind: "verdict", at: "", verified: false, confidence: "low", reason: "", ref: "a" },
+      ]),
+    ).toBeNull();
+    expect(
+      tierFromLedger([
+        { kind: "verdict", at: "", verified: true, confidence: "high", reason: "", ref: "a" },
+        { kind: "verdict", at: "", verified: true, confidence: "high", reason: "", ref: "b", selfReported: true },
+      ]),
+    ).toBe("self-reported");
   });
 });

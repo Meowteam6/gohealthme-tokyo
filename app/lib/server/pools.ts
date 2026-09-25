@@ -14,7 +14,7 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import { optionalEnv, requireEnv } from "@/lib/server/env";
+import { optionalEnv, requireEnv, requireHealthPoolsAddress } from "@/lib/server/env";
 
 const HEALTH_POOLS_PARTICIPANT_ABI = [
   {
@@ -59,7 +59,7 @@ export async function participantJoined(
   poolId: bigint,
   user: Address,
 ): Promise<boolean> {
-  const pools = requireEnv("HEALTH_POOLS_ADDRESS") as Address;
+  const pools = requireHealthPoolsAddress() as Address;
   const publicClient = createPublicClient({
     chain: arcTestnet(),
     transport: http(),

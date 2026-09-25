@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 export interface ProofStatus {
-  document: { available: boolean; reason: string };
+  document: { available: boolean; reason: string; mocked?: boolean };
   wearable: { available: boolean };
 }
 

@@ -23,10 +23,18 @@ const CONCURRENCY = 6;
  * (~46.09M), so every windowed scan short-circuited to empty on Base - the
  * activity ticker and on-chain stats read nothing. Override with
  * HEALTH_POOLS_FROM_BLOCK once history grows enough to retune it.
+ *
+ * V4 (Tokyo) deploys its own HealthPoolsV3: set HEALTH_POOLS_FROM_BLOCK (server
+ * scans: activity ticker, profile stats, sponsor outcomes, pool funders) and
+ * NEXT_PUBLIC_HEALTH_POOLS_FROM_BLOCK (the browser's fallback pool scan, which
+ * cannot see server env) to that deploy block. Either one serves both sides
+ * when only one is set. The literal NEXT_PUBLIC_ access is what Next inlines.
  */
 export function poolsScanFromBlock(): bigint {
-  const raw = process.env.HEALTH_POOLS_FROM_BLOCK ?? "";
-  if (/^\d+$/.test(raw)) return BigInt(raw);
+  const server = (process.env.HEALTH_POOLS_FROM_BLOCK ?? "").trim();
+  if (/^\d+$/.test(server)) return BigInt(server);
+  const pub = (process.env.NEXT_PUBLIC_HEALTH_POOLS_FROM_BLOCK ?? "").trim();
+  if (/^\d+$/.test(pub)) return BigInt(pub);
   return 45_800_000n;
 }
 

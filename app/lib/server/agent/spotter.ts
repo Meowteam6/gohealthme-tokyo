@@ -34,7 +34,7 @@ import {
 } from "viem";
 import type { CircleDeveloperControlledWalletsClient } from "@circle-fin/developer-controlled-wallets";
 import { arcPublicClient, ttlCache } from "@/lib/server/arc-client";
-import { requireEnv } from "@/lib/server/env";
+import { requireEnv, requireHealthPoolsAddress } from "@/lib/server/env";
 import { errorMessage } from "@/lib/server/http";
 import { readJson, writeJson } from "@/lib/server/store";
 import type { Confidence } from "@/lib/server/judge";
@@ -264,7 +264,7 @@ export async function settlePoolAsSpotter(
   input: { poolId: bigint; goalId: Hex; participant: Address },
 ): Promise<SettleOutcome> {
   const now = deps.nowSeconds?.() ?? BigInt(Math.floor(Date.now() / 1000));
-  const pools = requireEnv("HEALTH_POOLS_ADDRESS");
+  const pools = requireHealthPoolsAddress();
 
   const state = await deps.reader.getPoolState(input.poolId);
   if (state.settled) {
@@ -425,7 +425,7 @@ export async function settleDuePoolAsSpotter(
   input: { poolId: bigint },
 ): Promise<DuePoolOutcome> {
   const now = deps.nowSeconds?.() ?? BigInt(Math.floor(Date.now() / 1000));
-  const pools = requireEnv("HEALTH_POOLS_ADDRESS");
+  const pools = requireHealthPoolsAddress();
 
   const state = await deps.reader.getPoolState(input.poolId);
   if (state.settled) return { status: "already-settled" };
@@ -491,7 +491,7 @@ export async function recordResultAsSpotter(
     multiplierBps: number;
   },
 ): Promise<RecordOutcome> {
-  const pools = requireEnv("HEALTH_POOLS_ADDRESS");
+  const pools = requireHealthPoolsAddress();
   if (await deps.reader.participantRecorded(input.poolId, input.user)) {
     return { status: "already-recorded" };
   }
@@ -787,7 +787,7 @@ export function arcReader(
   // makes into one JSON-RPC request, and survives one endpoint rate-limiting
   // us. A per-call client could do neither.
   const client = arcPublicClient();
-  const pools = () => requireEnv("HEALTH_POOLS_ADDRESS") as Address;
+  const pools = () => requireHealthPoolsAddress() as Address;
   // --- foundation ---
   // The registry address is the pool's own healthVerdict(), read from chain
   // and cached per pool address (verdict.ts). The three registry reads below

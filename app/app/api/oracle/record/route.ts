@@ -16,7 +16,13 @@ import { participantJoined } from "@/lib/server/pools";
 import { deriveMultiplierBps, recordResult } from "@/lib/server/oracle";
 import { recordVerdict, VERDICT_FACETS } from "@/lib/server/verdict";
 import { requireEnv } from "@/lib/server/env";
-import { errorMessage, jsonError, readJsonBody } from "@/lib/server/http";
+import {
+  errorMessage,
+  jsonError,
+  newCorrelationId,
+  readJsonBody,
+  safeError,
+} from "@/lib/server/http";
 
 function secretMatches(provided: string, expected: string): boolean {
   const a = Buffer.from(provided);
@@ -26,6 +32,7 @@ function secretMatches(provided: string, expected: string): boolean {
 }
 
 export async function POST(request: Request) {
+  const cid = newCorrelationId("oracle-record");
   try {
     const expected = requireEnv("ORACLE_API_SECRET");
     const provided = request.headers.get("x-oracle-secret");
@@ -93,7 +100,10 @@ export async function POST(request: Request) {
     } catch (err) {
       const message = errorMessage(err);
       if (!message.includes("ALREADY_RECORDED")) {
-        return jsonError(500, `Recording the result on-chain failed: ${message}`);
+        return jsonError(
+          500,
+          `Recording the result on-chain failed. ${safeError(err, cid)}`,
+        );
       }
     }
 
@@ -124,14 +134,14 @@ export async function POST(request: Request) {
       } catch (e) {
         const message = errorMessage(e);
         console.error(
-          `[oracle] registry write FAILED for pool ${String(poolId)} / ${address} — ` +
+          `[${cid}] [oracle] registry write FAILED for pool ${String(poolId)} / ${address} — ` +
             `participant is NOT settleable until this succeeds: ${message}`,
         );
         return jsonError(
           502,
           `Result recorded on-chain, but the Chainlink verdict registry write ` +
             `failed, so this goal cannot pay out yet. Retry this request — the ` +
-            `result is already recorded and will not be duplicated. (${message})`,
+            `result is already recorded and will not be duplicated. Reference ${cid}.`,
         );
       }
     }
@@ -143,6 +153,6 @@ export async function POST(request: Request) {
       streakDays: progress.streakDays,
     });
   } catch (err) {
-    return jsonError(500, errorMessage(err));
+    return jsonError(500, safeError(err, cid));
   }
 }

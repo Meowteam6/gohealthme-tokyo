@@ -12,6 +12,7 @@
 // can leak what anyone's goal actually is.
 
 import { useQuery } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ui";
 
 type ActivityType = "joined" | "funded" | "paid";
 
@@ -59,7 +60,7 @@ const META: Record<
 };
 
 export default function HeroActivityTicker() {
-  const { data } = useQuery({
+  const { data, isPending, isError } = useQuery({
     queryKey: ["hero-activity"],
     queryFn: async () => {
       const res = await fetch("/api/activity");
@@ -80,7 +81,22 @@ export default function HeroActivityTicker() {
         <p className="text-sm font-semibold text-muted">What just happened on chain</p>
       </div>
 
-      {events.length === 0 ? (
+      {isPending ? (
+        <div className="space-y-2" aria-busy="true" aria-label="Reading the chain">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      ) : isError && data === undefined ? (
+        // Only a confirmed empty answer may say "quiet". A failed read says so.
+        <div role="status" className="rounded-lg border-2 border-dashed border-warning/50 px-4 py-6">
+          <p className="text-sm font-bold text-foreground">
+            Could not read chain activity just now.
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            This is a read problem, not an empty chain. It tries again in a few seconds.
+          </p>
+        </div>
+      ) : events.length === 0 ? (
         <div className="rounded-lg border-2 border-dashed border-edge px-4 py-6">
           <p className="text-sm font-bold text-foreground">Quiet right now.</p>
           <p className="mt-1 text-sm text-muted">

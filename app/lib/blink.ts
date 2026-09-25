@@ -173,7 +173,7 @@ export class BlinkResolutionError extends Error {
 export class BlinkNotConfiguredError extends Error {
   constructor() {
     super(
-      "Blink is not configured. Set NEXT_PUBLIC_BLINK_USDC_ADDRESS and NEXT_PUBLIC_BLINK_MERCHANT_ADDRESS.",
+      "Card top-ups are not set up on this build yet.",
     );
     this.name = "BlinkNotConfiguredError";
   }
