@@ -1,66 +1,122 @@
 #!/usr/bin/env python3
-"""Import V3's production env into the V4 Vercel project (production + preview).
+"""Set the V4 Vercel project's env (production + preview) from sources that hold real values.
 
 Run by a founder from their own terminal (sessions may not write secrets into
-Vercel). Reads V3 via `vercel env pull`, drops what V4 must not inherit, and
-pushes each value with `vercel env add`. Prints only names, never values.
+Vercel). V3's Vercel secrets are Sensitive and come back EMPTY on `vercel env
+pull`, so they cannot be copied; this script uses what exists locally instead:
+
+  - app/.env.local of V4 (Dynamic env id, oracle key, Circle ids)
+  - contracts/.env PRIVATE_KEY (the 0xc278 deployer) as treasury and ENS owner
+  - the Supabase CLI for the GoHealthMe project's URL and keys
+  - generated values (CRON_SECRET) and known constants (Junction sandbox host)
+
+Anything that is missing or still a placeholder is listed at the end as a
+founder action. Prints names only, never values.
 """
+import json
 import os
 import re
+import secrets
 import subprocess
 import sys
-import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-V3_APP = os.path.expanduser("~/Desktop/eth/gohealthme-base/app")
-V4_APP = os.path.join(ROOT, "app")
+APP = os.path.join(ROOT, "app")
+SUPABASE_REF = "lynhrbkspjsmqzywfhht"  # the GoHealthMe project (testnet handles only)
+SPOTTER_SETTLER = "0x5BECa2BCe03ef2D8d91091744b2CfD6d1A5cd483"  # Circle EOA, read from V3 chain
 
-# Never inherit: V3's production database, V3's pool/registry, the beta bypass,
-# WHOOP (capped at 10 members), V3's token key (V4 has its own), build noise.
-SKIP = re.compile(
-    r"^(KV_|REDIS_URL|HEALTH_VERDICT_ADDRESS|HEALTH_POOLS_ADDRESS|"
-    r"NEXT_PUBLIC_HEALTH_POOLS_ADDRESS|NEXT_PUBLIC_ACCESS_GATE_DISABLED|WHOOP_|"
-    r"WEARABLE_TOKEN_KEY|VERCEL|NX_|TURBO_)"
-)
+# Shape checks so a placeholder is never pushed as if it were real.
+SHAPES = {
+    "ORACLE_SIGNER_PRIVATE_KEY": r"^(0x)?[0-9a-fA-F]{64}$",
+    "TREASURY_PRIVATE_KEY": r"^(0x)?[0-9a-fA-F]{64}$",
+    "ENS_OWNER_PRIVATE_KEY": r"^(0x)?[0-9a-fA-F]{64}$",
+    "CIRCLE_API_KEY": r"^(TEST|LIVE)_API_KEY:[0-9a-f]+:[0-9a-f]+$",
+    "CIRCLE_ENTITY_SECRET": r"^[0-9a-fA-F]{64}$",
+    "CIRCLE_WALLET_ID": r"^[0-9a-f-]{36}$",
+    "CIRCLE_WALLET_SET_ID": r"^[0-9a-f-]{36}$",
+    "NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID": r"^[0-9a-f-]{36}$",
+}
 
 
 def parse(path):
-    """Parse a dotenv file written by `vercel env pull` into a dict."""
+    """Parse a dotenv file into a dict; missing file gives {}."""
     out = {}
+    if not os.path.exists(path):
+        return out
     for line in open(path, encoding="utf-8"):
         m = re.match(r"^([A-Z][A-Z0-9_]*)=(.*)$", line.rstrip("\n"))
-        if not m:
-            continue
-        key, val = m.groups()
-        if len(val) >= 2 and val[0] == val[-1] == '"':
-            val = val[1:-1].replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
-        out[key] = val
+        if m:
+            key, val = m.groups()
+            if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+                val = val[1:-1]
+            out[key] = val.strip()
     return out
 
 
+def supabase_values():
+    """URL and keys for the GoHealthMe Supabase project via the CLI."""
+    r = subprocess.run(
+        ["supabase", "projects", "api-keys", "--project-ref", SUPABASE_REF, "-o", "json"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return {}
+    keys = {k.get("name"): k.get("api_key") for k in json.loads(r.stdout)}
+    url = f"https://{SUPABASE_REF}.supabase.co"
+    return {
+        "NEXT_PUBLIC_SUPABASE_URL": url,
+        "SUPABASE_URL": url,
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY": keys.get("anon", ""),
+        "SUPABASE_ANON_KEY": keys.get("anon", ""),
+        "SUPABASE_SERVICE_ROLE_KEY": keys.get("service_role", ""),
+    }
+
+
 def main():
-    with tempfile.TemporaryDirectory() as tmp:
-        pulled = os.path.join(tmp, "v3.env")
-        subprocess.run(
-            ["vercel", "env", "pull", pulled, "--environment=production", "--yes"],
-            cwd=V3_APP, check=True, capture_output=True,
-        )
-        values = {k: v for k, v in parse(pulled).items() if v and not SKIP.match(k)}
-    failed = []
-    for key, val in sorted(values.items()):
+    local = parse(os.path.join(APP, ".env.local"))
+    deployer = parse(os.path.join(ROOT, "contracts", ".env")).get("PRIVATE_KEY", "")
+    want = {
+        "NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID": local.get("NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID", ""),
+        "ORACLE_SIGNER_PRIVATE_KEY": local.get("ORACLE_SIGNER_PRIVATE_KEY", ""),
+        "CIRCLE_API_KEY": local.get("CIRCLE_API_KEY", ""),
+        "CIRCLE_ENTITY_SECRET": local.get("CIRCLE_ENTITY_SECRET", ""),
+        "CIRCLE_WALLET_ID": local.get("CIRCLE_WALLET_ID", ""),
+        "CIRCLE_WALLET_SET_ID": local.get("CIRCLE_WALLET_SET_ID", ""),
+        "SPOTTER_WALLET_ADDRESS": SPOTTER_SETTLER,
+        "TREASURY_PRIVATE_KEY": deployer,
+        "ENS_OWNER_PRIVATE_KEY": deployer,
+        "ENS_AGENT_PRIVATE_KEY": local.get("ENS_AGENT_PRIVATE_KEY", ""),
+        "CRON_SECRET": secrets.token_urlsafe(32),
+        "WEARABLE_PROVIDER_DEFAULT": "junction",
+        "JUNCTION_ENV": "sandbox",
+        "JUNCTION_REGION": "us",
+        "JUNCTION_API_KEY": local.get("JUNCTION_API_KEY", ""),
+        "INTERCEPTA_API_KEY": local.get("INTERCEPTA_API_KEY", ""),
+        **supabase_values(),
+    }
+    ok, founder = [], []
+    for key, val in sorted(want.items()):
+        shape = SHAPES.get(key)
+        if not val or (shape and not re.match(shape, val)):
+            founder.append(key)
+            continue
         for env in ("production", "preview"):
             r = subprocess.run(
                 ["vercel", "env", "add", key, env, "--force"],
-                cwd=V4_APP, input=val, text=True, capture_output=True,
+                cwd=APP, input=val, text=True, capture_output=True,
             )
-            status = "ok  " if r.returncode == 0 else "FAIL"
-            print(f"{status} {key} ({env})")
             if r.returncode != 0:
-                failed.append(f"{key} ({env}): {r.stderr.strip().splitlines()[-1] if r.stderr.strip() else 'unknown'}")
-    print(f"\n{len(values)} variables, {len(failed)} failures")
-    for f in failed:
-        print("  " + f)
-    sys.exit(1 if failed else 0)
+                founder.append(f"{key} ({env}): vercel refused")
+                break
+        else:
+            ok.append(key)
+    print(f"set on production + preview: {len(ok)}")
+    for k in ok:
+        print("  ok   " + k)
+    print(f"\nstill needed from you: {len(founder)}")
+    for k in founder:
+        print("  TODO " + k)
+    sys.exit(0)
 
 
 if __name__ == "__main__":
