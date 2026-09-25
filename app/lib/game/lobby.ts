@@ -8,8 +8,10 @@
 // and on the run page, with its fix, before any stake - instead of five
 // separate refusal screens at the join.
 
-import type { JoinBlock } from "@/lib/wearable-join-gate";
-import type { PoolPhase } from "@/lib/pool-lifecycle";
+import type { PoolInfo } from "@/lib/contract";
+import { poolCanPay, poolPhase, type PoolPhase } from "@/lib/pool-lifecycle";
+import { hideDocumentPools, hideEmptyCancelledPools } from "@/lib/pool-visibility";
+import { wearableJoinBlock, type JoinBlock } from "@/lib/wearable-join-gate";
 import { metricLabel, type WearableMetric } from "@/lib/wearable-goal";
 
 export type RunLock =
@@ -167,6 +169,118 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
         tone: "wait",
       };
   }
+}
+
+// ------------------------------------------------------------ the lobby list
+
+export interface LobbyRow {
+  pool: PoolInfo;
+  phase: PoolPhase;
+  slot: RunSlot;
+  highlighted: boolean;
+}
+
+export interface LobbyInput {
+  pools: readonly PoolInfo[];
+  asOfSeconds: bigint;
+  documentAvailable: boolean;
+  /** Pool ids (decimal strings) this wallet has entered. */
+  joined: ReadonlySet<string>;
+  /** A run to put first and mark (the challenge link's run). */
+  highlightId: string | null;
+  address: string | null;
+  providerDown: string | null;
+  viewerMetrics: readonly WearableMetric[] | null;
+  capabilityPending: boolean;
+  needsDevice: boolean;
+  humanRequired: boolean;
+  humanVerified: boolean;
+  deviceLabel: string | null;
+}
+
+export interface Lobby {
+  /** The highlighted run, when there is one and it is readable. */
+  highlighted: LobbyRow | null;
+  /** Runs this wallet is in and still playing. */
+  mine: LobbyRow[];
+  /** Live runs this wallet can enter or is locked out of, playable first. */
+  open: LobbyRow[];
+  /** Ended runs, most recent first. */
+  closed: LobbyRow[];
+}
+
+/**
+ * The lobby, decided once. Same visibility rules the V3 board had: a run that
+ * can never pay is not offered, private dares stay off the public board (the
+ * challenge link's own run is the exception, and only for that link), document
+ * runs hide while their verifier is off, and cancelled empty pools are noise.
+ */
+export function buildLobby(input: LobbyInput): Lobby {
+  const payable = input.pools.filter(
+    (p) =>
+      poolCanPay(p) &&
+      (p.initiative !== "challenge" || p.id.toString() === input.highlightId),
+  );
+  const { visible } = hideDocumentPools(payable, input.documentAvailable);
+  const shown = hideEmptyCancelledPools(visible);
+
+  const rows: LobbyRow[] = shown.map((pool) => {
+    const id = pool.id.toString();
+    const joined = input.joined.has(id);
+    const phase = poolPhase(pool, input.asOfSeconds);
+    const joinBlock = wearableJoinBlock({
+      goalSpec: pool.goalSpec,
+      address: input.address,
+      joined,
+      providerDown: input.providerDown,
+      viewerMetrics: input.viewerMetrics,
+      capabilityPending: input.capabilityPending,
+      needsDevice: input.needsDevice,
+    });
+    return {
+      pool,
+      phase,
+      highlighted: id === input.highlightId,
+      slot: runSlotOf({
+        phase,
+        canPay: true,
+        joined,
+        address: input.address,
+        joinBlock,
+        humanRequired: input.humanRequired,
+        humanVerified: input.humanVerified,
+        deviceLabel: input.deviceLabel,
+      }),
+    };
+  });
+
+  const byUrgency = (a: LobbyRow, b: LobbyRow): number => {
+    const rank = slotRank(a.slot) - slotRank(b.slot);
+    if (rank !== 0) return rank;
+    if (a.pool.periodEnd === b.pool.periodEnd) return 0;
+    return a.pool.periodEnd < b.pool.periodEnd ? -1 : 1;
+  };
+
+  const highlighted = rows.find((r) => r.highlighted) ?? null;
+  const rest = rows.filter((r) => !r.highlighted);
+  return {
+    highlighted,
+    mine: rest.filter((r) => r.slot.kind === "in-run").sort(byUrgency),
+    open: rest
+      .filter((r) => r.slot.kind === "playable" || r.slot.kind === "locked")
+      .sort(byUrgency),
+    closed: rest
+      .filter((r) => r.slot.kind === "closed")
+      .sort((a, b) => (a.pool.periodEnd > b.pool.periodEnd ? -1 : 1)),
+  };
+}
+
+/** True when some run is locked only on the one-tap sensor check, so the
+ *  lobby shows one button instead of a lock per row. */
+export function lobbyNeedsSensorCheck(lobby: Lobby): boolean {
+  return [lobby.highlighted, ...lobby.open]
+    .filter((r): r is LobbyRow => r !== null)
+    .some((r) => r.slot.kind === "locked" && r.slot.lock.kind === "sensor-unchecked");
 }
 
 /** Lobby order: what you can act on first. */
