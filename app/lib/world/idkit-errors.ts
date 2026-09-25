@@ -52,9 +52,21 @@ const VIEWS: Record<string, IdkitErrorView> = {
     cancelled: false,
   },
   credential_unavailable: {
-    title: "No proof-of-human credential on this World App.",
+    title: "World App had no World ID to share.",
     detail:
-      "Verify at an Orb (or, on staging, pick an identity in the simulator) and try again.",
+      "Open World App, finish setting up your World ID (a quick selfie check is enough), then try again. On staging, pick an identity in the simulator.",
+    retryable: true,
+    cancelled: false,
+  },
+  world_id_4_not_available: {
+    title: "Your World App needs an update.",
+    detail: "Update World App from your app store, then try again.",
+    retryable: true,
+    cancelled: false,
+  },
+  world_id_3_not_available: {
+    title: "Your World App needs an update.",
+    detail: "Update World App from your app store, then try again.",
     retryable: true,
     cancelled: false,
   },

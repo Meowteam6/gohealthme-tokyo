@@ -67,7 +67,7 @@ describe("submitProof", () => {
       requestAuth: async () => OK_AUTH,
       fetchImpl,
     });
-    expect(result).toEqual({ ok: true, nullifierHash: "0xabc", mode: "mock", created: true });
+    expect(result).toEqual({ ok: true, nullifierHash: "0xabc", mode: "mock", created: true, credential: null });
     const [, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
     expect(new Headers(init.headers).get("x-gohealthme-address")).toBe(ADDRESS);
     expect(JSON.parse(init.body as string)).toEqual({ address: ADDRESS, proof: { protocol_version: "4.0" } });

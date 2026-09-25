@@ -49,6 +49,11 @@ import {
   type ApprovalOutcome,
   type OpenApprovalRequest,
 } from "@/lib/world/approval-client";
+import {
+  shouldFallBackToLegacy,
+  type WorldRequestStage,
+} from "@/lib/world/credentials";
+import { idkitErrorView } from "@/lib/world/idkit-errors";
 
 export type { ApprovalOutcome };
 
@@ -129,6 +134,10 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
   const [state, setState] = useState<CardState>({ kind: "asking" });
   const [now, setNow] = useState(() => Date.now());
   const [widgetOpen, setWidgetOpen] = useState(false);
+  // "v4" asks for any World ID 4.0 credential; "legacy" is the 3.0 request,
+  // opened only when World App says 4.0 is not available on this account
+  // (lib/world/credentials.ts, the same policy prove-human uses).
+  const [stage, setStage] = useState<WorldRequestStage>("v4");
   /** onResult fires once per request id, so "ask again" can report anew. */
   const reportedFor = useRef<string | null | undefined>(undefined);
   const mounted = useRef(true);
@@ -407,6 +416,35 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     [state, complete],
   );
 
+  // World App answered the widget with an error code. A 4.0-unavailable
+  // account falls over to the legacy request with a fresh rp_context (the
+  // pending request is re-read, which re-signs it); anything else is shown.
+  const onWorldError = useCallback(
+    (code: string) => {
+      if (state.kind !== "pending") return;
+      const { request } = state;
+      if (
+        shouldFallBackToLegacy(code, stage, request.world?.allowLegacyProofs === true)
+      ) {
+        setWidgetOpen(false);
+        setStage("legacy");
+        void openRequest().then((next) => {
+          if (!mounted.current) return;
+          setState(next);
+          if (next.kind === "pending") setWidgetOpen(true);
+        });
+        return;
+      }
+      const view = idkitErrorView(code);
+      setState({
+        kind: "pending",
+        request,
+        error: view.cancelled ? view.title : `${view.title} ${view.detail}`,
+      });
+    },
+    [state, stage, openRequest],
+  );
+
   const retrySignature = useCallback(async () => {
     await requestAuth({ refresh: true });
     reload();
@@ -561,17 +599,16 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
               onClick={() => setWidgetOpen(true)}
               className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {verifying ? "checking your proof..." : "Confirm with World ID"}
+              {verifying ? "checking your proof..." : "Confirm with World App"}
             </button>
             <WorldApprovalWidget
               open={widgetOpen}
               onOpenChange={setWidgetOpen}
               request={world}
+              stage={stage}
               onVerify={verifyWorld}
               onSuccess={() => setWidgetOpen(false)}
-              onError={(message) =>
-                setState({ kind: "pending", request, error: message })
-              }
+              onError={onWorldError}
             />
           </>
         ) : (

@@ -133,6 +133,7 @@ describe("verifyLive", () => {
       ok: true,
       nullifierHash: `0x${"abc".padStart(64, "0")}`,
       protocolVersion: "4.0",
+      credential: "orb",
     });
     const [url, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${WORLD_VERIFY_URL}/rp_test`);
@@ -264,7 +265,7 @@ describe("verifyMock (event mode)", () => {
     if (!result.ok) expect(result.reason).toMatch(/event mode/);
   });
 
-  it("refuses a different action and a non proof_of_human credential", () => {
+  it("refuses a different action, and accepts a non-Orb credential (no Orb gate)", () => {
     expect(
       verifyMock({ proof: mockProof({ action: "x" }), address: WALLET, action: ACTION }),
     ).toMatchObject({ ok: false, status: 401 });
@@ -274,6 +275,6 @@ describe("verifyMock (event mode)", () => {
         address: WALLET,
         action: ACTION,
       }),
-    ).toMatchObject({ ok: false, status: 401 });
+    ).toMatchObject({ ok: true, credential: "passport" });
   });
 });

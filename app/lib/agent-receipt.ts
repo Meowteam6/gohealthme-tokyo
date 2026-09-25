@@ -77,6 +77,8 @@ export type ReceiptRow =
       provider: "mock" | "world";
       expiresAtIso: string | null;
       nullifierStub: string | null;
+      /** World credential that confirmed, when recorded. */
+      credential: string | null;
       note: string | null;
     };
   // --- end world-agents ---
@@ -223,6 +225,7 @@ export function projectReceipt(ledger: LedgerEntry[]): Receipt {
           provider: entry.provider,
           expiresAtIso: entry.expiresAtIso ?? null,
           nullifierStub: entry.nullifierStub ?? null,
+          credential: entry.credential ?? null,
           note: entry.note ?? null,
         });
         break;

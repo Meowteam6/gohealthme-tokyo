@@ -18,7 +18,7 @@
 //                                   "sign in with the wallet you verified with"
 //   502  World could not be reached or answered nonsense (live mode only)
 //   503  prove-human is not enabled on this deployment, or the store is busy
-//   200  { ok: true, nullifierHash, verifiedAt, mode, created }
+//   200  { ok: true, nullifierHash, verifiedAt, mode, credential, created }
 //
 // Nothing about the person is stored beyond the wallet, the nullifier and
 // the time. No health data ever touches this route.
@@ -100,6 +100,7 @@ export async function POST(request: Request) {
         nullifierHash: verified.nullifierHash,
         mode: setup.mode,
         protocolVersion: verified.protocolVersion,
+        credential: verified.credential,
         // Bound where this deployment reads: a mock bind never lands where
         // live reads, and a staging bind never where production reads.
         namespace: worldNamespace(setup) ?? undefined,
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
       nullifierHash: bound.record.nullifierHash,
       verifiedAt: bound.record.verifiedAt,
       mode: bound.record.mode,
+      credential: bound.record.credential ?? null,
       created: bound.created,
     });
   } catch (err) {

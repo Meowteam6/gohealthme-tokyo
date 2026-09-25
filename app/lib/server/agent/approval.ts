@@ -60,6 +60,7 @@ import {
   type ApprovalProvider,
   type ApprovalProviderName,
 } from "@/lib/server/agent/approval-provider";
+import type { WorldCredential } from "@/lib/world/credentials";
 
 export type ApprovalStatus =
   | "pending"
@@ -89,6 +90,8 @@ export interface ApprovalRecord {
   completedAt?: string;
   /** Full nullifier, approved records only. Never leaves the server. */
   nullifier?: string;
+  /** The World credential that confirmed (approved world-mode records). */
+  credential?: WorldCredential | null;
   note?: string;
 }
 
@@ -436,6 +439,7 @@ export async function completeApproval(args: {
       status: "approved",
       completedAt: iso(nowMs),
       nullifier: verified.nullifier,
+      credential: verified.credential,
       note: "you confirmed; SPOTTER is recording the result and will settle when the pool closes",
     };
     await save(approved);
@@ -447,6 +451,7 @@ export async function completeApproval(args: {
       provider: current.provider,
       expiresAtIso: current.expiresAt,
       nullifierStub: nullifierStub(verified.nullifier),
+      ...(verified.credential === null ? {} : { credential: verified.credential }),
       note: approved.note,
     });
     // Queue the claim for the settlement sweep, due now. The record write

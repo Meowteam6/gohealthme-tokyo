@@ -52,6 +52,9 @@ export interface PublicFeedApproval {
   status: "requested" | "approved" | "declined" | "expired" | "cancelled";
   provider: "mock" | "world";
   expiresAtIso: string | null;
+  /** Which World credential confirmed (a credential kind, never an identity);
+   *  null until an approved world-mode row names one. */
+  credential: string | null;
 }
 // --- end world-agents ---
 
@@ -151,6 +154,7 @@ export function toPublicFeedClaim(
           status: entry.status,
           provider: entry.provider,
           expiresAtIso: asString(entry.expiresAtIso),
+          credential: asString(entry.credential),
         };
         break;
       // --- end world-agents ---

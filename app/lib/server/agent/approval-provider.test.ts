@@ -82,7 +82,7 @@ describe("mock provider (event mode)", () => {
       address: ADDRESS,
       proof: { kind: MOCK_PROOF_KIND, action: ACTION, signal: SIGNAL, approve: true },
     });
-    expect(ok).toEqual({ ok: true, nullifier: mockNullifier(ADDRESS, ACTION) });
+    expect(ok).toEqual({ ok: true, nullifier: mockNullifier(ADDRESS, ACTION), credential: null });
 
     const wrongAction = await provider.verify({
       action: ACTION,
@@ -180,7 +180,7 @@ describe("world provider", () => {
     const fetchImpl = fetchReplying(200, { success: true, nullifier: "255" });
     const p = await provider(fetchImpl);
     const outcome = await p.verify({ action: ACTION, signal: SIGNAL, address: ADDRESS, proof: goodProof });
-    expect(outcome).toEqual({ ok: true, nullifier: "0xff" });
+    expect(outcome).toEqual({ ok: true, nullifier: "0xff", credential: "orb" });
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://verify.example/api/v4/verify/rp_test");
     const sent = JSON.parse(String(init.body));
