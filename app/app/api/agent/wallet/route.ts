@@ -23,6 +23,9 @@ export async function GET() {
       explorerUrl: arcAddressUrl(wallet.address),
     });
   } catch (err) {
-    return jsonError(500, errorMessage(err));
+    // The detail names env vars and the wallet id; it stays in the log. The
+    // browser gets a product state (fetchAgentWallet reads non-ok as unknown).
+    console.error("[agent/wallet] read failed", errorMessage(err));
+    return jsonError(503, "SPOTTER's wallet is unavailable right now.");
   }
 }
