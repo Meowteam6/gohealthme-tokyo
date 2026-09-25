@@ -13,19 +13,21 @@ export const TITLE_TEMPLATE = `%s - ${SITE_NAME}`;
 // 60 characters. Leads with the name so a result or a share card names the
 // product before it names the mechanic.
 export const DEFAULT_TITLE =
-  "GoHealthMe: paid in USDC the second you hit your health goal";
+  "GoHealthMe: stake on your health goal, get paid in USDC";
 
-// 157 characters. The grandma one-liner from the landing, then the testnet
-// qualifier, so no snippet that mentions money ever reads as real money.
+// Under 160 characters. The grandma one-liner from the landing, then the
+// testnet qualifier, so no snippet that mentions money ever reads as real
+// money. No "instant": a run pays when it settles at the end of its window.
 export const DEFAULT_DESCRIPTION =
-  "You can't Venmo your grandma in another country to go for a walk - but you can pay her in USDC the second she does. Testnet, play-money USDC on Base Sepolia.";
+  "You can't Venmo your grandma in another country to go for a walk, but you can pay her in USDC when she does. Testnet, play-money USDC on Base Sepolia.";
 
-// The whole indexable surface, and the only URLs the sitemap ever lists.
+// The whole indexable surface, and the only URLs the sitemap ever lists. Every
+// entry must also render signed out (lib/public-paths.ts), or a crawler and a
+// shared link both land on character creation.
 export const PUBLIC_PATHS = [
   "/",
   "/pools",
   "/feed",
-  "/sponsor",
   "/privacy",
   "/terms",
 ] as const;

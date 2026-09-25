@@ -2,9 +2,10 @@
 
 // The gate, now character creation. Wraps the page content in the root layout.
 //
-// Public surfaces (the landing page, legal pages, public profiles, and invite
-// links) always render: a visitor sees the pitch, and an invited friend can
-// read a dare before signing in. Everything else shows character creation
+// Public surfaces (the landing page, legal pages, public profiles, invite
+// links, the lobby and the payout feed; lib/public-paths.ts) always render: a
+// visitor sees the pitch and the open runs, and an invited friend can read a
+// dare before signing in. Everything else shows character creation
 // until the two hard steps pass (signed in; World proof-of-human or the
 // closed-beta allowlist), then once more for the skippable onboarding pass
 // (name, sensor), then never again on this device.
@@ -21,16 +22,7 @@ import { Skeleton } from "@/components/ui";
 import CharacterCreation from "@/components/game/CharacterCreation";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useOnboarding } from "@/lib/game/onboarding-store";
-
-// Exact public paths and public path prefixes. Keep in sync with the route map;
-// anything not listed here is gated.
-const PUBLIC_EXACT = new Set(["/", "/privacy", "/terms"]);
-const PUBLIC_PREFIXES = ["/u/", "/c/"];
-
-export function isPublicPath(pathname: string): boolean {
-  if (PUBLIC_EXACT.has(pathname)) return true;
-  return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-}
+import { isPublicPath } from "@/lib/public-paths";
 
 function GateLoading() {
   return (
