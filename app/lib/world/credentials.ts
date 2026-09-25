@@ -30,14 +30,14 @@
 //     requested credential policy".
 //
 // So:
-//   Stage "v4"      constraints any(proof_of_human, passport, mnc, selfie),
-//                   each carrying the signal, allow_legacy_proofs false. Order
-//                   is strongest first. Every World ID 4.0 holder can satisfy
-//                   it: Selfie Check needs only World App and a camera.
+//   Stage "v4"      constraints any(proof_of_human, passport, mnc), each
+//                   carrying the signal, allow_legacy_proofs false. Order is
+//                   strongest first. (Selfie Check is excluded: preview-only.)
 //   Stage "legacy"  deviceLegacy({ signal }), allow_legacy_proofs true. Only
 //                   opened when World App answers the v4 stage with
-//                   `world_id_4_not_available` (an app or account not on 4.0
-//                   yet). Device is the lowest 3.0 level, so it accepts the
+//                   `world_id_4_not_available`, `credential_unavailable` or
+//                   `feature_unavailable` (no Orb, passport or My Number Card,
+//                   or an account not on 4.0 yet). Device is the lowest 3.0 level, so it accepts the
 //                   user's highest of Orb, Secure Document, Document, Device,
 //                   and the proof is bound to the same signal.
 //
@@ -57,8 +57,21 @@ export const V4_CREDENTIALS: readonly CredentialType[] = [
   "proof_of_human",
   "passport",
   "mnc",
-  "selfie",
 ];
+// Selfie Check is deliberately NOT requested: idkit-core 4.3.0 marks it
+// "Preview: contact us if you need it enabled", and a live test on 2026-09-26
+// showed World App taking the face scan and then failing with "Something went
+// wrong" before any proof reached us. Players without an Orb, passport or My
+// Number Card are covered by the Device-level 3.0 fallback below instead.
+
+/** World App answers that mean "you cannot satisfy this 4.0 request", which
+ *  reopen the check on the Device-level 3.0 stage every World App user can
+ *  pass. */
+const FALL_BACK_CODES = new Set([
+  "world_id_4_not_available",
+  "credential_unavailable",
+  "feature_unavailable",
+]);
 
 /** Whether a 3.0 (legacy) fallback stage is offered at all. One policy for
  *  both widgets: a player who can prove-human must also be able to confirm a
@@ -108,7 +121,7 @@ export function shouldFallBackToLegacy(
   stage: WorldRequestStage,
   legacyAllowed: boolean = LEGACY_FALLBACK_ENABLED,
 ): boolean {
-  return legacyAllowed && stage === "v4" && code === "world_id_4_not_available";
+  return legacyAllowed && stage === "v4" && code != null && FALL_BACK_CODES.has(code);
 }
 
 // ------------------------------------------------------ what was verified

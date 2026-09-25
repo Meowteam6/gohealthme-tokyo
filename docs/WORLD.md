@@ -37,8 +37,8 @@ WORLD_ENVIRONMENT=staging
 
 Founder decision, 2026-09-26: anyone with World App can play. Prove-human and the payout confirmation share one policy (`app/lib/world/credentials.ts`):
 
-- **World ID 4.0 first:** any one of Orb (`proof_of_human`), NFC passport, My Number Card, or Selfie Check. Selfie Check needs only World App and a camera, so every 4.0 holder can pass.
-- **3.0 fallback:** only when World App answers `world_id_4_not_available`, the check reopens at Device level, which accepts the user's highest 3.0 credential. It stays bound to the same signal.
+- **World ID 4.0 first:** any one of Orb (`proof_of_human`), NFC passport, or My Number Card. Selfie Check is excluded: it is a World preview feature and failed in a live test (World App took the face scan, then errored).
+- **3.0 fallback:** when World App answers `world_id_4_not_available`, `credential_unavailable` or `feature_unavailable`, the check reopens at Device level, which every World App user can pass and which accepts their highest 3.0 credential. It stays bound to the same signal.
 - The credential that verified is stored on the human record and the approval ledger row, and the feed shows it.
 
 **The tradeoff, stated plainly.** Only an Orb credential proves an Orb-verified unique human. Selfie Check, documents and device-level proofs are weaker sybil resistance: a determined person could hold more than one. GoHealthMe still enforces one World ID per wallet and one wallet per World ID through the nullifier. This was a deliberate accessibility choice for the beta; stakes are test USDC.
