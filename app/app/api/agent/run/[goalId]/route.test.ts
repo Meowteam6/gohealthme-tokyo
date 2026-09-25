@@ -545,6 +545,7 @@ describe("GET /api/agent/run/[goalId]", () => {
         recordTxs: null,
         settle: null,
         selfReported: false,
+        approval: null,
       },
       access: "unproven",
       hasLedger: false,

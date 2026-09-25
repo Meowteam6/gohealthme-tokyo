@@ -419,6 +419,41 @@ export default function AgentReceipt({
                   ) : null}
                 </li>
               );
+            // --- world-agents ---
+            // The human step. An approved row means one human consented to
+            // this payout; it says nothing about the goal, which the verdict
+            // row above already settled.
+            case "approval":
+              return (
+                <li key={item.key} className="animate-rise-in pl-7 text-sm">
+                  <span className="text-xs uppercase tracking-wide text-muted">
+                    {row.status === "requested"
+                      ? "asked you to confirm"
+                      : row.status === "approved"
+                        ? "you confirmed"
+                        : row.status === "declined"
+                          ? "you declined"
+                          : row.status === "expired"
+                            ? "request expired"
+                            : "request withdrawn"}
+                  </span>
+                  {row.provider === "mock" ? (
+                    <span className="ml-2 text-xs text-muted">
+                      event mode, mocked proof
+                    </span>
+                  ) : null}
+                  {row.note !== null ? (
+                    <p className="mt-1 text-foreground/80">{row.note}</p>
+                  ) : null}
+                  {row.nullifierStub !== null ? (
+                    <p className="mt-1 text-xs text-muted">
+                      World ID nullifier {row.nullifierStub}... (one human, one
+                      consent; no identity)
+                    </p>
+                  ) : null}
+                </li>
+              );
+            // --- end world-agents ---
           }
         })}
       </ol>

@@ -32,6 +32,17 @@ export interface PublicFeedSettle {
   periodEndIso: string | null;
 }
 
+// --- world-agents ---
+/** The human step, as a machine state: SPOTTER asked, and what came back.
+ *  No prose, no identity; the nullifier stub stays on the private receipt. */
+export interface PublicFeedApproval {
+  at: string;
+  status: "requested" | "approved" | "declined" | "expired" | "cancelled";
+  provider: "mock" | "world";
+  expiresAtIso: string | null;
+}
+// --- end world-agents ---
+
 export interface PublicFeedClaim {
   goalId: string;
   at: string;
@@ -44,6 +55,10 @@ export interface PublicFeedClaim {
    *  no health-derived prose — so the public feed may show it. The feed must
    *  never present a self-reported win as "verified". */
   selfReported: boolean;
+  // --- world-agents ---
+  /** Newest human-confirmation state, or null when SPOTTER never asked. */
+  approval: PublicFeedApproval | null;
+  // --- end world-agents ---
 }
 
 /** Runtime string check. The store returns whatever JSON it holds, so the
@@ -64,9 +79,23 @@ export function toPublicFeedClaim(
   let recordTxs: PublicFeedClaim["recordTxs"] = null;
   let settle: PublicFeedSettle | null = null;
   let selfReported = false;
+  // --- world-agents ---
+  let approval: PublicFeedApproval | null = null;
+  // --- end world-agents ---
 
   for (const entry of ledger) {
     switch (entry.kind) {
+      // --- world-agents ---
+      case "approval":
+        // Newest wins: the feed shows where the human step stands now.
+        approval = {
+          at: entry.at,
+          status: entry.status,
+          provider: entry.provider,
+          expiresAtIso: asString(entry.expiresAtIso),
+        };
+        break;
+      // --- end world-agents ---
       case "verdict":
         // Only the tier flag crosses the redaction boundary here — never the
         // verdict reason or any other prose, which stay server-side.
@@ -117,5 +146,16 @@ export function toPublicFeedClaim(
     }
   }
 
-  return { goalId, at, decision, spends, recordTxs, settle, selfReported };
+  return {
+    goalId,
+    at,
+    decision,
+    spends,
+    recordTxs,
+    settle,
+    selfReported,
+    // --- world-agents ---
+    approval,
+    // --- end world-agents ---
+  };
 }
