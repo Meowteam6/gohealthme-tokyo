@@ -107,7 +107,7 @@ function AuthControls() {
 /**
  * Signed out this answers "what is this about to ask me for" before Dynamic's
  * modal takes over the screen. Signed in it carries the wallet address, which
- * is the first thing anyone needs: Arc gas is USDC, so funding the wallet at
+ * is the first thing anyone needs: funding the wallet with test USDC at
  * the faucet starts by copying this.
  */
 function WalletNote() {

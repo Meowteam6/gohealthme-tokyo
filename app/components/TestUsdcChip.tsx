@@ -3,7 +3,7 @@
 // Persistent "where's my test money" affordance for signed-in users. It sits in
 // the header note row and answers two things at a glance: how much spendable
 // USDC the wallet holds, and how to get more in one tap. The balance shown is
-// the ON-CHAIN Arc USDC (what actually pays gas and entry fees), not the in-app
+// the ON-CHAIN Base Sepolia USDC (what pays entry fees), not the in-app
 // ledger, because that is the number that decides whether an action can run.
 //
 // Tapping "Get test USDC" runs the same grant-and-deliver chain the funding

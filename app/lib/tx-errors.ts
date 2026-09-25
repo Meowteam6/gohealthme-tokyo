@@ -17,12 +17,12 @@ export interface HumanTxError {
 
 // ------------------------------------------------------------ funding preflight
 
-// TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
-// The funding-preflight block below (JOIN_GAS_MARGIN, FUNDING_STEPS,
-// FUNDING_HELP_DETAIL) encodes "gas is paid in USDC, so a zero-USDC wallet is
-// blocked". Base gas is ETH and the CDP paymaster sponsors smart-wallet users,
-// so that premise is false on Base. Copy left verbatim on purpose — a human
-// rewrites this with the real Base gas/paymaster story.
+// TODO(base-gas): the preflight below (JOIN_GAS_MARGIN, canCoverUsdcCosts)
+// still encodes the Arc-era "gas is paid in USDC" margin. Base gas is ETH and
+// the CDP paymaster sponsors smart-wallet users, so an EOA with USDC but no
+// ETH passes this check and fails at approve. The real fix is an ETH balance
+// check for non-sponsored wallets in JoinPool and useWithdraw. The user-facing
+// copy (FUNDING_STEPS, FUNDING_HELP_DETAIL) is already Base-correct.
 
 /**
  * Gas headroom for a two-transaction flow (approve + write) on Arc testnet,
@@ -56,27 +56,30 @@ export const FAUCET_URL = "https://faucet.circle.com";
 /**
  * The funding steps, in the order a first-time user performs them. The faucet
  * takes a pasted address and a chosen network - it does not "send" anywhere -
- * and Arc Testnet sits in a long network dropdown, so both are called out.
- * FundingHelp renders these with a copy button and a real link; the deposit
- * hook folds the same sequence into one line (FUNDING_HELP_DETAIL) because it
- * can only hand consumers a string.
+ * and Base Sepolia sits in a long network dropdown, so both are called out.
+ * Pools and USDC live on Base Sepolia; test USDC requested on any other
+ * network never reaches this app. FundingHelp renders these with a copy button
+ * and a real link; the deposit hook folds the same sequence into one line
+ * (FUNDING_HELP_DETAIL) because it can only hand consumers a string.
  */
 export const FUNDING_STEPS: readonly string[] = [
   "Copy your wallet address.",
   "Open faucet.circle.com.",
-  "Choose Arc Testnet in the network dropdown.",
+  "Choose Base Sepolia in the network dropdown.",
   "Paste your address and request the test USDC.",
   "Come back here and check again.",
 ];
 
 /**
  * One-line funding instruction for surfaces that can only render a string
- * (anything reading DepositStatus.message through an ErrorNote).
+ * (anything reading DepositStatus.message through an ErrorNote). On Base the
+ * network fee is paid in ETH unless the wallet's fee is sponsored, so the
+ * line says what USDC is for and does not claim it covers gas.
  */
 export const FUNDING_HELP_DETAIL =
-  "Arc testnet pays gas in USDC, so a zero balance blocks every transaction. " +
-  "Copy your wallet address from the header, open faucet.circle.com, choose " +
-  "Arc Testnet, paste the address, request test USDC, then try again.";
+  "This action needs test USDC in your wallet. Copy your wallet address from " +
+  "the header, open faucet.circle.com, choose Base Sepolia, paste the " +
+  "address, request test USDC, then try again.";
 
 /**
  * The funding message with the numbers in it. Balances arrive as pre-formatted
@@ -95,13 +98,14 @@ export function fundingShortfallDetail(
 
 // ------------------------------------------------------------- error mapping
 
-// TODO(base-gas): Arc-era USDC-gas assumption, wrong for Base — rethink with paymaster UX.
-// "Arc testnet pays gas in USDC" is false on Base (gas is ETH / paymaster-sponsored).
-// Copy left verbatim on purpose; a human rewrites this with the real Base gas story.
+// Base pays the network fee in ETH (or a paymaster sponsors it), so an
+// insufficient-funds error can be either coin; the copy names both instead of
+// the Arc-era "gas is USDC" story.
 const INSUFFICIENT_FUNDS_DETAIL =
-  "This wallet does not have enough USDC to cover the transaction. " +
-  "Arc testnet pays gas in USDC - get test USDC at faucet.circle.com " +
-  "or top up from the dashboard balance card.";
+  "This wallet cannot cover the transaction. It needs test USDC for the " +
+  "amount (faucet.circle.com, Base Sepolia, or the dashboard balance card) " +
+  "and, unless the network fee is sponsored for you, a little Base Sepolia " +
+  "ETH for the fee.";
 
 const GENERIC_DETAIL =
   "Something went wrong while sending the transaction. Try again in a moment.";

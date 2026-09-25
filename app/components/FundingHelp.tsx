@@ -1,13 +1,12 @@
 "use client";
 
-// The first-run wall. Joining is gas-free (the network fee is sponsored), but a
-// brand new wallet still holds no USDC to cover the amount an action pulls - a
-// pool entry fee, a top-up. Every USDC-pulling surface needs the same
+// The first-run wall. A brand new wallet holds no USDC to cover the amount an
+// action pulls - a pool entry fee, a top-up. Every USDC-pulling surface needs the same
 // explanation and the same escape hatch, so it lives here rather than inside
 // JoinPool.
 //
 // The instructions matter: at faucet.circle.com you PASTE an address and pick
-// a network from a long dropdown, you do not "send" anything, and Arc Testnet
+// a network from a long dropdown, you do not "send" anything, and Base Sepolia
 // is easy to miss. A 42-character address is also impossible to select by
 // hand on a phone, so copying is a button, never a long-press drag.
 
@@ -144,7 +143,7 @@ export default function FundingHelp({
     setOutcome(null);
     const result = await fund(address);
     setOutcome(result);
-    // Only continue the original action when real USDC actually landed on Arc.
+    // Only continue the original action when real USDC actually landed on Base.
     if (result.kind === "funded") onRecheckRef.current?.();
   }, [address, fund]);
 
