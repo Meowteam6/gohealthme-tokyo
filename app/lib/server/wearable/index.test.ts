@@ -46,6 +46,28 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+const { appleAppAvailable, appleConfigured } = await import(
+  "@/lib/server/wearable/apple"
+);
+
+describe("apple is offered only when its phone app ships", () => {
+  it("is not configured without the app flag, whatever the database says", () => {
+    // A database alone made Apple look pairable to people who had no app to
+    // install: "open the app on your iPhone" for an app with no public build,
+    // then every wearable run locked. Hidden until the flag says it ships.
+    vi.stubEnv("APPLE_APP_AVAILABLE", "");
+    expect(appleAppAvailable()).toBe(false);
+    expect(providerConfigured("apple")).toBe(false);
+    expect(availableProviders()).not.toContain("apple");
+  });
+
+  it("follows the store once the app flag is on", () => {
+    vi.stubEnv("APPLE_APP_AVAILABLE", "1");
+    expect(appleAppAvailable()).toBe(true);
+    expect(providerConfigured("apple")).toBe(appleConfigured());
+  });
+});
+
 describe("providerConfigured", () => {
   it("needs the token key for whoop, because it stores user credentials", () => {
     expect(providerConfigured("whoop")).toBe(true);

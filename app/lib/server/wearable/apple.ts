@@ -67,9 +67,30 @@ import type {
   WearableRecent,
 } from "@/lib/server/wearable/types";
 
-/** Whether the Apple path is configured at all. */
+/**
+ * Whether the server can STORE Apple days at all. The sync route checks this:
+ * a development build of the phone app can still post days to a deployment
+ * that has the table, whether or not Apple is offered to players.
+ */
 export function appleConfigured(): boolean {
   return appleStoreConfigured();
+}
+
+/**
+ * Whether a real player can install the phone app that feeds this provider.
+ *
+ * Apple Health has no web OAuth; the only way in is the GoHealthMe iPhone
+ * app, and that app has no public build yet (development-client profiles
+ * only). Offering Apple in the picker because the database happens to exist
+ * sent every beta user to "open the app on your iPhone" for an app they
+ * cannot get, and left them with no sensor and every run locked. So Apple is
+ * offered only when the deployment says the app actually ships.
+ *
+ * Opt-in on an explicit flag rather than inferred, because nothing on the
+ * server can observe whether an App Store or TestFlight build exists.
+ */
+export function appleAppAvailable(): boolean {
+  return process.env.APPLE_APP_AVAILABLE?.trim() === "1";
 }
 
 /**
@@ -82,9 +103,9 @@ export function appleConfigured(): boolean {
 const APP_HANDOFF_INSTRUCTIONS =
   "Apple Health can only be read on the device that holds it, so there is " +
   "nothing for this browser to open. Open the GoHealthMe app on your iPhone " +
-  "and allow Apple Health when it asks, and your Apple Watch data starts " +
-  "syncing to this wallet. Nothing was charged and no health data has been " +
-  "read yet.";
+  "and allow Apple Health when it asks, then sync. Your Apple Health " +
+  "totals sync to this wallet each time you open the app and sync. Nothing " +
+  "was charged and no health data has been read yet.";
 
 /**
  * Where a wallet sits in the Apple link, in the shared vocabulary.
@@ -243,6 +264,17 @@ export const appleProvider: WearableProvider = {
     // metric we retired, so declared is the honest answer rather than an empty
     // observed list that would hide every pool.
     if (seen.length === 0) return { kind: "declared" };
+
+    // Workouts are a COUNT: the phone writes a row only on a day with a
+    // session, and the verdict reads a missing row as a real zero
+    // (EVERY_DAY_SOURCED). A phone that is syncing anything can therefore be
+    // judged on workouts even when the window holds none; the iPhone records
+    // them through the Fitness app with or without a Watch. Leaving it out
+    // told a person who rested for a month that their hardware cannot count
+    // workouts, and refused them a workouts run on that false reason.
+    if (!seen.includes("workouts") && declared.has("workouts")) {
+      seen.push("workouts");
+    }
 
     return { kind: "observed", metrics: seen };
   },
