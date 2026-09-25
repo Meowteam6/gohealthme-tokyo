@@ -13,14 +13,16 @@
 // same call opens a fresh attempt ("ask again"). One active request per goal.
 //
 // Response JSON:
-//   { requestId, expiresAt, status, attempt, action, provider, mocked, world? }
+//   { requestId, expiresAt, status, attempt, action, signal, provider, mocked,
+//     world? }. `action` is the static World action (`settle`); `signal` is
+//   `<goalId>:<attempt>`, the payout the proof must be bound to.
 // `world` (app id, server-signed rp_context, environment) is present only in
 // world mode. The signing key never leaves the server.
 
 import { APPROVAL_NOT_ENABLED_MESSAGE as NOT_ENABLED_MESSAGE } from "@/lib/server/agent/approval-messages";
 import { isClaimOwner, claimParticipantOf } from "@/lib/server/agent/claim-access";
 import { readLedger } from "@/lib/server/agent/ledger";
-import { requestApproval } from "@/lib/server/agent/approval";
+import { recordSignal, requestApproval } from "@/lib/server/agent/approval";
 import {
   approvalMode,
   approvalProviderFor,
@@ -140,6 +142,7 @@ export async function POST(request: Request) {
       status: record.status,
       attempt: record.attempt,
       action: record.action,
+      signal: recordSignal(record),
       provider: challenge.provider,
       mocked: challenge.mocked,
       ...(challenge.world === undefined ? {} : { world: challenge.world }),

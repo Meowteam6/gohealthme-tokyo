@@ -21,10 +21,15 @@
 //   unset                      the gate is off and SPOTTER pays as before.
 //
 // WHAT AN APPROVAL MEANS. An approved proof means one human consented to one
-// payout: the action string names the goal and the attempt and nothing else.
-// It never says the goal was met; that stays with the wearable read and
-// SPOTTER's verdict. Nothing here carries health data: the action is a goalId
-// hash plus a counter, and the proof is World's own payload forwarded intact.
+// payout. The World action is the static, Portal-registered `settle` (World ID
+// 4.0 verifies only actions created in the Developer Portal, so a per-payout
+// action string cannot be used); the payout is named by the SIGNAL instead,
+// `<goalId>:<attempt>`, which World hashes into responses[0].signal_hash. The
+// server checks that hash against the payout it asked about, so a proof made
+// for one payout can never approve another. It never says the goal was met;
+// that stays with the wearable read and SPOTTER's verdict. Nothing here
+// carries health data: the signal is a goalId hash plus a counter, and the
+// proof is World's own payload forwarded intact.
 //
 // Sources (fetched 2026-09-26, not from memory): docs.world.org/agents/
 // human-in-the-loop/integrate, /api-reference/developer-portal/verify,
@@ -38,6 +43,7 @@
 import { createHash } from "crypto";
 import { getAddress, isAddress } from "viem";
 import { signRequest, type RpSignature } from "@worldcoin/idkit/signing";
+import { hashSignal } from "@worldcoin/idkit-core/hashing";
 import type { RpContext } from "@worldcoin/idkit";
 import { optionalEnv, requireEnv } from "@/lib/server/env";
 
@@ -67,16 +73,20 @@ export type ProviderVerification =
 
 export interface ApprovalProvider {
   readonly name: ApprovalProviderName;
-  /** Build the challenge for `action`; ttlSeconds bounds any signed context. */
+  /** Build the challenge for `action`; ttlSeconds bounds any signed context.
+   *  The signal is not signed into the rp_context (World's signature covers
+   *  the action and nonce); it is bound by the signal_hash check in verify. */
   challenge(args: {
     action: string;
     ttlSeconds: number;
   }): Promise<ApprovalChallenge>;
   /** Validate what the browser sent back. Server-side, never trusting the
-   *  client: a proof for another action, another environment, or one World
-   *  rejects is refused with a plain reason. */
+   *  client: a proof for another action, another payout (signal), another
+   *  environment, or one World rejects is refused with a plain reason. */
   verify(args: {
     action: string;
+    /** `<goalId>:<attempt>`: the one payout this proof may approve. */
+    signal: string;
     address: string;
     proof: unknown;
   }): Promise<ProviderVerification>;
@@ -113,6 +123,8 @@ export const MOCK_PROOF_KIND = "gohealthme-mock-approval";
 export interface MockApprovalProof {
   kind: typeof MOCK_PROOF_KIND;
   action: string;
+  /** `<goalId>:<attempt>`, the payout it approves; mirrors World's signal. */
+  signal: string;
   approve: true;
 }
 
@@ -120,7 +132,8 @@ export interface MockApprovalProof {
  * Deterministic stand-in for a World nullifier: the same wallet approving the
  * same action always yields the same value, so the one-shot consumption and
  * the receipt stub behave exactly as they will with real nullifiers. Distinct
- * per action, like the real thing, so a re-ask (new attempt) needs a new one.
+ * per action and the same for every payout under one action, like the real
+ * thing: replay is refused by the payout-scoped store key in approval.ts.
  */
 export function mockNullifier(address: string, action: string): string {
   const who = isAddress(address) ? getAddress(address) : address;
@@ -138,7 +151,7 @@ export function mockApprovalProvider(): ApprovalProvider {
     async challenge() {
       return { provider: "mock", mocked: true };
     },
-    async verify({ action, address, proof }) {
+    async verify({ action, signal, address, proof }) {
       if (typeof proof !== "object" || proof === null) {
         return { ok: false, reason: "no proof was sent" };
       }
@@ -150,6 +163,12 @@ export function mockApprovalProvider(): ApprovalProvider {
         return {
           ok: false,
           reason: "the proof is bound to a different request",
+        };
+      }
+      if (candidate.signal !== signal) {
+        return {
+          ok: false,
+          reason: "the proof approves a different payout",
         };
       }
       if (candidate.approve !== true) {
@@ -185,6 +204,11 @@ export interface WorldProviderConfig {
 
 /** BigInt(nullifier).toString(16), the form the human-in-the-loop docs use for
  *  one-shot tracking; accepts the hex or decimal rendering World returns. */
+/** What responses[0].signal_hash must equal for a payout's signal. */
+export function expectedApprovalSignalHash(signal: string): string {
+  return hashSignal(signal).toLowerCase();
+}
+
 export function normalizeNullifier(raw: string): string | null {
   try {
     return "0x" + BigInt(raw).toString(16);
@@ -223,7 +247,7 @@ export function worldApprovalProvider(
         },
       };
     },
-    async verify({ action, proof }) {
+    async verify({ action, signal, proof }) {
       if (typeof proof !== "object" || proof === null || Array.isArray(proof)) {
         return {
           ok: false,
@@ -242,6 +266,23 @@ export function worldApprovalProvider(
         return {
           ok: false,
           reason: "the proof carries no credential response",
+        };
+      }
+      // The action is static (`settle`), so the signal is what names the
+      // payout. Checked before World is called: a proof for another payout,
+      // or one not bound to any, never reaches the verify endpoint.
+      const signalHash = (responses[0] as { signal_hash?: unknown } | null)
+        ?.signal_hash;
+      if (typeof signalHash !== "string" || signalHash === "") {
+        return {
+          ok: false,
+          reason: "the proof is not bound to a payout",
+        };
+      }
+      if (signalHash.toLowerCase() !== expectedApprovalSignalHash(signal)) {
+        return {
+          ok: false,
+          reason: "the proof approves a different payout",
         };
       }
 

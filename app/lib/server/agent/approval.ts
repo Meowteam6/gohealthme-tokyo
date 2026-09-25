@@ -33,10 +33,19 @@
 // "approval" to SPOTTER's ledger; the receipt and the /agent feed read those
 // rows, never this store.
 //
-// REPLAY. An approving proof's nullifier is consumed once per action through
-// store.setNx, and the action carries the attempt number, so a new request
-// needs a new proof. The full nullifier stays in this record; only a 10-char
-// stub reaches the ledger.
+// ACTION AND SIGNAL. The World action is static, `settle` (registered in the
+// Developer Portal; WORLD_APPROVAL_ACTION overrides it). World ID 4.0 only
+// verifies Portal-created actions, so the payout is named by the signal,
+// `<goalId>:<attempt>`, and the provider checks responses[0].signal_hash
+// against it: a proof for one payout can never approve another.
+//
+// REPLAY. With a static action a human's nullifier is the same on every
+// payout, so the one-shot key is scoped to the payout:
+// `agent-approval-nullifier:<action>:<goalId>:<attempt>:<nullifier>`,
+// consumed once through store.setNx. The same proof twice for one payout is
+// refused; the same human confirming a new payout (a later goal, or a re-ask
+// after a decline or expiry) is allowed. The full nullifier stays in this
+// record; only a 10-char stub reaches the ledger.
 
 import { randomUUID } from "crypto";
 import { getAddress, isAddress } from "viem";
@@ -68,8 +77,11 @@ export interface ApprovalRecord {
   address: string;
   /** 1 for the first ask; every re-ask after a decline or expiry adds one. */
   attempt: number;
-  /** `settle:<goalId>:<attempt>`; what the proof is bound to. */
+  /** The static World action (`settle` by default). */
   action: string;
+  /** `<goalId>:<attempt>`; the payout the proof is bound to via its signal.
+   *  Absent on records written before the static action; derived then. */
+  signal?: string;
   provider: ApprovalProviderName;
   status: ApprovalStatus;
   createdAt: string;
@@ -96,8 +108,32 @@ export function approvalTtlMs(): number {
   return seconds * 1000;
 }
 
-export function approvalAction(goalId: string, attempt: number): string {
-  return `settle:${goalId.toLowerCase()}:${attempt}`;
+/** The Developer Portal action every payout confirmation is proven against. */
+export const DEFAULT_APPROVAL_ACTION = "settle";
+
+/** The static World action: WORLD_APPROVAL_ACTION, else `settle`. It must be
+ *  an action registered in the Developer Portal for the configured app. */
+export function approvalAction(): string {
+  const raw = optionalEnv("WORLD_APPROVAL_ACTION", "").trim();
+  return raw === "" ? DEFAULT_APPROVAL_ACTION : raw;
+}
+
+/** The signal that binds a proof to one payout: `<goalId>:<attempt>`. */
+export function approvalSignal(goalId: string, attempt: number): string {
+  return `${goalId.toLowerCase()}:${attempt}`;
+}
+
+/** The signal a record's proof must carry. */
+export function recordSignal(record: ApprovalRecord): string {
+  return record.signal ?? approvalSignal(record.goalId, record.attempt);
+}
+
+/** One-shot key for a nullifier, scoped to the payout (see REPLAY above). */
+export function approvalNullifierKey(
+  record: Pick<ApprovalRecord, "action" | "goalId" | "attempt">,
+  nullifier: string,
+): string {
+  return `agent-approval-nullifier:${record.action}:${record.goalId.toLowerCase()}:${record.attempt}:${nullifier}`;
 }
 
 /** What the ledger shows of a nullifier: "0x" plus eight hex chars. */
@@ -226,7 +262,7 @@ export interface RequestApprovalResult {
  * Ask the achiever to confirm. Idempotent: a pending (unexpired) or approved
  * record is returned as-is, so SPOTTER's poll loop and the browser card can
  * both call this freely. A declined, expired or cancelled record is replaced
- * by a fresh attempt with a new action string.
+ * by a fresh attempt with a new signal.
  */
 export async function requestApproval(
   args: RequestApprovalArgs,
@@ -263,7 +299,8 @@ export async function requestApproval(
     }
 
     const attempt = (current?.attempt ?? 0) + 1;
-    const action = approvalAction(goalId, attempt);
+    const action = approvalAction();
+    const signal = approvalSignal(goalId, attempt);
     const ttlMs = args.ttlMs ?? approvalTtlMs();
     const record: ApprovalRecord = {
       requestId: `apr_${randomUUID()}`,
@@ -272,6 +309,7 @@ export async function requestApproval(
       address,
       attempt,
       action,
+      signal,
       provider: args.provider.name,
       status: "pending",
       createdAt: iso(nowMs),
@@ -372,16 +410,18 @@ export async function completeApproval(args: {
 
     const verified = await args.provider.verify({
       action: current.action,
+      signal: recordSignal(current),
       address: current.address,
       proof: args.decision.proof,
     });
     if (!verified.ok) {
       return { status: "rejected", reason: verified.reason, record: current };
     }
-    // One human, one consent, per action. The action carries the attempt, so
-    // a re-ask needs a fresh proof; the same proof can never approve twice.
+    // One human, one consent, per payout. The action is static, so the key
+    // carries goalId and attempt: the same proof can never approve twice,
+    // while the same human may confirm a different payout.
     const first = await setNx(
-      `agent-approval-nullifier:${current.action}:${verified.nullifier}`,
+      approvalNullifierKey(current, verified.nullifier),
       current.requestId,
     );
     if (!first) {

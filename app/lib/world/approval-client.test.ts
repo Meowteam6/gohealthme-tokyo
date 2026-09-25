@@ -29,9 +29,10 @@ describe("mountActionFor", () => {
 describe("approval-client", () => {
   it("mirrors the server's mock proof kind exactly (wire format)", () => {
     expect(CLIENT_MOCK_PROOF_KIND).toBe(MOCK_PROOF_KIND);
-    expect(mockApprovalProof("settle:0xabc:1")).toEqual({
+    expect(mockApprovalProof("settle", "0xabc:1")).toEqual({
       kind: MOCK_PROOF_KIND,
-      action: "settle:0xabc:1",
+      action: "settle",
+      signal: "0xabc:1",
       approve: true,
     });
   });
@@ -53,12 +54,15 @@ describe("approval-client", () => {
       expiresAt: "2026-09-26T03:01:30.000Z",
       status: "pending",
       attempt: 1,
-      action: "settle:0xabc:1",
+      action: "settle",
+      signal: "0xabc:1",
       provider: "mock",
       mocked: true,
     };
     expect(parseOpenRequest(base)).toMatchObject({ requestId: "apr_x", provider: "mock" });
     expect(parseOpenRequest({ ...base, attempt: "1" })).toBeNull();
+    // No signal means the widget could not bind the proof to this payout.
+    expect(parseOpenRequest({ ...base, signal: undefined })).toBeNull();
     expect(parseOpenRequest({ ...base, provider: "world", mocked: false })).toBeNull();
     expect(
       parseOpenRequest({

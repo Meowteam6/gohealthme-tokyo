@@ -212,7 +212,7 @@ describe("run.ts AUTHORIZE gate", () => {
       address: USER,
       decision: {
         decision: "approve",
-        proof: { kind: MOCK_PROOF_KIND, action: record.action, approve: true },
+        proof: { kind: MOCK_PROOF_KIND, action: record.action, signal: record.signal, approve: true },
       },
       provider: mockApprovalProvider(),
     });
@@ -307,7 +307,7 @@ describe("run.ts AUTHORIZE gate", () => {
     expect(result.ledger[result.ledger.length - 1]).toMatchObject({
       kind: "error",
       stage: "approval",
-      message: expect.stringContaining("NEXT_PUBLIC_WORLD_APP_ID"),
+      message: expect.stringContaining("WORLD_APP_ID"),
     });
     expect(deps.legacyRecordResult).not.toHaveBeenCalled();
   });
