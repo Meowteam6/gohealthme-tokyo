@@ -409,7 +409,7 @@ describe("approvalGate", () => {
     const { approvalGate, readLedger } = await load();
     await expect(
       approvalGate({ goalId: GOAL, poolId: 7n, address: USER, poolSettled: settledNo }),
-    ).rejects.toThrow(/NEXT_PUBLIC_WORLD_APP_ID/);
+    ).rejects.toThrow(/WORLD_APP_ID/);
     expect(await readLedger(GOAL)).toEqual([]);
   });
 });

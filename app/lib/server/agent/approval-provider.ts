@@ -317,17 +317,29 @@ function worldEnvironmentFromEnv(): WorldEnvironment {
   );
 }
 
+/** The first non-empty of several env names; throws naming the primary one. */
+function firstEnv(primary: string, ...fallbacks: string[]): string {
+  for (const name of [primary, ...fallbacks]) {
+    const value = optionalEnv(name, "");
+    if (value !== "") return value;
+  }
+  return requireEnv(primary);
+}
+
 /** The live provider from env. Throws with the variable name when a piece is
  *  missing: the gate and the routes turn that into an honest "not configured"
  *  state, never a silent fall-back to mock. */
 export function worldApprovalProviderFromEnv(): ApprovalProvider {
-  const appId = requireEnv("NEXT_PUBLIC_WORLD_APP_ID");
+  // One set of World credentials for both lanes: prove-human (world/config.ts)
+  // reads WORLD_APP_ID and WORLD_RP_SIGNING_KEY, so the approval step reads the
+  // same names first. The older names stay as fallbacks for existing envs.
+  const appId = firstEnv("WORLD_APP_ID", "NEXT_PUBLIC_WORLD_APP_ID");
   if (!appId.startsWith("app_")) {
-    throw new Error("NEXT_PUBLIC_WORLD_APP_ID must start with app_");
+    throw new Error("WORLD_APP_ID must start with app_");
   }
   return worldApprovalProvider({
     rpId: requireEnv("WORLD_RP_ID"),
-    signingKeyHex: requireEnv("WORLD_SIGNING_KEY"),
+    signingKeyHex: firstEnv("WORLD_RP_SIGNING_KEY", "WORLD_SIGNING_KEY"),
     appId: appId as `app_${string}`,
     environment: worldEnvironmentFromEnv(),
     verifyUrl: optionalEnv("WORLD_VERIFY_URL", DEFAULT_WORLD_VERIFY_URL),

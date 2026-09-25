@@ -11,6 +11,8 @@ World ID existed in V1 (ETHGlobal NY, IDKit 4.1.8, per-pool actions, removed in 
 
 ## Setup (Andre, about ten minutes)
 
+> One set of credentials drives both prove-human and the payout confirmation: `WORLD_APP_ID`, `WORLD_RP_ID`, `WORLD_RP_SIGNING_KEY`. Use a **Production** app on the live build (the code refuses staging there) and a **Staging** app on preview deployments, where the World simulator works.
+
 1. Go to https://developer.world.org and sign in. Click **Create app**. Name it `GoHealthMe`, pick **Staging** for the environment you will test with (the simulator only works against staging). Save.
 2. On the app page, copy the **App ID** (`app_...`) and the **RP ID** (`rp_...`). If the page offers a **World ID 4.0 migration** toggle, turn it on; the v4 verify endpoint answers `app_not_migrated` otherwise.
 3. Under **Signing key** (RP keys), generate a key and copy the **hex private key**. It is shown once. This is `WORLD_RP_SIGNING_KEY` and it never leaves the server.
@@ -224,7 +226,7 @@ relying party yet; that is the booth step below.
 | `WORLD_APPROVAL_TTL_S` | server | request window in seconds, default 90, clamped to 10..600 |
 | `NEXT_PUBLIC_WORLD_APP_ID` | server and browser | `app_...` from the Developer Portal (the event environment's app) |
 | `WORLD_RP_ID` | server | relying party id, `rp_...` |
-| `WORLD_SIGNING_KEY` | server only | hex RP signing key; signs `rp_context`; never reaches the browser |
+| `WORLD_RP_SIGNING_KEY` | server only | hex RP signing key; signs `rp_context`; never reaches the browser. Shared with prove-human. The older name `WORLD_SIGNING_KEY` is still read as a fallback. |
 | `WORLD_ENVIRONMENT` | server | `staging` (default), `sandbox` or `production`; pinned into every verify call, the client's value is discarded |
 | `WORLD_VERIFY_URL` | server | default `https://developer.world.org/api/v4/verify`; override if the event environment hosts its own verifier |
 | `WORLD_ALLOW_LEGACY_PROOFS` | server | `true` to accept v3 proofs in the widget; default `false` |

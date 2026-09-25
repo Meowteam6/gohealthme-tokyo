@@ -207,23 +207,32 @@ describe("world provider", () => {
 
   it("from env: every variable is required and a bad app id is refused", async () => {
     const { worldApprovalProviderFromEnv } = await load();
-    expect(() => worldApprovalProviderFromEnv()).toThrow(/NEXT_PUBLIC_WORLD_APP_ID/);
-    vi.stubEnv("NEXT_PUBLIC_WORLD_APP_ID", "notanapp");
+    expect(() => worldApprovalProviderFromEnv()).toThrow(/WORLD_APP_ID/);
+    vi.stubEnv("WORLD_APP_ID", "notanapp");
     expect(() => worldApprovalProviderFromEnv()).toThrow(/must start with app_/);
-    vi.stubEnv("NEXT_PUBLIC_WORLD_APP_ID", "app_1");
+    vi.stubEnv("WORLD_APP_ID", "app_1");
     expect(() => worldApprovalProviderFromEnv()).toThrow(/WORLD_RP_ID/);
     vi.stubEnv("WORLD_RP_ID", "rp_1");
-    expect(() => worldApprovalProviderFromEnv()).toThrow(/WORLD_SIGNING_KEY/);
-    vi.stubEnv("WORLD_SIGNING_KEY", "0x" + "22".repeat(32));
+    expect(() => worldApprovalProviderFromEnv()).toThrow(/WORLD_RP_SIGNING_KEY/);
+    vi.stubEnv("WORLD_RP_SIGNING_KEY", "0x" + "22".repeat(32));
     vi.stubEnv("WORLD_ENVIRONMENT", "prod");
     expect(() => worldApprovalProviderFromEnv()).toThrow(/WORLD_ENVIRONMENT/);
     vi.stubEnv("WORLD_ENVIRONMENT", "staging");
     expect(worldApprovalProviderFromEnv().name).toBe("world");
   });
 
-  it("from env: refuses staging (the simulator) on a production deployment", async () => {
+  it("from env: still accepts the older variable names as fallbacks", async () => {
     const { worldApprovalProviderFromEnv } = await load();
     vi.stubEnv("NEXT_PUBLIC_WORLD_APP_ID", "app_1");
+    vi.stubEnv("WORLD_RP_ID", "rp_1");
+    vi.stubEnv("WORLD_SIGNING_KEY", "0x" + "22".repeat(32));
+    vi.stubEnv("WORLD_ENVIRONMENT", "staging");
+    expect(worldApprovalProviderFromEnv().name).toBe("world");
+  });
+
+  it("from env: refuses staging (the simulator) on a production deployment", async () => {
+    const { worldApprovalProviderFromEnv } = await load();
+    vi.stubEnv("WORLD_APP_ID", "app_1");
     vi.stubEnv("WORLD_RP_ID", "rp_1");
     vi.stubEnv("WORLD_SIGNING_KEY", "0x" + "22".repeat(32));
     vi.stubEnv("VERCEL_ENV", "production");
