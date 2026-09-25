@@ -1,207 +1,78 @@
-# GoHealthMe — Circle Agentic Economy build
+# GoHealthMe V4 (ETHGlobal Tokyo 2026, Continuity track)
 
-Verified health goals with instant USDC rewards. Sponsors fund pools; you hit the goal; you get paid the second it is verified. Raw health data never touches the chain.
+Verified health goals, paid in USDC the instant a wearable proves you did the thing, and nobody sees your health data. This repo is the **ETHGlobal Tokyo 2026** build (Sep 25-27 2026, Tokyo, JST). Andre Chuabio and Nikki Hu, on site. Stage word: **hackathon build**. Never "live", never "production".
 
-This repo is GoHealthMe's architecture adapted for the **Circle Agentic Economy Prize ($50,000)**, deadline **2026-08-17, 1:00pm PT**. It is the same product. The change is that an agent now runs the money.
+## What this repo is
 
-## Read SPEC.md first
+A full-history clone of `Meowteam6/gohealthme-base` (V3, the Base Sepolia pilot) taken 2026-09-25 at `a86387d` on `feat/pilot-compliance-guardrails`, renamed `main`. Everything before that commit is the existing product the Continuity track expects; everything after it is what judges score. **Commit small and often, with real messages.** Judges read the history to see what the weekend added.
 
-`SPEC.md` is the build spec — verified defects with file:line, fixed product decisions, screens, build order, video beat sheet, and a rejected-ideas list so settled arguments are not reopened. Read it before proposing anything.
+Lineage: `gohealthme` (V1, ETHGlobal NY, won Chainlink Confidential AI Attester) -> `arbiterpay` (V2, Circle Agentic Economy) -> `gohealthme-base` (V3, Base pilot) -> **this repo (V4, Tokyo)**.
 
-**Four verified defects live there and the first one blocks everything else:** three of the five live pools settle to ZERO. `_payAchievers` computes `entryFee * multiplierBps / BPS`, and both `[doc]` preventive-care pools were created with `entryFee = 0` and `bountyModel = 0`, so `totalOwed` is zero and it returns early. The transaction succeeds, `AchieverPaid` never fires, nobody is paid. Do not build on pools that cannot pay. Always assert on the USDC delta, never on transaction success.
+**Frozen for the weekend, never touch from here:** `gohealthme-base` (repo, Vercel project `gohealthme-base`, www.gohealthme.app, Base Sepolia pools on `0x66815e3A...`), `arbiterpay`, `gohealthme`. V4 deploys to a **brand-new Vercel project** (`gohealthme-tokyo`). There is deliberately no `app/.vercel/` here. Linking to any existing project would overwrite a judged or piloting build.
 
-The agent is named **SPOTTER**. One name across every surface.
+## Event facts and prize targets
 
-## QA loop protocol — how to actually do it
+Event brief, verified prize table, and rules: `~/Desktop/eth/docs/tokyo-event-brief.md` and `~/Desktop/eth/docs/tokyo-prizes.md`. Read them before scoping anything. Shared ledger with Nikki (backlog, done log, approval queue): MI6 `Projects/Hackathons/ETHGlobal-Tokyo-2026.md`.
 
-A QA loop that only walks the happy path is worse than none: it reports "seamless" while
-half the surfaces are broken. This section is binding because a loop already shipped that
-missed a dead funding button, a failing handle claim, a hanging wearable connect, a raw
-dev string on the SPOTTER page, and stale challenge copy — all live, all at once.
+Targets as of Fri night (from the prize page Nikki screenshotted):
 
-**Walk every route, not the happy path.** Every iteration enumerates and exercises EVERY
-top-level surface as a fresh, non-crypto user, at phone width and desktop:
-`/` (home), `/pools` + a `/pools/[id]` detail, `/challenges` + `/challenge/new`,
-`/dashboard`, `/agent` (SPOTTER), `/sponsor`, `/wallet` (settings), `/handle`, `/feed`,
-`/u/[handle]`, `/goal`. On each, click EVERY interactive control and follow it to its result.
+| Partner | Track | $ | Continuity-only |
+|---|---|---|---|
+| World | Best Use of World ID for Agents | 5,000 | no |
+| World | Best Use of IDKit | 5,000 | no |
+| World | [Cont] Best Use of World ID for Agents | 2,500 | yes |
+| World | [Cont] Best IDKit Use Case | 2,500 | yes |
+| ENS | Best Use of ENSv2 | 6,000 | no |
+| ENS | Best Integration of ENSv2 into an Existing Project | 4,000 (2k/1k/1k) | yes |
 
-**Assert on the real result, never on render.** A button that shows "Added" while the
-balance stays $0.00 is a FAIL. Verify the on-chain delta (USDC balanceOf), the network
-response (200 with real data, not 500), or the DOM state that proves the action happened.
-"The page loaded" and "it built" are not verification.
+The thesis, in one line each. Do not reframe the product; add the mechanism.
 
-**Test state transitions, not just first run.** Fund -> spend on a pool entry -> try to
-fund again. Join -> revisit -> verify. Most breaks (faucet lockout, stale caches, empty
-states) only appear on the second action, not the first.
+- **World ID for Agents**: SPOTTER (the settlement agent in `app/lib/server/agent/`) must ask a real human to authenticate or freshly verify at the moment of a protected action (settle, payout, join). The demo must show the full journey: request, human completes it, validated result, protected action happens, AND a denied, expired or cancelled path where the action does not occur. Proofs are mocked at this event (no sandbox app); never rely on them for production.
+- **IDKit**: proof-of-human at the join so one human is one entry. World ID was in V1 and was removed in V2; V4 brings it back on the current SDK, wired into `joinPool` gating and the `/c/[token]` challenge path, not a login screen.
+- **ENSv2 on Sepolia**: names for pools, participants and the agent, using the parts the prize names (registry hierarchy, Enhanced Access Control, Permissioned Resolvers, record and namespace aliasing). Integration must be functional and improve the product, not cosmetic; no hard-coded values; live demo link and open-source repo at submission. Pools stay on Base Sepolia; ENS reads and writes go to Ethereum Sepolia.
 
-**A broken critical-path control is a P0 to FIX in the same pass.** Do not file it as a
-note and move on. The loop exists to catch AND fix; flagging a dead button and stopping is
-the failure mode this section prevents.
+## Landmines inherited from V3 (verified by the sessions that built it, 2026-09-25)
 
-**Every surface must reflect the CURRENT product model.** The pilot is self-staked
-commitment. Leftover copy from a prior model (sponsor-only, wager framing, World ID) is a
-bug, not cosmetic. Grep for retired terms after any model change.
+1. **The settle path cannot pay a winner today (V3 item P19).** `HealthPoolsV3.healthVerdict()` returns `0x0` (oracle-only) but `app/lib/server/agent/spotter.ts` settle preflight and `run.ts` attester check read a verdict registry unconditionally. First achiever gets recorded, then settle errors, never auto-paid. **Day-one V4 fix:** read the pool's own `healthVerdict()` from chain and treat `0x0` as oracle-only in the settle preflight, the attester-role check and `recordVerdict`. Assert on the USDC delta, never on tx success. Andre held this on V3 because it is a payout route; on V4 it is the demo, so fix it here.
+2. **`WEARABLE_TOKEN_KEY` fails silently.** Without it WHOOP reports itself unavailable and vanishes from the provider picker. `openssl rand -base64 32`.
+3. **`NEXT_PUBLIC_ACCESS_GATE_DISABLED=1` must never reach a deployed env.** It lives in `playwright.config.ts` for the suite only. It opens the closed beta.
+4. **The `e2e` CI workflow is red and pre-existing** (`agent-receipts.spec.ts`, `fail-closed.spec.ts`; mock RPC answers `getPool` with `0x`). Reproduced on `1df0e66`, before any wearable work. Do not spend Tokyo hours on it.
+5. **WHOOP cannot be the demo path.** Sandbox tier, 10 members total, no review SLA. Junction is the working default (sandbox, 50 users). Apple needs a native build on a phone and has never run on one.
+6. **Apple needs a database and cloning does not clone it.** Apply `supabase/migrations/20260908_wearable_days.sql` (plus its retention sweep) to whatever Supabase project V4 points at, or Apple silently has no data.
+7. **`app/.env.local` in V3 wrote to production (P20).** The V4 copy has the five Upstash/KV vars stripped, so local uses the JSON file store. Do not `vercel env pull` them back in. Preview deploys of V3 share the prod database for the same reason; V4's new project must get its own KV.
+8. **Both staking surfaces must use the join gate** (`app/lib/wearable-join-gate.ts`): the pool page and `/c/[token]`. Any new entry path (World-verified join included) goes through it. A pool a device cannot verify is refused at the join, before any stake.
 
-**No dev strings reach end users.** Env-var names ("set CIRCLE_* variables"), raw stack
-traces, "run the provisioning script", and internal error text are bugs. A user sees an
-honest product state or an honest "not live yet" — never the plumbing.
+## Rules (binding)
 
-**Verify the backend is provisioned, not just coded.** A missing env var (Redis, treasury
-key, JUNCTION_API_KEY) makes a correct route return 500. Check that the deployment actually
-has what the code needs before declaring a flow works; a green build over an unprovisioned
-backend is a broken app.
+- **Testnet only.** Base Sepolia for pools and USDC, Ethereum Sepolia for ENSv2. No mainnet, no real money, no wager or odds language, no raw health data on chain.
+- **Never touch the frozen repos or their Vercel projects** (above).
+- **No secrets in git, notes, chat or artifacts.** `app/.env.local`, `contracts/.env`, `*.pem`, recovery files stay ignored. `AI_ATTRIBUTION.md` stays current.
+- **No emojis. No exclamation marks in code or docs. No AI credit in commits.**
+- **Money paths:** assert on a USDC delta or an emitted event. Transaction success alone proves nothing.
+- **Product correctness:** an addition is judged by whether any user can now hit a dead end. Surface limits at the join, not at the claim. Before calling a lane done, name which users are worse off.
+- **No stopgaps.** Ship the true fix or flag the real fix by name. A degraded path is visible in the UI and to Andre.
+- **Nothing outward is sent by a session.** Submission text, tweets, DMs and forms go to the approval queue in the ledger. Andre submits.
+- **Honesty ladder:** V4 is a hackathon build. V3 is a pilot. V1 won a prize. Never "live" or "production" for anything here.
 
-**Done means the whole chain works, verified end to end:** sign in -> add practice money
-(and re-add after spending) -> browse -> join gasless -> connect a real wearable -> claim a
-handle -> see SPOTTER settle -> payout lands. Not "4 of 8 buttons work."
+## How to run
 
-## The product does not change
+- App: `cd app && npm ci && npm run dev` -> http://localhost:3000. Env is `app/.env.local` (NOT the repo root). `NEXT_PUBLIC_*` vars must be there to reach the browser.
+- Tests: `cd app && npm test` (vitest, 1154 at fork) and `npx tsc --noEmit`. Contracts: `cd contracts && forge test`.
+- E2E: `npm run test:e2e` (expect the pre-existing red specs in item 4).
+- Deploy: `vercel` from `app/` into the NEW `gohealthme-tokyo` project, preview first; Andre promotes. Vercel SSO protection puts every preview behind a login wall; drive QA on a URL you can actually open.
+- Read `docs/WEARABLES.md` before touching wearables, `DEPLOYMENTS.md` for addresses, `HANDOFF.md` for the V1-era history (World ID sections there are history, not a wiring guide).
 
-GoHealthMe stays GoHealthMe. Sponsor-funded health pools, one-wallet-one-entry enforced on-chain by `joinPool` (World ID was removed in the Circle build), confidential AI verification in a TEE, instant USDC settlement on Arc.
+## Verified facts that still hold (do not re-derive)
 
-**Do not rewrite this as a generic "autonomous underwriting agent" or "claims automation platform."** That framing was tried and rejected — it is what every B2B fintech entrant calls themselves, it is forgettable, and it throws away the thing that makes this memorable. Judges see hundreds of submissions. "Get paid in USDC the instant you hit your sleep streak, verified so nobody ever sees your health data" lands. "Autonomous underwriting" does not.
-
-The brand voice is deliberate and Andre owns it: degen energy, direct, a bit funny, founder as the persona. Do not sand it into enterprise copy.
-
-## What is actually new for Circle
-
-One thing: **the agent becomes an economic actor inside GoHealthMe** rather than a script someone runs.
-
-```
-sponsor funds a pool
-   -> agent BUYS the verification it needs, per claim
-      (x402 / nanopayments via the Circle Agent Marketplace)
-   -> agent decides who hit the goal
-      (Chainlink Confidential AI Attester verdict + Gemini reasoning)
-   -> agent PAYS the achievers from its own Circle wallet
-      (settle() on Arc)
-```
-
-The agent has a budget, real costs, and real payouts. That is Circle's stated thesis — agents as economic actors that hold money and operate under guardrails — expressed through GoHealthMe's existing mechanics, not bolted onto them.
-
-Why this is strong for their **centrality** criterion: GoHealthMe has no business at all if settlement is manual. The payout is the product. Most entrants will be adding a payment to something that worked fine without one.
-
-Honest about the payee: this is agent-to-service on the buy side and agent-to-human on the pay side. Do not pretend it is agent-to-agent. An agent paying real people for real behaviour is a better story than two bots trading API calls.
-
-## Repo name
-
-`arbiterpay` is a leftover from the rejected reframe and is almost certainly wrong. This is GoHealthMe. Rename before the repo goes public — GitHub redirects make it free. Andre decides.
-
-## Who owns this — Meowteam6
-
-This repo belongs to **Meowteam6**, the two-founder company run by Andre Chuabio and Nikki Hu. GitHub org is `Meowteam6`; this repo is `Meowteam6/arbiterpay`. Anything written here is read by both founders, so write for that audience.
-
-Five repos, and this one does not stand alone:
-
-| Repo | Role |
-|---|---|
-| `claudemeow` | Plugin, guards, executor, Telegram bridge — the substrate the others run on |
-| `MeritAI` | **Main XPRIZE entry** (Build with Gemini, $2M pool, Professional Services Access) |
-| `arbiterpay` | **This repo. Circle Agentic Economy entry** ($50k, one winner, stacks on the main prize) |
-| `gohealthme` | The ancestor. Frozen ETHGlobal NY 2026 artifact — never modify it from here |
-| `synapse` | Dormant |
-
-**Both prize tracks submit against the same deadline: 2026-08-17, 1:00 PM PT.** MeritAI is the main entry; this is the bonus that stacks on it. Work here competes for hours with MeritAI, so scope creep in this repo costs the $2M track, not just this one.
-
-Operating model: work is queued through a Telegram group and the MeowConcierge bot into GitHub Issues, then executed by launchd executors on an always-on M4 Mac mini, one git worktree per ticket, ending in a draft PR. Nobody codes on the mini directly.
-
-The company brain is the **MI6 Obsidian vault** at `/Users/andrechuabio/Documents/Meow_Intelligence_6(MI6)` — company decisions, repo dossiers, and the sprint ledger live there, not in this repo. It is shared with Nikki and multi-writer, and the Obsidian MCP server cannot reach it (use absolute shell paths; mind the literal parentheses). Notes for this build: `Projects/GoHealthMe-Circles.md`; repo dossier: `Repos/ArbiterPay.md`; deadline ledger: `Org/XPRIZE-Sprint.md`; append-only decision log: `Org/Decisions.md`. Never put secrets in the vault.
-
-## Relationship to the original gohealthme repo
-
-Full-history clone of `AndreChuabio/gohealthme` taken at `pre-circle-pivot` (2026-07-30).
-
-**Never modify the `gohealthme` repo, its Vercel project, or `gohealthme.vercel.app` from here.** That deployment won the Chainlink Confidential AI Attester prize at ETHGlobal NY 2026 and must keep serving that build. Tags there: `ethglobal-submission` (`0b5b17e`, the judged state) and `pre-circle-pivot` (`767c8f1`, the fork point).
-
-**Never link this repo to the existing Vercel project.** There is deliberately no `.vercel/` here. Create a brand new project when deploying. Linking to `gohealthme` would overwrite the winning demo.
-
-## What Circle is judging
-
-Creativity, **centrality to the business**, technical depth and autonomy, customer experience.
-
-Three mandatory proofs, all required:
-1. Public GitHub repo showing **Circle Agent Stack** integration
-2. Recorded demo of at least one real, verifiable USDC transaction
-3. The agent's **Circle wallet address** plus a clickable block-explorer URL
-
-The bar is *"genuinely agent-driven — no human manual checkout."*
-
-## Eligibility gates — blockers, not features
-
-**No Gemini call exists anywhere in this codebase.** Zero hits for gemini/vertex/googleapis in `app/lib` and `app/app`; the judge runs `gemma4` through the Chainlink attester (`app/lib/server/judge.ts`). Base rules require a Gemini API call in the deployed application, and Circle's page requires meeting all base rules. **No Gemini means no prize.** Route the agent's reasoning through Gemini on Vertex AI — satisfies the Gemini rule and the Google Cloud rule in one integration.
-
-**Arc has no mainnet before Aug 17.** Circle's docs say never target Arc mainnet, so every transaction available is testnet while the prize's example explorers are mainnet. Circle confirmed on the 2026-07-30 briefing that agents transacting on testnet is normal and widely done, which de-risks it, but that is not a formal ruling. Written clarification outstanding. If unanswered by Aug 8, hedge with one small agent-driven USDC transfer on Base mainnet for a Basescan link — do **not** migrate settlement off Arc.
-
-## Verified facts — do not re-derive
-
-- **`settle()` is permissionless.** `contracts/src/HealthPools.sol` — `external nonReentrant`, gated only on `block.timestamp > periodEnd` and `!settled`. A Circle wallet can become the settler with zero Solidity changes and no redeploy. It is also a known griefing vector; **do not "fix" it before submission** — it is what makes the integration cheap. Revisit immediately after.
-- **ARC-TESTNET is Circle CLI's `DEFAULT_AGENT_CHAIN_TESTNET`**, chain id 5042002 — already the settlement chain. No migration needed.
-- **Agent Wallet sessions cannot run headless.** The CLI strips the refresh token before persisting and secrets live in the OS keychain, so a Vercel function cannot re-authenticate. Use `@circle-fin/developer-controlled-wallets` (static API key plus entity secret) as the always-on settler; use the CLI-provisioned Agent Wallet as the named agent identity for proof 3. Never put a CLI session on the critical path.
-- Live contracts (Arc testnet, gate ON): HealthPools `0xc4274eF2cBe28f77Af31b980055Cc1171818390C`, HealthVerdict `0x9bf5e4b54361DEAca4314c1d8de3aeB30111F042`, KeystoneForwarder `0x76c9cf548b4179F8901cda1f8623568b58215E62`.
-- `goalId` is `keccak256(abi.encode(pools, poolId, participant, periodStart))`. Four layers must agree: both contracts, the CRE workflow, and `app/lib/server/verdict.ts` (which reads it from the contract rather than re-deriving — keep it that way).
-- The settlement gate is ON: `settle()` pays only where `canSettle(goalId)` is true. A missing registry write means a successful transaction that pays nobody. Assert on the USDC delta, never on transaction success alone.
-- **The "nothing was listening to `setShowAuthFlow`" theory is FALSE — do not re-derive it.** Verified against the installed SDK (`@dynamic-labs/sdk-react-core@4.88.6`): `DynamicContextProvider` renders `DynamicAuthFlow` itself, and `DynamicConnectButton`'s onClick is literally `setSelectedWalletConnectorKey(null); setShowAuthFlow(true);` — the same call the old hand-rolled button made. The flag always had a listener. The real fix is the `primaryWallet ?? userWallets[0]` resolution below. `components/Header.tsx` uses `DynamicConnectButton` anyway (it also clears a stale connector key and gates on `projectSettings` loading), but note `login()` is still the sign-in path in nine other components — if the bare-button theory were true the app would still be broken everywhere else.
-- **MetaMask is filtered out of the login modal** via `walletsFilter` in `app/app/providers.tsx`. It matches on the `metamask` key *prefix*, because the SDK also ships a `metamaskevm` key that an exact `RemoveWallets(["metamask"])` would miss. Email, Coinbase, WalletConnect and Trust remain. Verified in-browser: the shortlist omits it and searching the full 585-wallet list returns "Wallet not available". `useMetamaskSdk: false` is now inert but harmless.
-- **The Arc RPC reorder from PR #29 only landed in `app/lib/chains.ts`.** `app/lib/dynamic.ts` still lists the demoted `rpc.testnet.arc.network` as its sole RPC, and `app/app/providers.tsx` still leads with it and still includes the drpc endpoint that answers 400. This matters because Dynamic builds the `wallet_addEthereumChain` payload from the `dynamic.ts` descriptor, so external-wallet users get the known-bad endpoint written into their wallet. One line in each file, still unfixed.
-- **`primaryWallet` is null for external wallets under connect-only.** Email sign-in populates it (the turnkey embedded wallet), but a MetaMask/Coinbase connection lands in `useUserWallets()` with no authenticated session to promote a primary. Reading `primaryWallet` alone meant a wallet user connected successfully and the header never left "Sign in". `lib/wallet.ts` now resolves `primaryWallet ?? userWallets[0]`. Verified end to end on production: a real email login flips the header to "Sign out" plus the wallet address.
-- **Keep `initialAuthenticationMode: "connect-only"` in `app/app/providers.tsx`.** It skips the SIWE ownership signature, which is what surfaces as "Message signature denied" in the modal for MetaMask users. It was never the reason sign-in was dead, and measured on production it does NOT cost the email view — the modal shows email and the wallet list together. Removing it re-introduces the signature failure. `lib/wallet.ts` already treats a connected wallet as authenticated precisely because connect-only never sets `isLoggedIn`.
-- **These CSP / CORS / allowed-origin theories are all disproved. Do not re-derive them.** The app serves no CSP on any surface (no header, no meta tag, no `middleware.ts`); the policy seen in DevTools comes from Vercel's SSO login page and the MetaMask extension frame. All three Arc RPCs return correct CORS from the browser origin, so PR #29's premise is stale. Dynamic returns a correct `access-control-allow-origin` for production, preview, and localhost, so Allowed Origins was never the blocker. Note `curl` ignores CORS — a `200` proves nothing unless you check the ACAO header.
-- **Vercel SSO protection is ON** (`all_except_custom_domains`), so every preview and `*.vercel.app` URL sits behind a Vercel login wall. Test on the production alias, never a preview URL. A custom domain is exempt — which is also the escape from Blockaid flagging `*.vercel.app` (3,705 of its siblings are on MetaMask's blocklist; this app is on none).
-
-## Build on Circle's own scaffold
-
-- `circlefin/agent-stack-starter-kits` — the **`vercel-ai`** kit matches this stack. `packages/circle-tools` wraps the CLI for wallets, balances, service discovery, and x402 payments.
-- `circlefin/skills` — Circle's skill files for AI-assisted development.
-- Circle Agent Marketplace: `agents.circle.com/services`.
-
-Using their scaffold makes the integration read as native, which matters for proof 1.
-
-## No stopgaps — this is a live product, not a demo
-
-GoHealthMe has real users and is heading into a fundraise. Ship production quality, not proof-of-concept behaviour. Andre has flagged demo/POC shortcuts as the thing that makes this product fragile — treat this section as binding.
-
-- **Ship the whole true fix, or flag it — never a silent band-aid.** Fix the actual root cause. If the true fix is out of scope, needs infrastructure, or needs a decision, STOP and tell Andre plainly what the real fix is and why it is not done. A "graceful degradation" that leaves a feature non-functional is a stopgap; if you ship one to unblock, name it as a stopgap out loud, every time, and say what the durable fix is.
-- **Never claim something is fixed until you have seen it work.** Assert on real behaviour — a live response returning real data, a real on-chain delta, a passing end-to-end — not on "it built" or "it should work". Do not call anything a "real fix" until verified against the running system.
-- **Stopgaps compound into fragility.** Each unflagged band-aid hides the next bug. Prefer the durable fix; an interim measure is a flagged, tracked exception, not the default.
-- **A degraded path must be visible.** If a surface can only partially work, both the UI and Andre are told what does not work and what the real fix is — no fake zeros, no pretending.
-
-## Hard rules
-
-- **Never send raw health data to Gemini or any marketplace service.** Only derived verdicts and pool state. The TEE privacy boundary in `app/lib/server/judge.ts` is the product's core claim.
-- **Cap the agent's verification spend per pool.** Circle emphasised guardrails heavily on the briefing. Few lines, demos well, maps to their technical-depth criterion.
-- **No silent failures on any money path.** Report success only when funds actually moved.
-- **Never commit key material.** `*.pem` and `*-recovery-file.json` are gitignored. The Circle entity-secret recovery file must never live in the repo tree — there is no recovery if both it and the entity secret are lost.
-- **This repo becomes public before Aug 17.** Unfixed money-path security findings exist and are deliberately undocumented here for that reason. Ask Andre for the private triage before touching payout routes or funding the agent wallet meaningfully.
-- No AI-tool credit in commits, code comments, or docs. No emojis. No exclamation marks in code or documentation.
-
-## Out of scope until Aug 17
-
-Every hour here is an hour not spent on the three mandatory proofs.
-
-- Selling into the Circle Marketplace as a provider (99.9% uptime vetting; we are a buyer)
-- Chainlink CRE path B deployed end to end; `authorizedKeys` and the DON deployment
-- Mainnet contract audit and real-money settlement (contracts are unaudited)
-- Junction wearables expansion, Blink, Unlink payout work, new pool types
-- Chasing arms-length revenue. Report zero honestly; do not build a sales motion.
+- `multiInjectedProviderDiscovery: false` in wagmi `createConfig` (`app/app/providers.tsx`) is load-bearing; removing it breaks MetaMask sign-in. `initialAuthenticationMode: "connect-only"` stays. `lib/wallet.ts` resolves `primaryWallet ?? userWallets[0]`.
+- Dynamic renders into `.dynamic-shadow-dom`; a clean accessibility tree does not mean nothing rendered. Browser-automation clicks can no-op on React handlers; dispatch the full pointer sequence before declaring a control dead.
+- `goalId` is read from the contract, never re-derived in the app.
+- Base Sepolia HealthPoolsV3 `0x66815e3AC541eB18d01D2aed25D0D9779583D832`, USDC `0x036CbD53842c5426634e7929541eC2318f3dCF7e`, oracle on chain `0xA56eAD3A32b6261bDE6C2A45495C9250084F7F2D` (DEPLOYMENTS.md lists a different oracle; chain wins). V4 may redeploy its own HealthPoolsV3 for the demo; record it in DEPLOYMENTS.md under a Tokyo heading.
 
 ## Research-first
 
-Read before changing: this file, `HANDOFF.md`, `DEPLOYMENTS.md`, and the specific route or contract. Map the flow end to end (evidence -> attester verdict -> HealthVerdict registry -> agent decision -> settle) before touching any link. Expand existing code; do not duplicate. Check existing branches before implementing a fix — work has been duplicated that way before.
+Read this file, `~/Desktop/eth/docs/tokyo-prizes.md`, the ledger, and the specific route or contract before changing anything. Map the flow end to end (join gate -> wearable summary -> SPOTTER verdict -> human authorization -> settle -> payout) before touching any link. Expand existing code; check existing branches before implementing a fix.
 
-## Reporting a bug fix — do not hand back a status report
+## Logging
 
-When Andre reports something broken, the deliverable is the **fixed, verified thing** — not an analysis of it. Drive it to done in one pass:
-
-1. **Reproduce it in a real browser first.** Notes and prior diagnoses in this file, in memory, and in commit messages have all been wrong about this app before. A premise older than a few days is a hypothesis, not a fact — re-measure it.
-2. **Verify in the running app, not by reading code.** Check the live DOM, network, and console. Shadow DOM hides things: Dynamic renders into `.dynamic-shadow-dom`, so an empty accessibility tree or a clean screenshot does not mean nothing rendered.
-3. **Browser-automation clicks are not real clicks.** The harness's `left_click` does not fire the full pointer sequence React needs, and it silently no-ops on some handlers. Before concluding a control is broken, dispatch `pointerdown/mousedown/pointerup/mouseup/click` or call `.click()` directly. A fix was nearly abandoned as failed over exactly this.
-4. **Do not stack fixes.** If a fix does not work, return to evidence. Three failed fixes means the architecture is wrong, not that the fourth attempt will land.
-5. Report only once it works, with the verification. Interim theories waste his time and read as excuses.
-
-## Stack
-
-Next.js App Router + TypeScript, wagmi/viem, Foundry, Upstash Redis. Arc testnet for settlement. Circle Agent Stack for the agent wallet and service payments. Gemini via Vertex AI for the agent's reasoning step.
-
-## Progress logging
-
-Append dated entries to `/Users/andrechuabio/Documents/Claude_Brain/01 - Hackathons/ETHGlobal NY 2026.md` after each significant milestone. Consider a dedicated note for this prize once the build is underway.
+After each milestone: a row in the MI6 ledger done log with evidence (commit, tx hash, URL), and a dated entry in `~/Claude_Brain/01 - Hackathons/ETHGlobal Tokyo 2026.md` (mirrored to `~/Documents/Claude_Brain`). A session that ends without the ledger knowing what happened did not finish.
