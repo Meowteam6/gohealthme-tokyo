@@ -113,7 +113,7 @@ export function deferredSettleCopy(
 /** The record row's label: a recorded miss says so, never "recorded" alone,
  *  which reads like a pass. */
 export function recordRowLabel(row: Extract<ReceiptRow, { kind: "record" }>): string {
-  return row.verdict ? "recorded on-chain" : "miss recorded on chain";
+  return row.verdict ? "Recorded on chain" : "Miss recorded on chain";
 }
 
 /** Calm per-stage label for an error row. Transient conditions (the chain not
@@ -223,18 +223,18 @@ function SpendRow({ row }: { row: SpendReceiptRow }) {
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 break-words text-sm font-medium">
           {row.paidUsd !== null ? (
-            <span aria-hidden className="mr-2 text-accent">
+            <span aria-hidden className="mr-2 font-mono text-moonlight">
               [x]
             </span>
           ) : (
-            <span aria-hidden className="mr-2 text-muted">
+            <span aria-hidden className="mr-2 font-mono text-muted">
               [ ]
             </span>
           )}
           {row.label}
           {!row.planned ? (
-            <span className="ml-2 text-xs uppercase tracking-wide text-warning">
-              unplanned
+            <span className="ml-2 text-xs font-semibold text-foreground">
+              Unplanned
             </span>
           ) : null}
         </span>
@@ -272,7 +272,7 @@ function SpendRow({ row }: { row: SpendReceiptRow }) {
         </p>
       ) : null}
       {note !== null ? (
-        <p className="mt-1 break-words pl-7 text-sm text-foreground/80">
+        <p className="mt-1 break-words pl-7 text-sm text-muted">
           {note}
         </p>
       ) : null}
@@ -342,9 +342,9 @@ export default function AgentReceipt({
   const missStakeUsd = missRow?.stakeUsd ?? null;
 
   return (
-    <div className="rounded-xl border border-edge bg-surface-raised p-4 font-mono">
-      <p className="text-xs font-semibold uppercase tracking-widest text-muted">
-        SPOTTER receipt
+    <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
+      <p className="text-[1.0625rem] font-semibold">
+        SPOTTER&apos;s receipt
       </p>
       <ol className="mt-3 space-y-3">
         {items.map((item) => {
@@ -370,7 +370,7 @@ export default function AgentReceipt({
                     confidence={row.confidence}
                     selfReported={row.selfReported}
                   />
-                  <p className="mt-1 text-sm text-foreground/80">
+                  <p className="mt-1 text-sm text-muted">
                     {row.escalation ? "second opinion: " : ""}
                     {row.reason}
                   </p>
@@ -379,23 +379,23 @@ export default function AgentReceipt({
             case "reason":
               return (
                 <li key={item.key} className="animate-rise-in pl-7 text-sm">
-                  <span className="text-xs uppercase tracking-wide text-muted">
-                    decision
+                  <span className="text-xs font-bold text-muted">
+                    Decision:
                   </span>{" "}
                   <span
                     className={
-                      row.decision === "pay" ? "text-accent" : "text-warning"
+                      row.decision === "pay" ? "text-moonlight" : "text-dusk-ink"
                     }
                   >
                     {row.decision}
                   </span>
-                  <p className="mt-1 text-foreground/80">{row.note}</p>
+                  <p className="mt-1 text-muted">{row.note}</p>
                 </li>
               );
             case "record":
               return (
                 <li key={item.key} className="animate-rise-in pl-7 text-sm">
-                  <span className="text-xs uppercase tracking-wide text-muted">
+                  <span className="text-xs font-bold text-muted">
                     {recordRowLabel(row)}
                   </span>
                   {!row.verdict ? (
@@ -463,16 +463,16 @@ export default function AgentReceipt({
             case "approval":
               return (
                 <li key={item.key} className="animate-rise-in pl-7 text-sm">
-                  <span className="text-xs uppercase tracking-wide text-muted">
+                  <span className="text-xs font-bold text-muted">
                     {row.status === "requested"
-                      ? "asked you to confirm"
+                      ? "Asked you to confirm"
                       : row.status === "approved"
-                        ? "you confirmed"
+                        ? "You confirmed"
                         : row.status === "declined"
-                          ? "you declined"
+                          ? "You declined"
                           : row.status === "expired"
-                            ? "request expired"
-                            : "request withdrawn"}
+                            ? "Request expired"
+                            : "Request withdrawn"}
                   </span>
                   {row.provider === "mock" ? (
                     <span className="ml-2 text-xs text-muted">
@@ -480,7 +480,7 @@ export default function AgentReceipt({
                     </span>
                   ) : null}
                   {row.note !== null ? (
-                    <p className="mt-1 text-foreground/80">{row.note}</p>
+                    <p className="mt-1 text-muted">{row.note}</p>
                   ) : null}
                   {row.nullifierStub !== null ? (
                     <p className="mt-1 text-xs text-muted">

@@ -20,12 +20,15 @@ export interface EnsNameProps {
   className?: string;
 }
 
-export default function EnsName({ address, fallback, className }: EnsNameProps) {
+/** The ENS name for an address, or null until (or unless) one resolves. The
+ *  same read EnsName draws; for a surface that needs the name as text (an
+ *  avatar's initial). Null reads nothing (no wallet yet). */
+export function useEnsName(address: string | null): string | null {
   const [resolved, setResolved] = useState<{ address: string; name: string | null } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    if (cachedName(address) !== undefined) return;
+    if (address === null || cachedName(address) !== undefined) return;
     resolveOnce(address, fetchResolvedName)
       .then((result) => {
         if (!cancelled) setResolved({ address, name: result });
@@ -38,14 +41,17 @@ export default function EnsName({ address, fallback, className }: EnsNameProps) 
     };
   }, [address]);
 
+  if (address === null) return null;
   const memo = cachedName(address);
-  const name =
-    memo !== undefined
-      ? memo
-      : resolved !== null && resolved.address === address
-        ? resolved.name
-        : null;
+  return memo !== undefined
+    ? memo
+    : resolved !== null && resolved.address === address
+      ? resolved.name
+      : null;
+}
 
+export default function EnsName({ address, fallback, className }: EnsNameProps) {
+  const name = useEnsName(address);
   const short = shortAddress(address);
   return (
     <span className={className} title={address} data-ens-name={name ?? undefined}>

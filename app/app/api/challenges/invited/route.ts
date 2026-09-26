@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     // caller could sign for their own wallet and read another handle's tokens.
     const auth = await requireAddressSignature(request, address);
     if (!auth.ok) {
-      return jsonError(401, "Sign with your wallet to see the dares aimed at you.");
+      return jsonError(401, "Sign with your wallet to see the challenges aimed at you.");
     }
 
     // No claimed handle means nobody could have targeted this wallet by handle.

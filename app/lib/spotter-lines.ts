@@ -59,21 +59,21 @@ export interface SpotterLine {
 
 export const SPOTTER_LINES: SpotterLine[] = [
   // ── Headers (deadpan, one-liners beside the scenic otter) ────────────────
-  { id: "dash-h1", surface: "dashboard-header", state: "idle", tone: "deadpan", text: { en: "I hold the wallet. You hold the streak." } },
+  { id: "dash-h1", surface: "dashboard-header", state: "idle", tone: "deadpan", text: { en: "I read the wearable. You keep the streak." } },
   { id: "dash-h2", surface: "dashboard-header", state: "idle", tone: "deadpan", text: { en: "Watching the money so you don't have to." } },
   { id: "dash-h3", surface: "dashboard-header", state: "idle", tone: "deadpan", text: { en: "Your goals. My problem now." } },
 
   { id: "pools-h1", surface: "pools-header", state: "idle", tone: "deadpan", text: { en: "Put your money where your goal is. Then go get it back." } },
   { id: "pools-h2", surface: "pools-header", state: "idle", tone: "deadpan", text: { en: "Pick one. Do the thing. Get paid. In that order." } },
 
-  { id: "agent-h1", surface: "agent-header", state: "idle", tone: "deadpan", text: { en: "I buy the proof, I make the call, I move the money." } },
+  { id: "agent-h1", surface: "agent-header", state: "idle", tone: "deadpan", text: { en: "I buy the proof and make the call. The contract moves the money." } },
   { id: "agent-h2", surface: "agent-header", state: "idle", tone: "deadpan", text: { en: "The verdict goes on chain. Your health data never does." } },
 
   { id: "feed-h1", surface: "feed-header", state: "idle", tone: "deadpan", text: { en: "Real payouts, flowing downstream. None of them fake." } },
   { id: "feed-h2", surface: "feed-header", state: "idle", tone: "deadpan", text: { en: "Everybody here already got paid. Catch up." } },
 
   // ── Empty states (dry — never a dead screen) ─────────────────────────────
-  { id: "dash-e1", surface: "dashboard-empty", state: "empty", tone: "dry", text: { en: "Nothing on record yet. I can't pay a streak that doesn't exist." } },
+  { id: "dash-e1", surface: "dashboard-empty", state: "empty", tone: "dry", text: { en: "Nothing on record yet. No streak to read." } },
   { id: "dash-e2", surface: "dashboard-empty", state: "empty", tone: "dry", text: { en: "Empty. Go put your name on a pool." } },
 
   { id: "pools-e1", surface: "pools-empty", state: "empty", tone: "dry", text: { en: "No live pools right now. Even I'm just watching the river." } },
@@ -92,7 +92,7 @@ export const SPOTTER_LINES: SpotterLine[] = [
 
   // ── Payout: verified win (LOUD — only here) ──────────────────────────────
   { id: "pay-v1", surface: "payout", state: "won-verified", tone: "loud", text: { en: "Absolute unit. Run it back." } },
-  { id: "pay-v2", surface: "payout", state: "won-verified", tone: "loud", text: { en: "That happened. I saw it, I paid it." } },
+  { id: "pay-v2", surface: "payout", state: "won-verified", tone: "loud", text: { en: "That happened. I saw it, the contract paid it." } },
   { id: "pay-v3", surface: "payout", state: "won-verified", tone: "loud", text: { en: "Clean proof. Money's already moving." } },
 
   // ── Join: you're in (DRY/deadpan — never loud, joining moves no money) ────
@@ -102,7 +102,7 @@ export const SPOTTER_LINES: SpotterLine[] = [
   // work is still ahead.
   { id: "join-1", surface: "join", state: "joined", tone: "deadpan", text: { en: "You're in. Now go do the thing." } },
   { id: "join-2", surface: "join", state: "joined", tone: "deadpan", text: { en: "Name's on the pool. The hard part is still yours." } },
-  { id: "join-3", surface: "join", state: "joined", tone: "dry", text: { en: "One wallet, one entry. That's you now. I don't pay for showing up, though." } },
+  { id: "join-3", surface: "join", state: "joined", tone: "dry", text: { en: "One wallet, one entry. That's you now. Showing up doesn't pay, though." } },
   { id: "join-4", surface: "join", state: "joined", tone: "dry", text: { en: "Locked in. Come back when there's something for me to settle." } },
 
   // ── Payout: self-reported (WARN — never loud, never "verified") ───────────

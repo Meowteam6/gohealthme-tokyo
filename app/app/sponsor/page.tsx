@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import SponsorConsole from "@/components/SponsorConsole";
-import { EmptyState } from "@/components/ui";
+import { EmptyCard, PAGE_COLUMN, PerchedHeader } from "@/components/night/kit";
+import { buttonClasses } from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "Sponsor a health goal",
   description:
-    "Create and fund USDC health-goal pools and see privacy-safe aggregate outcomes. No participant health data is ever shown. Base Sepolia testnet, play-money USDC.",
+    "Create and fund USDC health-goal runs and see privacy-safe aggregate outcomes. No player health data is ever shown. Base Sepolia testnet, play-money USDC.",
   alternates: { canonical: "/sponsor" },
 };
 
@@ -18,29 +19,22 @@ export const metadata: Metadata = {
 export default function SponsorPage() {
   if (!DYNAMIC_CONFIGURED) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Sponsor console
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            Create and fund USDC health-goal pools, and see privacy-safe
-            aggregate outcomes.
-          </p>
-        </div>
-        <EmptyState
+      <PerchedHeader
+        className={PAGE_COLUMN}
+        title="Sponsor console"
+        lead="Create and fund USDC health-goal runs, and see privacy-safe aggregate outcomes."
+        pose="meditate"
+      >
+        <EmptyCard
           title="Sign-in is off on this build"
           detail="This part is not switched on for this build yet. Nothing is wrong on your side."
           action={
-            <Link
-              href="/pools"
-              className="inline-block rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
-            >
-              Browse pools instead
+            <Link href="/pools" className={buttonClasses({ size: "sm" })}>
+              See the open runs
             </Link>
           }
         />
-      </div>
+      </PerchedHeader>
     );
   }
   return <SponsorConsole />;

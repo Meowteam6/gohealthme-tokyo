@@ -202,7 +202,7 @@ describe("a recorded miss on the receipt", () => {
         verdict: false,
         stakeUsd: "1.00",
       }),
-    ).toBe("miss recorded on chain");
+    ).toBe("Miss recorded on chain");
     expect(
       recordRowLabel({
         kind: "record",
@@ -211,6 +211,6 @@ describe("a recorded miss on the receipt", () => {
         verdict: true,
         stakeUsd: null,
       }),
-    ).toBe("recorded on-chain");
+    ).toBe("Recorded on chain");
   });
 });

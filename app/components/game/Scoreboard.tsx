@@ -1,15 +1,16 @@
-// The scoreboard: the one bold element on a game screen (docs/DESIGN.md). A
-// navy panel, bulb-gold figures for money, chalk for time and nights. Static
-// figures only; a payout landing is PayoutMoment's job, not this panel's.
+// A run's figures in one row (docs/DESIGN.md, "Stat"): stake, pot, time left,
+// with hairline dividers. Money figures are gold, everything else moon. Static
+// figures only; a payout landing is PayoutMoment's job.
 
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
+import { Card, Stat, StatRow } from "@/components/ui";
 
 export interface ScoreCell {
   label: string;
   value: ReactNode;
-  /** Money figures glow bulb gold; everything else is chalk. */
+  /** Money figures are gold; everything else is the foreground. */
   tone?: "money" | "chalk";
-  /** Small line under the figure ("USDC", "left"). */
+  /** Small trailing unit ("USDC"). */
   unit?: string;
 }
 
@@ -18,47 +19,22 @@ export default function Scoreboard({
   caption,
 }: {
   cells: ScoreCell[];
-  /** Screen-reader summary of the board, e.g. the run name. */
+  /** Screen-reader summary of the row, e.g. the run name. */
   caption: string;
 }) {
-  // At phone width (390px) four cells in one row left ~64px per figure, and a
-  // money value like 1,240.00 truncated. Below `sm` the board wraps to two
-  // columns (a lone last cell spans both); from `sm` up every cell shares one
-  // row. The hairlines come from the gap over the edge colour, so they stay
-  // right however the cells wrap.
-  const columns = {
-    "--score-cols": `repeat(${cells.length}, minmax(0, 1fr))`,
-  } as CSSProperties;
   return (
-    <section
-      aria-label={caption}
-      className="overflow-hidden rounded-xl border-2 border-board bg-board-edge text-chalk"
-    >
-      <dl
-        className="grid grid-cols-2 gap-px sm:[grid-template-columns:var(--score-cols)]"
-        style={columns}
-      >
-        {cells.map((cell, index) => (
-          <div
+    <Card as="section" aria-label={caption} padding="sm">
+      <StatRow>
+        {cells.map((cell) => (
+          <Stat
             key={cell.label}
-            className={`min-w-0 bg-board px-3 py-3 sm:col-span-1 sm:px-5 sm:py-4 ${
-              cells.length % 2 === 1 && index === cells.length - 1 ? "col-span-2" : ""
-            }`}
-          >
-            <dt className="text-xs font-semibold text-chalk/70">{cell.label}</dt>
-            <dd
-              className={`mt-1 truncate font-display text-3xl font-extrabold leading-none tabular-nums sm:text-4xl ${
-                cell.tone === "money" ? "text-gold" : "text-chalk"
-              }`}
-            >
-              {cell.value}
-            </dd>
-            {cell.unit !== undefined ? (
-              <dd className="mt-1 text-xs text-chalk/70">{cell.unit}</dd>
-            ) : null}
-          </div>
+            label={cell.label}
+            value={cell.value}
+            unit={cell.unit}
+            tone={cell.tone === "money" ? "money" : "default"}
+          />
         ))}
-      </dl>
-    </section>
+      </StatRow>
+    </Card>
   );
 }

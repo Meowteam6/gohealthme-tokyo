@@ -6,9 +6,11 @@ import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { getHealthPoolsAddress, parseUsdc } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
-import { ArcTxLink, ErrorNote } from "@/components/ui";
+import { ArcTxLink, Button, ErrorNote } from "@/components/ui";
+import { FIELD, FIELD_HINT, FIELD_LABEL, Notice } from "@/components/night/kit";
 import GaslessBadge from "@/components/GaslessBadge";
 import SignInGate from "@/components/SignInGate";
+import ChipInWarning, { type ChipInTerms } from "@/components/ChipInWarning";
 
 interface FundPoolCopy {
   /** Section heading. Defaults to the sponsor top-up wording. */
@@ -24,7 +26,8 @@ function FundPoolInner({
   heading,
   description,
   ctaLabel,
-}: { poolId: bigint } & FundPoolCopy) {
+  chipIn,
+}: { poolId: bigint; chipIn?: ChipInTerms } & FundPoolCopy) {
   const queryClient = useQueryClient();
   const { ready, authenticated } = useEmbeddedWallet();
   const { status, busy, reset, runUsdcDeposit, gasless } = useUsdcDeposit();
@@ -74,32 +77,45 @@ function FundPoolInner({
       : status.kind === "approving"
       ? "Approving USDC..."
       : status.kind === "depositing"
-        ? "Topping up pool..."
+        ? "Adding to the pot..."
         : authenticated
           ? ctaLabel
-          : "Sign in to top up";
+          : "Sign in to add to the pot";
 
   return (
-    <div className="space-y-3">
-      <h3 className="text-lg font-semibold">{heading}</h3>
-      <p className="text-sm text-muted">{description}</p>
+    <div className="[&>*+*]:mt-3">
+      <h3 className="m-0 text-lg font-semibold leading-tight text-foreground">{heading}</h3>
+      <p className="m-0 text-[0.9375rem] leading-[1.45] text-muted">{description}</p>
 
-      <label className="block text-sm font-medium">
-        Amount (USDC)
-        <input
-          type="text"
-          inputMode="decimal"
-          placeholder="25.00"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
-        />
-      </label>
+      {/* Where the money goes, before the amount and the button. */}
+      {chipIn !== undefined ? <ChipInWarning {...chipIn} /> : null}
 
-      <SignInGate note="Sign in to top up this pool.">
+      <div>
+        <label htmlFor={`fund-amount-${poolId.toString()}`} className={FIELD_LABEL}>
+          Amount
+        </label>
+        <div className="relative">
+          <input
+            id={`fund-amount-${poolId.toString()}`}
+            type="text"
+            inputMode="decimal"
+            placeholder="25.00"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className={`${FIELD} num pr-16`}
+          />
+          <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[0.9375rem] text-haze">
+            USDC
+          </span>
+        </div>
+        <p className={FIELD_HINT}>Base Sepolia test USDC. Pulled from your wallet.</p>
+      </div>
+
+      <SignInGate note="Sign in to add to this run's pot.">
         {(openSignIn) => (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            block
             disabled={!ready || busy}
             onClick={() => {
               if (!authenticated) {
@@ -108,38 +124,34 @@ function FundPoolInner({
               }
               void submit();
             }}
-            className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3.5 text-base font-semibold text-accent hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {primaryLabel}
-          </button>
+          </Button>
         )}
       </SignInGate>
 
       {authenticated ? <GaslessBadge status={gasless} /> : null}
 
       {status.kind === "approving" || status.kind === "depositing" ? (
-        <p className="text-xs text-muted">
+        <p className="m-0 text-[0.8125rem] text-haze" role="status">
           Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
           {status.kind === "approving"
             ? "approving USDC"
-            : "funding the pool on Base"}
+            : "adding to the pot on Base"}
           ...
         </p>
       ) : null}
 
       {status.kind === "done" ? (
-        <div className="space-y-1 rounded-xl border border-accent/40 bg-accent/20 p-4">
-          <p className="text-sm font-semibold text-accent-deep">
-            Pool topped up.
-          </p>
+        <Notice tone="ok" title="Added to the pot." role="status" live>
           {status.approveHash ? (
             <>
-              <ArcTxLink txHash={status.approveHash} label="View approval tx" />
+              <ArcTxLink txHash={status.approveHash} label="View the approval" />
               <br />
             </>
           ) : null}
-          <ArcTxLink txHash={status.depositHash} label="View fundPool tx" />
-        </div>
+          <ArcTxLink txHash={status.depositHash} label="View the transaction" />
+        </Notice>
       ) : null}
 
       {formError !== null ? (
@@ -164,11 +176,14 @@ function FundPoolInner({
 
 export default function FundPool({
   poolId,
-  heading = "Top up this pool",
-  description = "Add USDC to the bounty so more participants can be paid when they hit the goal.",
-  ctaLabel = "Approve and top up",
+  heading = "Add to this run's pot",
+  description = "Add test USDC to the pot so more of the players who hit can be paid.",
+  ctaLabel = "Approve and add to the pot",
+  chipIn,
 }: {
   poolId: bigint;
+  /** Anyone but the sponsor's own console: the chip-in warning, per model. */
+  chipIn?: ChipInTerms;
 } & Partial<FundPoolCopy>) {
   if (!DYNAMIC_CONFIGURED) {
     return (
@@ -184,6 +199,7 @@ export default function FundPool({
       heading={heading}
       description={description}
       ctaLabel={ctaLabel}
+      chipIn={chipIn}
     />
   );
 }

@@ -5,126 +5,215 @@ import { Badge } from "@/components/ui";
 export const metadata: Metadata = {
   title: "Privacy",
   description:
-    "What GoHealthMe collects, how it is used, and who processes it. A plain-language notice for the testnet beta.",
+    "What GoHealthMe collects, how it is used, and who processes it. A plain-language notice for the V4 beta on testnet.",
   alternates: { canonical: "/privacy" },
 };
 
-const EFFECTIVE_DATE = "2026-09-26";
+const LAST_UPDATED = "2026-09-26";
 const CONTACT_EMAIL = "andre102599@gmail.com";
 
 /**
- * Pre-counsel, testnet-only privacy notice. Every statement here is written to
- * match what the app actually does. Sources, by section:
- *   World ID       lib/server/world/human.ts (what the binding stores),
- *                  lib/server/agent/approval*.ts (the payout confirmation)
- *   ENS names      lib/server/ens/claim.ts, lib/server/ens/write.ts
+ * Pre-counsel, testnet-only privacy notice for V4. Every statement here is
+ * written to match what the app does today. Sources, by section:
+ *   Sign-in        lib/server/access.ts (the sign-in email never reaches the
+ *                  server; the access request stores name, email, reason and
+ *                  US state), lib/geo-blocklist.ts
+ *   World ID       lib/server/world/human.ts, nullifier.ts, verify.ts (the
+ *                  proof is bound to the wallet address as its signal),
+ *                  config.ts (action "prove-human"),
+ *                  lib/server/agent/approval.ts (action "settle", signal
+ *                  goalId:attempt, per-payout one-shot nullifier key)
+ *   ENS names      lib/server/ens/claim.ts, write.ts, receipt.ts (four
+ *                  gohealthme.settle.* text records), link.ts (own names
+ *                  re-checked once the last check is an hour old),
+ *                  human-gate.ts
+ *   Gas drip       lib/server/gas-drip.ts, app/api/gas/drip/route.ts
  *   Screening      lib/server/screening/intercepta.ts (address only, 1h cache)
- *   Wearables      lib/server/junction.ts, lib/server/wearable/*,
- *                  lib/server/wearable/apple-store.ts and the wearable_days
- *                  migration (daily totals; the 120-day sweep function exists
- *                  but nothing schedules it, so the copy does not promise it)
- *   Documents      app/api/evidence/submit/route.ts (bytes go to the attester
- *                  only), lib/server/proof-status.ts (on or off per build)
+ *   Wearables      lib/server/junction.ts (wallet address is the Junction
+ *                  client_user_id), lib/server/wearable/whoop.ts (scopes
+ *                  read:sleep read:workout offline), tokens.ts (AES-256-GCM),
+ *                  whoop-seats.ts, index.ts (only the paired provider is
+ *                  stored), apple.ts (APPLE_APP_AVAILABLE), apple-store.ts,
+ *                  app/api/cron/wearable-retention (daily, 120 days,
+ *                  scheduled in vercel.json)
+ *   History        app/api/agent/feed/route.ts, lib/server/agent/feed-view.ts
+ *   Documents      app/api/evidence/submit/route.ts, lib/server/judge.ts
  *   Gemini         lib/server/help/ask.ts, lib/server/agent/reason.ts
+ *   Feedback       supabase/migrations/20260926100100_feedback.sql
  *   Disconnect     components/DisconnectDeviceButton.tsx on /settings
  * Do not add claims the app cannot keep.
  */
 export default function PrivacyPage() {
   return (
-    <div className="mx-auto w-full max-w-3xl py-4">
-      <header className="space-y-3">
-        <Badge tone="warning">Beta, testnet</Badge>
-        <h1 className="text-3xl font-bold tracking-tight">Privacy Policy</h1>
-        <p className="text-sm text-muted">
-          Effective {EFFECTIVE_DATE}. This is a plain-language notice for the
-          GoHealthMe beta on testnet, so you know what happens to your data
-          before you try the app.
+    <div className="mx-auto w-full max-w-[46rem]">
+      {/* REVIEW: Nikki and counsel to confirm this notice before any
+          real-money launch, including whether US state health-data laws
+          (for example Washington's My Health My Data Act) apply to the
+          wearable summaries our server reads. */}
+      <header className="[&>*+*]:mt-3">
+        <Badge tone="muted">Beta, testnet</Badge>
+        <h1 className="type-title text-[2.5rem] min-[900px]:text-[3.25rem]">Privacy Policy</h1>
+        <p className="max-w-[60ch] text-[1.0625rem] leading-[1.5] text-muted text-pretty">
+          Last updated {LAST_UPDATED}. This covers GoHealthMe V4, the beta
+          built at ETHGlobal Tokyo 2026 and running on Base Sepolia test
+          money. It says what happens to your data before you try the app.
         </p>
       </header>
 
-      <div className="mt-6 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-relaxed text-foreground/90">
+      <section
+        aria-labelledby="privacy-summary"
+        className="relative mt-8 rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] px-4 py-[18px] text-[0.9375rem] leading-[1.6] shadow-card min-[960px]:p-6"
+      >
+        <h2 id="privacy-summary" className="text-lg font-semibold leading-tight text-foreground">
+          The short version
+        </h2>
+        <ul className="mt-3 list-disc pl-5 text-muted marker:text-haze [&>*+*]:mt-2.5 [&_strong]:font-semibold [&_strong]:text-foreground">
+          <li>
+            <strong>Health data never goes on chain.</strong> Our server reads
+            daily summaries from your wearable to run the check; only
+            SPOTTER&apos;s yes-or-no verdict is written to the blockchain.
+          </li>
+          <li>
+            <strong>World ID tells us you are one human, not who you are.</strong>{" "}
+            We keep a World nullifier bound to your wallet. No face, iris,
+            name or email reaches us from World.
+          </li>
+          <li>
+            <strong>Some things are public for good:</strong> your wallet
+            address, the runs you join, payouts, the goal text of a run, and
+            any ENS name you pick.
+          </li>
+          <li>
+            <strong>Apple Health daily totals are deleted after 120 days</strong>{" "}
+            by a daily job. You can disconnect a wearable from Settings at any
+            time.
+          </li>
+          <li>
+            <strong>Test money only.</strong> Base Sepolia test USDC has no
+            monetary value. Email us to delete your off-chain data.
+          </li>
+        </ul>
+      </section>
+
+      <div className="mt-6 rounded-control bg-surface-raised p-4 text-[0.9375rem] leading-[1.55] text-muted shadow-[inset_0_0_0_1px_var(--border-strong)] [&_strong]:font-semibold [&_strong]:text-foreground">
         This is not legal advice. It is an honest, good-faith description of a
         beta that runs on test money, not a finished legal policy. Before any
         real-money launch it will be replaced by a policy reviewed by a lawyer.
       </div>
 
-      <div className="mt-10 space-y-10 text-sm leading-relaxed text-muted">
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+      <div className="mt-10 text-base leading-[1.65] text-muted [&>*+*]:mt-10 [&_strong]:font-semibold [&_strong]:text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             This is a testnet beta
           </h2>
           <p>
-            GoHealthMe runs on Base Sepolia. All USDC here is test USDC with
-            no real monetary value. Nothing on this site can pay you real money
-            or cost you real money.
+            GoHealthMe V4 runs on Base Sepolia, a test network. All USDC here
+            is test USDC with no monetary value. Nothing on this site can pay
+            you real money or cost you real money.
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Signing in creates a wallet
           </h2>
           <p>
             When you sign in with your email, Dynamic (a Fireblocks company)
-            creates an embedded wallet for you on Base. From that step we hold
-            your email address and your wallet address.
+            creates an embedded wallet for you on Base. Dynamic holds your
+            email; our server never receives it. What we see is your wallet
+            address, and every record we keep about you is keyed to it.
+          </p>
+          <p>
+            If you ask to join the closed beta instead of proving you are
+            human with World ID, the request form stores what you type: a
+            name, an email, a reason, and your US state. We use it only to
+            decide the request. Some US states are not admitted to the beta,
+            and the form tells you so before you send it.
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Proving you are one human (World ID)
           </h2>
           <p>
-            When a build asks you to prove you are one human, you scan with the
-            World App. World gives us a nullifier: a number that is unique to
-            you inside GoHealthMe and means nothing anywhere else. We store that
+            To play, you prove you are one human by scanning with the World
+            App. The proof is tied to your wallet address, and we check it with
+            World. World gives us a nullifier: a number that is unique to you
+            inside GoHealthMe and means nothing anywhere else. We store that
             nullifier bound to your wallet address, the time you verified, and
-            the kind of check it was. We never get your name, your face, your
-            iris data, or your email from World. The binding is how we keep one
-            human to one wallet and one entry per run.
+            the kind of World credential that verified you (for example Orb or
+            passport). We never get your name, your face, your iris data, or
+            your email from World, and no biometric data reaches us. The
+            binding is how we keep one human to one wallet and one entry per
+            run, and one human to one GoHealthMe name.
           </p>
           <p>
-            Before SPOTTER records a win, a build may ask you to confirm the
-            payout with World ID. We store whether you confirmed, declined, or
-            let the window close, and when. The public History page shows that
-            state next to the claim, never your identity.
+            Before the settle pays a win, SPOTTER can ask you to confirm the
+            payout with World ID. That proof is made for that one payout. We store
+            whether you confirmed, declined, or let the window close, when,
+            the nullifier, and the credential kind. The public History page
+            shows only the state and the credential kind, never your identity.
           </p>
           <p>
-            On a build where World ID is off, the closed-beta list decides who
-            can play instead, and we hold your wallet address on that list.
+            On a test build the World step can be simulated. Then nothing is
+            sent to World and no human is actually proven. On a build where
+            World ID is off, the closed-beta list decides who can play, and we
+            hold your wallet address on that list.
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Your name is public on purpose
           </h2>
           <p>
-            Picking a name is optional. On a build with ENS names on, the name
-            you pick becomes a subname (for example yourname.gohealthme.eth) on
-            Ethereum Sepolia, pointing at your wallet address. That record is
-            on a public blockchain: anyone can look it up, and like every
-            on-chain record it is permanent. We cannot delete it. SPOTTER also
-            writes a settlement receipt on ENS for each pool (how many people
-            hit the goal and the payout transaction), with no names and no
+            Picking a name is optional. The name you pick becomes a subname
+            (for example yourname.gohealthme.eth) on Ethereum Sepolia that
+            resolves to your wallet address. That record is on a public
+            blockchain: anyone can look it up, and like every on-chain record
+            it is permanent. We cannot delete it.
+          </p>
+          <p>
+            You can link an ENS name you already own instead. We check that it
+            resolves to your wallet, and check again whenever it is shown and
+            the last check is more than an hour old. If it no longer points at
+            your wallet, we drop the link.
+          </p>
+          <p>
+            When SPOTTER settles a run, it writes a receipt on that run&apos;s
+            ENS name: the settle transaction, when it happened, which agent
+            wrote it, and how many people hit the goal. No player names and no
             health data.
           </p>
           <p>
-            Otherwise the name is an @handle. Your @handle, the glyph you pick,
-            and your public page at /u/your-handle are visible to anyone. That
-            page shows your wins and payouts, never the health goal behind
-            them. Handles are stored in our database (Supabase).
+            Your @handle, the glyph you pick, and your public page at
+            /u/your-handle are visible to anyone. That page shows your wins and
+            payouts, never the health goal behind them. Handles are stored in
+            our database (Supabase).
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
+            Test gas for your wallet
+          </h2>
+          <p>
+            A new wallet holds no test ETH, so it cannot pay the network fee to
+            join a run. When that happens, our treasury sends a small amount of
+            Base Sepolia test ETH to your wallet address. To keep the drip
+            fair we count drips per wallet address per day. Test ETH has no
+            monetary value.
+          </p>
+        </section>
+
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Payout wallets are screened
           </h2>
           <p>
-            Before SPOTTER pays a wallet, it sends that wallet address, and
-            nothing else, to Web3 Antivirus (through Intercepta) to check it
+            Before the settle pays a wallet, SPOTTER sends that wallet
+            address, and nothing else, to Web3 Antivirus (through Intercepta) to check it
             against sanction, blacklist and scam data. We keep the answer for
             about an hour so a retry does not ask again. No health data, no
             goal, and no name is sent. A wallet that is flagged, or a check
@@ -132,26 +221,48 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
+            SPOTTER&apos;s receipts and History
+          </h2>
+          <p>
+            SPOTTER keeps a private ledger for each claim: its verdict, a short
+            reason (which can describe the result of your check, for example
+            hours slept against the goal), the payout steps and the screening
+            answer. That ledger is not public.
+          </p>
+          <p>
+            The public History page shows a redacted view: the goal id, the
+            decision (pay or no pay), payout amounts, transaction hashes, the
+            screening result, and the World confirmation state. No reason
+            text, no goal text and no health data. A goal id is derived from
+            the run and your wallet address, which are already public on
+            chain.
+          </p>
+        </section>
+
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Challenges and feedback
           </h2>
           <p>
             If you create or accept a challenge, we store its metadata in
-            Supabase: an invite token, the pool id, an optional label for who
-            the challenge is for, and an optional message. If you leave
-            feedback, we store your rating and your message.
+            Supabase: an invite token, the pool id, your wallet address, an
+            optional handle for who the challenge is for, and an optional
+            message. If you leave feedback, we store your rating, your message,
+            the page you were on, and your wallet address if you were signed
+            in. The feedback table holds no health data.
           </p>
           <p>
-            One thing to be clear about: the health goal text you write when you
-            create a pool or a challenge (for example, &quot;lose 10 lbs&quot;)
-            is written on-chain in the pool&apos;s goal description, not just in
-            our database. See the on-chain section below.
+            One thing to be clear about: the health goal text of a run (for
+            example, &quot;sleep 7 hours&quot;) is written on-chain in the
+            pool&apos;s goal description, not just in our database. See the
+            on-chain section below.
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             What goes to Google
           </h2>
           <p>
@@ -161,60 +272,71 @@ export default function PrivacyPage() {
             you type is sent.
           </p>
           <p>
-            When SPOTTER decides whether to pay a claim, it can also ask Gemini
+            When SPOTTER decides whether a claim should be paid, it can also ask Gemini
             to reason over the pool&apos;s public goal text and the
             verifier&apos;s yes-or-no verdict. It never sends your wearable
             data, your document, or your wallet address.
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Document proof
           </h2>
           <p>
-            Some runs are checked from an uploaded document (a lab result, a
-            flu-shot record). Those runs only open on a build where the
-            confidential verifier is switched on; otherwise the lobby shows
+            Some runs are checked from an uploaded document or photo (a lab
+            result, a flu-shot record). Those runs only open on a build where
+            the confidential verifier is switched on; otherwise the lobby shows
             them locked. When it is on, your file goes to the Chainlink
             Confidential AI Attester, which reads it inside a sealed enclave
-            and returns a verdict. The file does not go to Gemini or to any
-            other model. If you joined a document run and could not be
-            verified, your stake is credited back when the run settles.
+            and returns a verdict. We do not keep the file, and it does not go
+            to Gemini or to any other model. If you joined a document run and
+            could not be verified, your stake is credited back when the run
+            settles.
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
-            Wearable data is handled differently, and we want to be straight
-            about it
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
+            Wearable data, and what our server sees
           </h2>
           <p>
-            There are three ways to connect a device, and they differ in who
-            holds what. Through Junction (WHOOP, Oura, Fitbit, or Garmin),
-            Junction holds your connection and we hold only an API key.
-            Connecting WHOOP directly instead means WHOOP gives us an access
-            token for your account, which we store encrypted and use only to
-            read the metric your run is measured on. Either way, the health
-            summary we pull to check a streak passes through our own server
-            (hosted on Vercel) before we compute the result.
+            We use daily summaries only, for the one metric your run measures
+            (for example hours of sleep, sleep score, or steps). We never write
+            health data to the blockchain. We store which wearable you paired,
+            but not the readings we pull from Junction or WHOOP: our server
+            (hosted on Vercel) reads the summary, runs the check, and keeps
+            SPOTTER&apos;s verdict.
           </p>
           <p>
-            With Apple Health, our iPhone app adds up your day on the phone and
-            sends us one total per day per metric (for example steps, or hours
-            of sleep). Individual readings, heart-rate samples and routes never
-            leave your phone. Those daily totals are stored in our database
-            (Supabase) against your wallet address. No run needs a total older
-            than 120 days; deleting older totals automatically is not switched
-            on yet, so until it is, ask us and we delete yours.
+            <strong className="text-foreground">Junction</strong> (WHOOP, Oura,
+            Fitbit, Garmin and others). Junction holds your device connection.
+            We give Junction your wallet address as the id for your account
+            there, and hold one API key for our app.
           </p>
           <p>
-            If you connect WHOOP directly we ask for the narrowest access that
-            can answer a goal: your sleep and your workouts, nothing else.
+            <strong className="text-foreground">WHOOP, connected directly.</strong>{" "}
+            WHOOP gives us an access token for your account. We ask for the
+            narrowest access that can answer a goal: your sleep and your
+            workouts, nothing else. The token is stored encrypted (AES-256-GCM)
+            and used only to read the metric your run measures. WHOOP limits
+            how many people our app can connect while it is in review, so
+            direct seats go first come, first served, and we keep a list of the
+            wallet addresses holding a seat. When the seats are gone, WHOOP
+            straps connect through Junction instead.
           </p>
           <p>
-            You can disconnect a device at any time from{" "}
-            <Link href="/settings" className="text-accent underline">
+            <strong className="text-foreground">Apple Health</strong> is not
+            offered yet, because our iPhone app has no public build. When it
+            is, the app adds up your day on the phone and sends us one total
+            per day per metric. Individual readings, heart-rate samples and
+            routes never leave your phone. Those daily totals are stored in our
+            database (Supabase) against your wallet address, and a daily job
+            deletes any total older than 120 days.
+          </p>
+          <p>
+            You can disconnect a wearable at any time from{" "}
+            <Link href="/settings" className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4 hover:decoration-foreground">
               your Settings page, under Your wearable
             </Link>
             . For WHOOP that revokes our access at WHOOP and deletes the stored
@@ -223,11 +345,8 @@ export default function PrivacyPage() {
             the WHOOP app.
           </p>
           <p>
-            So today our server does see the wearable summary it uses to run the
-            check. What is true without exception is that health data is never
-            written to the blockchain; only SPOTTER&apos;s yes-or-no verdict
-            is. If our server handling a summary matters to you, do not connect
-            a wearable yet.
+            So our server does see the wearable summary it uses to run the
+            check. If that matters to you, do not connect a wearable yet.
           </p>
           <p>
             On a run where you staked on yourself, SPOTTER also reads every
@@ -241,41 +360,45 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Some things are public and permanent by design
           </h2>
           <p>
             GoHealthMe settles on the Base Sepolia blockchain and names players
-            on Ethereum Sepolia. Wallet addresses, pool activity, payouts, ENS
-            names, and the goal text you write when you create a pool are
-            recorded on-chain. Blockchain records are public and, by their
+            on Ethereum Sepolia. Wallet addresses, the runs you join, payouts,
+            ENS names and settlement receipts, and the goal text of every run
+            are recorded on-chain. Blockchain records are public and, by their
             nature, permanent. We cannot edit or delete them. Do not put
             anything in a goal description or a name that you would not want
             to be public forever.
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Who processes your data
           </h2>
           <p>
             We rely on the following third parties to run the beta. Each is
             named so you can read their own policies:
           </p>
-          <ul className="list-disc space-y-1 pl-5">
+          <ul className="list-disc pl-5 marker:text-haze [&>*+*]:mt-1.5">
             <li>Dynamic (a Fireblocks company) - email sign-in and embedded wallets</li>
             <li>World (Tools for Humanity) - proof that you are one human, and the payout confirmation</li>
-            <li>ENS on Ethereum Sepolia - public player and pool names</li>
+            <li>ENS on Ethereum Sepolia - public player and run names, and settlement receipts</li>
             <li>Web3 Antivirus, through Intercepta - screening of payout wallet addresses</li>
-            <li>Circle - the agent wallet and USDC settlement</li>
+            <li>Circle - SPOTTER&apos;s agent wallet</li>
             <li>Chainlink Confidential AI Attester - reads uploaded documents inside an enclave, when document proof is on</li>
             <li>
               Supabase - our database (handles, challenge metadata, feedback,
-              and Apple Health daily totals if you use the iPhone app)
+              and Apple Health daily totals once the iPhone app ships)
             </li>
-            <li>Upstash - our key-value store (SPOTTER&apos;s claim ledger, World ID bindings, the closed-beta list)</li>
+            <li>
+              Upstash - our key-value store (SPOTTER&apos;s ledger, World ID
+              bindings and payout confirmations, linked ENS names, encrypted
+              WHOOP tokens, the closed-beta list and requests)
+            </li>
             <li>Google Cloud / Vertex AI - the Gemini model that answers helper questions and helps SPOTTER reason over a verdict</li>
             <li>Vercel - hosting for the app and its server</li>
             <li>
@@ -283,38 +406,44 @@ export default function PrivacyPage() {
               can see where the beta gets stuck. It sets no cookies and never
               receives your wallet address or health data.
             </li>
-            <li>Base Sepolia - the public blockchain where pools settle</li>
+            <li>Base Sepolia - the public test network where runs settle</li>
             <li>Junction - wearable summaries, only if you connect a device through Junction</li>
-            <li>
-              WHOOP - sleep and workout summaries, only if you connect WHOOP
-              directly. We hold an encrypted access token for your WHOOP account
-              until you disconnect.
-            </li>
-            <li>Apple Health - daily totals, only if you connect through our iPhone app</li>
+            <li>WHOOP - sleep and workout summaries, only if you connect WHOOP directly</li>
+            <li>Apple Health - daily totals, only through our iPhone app once it ships</li>
           </ul>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             How long we keep it
           </h2>
+          {/* REVIEW: no automated deletion exists for anything except Apple
+              Health daily totals (120 days). Nikki to confirm the retention
+              promise for the key-value store (World bindings, SPOTTER's
+              ledger, access requests, WHOOP tokens) and Supabase tables. */}
           <p>
-            Off-chain data (handles, challenge metadata, feedback, Apple Health
-            daily totals, World ID bindings, SPOTTER&apos;s claim ledger) is
-            kept until you ask us to delete it, or until we reset the testnet. Testnet data may be wiped
-            at any time. On-chain data, including ENS names, is permanent and
-            outside our control to delete.
+            Apple Health daily totals are deleted automatically after 120 days.
+            Other off-chain data (handles, challenge metadata, feedback, access
+            requests, World ID bindings and payout confirmations, linked names,
+            SPOTTER&apos;s ledger) is kept until you ask us to delete it, or
+            until we reset the testnet. A WHOOP token is deleted when you
+            disconnect. Testnet data may be wiped at any time. On-chain data,
+            including ENS names, is permanent and outside our control to
+            delete.
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">Contact</h2>
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">Contact</h2>
+          {/* REVIEW: the contact address is a personal inbox placeholder.
+              Confirm the operator entity (Meowteam6 vs Chuabio Labs) and a
+              team address before launch. */}
           <p>
             This beta is operated by Meowteam6. To ask a question or request
             deletion of your off-chain data, email{" "}
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="text-accent underline"
+              className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4 hover:decoration-foreground"
             >
               {CONTACT_EMAIL}
             </a>{" "}
@@ -322,12 +451,13 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3 border-t border-edge pt-8">
-          <p className="text-xs text-muted">
-            This is a pre-launch testnet notice, not legal advice, and will be
-            replaced by a lawyer-reviewed policy before any real-money launch.
-            See also our{" "}
-            <Link href="/terms" className="text-accent underline">
+        <section className="border-t border-edge pt-8 [&>*+*]:mt-3">
+          <p className="text-[0.8125rem] text-haze">
+            GoHealthMe V4 is a beta built at ETHGlobal Tokyo 2026, running on
+            Base Sepolia test money. This notice is not legal advice and will
+            be replaced by a lawyer-reviewed policy before any real-money
+            launch. See also our{" "}
+            <Link href="/terms" className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4 hover:decoration-foreground">
               Terms
             </Link>
             .

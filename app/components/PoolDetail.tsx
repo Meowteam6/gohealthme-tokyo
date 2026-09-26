@@ -1,43 +1,58 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import Link from "next/link";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import JoinPool from "@/components/JoinPool";
 import FundPool from "@/components/FundPool";
 import ChallengeContribute from "@/components/ChallengeContribute";
 import EvidenceUpload from "@/components/EvidenceUpload";
 import { useDocumentProofAvailable } from "@/lib/useProofStatus";
 import WearableCheck from "@/components/WearableCheck";
-import ShareChallenge from "@/components/ShareChallenge";
 import ChallengeInviteShare from "@/components/ChallengeInviteShare";
-import SpotterSays from "@/components/SpotterSays";
-import SpotterMascot from "@/components/SpotterMascot";
+import type { ChipInTerms } from "@/components/ChipInWarning";
 import ClaimPayout from "@/components/ClaimPayout";
 import {
-  Badge,
+  ButtonLink,
   Card,
+  Chip,
+  EmptyState,
   ErrorNote,
-  ProofTierBadges,
   Skeleton,
-  TAP_TARGET,
+  TEXT_LINK,
 } from "@/components/ui";
 import ApprovalNote from "@/components/game/ApprovalNote";
-import LockPanel from "@/components/game/LockPanel";
-import RunBoard from "@/components/game/RunBoard";
-import Scoreboard from "@/components/game/Scoreboard";
+import { KindTag, MissUnderStake, MoneyLineBox, MoneyTermsList } from "@/components/game/MoneyTerms";
+import { usePlayers, useRunNights } from "@/components/game/RunBoard";
 import VerdictStage, {
   proofSurfaceNeeded,
   useVerdict,
 } from "@/components/game/VerdictStage";
-import { arcAddressUrl } from "@/lib/chains";
+import RunHero from "@/components/run/RunHero";
+import RunLayout, { BackLink } from "@/components/run/RunLayout";
+import {
+  SoloNote,
+  StakeAction,
+  StakeCard,
+  StakeChecks,
+  StakeFailed,
+  StakeStats,
+  StakeTerms,
+  StakeTermsPlain,
+  StakeVault,
+  type StakeCheck,
+} from "@/components/run/StakeCard";
+import StakeLock from "@/components/run/StakeLock";
+import YourNight, { type NightRail } from "@/components/run/YourNight";
+import WhosIn, { type RosterRow } from "@/components/run/WhosIn";
+import AlsoOpen, { type AlsoOpenRow } from "@/components/run/AlsoOpen";
+import ChallengeFriend from "@/components/run/ChallengeFriend";
+import { Glyph } from "@/components/run/glyphs";
 import {
   runStatusFromLedger,
   type LedgerEntry,
   type RunStatus,
 } from "@/lib/agent-receipt";
-import { needsDocumentVerifier, runSlotOf } from "@/lib/game/lobby";
-import { formatRunClock, runClock } from "@/lib/game/tally";
+import { lockCopy, needsDocumentVerifier, runSlotOf } from "@/lib/game/lobby";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useJoinChecks } from "@/lib/game/useJoinChecks";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
@@ -60,7 +75,6 @@ import {
 import { unsupportedMetricFor } from "@/lib/pool-availability";
 import { uploadFallbackNote, wearableJoinBlock } from "@/lib/wearable-join-gate";
 import {
-  BOUNTY_MODEL_LABELS,
   ContractNotConfiguredError,
   displayGoalSpec,
   evidenceTypeOf,
@@ -69,124 +83,54 @@ import {
   fetchParticipantResults,
   fetchParticipants,
   fetchPool,
+  fetchPools,
   formatUsdc,
   proofPolicyOf,
   type Modality,
+  type PoolInfo,
 } from "@/lib/contract";
-import { poolCanPay, poolIsOver, poolPhase } from "@/lib/pool-lifecycle";
+import { poolCanPay, poolIsOver, poolPhase, type PoolPhase } from "@/lib/pool-lifecycle";
 import { runEndCopy, settleTallyOf } from "@/lib/game/run-end";
-import { verdictShowsClaim } from "@/lib/game/verdict";
+import { verdictShowsClaim, type VerdictScreen } from "@/lib/game/verdict";
 import SweepLeftover from "@/components/SweepLeftover";
 import { useEmbeddedWallet } from "@/lib/wallet";
-import { useDisplayNames } from "@/lib/use-display-names";
 import { darePot } from "@/lib/challenges";
-import { commitmentJoinCopy } from "@/lib/commitment-copy";
+import { creatorStakedIn, shareCardOf } from "@/lib/game/money-sharing";
+import { recordsMissesOf, sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
+import { missRulePool, missRuleReading } from "@/lib/miss-rule";
+import { runName } from "@/lib/game/landing";
+import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
+import type { MoneyTermKey } from "@/lib/game/money-flow";
+import { useRunMoney } from "@/lib/game/useRunMoney";
+import { classifyWearableGoal, metricLabel } from "@/lib/wearable-goal";
+import { fetchResolvedName, resolveOnce } from "@/lib/ens/client-cache";
+import type { SpotterScreenState } from "@/lib/spotter-poses";
+import {
+  clockLabel,
+  closeLabelOf,
+  closesWithinDay,
+  endsLabel,
+  friendMathOf,
+  isSleepMetric,
+  leftLabel,
+  nightTimelineOf,
+  resultIcs,
+  runHeadlineOf,
+  soloLineOf,
+  stakeTermsOf,
+  type RunHeadline,
+} from "@/lib/game/run-page";
 
-function formatDay(seconds: bigint): string {
-  return new Date(Number(seconds) * 1000).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
+/** The stake card's stat row already says the stake, so its terms skip it. */
+const STAKE_CARD_SKIP: readonly MoneyTermKey[] = ["stake"];
 
-/** Every terminal state on this page ends with somewhere to go. A pool that
- *  has settled or expired is not a place to leave someone standing. */
-function BrowsePoolsLink({ label = "Browse live pools" }: { label?: string }) {
-  return (
-    <Link
-      href="/pools"
-      className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-    >
-      {label}
-    </Link>
-  );
-}
-
-// ------------------------------------------------------- reskin presentation
-// Small inline icons — this app carries no icon dependency, so the few glyphs
-// the candy stat cards and share row want are drawn here with currentColor so
-// each inherits the tint of the chip it sits in. Decorative only (aria-hidden).
-type IconName =
-  | "back"
-  | "coins"
-  | "clock"
-  | "users"
-  | "calendar"
-  | "wallet"
-  | "flask";
-
-function Icon({
-  name,
-  className = "size-4",
-}: {
-  name: IconName;
-  className?: string;
-}) {
-  const paths: Record<IconName, ReactNode> = {
-    back: <path d="M15 18l-6-6 6-6" />,
-    coins: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7.5v9M14.5 9.5a2.5 2.5 0 0 0-2.5-1.5c-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2a2.5 2.5 0 0 1-2.5-1.5" />
-      </>
-    ),
-    clock: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3 2" />
-      </>
-    ),
-    users: (
-      <>
-        <path d="M16 19v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="3.5" />
-        <path d="M22 19v-2a4 4 0 0 0-3-3.87" />
-      </>
-    ),
-    calendar: (
-      <>
-        <rect x="3" y="4.5" width="18" height="16.5" rx="2.5" />
-        <path d="M3 9.5h18M8 2.5v4M16 2.5v4" />
-      </>
-    ),
-    wallet: (
-      <>
-        <rect x="3" y="6" width="18" height="13" rx="2.5" />
-        <path d="M3 10.5h18M16.5 14.5h1.5" />
-      </>
-    ),
-    flask: (
-      <>
-        <path d="M9 3h6M10 3v6L4.7 17.2A2 2 0 0 0 6.4 20.3h11.2a2 2 0 0 0 1.7-3.1L14 9V3" />
-        <path d="M7.5 14.5h9" />
-      </>
-    ),
-  };
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {paths[name]}
-    </svg>
-  );
-}
-
-/** Test money, always in sight (docs/DESIGN.md). */
-function TestnetLine() {
-  return (
-    <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
-      <Icon name="flask" className="size-3.5" />
-      Base Sepolia test USDC, no real money
-    </p>
-  );
-}
+// The run page (docs/DESIGN.md, "Run page"): the one big figure with SPOTTER
+// standing on the card below it, the stake card in whichever state the join
+// is in (right column on desktop, sticky), Your night, Who's in, and the other
+// runs this wearable can check. After the run, the verdict takes the stake
+// card's place. Every decision here is read from the libraries that make it
+// (the join gate, runSlotOf, verdictScreenOf, lib/commitment.ts); this file
+// only lays them out.
 
 /** The claim ledger, read owner-only and cachedOnly (never prompts): it drives
  *  the claim rail's progress and the restored proof path. hasLedger tells a
@@ -194,6 +138,176 @@ function TestnetLine() {
 interface ClaimLedgerData {
   ledger: LedgerEntry[] | null;
   hasLedger: boolean;
+}
+
+/** The lobby's pool list, same key and shape, so both screens share one read. */
+function useOpenPools() {
+  return useQuery({
+    queryKey: ["pools"],
+    queryFn: async () => ({
+      pools: await fetchPools(),
+      asOfSeconds: BigInt(Math.floor(Date.now() / 1000)),
+    }),
+    refetchInterval: 45_000,
+  });
+}
+
+/** "After staking the page glow dims to 35%" (docs/DESIGN.md, Motion). */
+function LightsOut({ on }: { on: boolean }) {
+  useEffect(() => {
+    document.body.classList.toggle("lights-out", on);
+    return () => document.body.classList.remove("lights-out");
+  }, [on]);
+  return null;
+}
+
+/** SPOTTER's pose for the hero: the staging table, one pose per viewport.
+ *  The paid verdict hides him here; he stands on the receipt instead. */
+function heroSpotterOf(input: {
+  screen: VerdictScreen;
+  joined: boolean;
+  phase: PoolPhase;
+  sleepRun: boolean;
+  /** How many hit, once settled: nobody hitting is calm, not a loss. */
+  achievers: number | null;
+}): SpotterScreenState | null {
+  switch (input.screen.kind) {
+    case "won":
+      return null;
+    case "checking":
+    case "confirm-human":
+    case "confirmed":
+      return "verdict-confirm";
+    case "approval-failed":
+    case "bad-read":
+    case "stopped":
+      return "verdict-denied";
+    case "lost":
+      return input.achievers === 0 ? "outcome-none" : "verdict-lost";
+    case "banked":
+      return "outcome-hit";
+    case "settled-final":
+    case "cancelled":
+      return "outcome-none";
+    case "not-yet":
+    case "none":
+      break;
+  }
+  if (input.phase !== "live") return "outcome-none";
+  if (input.joined) return input.sleepRun ? "run-joined" : "run-open";
+  return "run-open";
+}
+
+/** The loading page: the same grid, so nothing jumps when the run reads. */
+function RunSkeleton() {
+  return (
+    <RunLayout
+      hero={
+        <div className="[grid-area:hero]" aria-busy="true">
+          <Skeleton className="h-[26px] w-28" />
+          <Skeleton className="mt-3 h-14 w-56 min-[960px]:h-24 min-[960px]:w-96" />
+          <Skeleton className="mt-3 h-6 w-64" />
+          <Skeleton className="mt-3 mb-5 h-5 w-44" />
+        </div>
+      }
+      stake={
+        <Card aria-busy="true">
+          <Skeleton className="h-12" />
+          <Skeleton className="mt-4 h-24" />
+          <Skeleton className="mt-4 h-[60px]" />
+        </Card>
+      }
+    >
+      <Card aria-busy="true">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="mt-4 h-16" />
+      </Card>
+    </RunLayout>
+  );
+}
+
+/** A joined player's night: the rail, SPOTTER's line and the nights read. */
+function JoinedNight({
+  pool,
+  address,
+  base,
+}: {
+  pool: PoolInfo;
+  address: `0x${string}`;
+  base: Omit<Parameters<typeof YourNight>[0], "children">;
+}) {
+  const { nights, line } = useRunNights({ pool, address, promptForData: false });
+  const spec = classifyWearableGoal(pool.goalSpec);
+  // A one-night run's caption is the goodnight line; a longer run's is where
+  // the nights stand.
+  const caption = spec.goalDays > 1 && line !== undefined ? line : base.caption;
+  return (
+    <YourNight {...base} caption={caption} captionLive>
+      <div className="mt-4 border-t border-edge pt-3.5">{nights}</div>
+    </YourNight>
+  );
+}
+
+/** Who's in, named by ENS where a player has a name. Only the viewer's own
+ *  row says anything about their night; everyone else shows "Hit" once the
+ *  chain records it. */
+function Roster({
+  poolId,
+  address,
+  copy,
+  action,
+  youPlaying,
+}: {
+  poolId: bigint;
+  address: string | null;
+  copy?: (playerCount: number | null) => ReactNode;
+  action?: ReactNode;
+  /** The viewer's own status while the run is still on, e.g. "You, night to play". */
+  youPlaying?: string;
+}) {
+  const players = usePlayers(poolId);
+  const list = players.data ?? [];
+  const names = useQueries({
+    queries: list.map((p) => ({
+      queryKey: ["ens-name", p.address.toLowerCase()],
+      queryFn: () => resolveOnce(p.address, fetchResolvedName),
+      staleTime: 5 * 60_000,
+      retry: false,
+    })),
+  });
+  const rows: RosterRow[] = list.map((p, i) => {
+    const you = address !== null && p.address.toLowerCase() === address.toLowerCase();
+    const ens = names[i]?.data ?? null;
+    const shown = ens ?? `${p.address.slice(0, 6)}...${p.address.slice(-4)}`;
+    return {
+      key: p.address,
+      name: <span title={p.address}>{shown}</span>,
+      initial: ens !== null ? ens.slice(0, 1).toUpperCase() : p.address.slice(2, 3).toUpperCase(),
+      you,
+      hit: p.hit,
+      status: you ? (p.hit ? "You, hit" : youPlaying ?? "You") : p.hit ? "Hit" : "",
+    };
+  });
+  // The viewer's own row first: it is the one they came to find.
+  rows.sort((a, b) => Number(b.you) - Number(a.you));
+  return (
+    <WhosIn
+      rows={rows}
+      loading={players.isLoading}
+      error={
+        players.isError ? (
+          <div className="flex flex-wrap items-center gap-x-3">
+            <p className="m-0 text-sm text-muted">I could not read the players just now.</p>
+            <button type="button" onClick={() => void players.refetch()} className={TEXT_LINK}>
+              Read them again
+            </button>
+          </div>
+        ) : null
+      }
+      copy={copy?.(players.data !== undefined ? list.length : null)}
+      action={action}
+    />
+  );
 }
 
 export default function PoolDetail({ id }: { id: string }) {
@@ -213,15 +327,6 @@ export default function PoolDetail({ id }: { id: string }) {
   // never race the render or overwrite a tap.
   const [pinnedPath, setPinnedPath] = useState<ProofPath | null>(null);
   const choosePath = (path: ProofPath) => setPinnedPath(path);
-  // The public origin for the shareable pool link. useSyncExternalStore is the
-  // hydration-safe way to read a client-only value: null on the server and the
-  // hydrating render, the real origin once mounted - no setState-in-effect, no
-  // mismatch. Same pattern ShareChallenge uses for its own origin.
-  const shareOrigin = useSyncExternalStore(
-    () => () => {},
-    () => window.location.origin,
-    () => null,
-  );
   const poolId = useMemo(() => {
     try {
       const parsed = BigInt(id);
@@ -291,7 +396,6 @@ export default function PoolDetail({ id }: { id: string }) {
 
   // What the viewer's own device can measure. cachedOnly for the same reason
   // as the read above: opening a pool page must never fire a wallet prompt.
-
   const capabilityQuery = useQuery({
     queryKey: providerOptionsQueryKey(address),
     queryFn: () => {
@@ -305,8 +409,7 @@ export default function PoolDetail({ id }: { id: string }) {
     staleTime: 60_000,
   });
 
-  // SPOTTER's own wallet status is one line in the header on every screen
-  // (components/game/SpotterStatusLine.tsx), not a wall on this page.
+  const openPools = useOpenPools();
 
   const joined = participantQuery.data?.joined === true;
   const canPay =
@@ -314,12 +417,10 @@ export default function PoolDetail({ id }: { id: string }) {
 
   // The claim's ledger, read owner-only and cachedOnly so opening a pool page
   // never prompts for a signature. It drives the claim rail's step and the
-  // restored proof path. One read here replaces the wearable-only path probe:
-  // the rail needs the ledger for every joined, payable pool, not just wearable
-  // ones. The refetch interval follows the run - fast while verifying, slow
-  // while a deferred settlement waits, stopped once terminal - and it is a GET
-  // that never drives SPOTTER's run loop, so it does not conflict with the
-  // upload/wearable client that does.
+  // restored proof path. The refetch interval follows the run - fast while
+  // verifying, slow while a deferred settlement waits, stopped once terminal -
+  // and it is a GET that never drives SPOTTER's run loop, so it does not
+  // conflict with the upload/wearable client that does.
   const claimLedgerQuery = useQuery<ClaimLedgerData>({
     queryKey: ["claim-ledger", id, address],
     queryFn: async (): Promise<ClaimLedgerData> => {
@@ -425,63 +526,83 @@ export default function PoolDetail({ id }: { id: string }) {
     enabled: poolId !== null && settledNow,
     staleTime: 60_000,
   });
-
-  // Resolve the funder address to a handle when it has claimed one. Called
-  // unconditionally with whatever is known this render (empty until the pool
-  // loads), so the rules of hooks hold across the early returns below.
-  const { displayName, handleFor } = useDisplayNames(
-    poolQuery.data ? [poolQuery.data.pool.creator] : [],
-  );
+  const commitmentFee = useCommitmentFee(poolQuery.data?.pool.bountyModel === 2);
+  // The run's money flow (docs/MONEY-FLOWS.md): the kind and miss chips in the
+  // header, the flow's terms on the stake card, the miss chip under the hold.
+  const runMoney = useRunMoney({
+    pool: poolQuery.data?.pool ?? null,
+    players: participantsQuery.data?.length ?? null,
+    includeJoiner: !joined,
+    viewer: address,
+    feeBps: commitmentFee.bps,
+  });
+  // The creator's ENS name for the chip-in warning ("if nobody hits, it goes
+  // to {creator}"); the same cache key Who's in uses, so no second read.
+  const creatorAddress = poolQuery.data?.pool.creator ?? null;
+  const creatorNameQuery = useQuery({
+    queryKey: ["ens-name", creatorAddress?.toLowerCase() ?? ""],
+    queryFn: () => {
+      if (creatorAddress === null) throw new Error("No creator yet.");
+      return resolveOnce(creatorAddress, fetchResolvedName);
+    },
+    enabled: creatorAddress !== null,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
 
   if (poolId === null) {
     return (
-      <ErrorNote
-        title="Invalid pool"
-        detail={`"${id}" is not a valid pool id.`}
-      />
-    );
-  }
-
-  if (poolQuery.isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-6 w-32" />
-        <Skeleton className="h-9 w-3/4" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Skeleton className="h-20" />
-          <Skeleton className="h-20" />
-          <Skeleton className="h-20" />
+      <div className="pb-10">
+        <BackLink />
+        <div className="mt-3 max-w-xl">
+          <ErrorNote
+            title="That run does not exist"
+            detail={`"${id}" is not a run number. Pick one from the open runs.`}
+          />
+          <ButtonLink href="/pools" variant="tertiary" className="mt-2">
+            See the open runs
+          </ButtonLink>
         </div>
-        <Skeleton className="h-14" />
       </div>
     );
   }
 
+  if (poolQuery.isLoading) return <RunSkeleton />;
+
   if (poolQuery.isError || poolQuery.data === undefined) {
     return (
-      <ErrorNote
-        title="Could not load this pool"
-        detail={
-          poolQuery.error instanceof ContractNotConfiguredError
-            ? "Runs are not switched on for this build yet."
-            : "I could not read this run from Base Sepolia just now. Nothing changed on your side."
-        }
-        onRetry={() => {
-          void poolQuery.refetch();
-        }}
-      />
+      <div className="pb-10">
+        <BackLink />
+        <div className="mt-3 max-w-xl">
+          <ErrorNote
+            title="Could not load this run"
+            detail={
+              poolQuery.error instanceof ContractNotConfiguredError
+                ? "Runs are not switched on for this build yet."
+                : "I could not read this run from Base Sepolia just now. Nothing changed on your side."
+            }
+            onRetry={() => {
+              void poolQuery.refetch();
+            }}
+            retryLabel="Read the run again"
+          />
+          <ButtonLink href="/pools" variant="tertiary" className="mt-2">
+            See the open runs instead
+          </ButtonLink>
+        </div>
+      </div>
     );
   }
 
   const { pool, asOfSeconds } = poolQuery.data;
 
-  // A challenge is a private, person-aimed dare. Its goal (health-adjacent),
-  // the challenger's @handle, and the "challenge" initiative badge are for the
-  // people who belong here only: the target once they have joined through the
-  // invite link, and the creator. Every other visitor - including a stranger
-  // walking sequential /pools/<n> ids - gets a neutral notice with no goal, no
-  // handle, no badge, and no money action. Challenge-ness is the immutable
-  // on-chain initiative, never the Supabase challenges row (which can be absent).
+  // A challenge is a private, person-aimed challenge. Its goal (health-
+  // adjacent), the challenger's @handle, and the "challenge" initiative are
+  // for the people who belong here only: the target once they have joined
+  // through the invite link, and the creator. Every other visitor - including
+  // a stranger walking sequential /pools/<n> ids - gets a neutral notice with
+  // no goal, no handle, and no money action. Challenge-ness is the immutable
+  // on-chain initiative, never the Supabase challenges row.
   const isChallenge = pool.initiative === "challenge";
   const isCreator =
     address !== null && address.toLowerCase() === pool.creator.toLowerCase();
@@ -489,32 +610,41 @@ export default function PoolDetail({ id }: { id: string }) {
     // Signed in but participant status still loading: we cannot yet tell a
     // joined target from a stranger, so hold on a neutral skeleton rather than
     // flashing the private notice at someone who came in through their link.
-    // Nothing about the challenge is revealed either way.
-    if (address !== null && participantQuery.isLoading) {
-      return (
-        <div className="space-y-4">
-          <Skeleton className="h-6 w-32" />
-          <Skeleton className="h-9 w-3/4" />
-          <Skeleton className="h-14" />
-        </div>
-      );
-    }
+    if (address !== null && participantQuery.isLoading) return <RunSkeleton />;
     return (
-      <div className="mx-auto max-w-md py-12 text-center">
-        <SpotterMascot pose="watching" size="md" className="mx-auto" />
-        <h1 className="mt-4 font-display text-2xl font-bold tracking-tight">
-          This is a private challenge
-        </h1>
-        <p className="mt-3 text-sm text-muted">
-          Open it from the invite link you were sent. That link carries the
-          details this page keeps private.
-        </p>
-        <BrowsePoolsLink label="Browse open pools instead" />
+      <div className="pb-10">
+        <BackLink />
+        <div className="mx-auto mt-6 max-w-md">
+          <EmptyState
+            pose="detective"
+            title="This is a private challenge"
+            detail="Open it from the invite link you were sent. That link carries the details this page keeps private."
+            action={<ButtonLink href="/pools">See the open runs</ButtonLink>}
+          />
+        </div>
       </div>
     );
   }
 
   const participantCount = participantsQuery.data?.length ?? null;
+  // A commitment run's money terms, for the numbers every surface states.
+  // Only meaningful before settle: afterwards the balance tracks payouts.
+  const selfStaked = pool.bountyModel === 2;
+  // Whether a miss here can go to the players who hit (lib/miss-rule.ts);
+  // every other run refunds a miss at settle, and its terms say so.
+  const recordsMisses = recordsMissesOf(pool);
+  const commitmentTerms: CommitmentTerms | null =
+    selfStaked && participantCount !== null && !pool.settled && !pool.cancelled
+      ? {
+          entryFee: pool.entryFee,
+          players: participantCount,
+          balance: pool.balance,
+          feeBps: commitmentFee.bps,
+          recordsMisses,
+        }
+      : null;
+  const settleAchievers =
+    resultsQuery.data !== undefined ? settleTallyOf(resultsQuery.data).achievers : null;
   const evidenceType = evidenceTypeOf(pool.goalSpec);
   const isDocGoal = evidenceType === "document";
   const goalTitle = displayGoalSpec(pool.goalSpec);
@@ -523,7 +653,7 @@ export default function PoolDetail({ id }: { id: string }) {
   // proven: its floor (highest-trust modality) and the full accepted set. The
   // prove surface renders one path per accepted modality; the mounted path is
   // the visitor's tap, else the path their existing claim used, else the floor
-  // — clamped to the accepted set so a stale restore can never mount a modality
+  // - clamped to the accepted set so a stale restore can never mount a modality
   // the pool does not accept.
   const policy = proofPolicyOf(pool.goalSpec);
   // While the document verifier is off, only the wearable path is offered.
@@ -544,16 +674,8 @@ export default function PoolDetail({ id }: { id: string }) {
   const phase = poolPhase(pool, asOfSeconds);
 
   // ONE decision, made in lib/wearable-join-gate.ts, shared with the challenge
-  // link. This page used to run its own chain in its own order, and the order
-  // was wrong: the not-yet-checked branch pre-empted both the unsupported and
-  // the outage branches, so a full provider outage rendered "connect a device
-  // first, you have not linked one yet" to a wallet that had Junction linked.
-  // Two surfaces deciding the same thing differently is precisely what that
-  // module's header says it exists to prevent, and this page was the surface
-  // still doing it.
-  //
-  // The kinds are mutually exclusive by construction, so the JSX below can no
-  // longer disagree with the gate about precedence however it is ordered.
+  // link. The kinds are mutually exclusive by construction, so the JSX below
+  // can never disagree with the gate about precedence however it is ordered.
   const providerDown = providerDownReason(providerQuery.data);
   const viewerProvider = (capabilityQuery.data?.providers ?? []).find(
     (option) => option.id === capabilityQuery.data?.selected,
@@ -573,7 +695,7 @@ export default function PoolDetail({ id }: { id: string }) {
     uploadAvailable: docAvailable,
   });
 
-  // The run's one decision, shared with the lobby and the dare link
+  // The run's one decision, shared with the lobby and the challenge link
   // (lib/game/lobby.ts): the join gate above, plus World proof-of-human, the
   // closed-beta list, the document checker and the payout rule. A limit is a
   // lock with its fix, here, before any stake; a read still loading holds the
@@ -598,17 +720,14 @@ export default function PoolDetail({ id }: { id: string }) {
   const fundingPaused =
     (needsDocumentVerifier(pool.goalSpec) && checks.verifier !== "available") ||
     checks.payouts !== "ready";
-  const unverifiableNow = joinBlock.kind === "outage";
-  const unsupportedForViewer = joinBlock.kind === "unsupported";
 
   // A participant who ALREADY joined and then switched device is in the worst
-  // position of anyone: the fee is spent and their new device cannot prove the
+  // position of anyone: the stake is in and their new device cannot prove the
   // goal. The gate deliberately passes them - withholding a join they already
   // made protects nothing - so the mismatch is computed separately here, and
-  // they are told rather than left reading an outage message that is neither
-  // their fault nor fixable by waiting.
+  // they are told rather than left reading an outage message.
   const unsupportedAfterJoin =
-    joined && unsupportedMetricFor(pool.goalSpec, viewerMetrics) !== null;
+    joined ? unsupportedMetricFor(pool.goalSpec, viewerMetrics) : null;
 
   // Wait for the restore before mounting a tab on a multi-path pool; mounting
   // the wrong one first would start a poll loop the correct tab then supersedes.
@@ -623,517 +742,791 @@ export default function PoolDetail({ id }: { id: string }) {
   // verifier is paused). When it carries its own claim card, the page-level
   // one stays hidden so there is never a second withdraw button.
   const over = poolIsOver(phase);
+  const live = phase === "live";
   const verdictHoldsClaim =
     joined &&
     address !== null &&
     verdictShowsClaim(screen) &&
     (over || (canPay && !(isDocGoal && !docAvailable)));
 
-  // The single mounted claim surface. Wearable pools default to the wearable
-  // check with the document upload one tap away; document pools upload only.
-  const claimSection = !joined ? null : isDocGoal && !docAvailable ? (
-    <div className="rounded-3xl border border-warning/40 bg-warning/10 p-4 sm:p-5">
-      <p className="font-display text-lg font-bold">Document proof is paused</p>
-      <p className="mt-2 text-sm text-foreground/80">
-        I cannot read uploaded records right now - the verifier is not live.
-        Your stake is safe: if the pool ends before it is back, you are
-        refunded automatically. Wearable goals still verify today.
-      </p>
-    </div>
-  ) : (
-    <>
-      {address !== null ? (
-        <VerdictStage
-          pool={pool}
-          address={address}
-          joined={joined}
-          refunded={participantQuery.data?.refunded === true}
-          runStatus={runStatus}
-          ledger={claimLedger}
-          hasClaim={hasClaim}
-          screen={screen}
-          goalId={verdict.goalId}
-          screening={verdict.screening}
-          onApproval={verdict.onApproval}
-        />
-      ) : null}
-      {showProofSurface && multiPath ? (
-        <div className="flex flex-wrap gap-2">
-          {accepted.map((m) => {
-            const selected = proofPath === m;
-            const tone = selected
-              ? m === "self-reported"
-                ? "border-warning/50 bg-warning/10 text-warning"
-                : "border-accent/50 bg-accent/10 text-accent-strong"
-              : "border-edge bg-surface-raised text-muted hover:text-foreground";
-            const label =
-              m === "wearable"
-                ? "Verify from wearable"
-                : m === "document"
-                  ? "Upload proof"
-                  : "Upload a photo (self-reported)";
-            return (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => choosePath(m)}
-                className={`rounded-full border-2 font-display font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${TAP_TARGET} ${tone}`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-      {/* The proof surface stays mounted while its polling loop or its retry
-          still matters (proofSurfaceNeeded). Once the Verdict above is
-          showing, it keeps the receipt and the buttons and drops the status
-          paragraphs the Verdict already says. */}
-      {showProofSurface ? (
-      <section
-        id="proof-upload"
-        className="rounded-xl border-2 border-foreground/15 bg-surface p-4 sm:p-6"
-      >
-        <h2 className="mb-3 font-display text-3xl font-extrabold leading-tight">
-          {verdictShown ? "SPOTTER's check" : "Prove tonight"}
-        </h2>
-        {!verdictShown ? (
-          <div className="mb-5">
-            <SpotterSays
-              surface="join"
-              state="joined"
-              pose="cheer"
-              say="You are in. When your nights are banked, send me in to check."
-            />
-          </div>
-        ) : null}
-        {claimPathPending ? (
-          <div className="space-y-3">
-            <Skeleton className="h-6 w-40" />
-            <Skeleton className="h-16" />
-          </div>
-        ) : proofPath === "wearable" ? (
-          <WearableCheck
-            key={proofRun}
-            poolId={pool.id}
-            goalSpec={pool.goalSpec}
-            verdictShown={verdictShown}
-            onSwitchToDocument={
-              uploadAltPath !== undefined
-                ? () => choosePath(uploadAltPath)
-                : undefined
-            }
-          />
-        ) : proofPath === "self-reported" ? (
-          <EvidenceUpload
-            poolId={pool.id}
-            goalSpec={pool.goalSpec}
-            modality="self-reported"
+  // ---------------------------------------------------------- words, numbers
+
+  const headline: RunHeadline = runHeadlineOf({ goalSpec: pool.goalSpec, periodEnd: pool.periodEnd });
+  const sleepRun = isSleepMetric(headline.metric);
+  const clockNow = now ?? Number(asOfSeconds);
+  const left = leftLabel(pool.periodEnd, clockNow);
+  const endClock = clockLabel(Number(pool.periodEnd));
+  const deviceName = viewerProvider?.label ?? null;
+  const stake = formatUsdc(pool.entryFee);
+  const pot = formatUsdc(pool.balance);
+  const sponsorPot = commitmentTerms !== null ? sponsorPotOf(commitmentTerms) : 0n;
+  const terms =
+    selfStaked && commitmentTerms !== null && !commitmentFee.loading
+      ? stakeTermsOf({
+          entryFee: pool.entryFee,
+          sponsorPot,
+          goalShort: headline.short,
+          feeBps: commitmentFee.bps,
+          recordsMisses,
+        })
+      : null;
+  // How SPOTTER reads the goal when it can record a miss, said before the
+  // stake so a player knows the count a miss is judged on.
+  const missRule = selfStaked ? missRulePool(pool) : null;
+  const missReading = missRule !== null && missRule.ok ? missRuleReading(missRule.spec) : null;
+  // The flow's terms carry the range themselves; the solo note is the
+  // fallback for when they cannot be built.
+  const flowTerms = runMoney?.copy ?? null;
+  const solo =
+    flowTerms === null && terms !== null && commitmentTerms !== null ? soloLineOf(commitmentTerms) : null;
+  // The hero carries the tag alone on a group run, as the approved mock does;
+  // a challenge or a sponsored run adds its kind chip, which names whose money
+  // it is. The miss rule is said once in the terms, and its chip sits under
+  // the stake button, the last thing read before the money moves.
+  const groupRun = pool.bountyModel === 2 && pool.initiative !== "challenge";
+  const kindChip =
+    runMoney !== null && live && !groupRun ? <KindTag kind={runMoney.kind?.chip ?? null} /> : null;
+  const underStake =
+    runMoney !== null && runMoney.miss !== null && flowTerms !== null ? (
+      <MissUnderStake miss={runMoney.miss} detail={null} />
+    ) : null;
+  const friendMath = commitmentTerms !== null ? friendMathOf(commitmentTerms, joined) : null;
+
+  const tag =
+    phase === "cancelled"
+      ? { tone: "ended" as const, label: "Cancelled" }
+      : phase === "settled"
+        ? { tone: "ended" as const, label: "Settled" }
+        : phase === "expired"
+          ? { tone: "ended" as const, label: "Ended" }
+          : closesWithinDay(pool.periodEnd, clockNow)
+            ? // The landing and the lobby tag a day run "Open now" (openTag in
+              // lib/game/landing.ts); "today" read as the close's day.
+              { tone: "live" as const, label: sleepRun ? "Open tonight" : "Open now" }
+            : { tone: "live" as const, label: "Open" };
+  const ends: ReactNode =
+    phase === "cancelled" ? (
+      <>
+        Called off before <b>{endsLabel(pool.periodEnd)}</b>
+      </>
+    ) : live && left !== null ? (
+      <>
+        Ends <b>{endsLabel(pool.periodEnd)}</b>, in {left}
+      </>
+    ) : (
+      <>
+        Ended <b>{endsLabel(pool.periodEnd)}</b>
+      </>
+    );
+
+  const hero = (
+    <RunHero
+      tag={tag}
+      figure={headline.figure}
+      rest={headline.figure !== null ? headline.rest : goalTitle}
+      ends={ends}
+      chips={kindChip}
+      spotter={heroSpotterOf({ screen, joined, phase, sleepRun, achievers: settleAchievers })}
+    />
+  );
+
+  // The next open run of the same kind, for "Go again tonight" and Also open.
+  const openRuns: PoolInfo[] = (() => {
+    const data = openPools.data;
+    if (data === undefined) return [];
+    return data.pools.filter(
+      (p) =>
+        p.id !== pool.id &&
+        p.initiative !== "challenge" &&
+        poolPhase(p, data.asOfSeconds) === "live" &&
+        poolCanPay(p) &&
+        unsupportedMetricFor(p.goalSpec, viewerMetrics) === null,
+    );
+  })().sort((a, b) => Number(a.periodEnd - b.periodEnd));
+  const sameKind = openRuns.find(
+    (p) => classifyWearableGoal(p.goalSpec).metric === headline.metric,
+  );
+  const nextRunHref = sameKind !== undefined ? `/pools/${sameKind.id.toString()}` : "/pools";
+
+  // ------------------------------------------------------------ stake card
+
+  const statsFor = (joinedView: boolean) =>
+    selfStaked ? (
+      <StakeStats joined={joinedView} stake={stake} pot={pot} players={participantCount} />
+    ) : (
+      <StakeStats
+        stakeLabel="Entry"
+        potLabel="Prize pool"
+        stake={stake}
+        pot={pot}
+        players={participantCount}
+      />
+    );
+
+  const termsBlock = selfStaked ? (
+    terms !== null ? (
+      <>
+        {flowTerms !== null ? (
+          <MoneyTermsList
+            copy={flowTerms}
+            id="stake-terms"
+            line={false}
+            skip={STAKE_CARD_SKIP}
+            className="mt-3.5 border-t border-edge pt-3.5"
           />
         ) : (
-          <EvidenceUpload
-            poolId={pool.id}
-            goalSpec={pool.goalSpec}
-            modality="document"
-          />
+          <StakeTerms terms={terms} />
         )}
-      </section>
-      ) : null}
+        {missReading !== null ? (
+          <p className="m-0 mt-2 text-[0.8125rem] leading-[1.45] text-haze">{missReading}</p>
+        ) : null}
+        {flowTerms !== null ? <MoneyLineBox copy={flowTerms} /> : null}
+      </>
+    ) : participantsQuery.isLoading || commitmentFee.loading ? (
+      <div className="mt-3.5 grid gap-2.5 border-t border-edge pt-3.5" aria-busy="true">
+        <Skeleton className="h-5" />
+        <Skeleton className="h-5 w-4/5" />
+        <Skeleton className="h-5 w-3/5" />
+      </div>
+    ) : (
+      <StakeTermsPlain>
+        {recordsMisses
+          ? "Hit it and your stake comes back with a share of the missed stakes and the sponsor pot. Miss it, as your wearable shows, and if anyone else hits your stake goes to them; no data from your wearable is not a miss. If nobody hits, every stake comes back."
+          : "Hit it and your stake comes back with a share of any sponsor pot. This run cannot record a miss, so a miss comes back at settle too. If nobody hits, every stake comes back."}
+      </StakeTermsPlain>
+    )
+  ) : flowTerms !== null ? (
+    <>
+      <MoneyTermsList
+        copy={flowTerms}
+        id="stake-terms"
+        line={false}
+        skip={STAKE_CARD_SKIP}
+        className="mt-3.5 border-t border-edge pt-3.5"
+      />
+      <MoneyLineBox copy={flowTerms} />
+    </>
+  ) : (
+    <StakeTermsPlain>
+      {isDocGoal
+        ? `Pay the ${stake} USDC entry, then hand SPOTTER your record. The prize pays once the document checks out and the run allows.`
+        : `Pay the ${stake} USDC entry, hit the goal inside the run, and the prize pays once SPOTTER confirms it and the run allows.`}
+    </StakeTermsPlain>
+  );
+
+  // What stands between this player and the stake, in the order the card
+  // reads. A lock replaces the check it fails; cleared checks say so.
+  const timeline =
+    headline.metric === "sleep_hours" && headline.goalDays === 1
+      ? nightTimelineOf({ nowSec: clockNow, periodEnd: pool.periodEnd, goalHours: headline.threshold })
+      : null;
+  const cleared: StakeCheck[] = [];
+  if (slot.kind === "playable") {
+    if (slot.proof === "upload") {
+      cleared.push({ key: "upload", glyph: "info", children: uploadFallbackNote(pool.goalSpec) });
+    } else if (evidenceType === "wearable" && deviceName !== null && headline.metric !== null) {
+      cleared.push({
+        key: "device",
+        glyph: "ok",
+        children: (
+          <>
+            <b>Your {deviceName}</b> tracks {metricLabel(headline.metric)}, so it can check this run
+          </>
+        ),
+      });
+    }
+    const name = character.character?.name ?? null;
+    if (checks.worldLane === "on" && checks.humanVerified) {
+      cleared.push({
+        key: "human",
+        glyph: "ok",
+        children:
+          name !== null ? (
+            <>
+              Joining as <b>{name}</b>, verified as one person
+            </>
+          ) : (
+            <>Verified as one person with World ID</>
+          ),
+      });
+    } else if (name !== null) {
+      cleared.push({
+        key: "human",
+        glyph: "ok",
+        children: (
+          <>
+            Joining as <b>{name}</b>
+          </>
+        ),
+      });
+    }
+    if (timeline !== null && !timeline.fits) {
+      cleared.push({
+        key: "late",
+        glyph: "info",
+        children: (
+          <>
+            <b>Less than {headline.short} is left before the {endClock} close,</b> so tonight can no
+            longer reach the goal.
+          </>
+        ),
+      });
+    }
+  }
+
+  const preamble = (
+    <>
+      {statsFor(false)}
+      {termsBlock}
+      {solo !== null ? <SoloNote line={solo} /> : null}
+      <StakeChecks items={cleared} />
+      <ApprovalNote />
     </>
   );
 
-  // The funder's claimed handle, or null when the wallet never claimed one.
-  // Null means the header shows "A sponsor" with the address as a demoted link
-  // rather than a raw hex string standing in as the funder's identity.
-  const funderHandle = handleFor(pool.creator);
+  const shareText = `Put money on yourself with me on GoHealthMe: ${goalTitle}.`;
+  const friendAction =
+    !isChallenge && live ? (
+      <ChallengeFriend path={`/pools/${pool.id.toString()}`} text={shareText} />
+    ) : null;
 
-  const clockNow = now ?? Number(asOfSeconds);
-  const clock = runClock(pool.periodStart, pool.periodEnd, clockNow);
+  const icsHref =
+    now !== null && live
+      ? `data:text/calendar;charset=utf-8,${encodeURIComponent(
+          resultIcs({
+            poolId: pool.id,
+            periodEnd: pool.periodEnd,
+            title: goalTitle,
+            deviceName: deviceName ?? "wearable",
+            nowSec: now,
+          }),
+        )}`
+      : null;
 
-  const workbench = (
-    <div className="min-w-0 space-y-8">
-      <header className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          {/* -ml-4 keeps the text optically flush while the padding keeps a
-              real 44px thumb target. */}
-          <Link
-            href="/pools"
-            className={`-ml-4 inline-flex items-center gap-1 text-muted hover:text-foreground ${TAP_TARGET}`}
-          >
-            <Icon name="back" className="size-4" />
-            Lobby
-          </Link>
-          <TestnetLine />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge>{pool.initiative}</Badge>
-          <ProofTierBadges policy={policy} />
-          {phase === "cancelled" ? (
-            <Badge tone="warning">Cancelled</Badge>
-          ) : phase === "settled" ? (
-            <Badge tone="muted">Settled</Badge>
-          ) : phase === "expired" ? (
-            <Badge tone="warning">Ended</Badge>
-          ) : null}
-          {unverifiableNow && phase === "live" ? (
-            <Badge tone="warning">Wearable checks down</Badge>
-          ) : null}
-          {(unsupportedForViewer || unsupportedAfterJoin) && phase === "live" ? (
-            <Badge tone="warning">Your wearable cannot measure this</Badge>
-          ) : null}
-        </div>
-        <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight text-balance sm:text-6xl">
-          {goalTitle}
-        </h1>
-        {pool.bountyModel === 2 ? (
-          <p className="text-sm text-muted">
-            Started by{" "}
-            <a
-              href={arcAddressUrl(pool.creator)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline decoration-edge underline-offset-2 hover:text-foreground"
-            >
-              {displayName(pool.creator)}
-            </a>
-            . Everyone stakes their own; the nights decide.
-          </p>
-        ) : (
-          <p className="text-sm text-muted">
-            {funderHandle !== null ? "Prize put up by " : "Prize put up by a sponsor, "}
-            <a
-              href={arcAddressUrl(pool.creator)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline decoration-edge underline-offset-2 hover:text-foreground"
-            >
-              {displayName(pool.creator)}
-            </a>
-          </p>
-        )}
-        {joined && address !== null ? null : (
-          <Scoreboard
-            caption="Run scoreboard"
-            cells={[
-              {
-                // After a settle the balance is what was not paid out, not a prize.
-                label: over ? "Left in pool" : "Prize pool",
-                value: formatUsdc(pool.balance),
-                tone: "money",
-                unit: "test USDC",
-              },
-              {
-                label: pool.bountyModel === 2 ? "Stake to enter" : "Entry",
-                value: formatUsdc(pool.entryFee),
-                tone: "money",
-                unit: "test USDC",
-              },
-              {
-                label: "Time left",
-                value: formatRunClock(clock),
-                unit: `${participantCount ?? "--"} in the run`,
-              },
-            ]}
-          />
-        )}
-        {/* A dare's link is its PRIVATE /c/<token> invite and pool ids are
-            walkable, so only the creator gets it, revealed after a one-tap
-            signature. Public runs share from the block further down. */}
-        {isChallenge && isCreator && address !== null ? (
-          <div className="rounded-xl border-2 border-foreground/15 bg-surface p-4">
-            <h2 className="mb-2 font-display text-2xl font-extrabold">Send the dare</h2>
-            <ChallengeInviteShare poolId={pool.id} address={address} />
+  // The single mounted claim surface. Wearable pools default to the wearable
+  // check with the document upload one tap away; document pools upload only.
+  const verdictCard =
+    joined && address !== null ? (
+      <VerdictStage
+        pool={pool}
+        address={address}
+        joined={joined}
+        refunded={participantQuery.data?.refunded === true}
+        runStatus={runStatus}
+        ledger={claimLedger}
+        hasClaim={hasClaim}
+        screen={screen}
+        goalId={verdict.goalId}
+        screening={verdict.screening}
+        onApproval={verdict.onApproval}
+        settleAchievers={settleAchievers}
+        players={participantCount}
+        goalShort={headline.short}
+        deviceName={deviceName}
+        nextRunHref={nextRunHref}
+        paidTo={character.character?.name ?? null}
+      />
+    ) : null;
+
+  const proofSurface =
+    !joined || !showProofSurface ? null : isDocGoal && !docAvailable ? (
+      <Card as="section" aria-labelledby="proof-h">
+        <h2 id="proof-h" className="m-0 text-[1.0625rem] font-semibold">
+          Document proof is paused
+        </h2>
+        <p className="m-0 mt-2 text-[0.9375rem] text-muted">
+          I cannot read uploaded records right now: the verifier is not live.
+          Your stake is safe. If the run ends before it is back, you are
+          refunded automatically. Wearable goals still verify today.
+        </p>
+      </Card>
+    ) : (
+      <Card as="section" id="proof-upload" aria-labelledby="proof-h">
+        <h2 id="proof-h" className="m-0 text-[1.0625rem] font-semibold">
+          {verdictShown ? "SPOTTER's check" : "Send SPOTTER in"}
+        </h2>
+        {multiPath ? (
+          <div role="radiogroup" aria-label="How to prove it" className="mt-3.5 flex flex-wrap gap-2">
+            {accepted.map((m) => (
+              <Chip key={m} role="radio" selected={proofPath === m} onClick={() => choosePath(m)}>
+                {m === "wearable"
+                  ? "From my wearable"
+                  : m === "document"
+                    ? "Upload proof"
+                    : "Upload a photo (self-reported)"}
+              </Chip>
+            ))}
           </div>
         ) : null}
-        <p className="text-xs text-muted">
-          {BOUNTY_MODEL_LABELS[pool.bountyModel] ?? "Custom payout"}. Runs{" "}
-          {formatDay(pool.periodStart)} to {formatDay(pool.periodEnd)}.
-        </p>
-      </header>
+        <div className="mt-4">
+          {claimPathPending ? (
+            <div className="grid gap-3" aria-busy="true">
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-16" />
+            </div>
+          ) : proofPath === "wearable" ? (
+            <WearableCheck
+              key={proofRun}
+              poolId={pool.id}
+              goalSpec={pool.goalSpec}
+              verdictShown={verdictShown}
+              onSwitchToDocument={
+                uploadAltPath !== undefined
+                  ? () => choosePath(uploadAltPath)
+                  : undefined
+              }
+            />
+          ) : proofPath === "self-reported" ? (
+            <EvidenceUpload poolId={pool.id} goalSpec={pool.goalSpec} modality="self-reported" />
+          ) : (
+            <EvidenceUpload poolId={pool.id} goalSpec={pool.goalSpec} modality="document" />
+          )}
+        </div>
+      </Card>
+    );
 
-      {/* A win or refund credited on chain from ANY run shows here until it
-          is claimed, unless this run's own Verdict is already showing the
-          claim (a win, a settled result, or a cancelled run's refund). */}
-      {address !== null && !verdictHoldsClaim ? (
-        <ClaimPayout address={address} />
-      ) : null}
-
-      {joined && address !== null ? (
-        <RunBoard pool={pool} address={address} promptForData={false} />
-      ) : null}
-
-      {phase === "live" ? (
-        <div className="space-y-4">
-          {slot.kind === "cannot-pay" ? (
-            <section className="rounded-xl border-2 border-warning/60 bg-warning/5 p-4 sm:p-5">
-              <h2 className="font-display text-3xl font-extrabold text-warning">
-                This run cannot pay out
-              </h2>
-              <p className="mt-1 text-sm text-foreground/80">
-                It was set up with no reward per achiever, so even a verified
-                result would land you zero. I am not letting you enter a run
-                that cannot pay.
-              </p>
-              <BrowsePoolsLink label="Back to the lobby" />
-            </section>
-          ) : address !== null && !joined && participantQuery.isError ? (
-            // Unknown whether this wallet is already in: never offer a join
-            // that could revert ALREADY_JOINED after the wallet prompt.
-            <ErrorNote
+  let stakeCard: ReactNode;
+  if (joined && verdictShown && canPay && verdictCard !== null) {
+    // After a claim exists, the verdict takes the stake card's place.
+    stakeCard = verdictCard;
+  } else if (live) {
+    const joinMounted = slot.kind === "playable" || slot.kind === "in-run";
+    let body: ReactNode;
+    if (slot.kind === "cannot-pay") {
+      body = (
+        <>
+          {statsFor(false)}
+          <p className="m-0 mt-4 text-[1.0625rem] font-semibold">This run cannot pay out</p>
+          <p className="m-0 mt-1 text-[0.9375rem] text-muted">
+            It was set up with no reward per achiever, so even a verified result
+            would pay you nothing. I am not letting anyone stake into it.
+          </p>
+          <StakeAction>
+            <ButtonLink href={nextRunHref} block>
+              Find a run that pays
+            </ButtonLink>
+          </StakeAction>
+        </>
+      );
+    } else if (address !== null && !joined && participantQuery.isError) {
+      // Unknown whether this wallet is already in: never offer a join that
+      // could revert ALREADY_JOINED after the wallet prompt.
+      body = (
+        <>
+          {statsFor(false)}
+          <div className="mt-4">
+            <StakeFailed
               title="I could not check whether you are in this run"
               detail="Nothing changed on your side."
               onRetry={() => {
                 void participantQuery.refetch();
               }}
+              retryLabel="Check again"
             />
-          ) : slot.kind === "checking" ||
-            (address !== null && participantQuery.isLoading) ? (
-            // A read the join depends on has not answered yet: hold the stake
-            // rather than offer it and take it back a moment later.
-            <Skeleton className="h-40" />
-          ) : slot.kind === "locked" ? (
-            <LockPanel
-              lock={slot.lock}
-              returnTo={`/pools/${id}`}
-              onCheckSensor={character.checkSensor}
-              onRetry={checks.retry}
-            />
-          ) : slot.kind === "playable" ? (
-            <section className="rounded-xl border-2 border-foreground bg-surface p-4 sm:p-6">
-              <h2 className="font-display text-4xl font-black leading-none">
-                {isChallenge ? "Take the dare" : "Enter the run"}
-              </h2>
-              <p className="mt-3 mb-4 text-sm text-foreground/80">
-                {pool.bountyModel === 2
-                  ? commitmentJoinCopy(pool, formatUsdc(pool.entryFee))
-                  : isDocGoal
-                    ? `Pay the ${formatUsdc(pool.entryFee)} USDC entry, then hand SPOTTER your record. The prize pays the moment the document checks out.`
-                    : `Pay the ${formatUsdc(pool.entryFee)} USDC entry, hit the goal inside the run, and the prize pays the moment SPOTTER confirms it.`}
-              </p>
-              {participantCount === 0 ? (
-                <p className="mb-4 text-sm font-semibold">Nobody is in yet. You would be first.</p>
-              ) : null}
-              {slot.proof === "upload" ? (
-                <p className="mb-4 rounded-lg border-2 border-warning/40 bg-warning/5 p-3 text-sm">
-                  {uploadFallbackNote(pool.goalSpec)}
-                </p>
-              ) : null}
-              <div className="mb-4">
-                <ApprovalNote />
-              </div>
-              <JoinPool
-                poolId={pool.id}
-                entryFee={pool.entryFee}
-                alreadyJoined={joined}
-              />
-            </section>
-          ) : null}
-
-          {canPay ? claimSection : null}
+          </div>
+        </>
+      );
+    } else if (
+      slot.kind === "checking" ||
+      (address !== null && participantQuery.isLoading)
+    ) {
+      // A read the join depends on has not answered yet: hold the stake
+      // rather than offer it and take it back a moment later.
+      body = (
+        <div aria-busy="true">
+          {statsFor(false)}
+          <Skeleton className="mt-4 h-24" />
+          <Skeleton className="mt-4 h-[60px]" />
+          <p className="m-0 mt-2 text-[0.8125rem] text-haze">Checking what this run needs from you.</p>
         </div>
-      ) : phase === "expired" ? (
-        <div className="space-y-4">
-          <Card>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <SpotterMascot
-                pose="nature"
-                size="sm"
-                className="mx-auto sm:mx-0"
+      );
+    } else if (slot.kind === "locked" && slot.lock.kind === "sign-in") {
+      const fix = lockCopy(slot.lock, `/pools/${id}`).fix;
+      body = (
+        <>
+          {statsFor(false)}
+          {termsBlock}
+          {solo !== null ? <SoloNote line={solo} /> : null}
+          <StakeAction
+            id="stake-action"
+            fine="Sign in with Base or email, no seed phrase. You make your player once, then land back on this run."
+          >
+            <ButtonLink href={fix.kind === "link" ? fix.href : "/character"} block>
+              Sign in to stake {stake} USDC
+            </ButtonLink>
+            {underStake}
+          </StakeAction>
+          <StakeVault />
+        </>
+      );
+    } else if (slot.kind === "locked") {
+      body = (
+        <>
+          {statsFor(false)}
+          {termsBlock}
+          {solo !== null ? <SoloNote line={solo} /> : null}
+          <StakeLock
+            lock={slot.lock}
+            returnTo={`/pools/${id}`}
+            onCheckSensor={character.checkSensor}
+            onRetry={checks.retry}
+          />
+          <StakeVault />
+        </>
+      );
+    } else if (joinMounted) {
+      // One mount for playable and in-run, so a fresh join keeps its receipt
+      // when the participant read flips to joined underneath it.
+      body = (
+        <JoinPool
+          poolId={pool.id}
+          entryFee={pool.entryFee}
+          alreadyJoined={joined}
+          view={{
+            preamble,
+            underStake,
+            goalTitle: headline.figure !== null ? `${headline.figure} ${headline.rest}` : goalTitle,
+            joined: {
+              stake,
+              pot,
+              players: participantCount,
+              night: sleepRun,
+              deviceName: deviceName ?? "wearable",
+              goalShort: headline.short,
+              closeLabel: closeLabelOf(pool.periodEnd),
+              closeClock: endClock,
+              icsHref,
+              action: friendAction,
+            },
+            barAction: friendAction !== null ? (
+              <ChallengeFriend
+                path={`/pools/${pool.id.toString()}`}
+                text={shareText}
+                variant="secondary"
               />
-              <div className="min-w-0">
-                <h2 className="font-display text-lg font-semibold">
-                  This pool has ended
-                </h2>
-                <p className="mt-1 text-sm text-muted">
-                  The goal window closed on {formatDay(pool.periodEnd)}, so
-                  joining is closed. I pay out the verified achievers now that
-                  the period is over.
-                </p>
-                {!joined ? (
-                  <>
-                    <p className="mt-2 text-sm text-muted">
-                      {participantCount === 0
-                        ? "Nobody joined this one, so there is nothing here for me to pay."
-                        : "You are not in this pool, so nothing here pays out for you."}
-                    </p>
-                    <BrowsePoolsLink />
-                  </>
-                ) : null}
-              </div>
+            ) : null,
+          }}
+        />
+      );
+    } else {
+      body = null;
+    }
+    stakeCard = (
+      <StakeCard label={joined ? "Your stake" : "Stake on this run"}>
+        {body}
+        {unsupportedAfterJoin !== null ? (
+          <p className="m-0 mt-3 flex items-start gap-2.5 text-sm leading-[1.45] text-foreground">
+            <Glyph name="info" size={18} className="mt-px text-muted" />
+            <span>
+              {deviceName ?? "Your wearable"} does not report {metricLabel(unsupportedAfterJoin)}, so it
+              cannot prove this run. Pair the wearable you joined with to send SPOTTER in.
+            </span>
+          </p>
+        ) : null}
+      </StakeCard>
+    );
+  } else if (phase === "expired") {
+    stakeCard =
+      joined && verdictCard !== null && verdictShown ? (
+        verdictCard
+      ) : (
+        <StakeCard label="This run has ended">
+          {statsFor(joined)}
+          <p className="m-0 mt-4 text-[1.0625rem] font-semibold">
+            {joined ? "Time is up. Send SPOTTER in." : "This run has ended"}
+          </p>
+          <p className="m-0 mt-1 text-[0.9375rem] text-muted">
+            {joined
+              ? `Joining closed at ${endClock}. Sync your ${deviceName ?? "wearable"} and send SPOTTER in below, before the run settles.`
+              : participantCount === 0
+                ? "Nobody joined this one, so there is nothing here to pay out."
+                : "You are not in this run, so nothing here pays out for you."}
+          </p>
+          {!joined ? (
+            <StakeAction>
+              <ButtonLink href={nextRunHref} block>
+                Find an open run
+              </ButtonLink>
+            </StakeAction>
+          ) : null}
+        </StakeCard>
+      );
+  } else {
+    // Settled or cancelled. What happened is read from the chain
+    // (lib/game/run-end.ts), never assumed. A joined player gets their
+    // Verdict with the claim folded in; everyone else the run's result.
+    const endPhase = phase === "cancelled" ? "cancelled" : "settled";
+    const tally = resultsQuery.data !== undefined ? settleTallyOf(resultsQuery.data) : null;
+    const copy = runEndCopy({ phase: endPhase, bountyModel: pool.bountyModel, joined, tally });
+    if (joined && address !== null) {
+      stakeCard =
+        claimLedgerQuery.isLoading || participantQuery.isLoading ? (
+          // Hold until the ledger and the chain answer, so a winner never
+          // sees "Run settled" flip to a paid receipt.
+          <Card aria-busy="true">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="mt-3 h-10 w-3/4" />
+            <Skeleton className="mt-4 h-40" />
+          </Card>
+        ) : (
+          verdictCard
+        );
+    } else {
+      stakeCard = (
+        <StakeCard label="How this run ended">
+          <StakeStats stake={stake} pot={pot} potLabel="Left in pool" players={participantCount} stakeLabel={selfStaked ? "Stake" : "Entry"} />
+          <p className="m-0 mt-4 text-[1.0625rem] font-semibold">{copy.headline}</p>
+          {endPhase === "settled" && resultsQuery.isLoading ? (
+            <Skeleton className="mt-2 h-10" />
+          ) : (
+            <p className="m-0 mt-1 text-[0.9375rem] text-muted">{copy.body}</p>
+          )}
+          {endPhase === "settled" && resultsQuery.isError ? (
+            <div className="mt-3">
+              <ErrorNote
+                title="Could not read who hit it"
+                detail="I could not read the results on this run from Base Sepolia just now. Nothing changed; anything credited to you is still claimable."
+                onRetry={() => {
+                  void resultsQuery.refetch();
+                }}
+                retryLabel="Read the results again"
+              />
+            </div>
+          ) : null}
+          {!isCreator ? (
+            <StakeAction fine="You were not in this run, so nothing here is yours.">
+              <ButtonLink href={nextRunHref} block>
+                Find an open run
+              </ButtonLink>
+            </StakeAction>
+          ) : null}
+        </StakeCard>
+      );
+    }
+  }
+
+  // ------------------------------------------------------------ Your night
+
+  const railFor = (): NightRail | null =>
+    timeline !== null && timeline.fits
+      ? {
+          latestPct: timeline.latestPct,
+          latestLabel: clockLabel(timeline.latestSec),
+          blockLabel: `${headline.threshold}h`,
+        }
+      : null;
+  const device = deviceName ?? "wearable";
+  const lockedCaption =
+    slot.kind === "locked" && slot.lock.kind === "cannot-measure"
+      ? `${slot.lock.deviceLabel ?? "Your wearable"} can't send me ${metricLabel(slot.lock.metric)}. Pair a wearable that tracks it and I'll check this run.`
+      : null;
+  const caption = joined
+    ? sleepRun && headline.goalDays === 1
+      ? `You're in. I'm asleep till ${endClock}. You should be too.`
+      : `You're in. Sync your ${device} before ${endClock} and send me in to check.`
+    : lockedCaption ??
+      (deviceName !== null
+        ? sleepRun
+          ? `Wear your ${deviceName} to bed. When you wake, sync it and send me in to read the night.`
+          : `Wear your ${deviceName}. Sync it before ${endClock} and send me in to read the day.`
+        : sleepRun
+          ? "Wear whatever tracks your sleep to bed. When you wake, sync it and send me in to read the night."
+          : `Wear whatever tracks it. Sync it before ${endClock} and send me in to read the day.`);
+  const rail = railFor();
+  const appName = deviceName !== null ? `the ${deviceName} app` : "your wearable's app";
+  const note: ReactNode =
+    timeline !== null && timeline.fits ? (
+      <>
+        To fit {headline.short} before the {endClock} close, be asleep by{" "}
+        <b>{clockLabel(timeline.latestSec)}</b> at the latest. Your {device} counts time asleep, not
+        time in bed. Open {appName} when you wake so the night syncs.
+      </>
+    ) : timeline !== null ? (
+      <>
+        Less than {headline.short} is left before the {endClock} close, so tonight can no longer
+        reach the goal.
+      </>
+    ) : (
+      <>
+        The run closes at <b>{endClock}</b>
+        {left !== null ? `, in ${left}` : ""}. Only {sleepRun ? "nights" : "days"} your {device} has
+        scored and synced count, so open {appName} before then.
+      </>
+    );
+  const nightBase = {
+    title: sleepRun ? "Your night" : "Your day",
+    nowLabel: now !== null ? `Now ${clockLabel(now)}` : null,
+    caption,
+    endLabel: endClock,
+    rail,
+    left,
+    railLabel:
+      rail !== null
+        ? `From now to the ${endClock} close. Asleep by ${rail.latestLabel} fits ${headline.short}.`
+        : `From now to the ${endClock} close: ${left ?? ""} left.`,
+    note,
+  };
+  const yourNight =
+    !live || evidenceType !== "wearable" ? null : joined && address !== null ? (
+      <JoinedNight pool={pool} address={address} base={nightBase} />
+    ) : (
+      <YourNight {...nightBase} />
+    );
+
+  // -------------------------------------------------------------- Who's in
+
+  const rosterCopy = (count: number | null): ReactNode => {
+    if (!live) return undefined;
+    if (friendMath !== null) {
+      return (
+        <>
+          Bring a friend. If you both hit, each gets <b>{friendMath.bothHit}</b>. If they miss, you
+          get <b>{friendMath.friendMisses}</b>.
+        </>
+      );
+    }
+    if (count !== null && count > 0 && !isChallenge) {
+      // Only a run that records a miss grows with its players. Anywhere else a
+      // miss is refunded, so another player splits the same sponsor pot.
+      if (recordsMisses) return <>More players, bigger pot. Each one stakes {stake} too.</>;
+      return sponsorPot > 0n ? (
+        <>
+          Each player stakes {stake}. A miss here comes back, so the players who hit share the{" "}
+          <b>{formatUsdc(sponsorPot)}</b> sponsor pot.
+        </>
+      ) : (
+        <>Each player stakes {stake}. A miss here comes back, so a hit is your stake back.</>
+      );
+    }
+    return undefined;
+  };
+
+  // -------------------------------------------------------------- Also open
+
+  const alsoRows: AlsoOpenRow[] = openRuns.slice(0, 2).map((p) => ({
+    href: `/pools/${p.id.toString()}`,
+    // The lobby row's name for the same run, so a link lands on what it said.
+    title: runName(p),
+    ends: endsLabel(p.periodEnd),
+    stake: formatUsdc(p.entryFee),
+    pot: formatUsdc(p.balance),
+  }));
+
+  // -------------------------------------------------------------- Sharing
+
+  // A challenge run is stake on yourself ("Match my stake" / "Back me") or a
+  // reward challenge, decided money first by useRunMoney from the creator's
+  // seed at create (the pot net of stakes and of backers' money) and their
+  // own stake (lib/game/money-sharing). Null until those read, and then no
+  // share card guesses; and none at all once the run is over.
+  const { prize: challengePrize } = darePot({
+    balance: pool.balance,
+    entryFee: pool.entryFee,
+    participantCount,
+    settled: pool.settled,
+    cancelled: pool.cancelled,
+  });
+  const creatorStaked =
+    participantsQuery.data !== undefined && creatorStakedIn(pool.creator, participantsQuery.data);
+  const challengeKind = runMoney?.challengeKind ?? null;
+  const shareCard = shareCardOf({ kind: challengeKind, live });
+  // A challenge's creator is someone the viewer knows; a public run's is not,
+  // so an address with no ENS name there says whose it is.
+  const creatorShort = `${pool.creator.slice(0, 6)}...${pool.creator.slice(-4)}`;
+  const creatorName =
+    creatorNameQuery.data ?? (isChallenge ? creatorShort : `the run's creator (${creatorShort})`);
+  const chipIn: ChipInTerms = {
+    bountyModel: pool.bountyModel,
+    creator: { name: creatorName, you: isCreator },
+    selfStake: isChallenge && creatorStaked,
+    stakers: participantCount,
+  };
+
+  return (
+    <>
+      <LightsOut on={joined && live} />
+      <RunLayout hero={hero} stake={stakeCard}>
+        {/* A win or refund credited on chain from ANY run shows here until it
+            is claimed, unless this run's own Verdict is already showing the
+            claim (a win, a settled result, or a cancelled run's refund). */}
+        {address !== null && !verdictHoldsClaim ? <ClaimPayout address={address} /> : null}
+
+        {yourNight}
+        {canPay ? proofSurface : null}
+
+        {/* A challenge's link is its PRIVATE /c/<token> invite and pool ids
+            are walkable, so only the creator gets it, revealed after a
+            one-tap signature. Public runs share from Who's in. */}
+        {isChallenge && isCreator && address !== null && shareCard !== null && challengeKind !== null ? (
+          <Card as="section" aria-labelledby="send-h">
+            <h2 id="send-h" className="m-0 text-[1.0625rem] font-semibold">
+              {shareCard.heading}
+            </h2>
+            <div className="mt-3">
+              <ChallengeInviteShare poolId={pool.id} address={address} kind={challengeKind} />
             </div>
           </Card>
+        ) : null}
 
-          {joined ? (
-            <>
-              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-                Your claim
-              </p>
-              {claimSection}
-            </>
+        <Roster
+          poolId={pool.id}
+          address={address}
+          youPlaying={live ? (sleepRun ? "You, night to play" : "You, day to play") : undefined}
+          copy={rosterCopy}
+          action={joined ? null : friendAction !== null ? (
+            <ChallengeFriend path={`/pools/${pool.id.toString()}`} text={shareText} variant="secondary" />
           ) : null}
-        </div>
-      ) : (
-        // Settled or cancelled. What happened is read from the chain
-        // (lib/game/run-end.ts), never assumed: a pool nobody hit, a cancelled
-        // pool and a pool with winners each say what is true. A joined player
-        // gets their Verdict with the claim folded in (refund, share or win);
-        // the creator gets the leftover.
-        <div className="space-y-4">
-          {(() => {
-            const endPhase = phase === "cancelled" ? "cancelled" : "settled";
-            const tally =
-              resultsQuery.data !== undefined ? settleTallyOf(resultsQuery.data) : null;
-            const copy = runEndCopy({
-              phase: endPhase,
-              bountyModel: pool.bountyModel,
-              joined,
-              tally,
-            });
-            return (
-              <Card>
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                  <SpotterMascot
-                    pose="nature"
-                    size="sm"
-                    className="mx-auto sm:mx-0"
-                  />
-                  <div className="min-w-0">
-                    <h2 className="font-display text-lg font-semibold">
-                      {copy.headline}
-                    </h2>
-                    {endPhase === "settled" && resultsQuery.isLoading ? (
-                      <Skeleton className="mt-2 h-10" />
-                    ) : (
-                      <p className="mt-1 text-sm text-muted">{copy.body}</p>
-                    )}
-                    {endPhase === "settled" && resultsQuery.isError ? (
-                      <div className="mt-3">
-                        <ErrorNote
-                          title="Could not read who hit it"
-                          detail="I could not read the results on this run from Base Sepolia just now. Nothing changed; anything credited to you is still claimable."
-                          onRetry={() => {
-                            void resultsQuery.refetch();
-                          }}
-                        />
-                      </div>
-                    ) : null}
-                    {!joined && !isCreator ? (
-                      <>
-                        <p className="mt-2 text-sm text-muted">
-                          You were not in this run, so nothing here is yours.
-                        </p>
-                        <BrowsePoolsLink label="Find an open run" />
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-              </Card>
-            );
-          })()}
+        />
 
-          {joined && address !== null ? (
-            <>
-              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-                Your result
-              </p>
-              {claimLedgerQuery.isLoading || participantQuery.isLoading ? (
-                // Hold until the ledger and the chain answer, so a winner
-                // never sees "Run settled" flip to "You won the run".
-                <Skeleton className="h-48" />
-              ) : (
-              <VerdictStage
-                pool={pool}
-                address={address}
-                joined={joined}
-                refunded={participantQuery.data?.refunded === true}
-                runStatus={runStatus}
-                ledger={claimLedger}
-                hasClaim={hasClaim}
-                screen={screen}
-                goalId={verdict.goalId}
-                screening={verdict.screening}
-                onApproval={verdict.onApproval}
-              />
-              )}
-            </>
-          ) : null}
+        {over ? <SweepLeftover pool={pool} phase={phase} address={address} /> : null}
 
-          <SweepLeftover pool={pool} phase={phase} address={address} />
-
-          {/* Secondary on purpose: the claim or the take-back above is the one
-              primary action on this screen. */}
-          {joined || isCreator ? (
-            <Link
-              href="/pools"
-              className={`inline-flex items-center text-sm font-semibold text-muted underline decoration-edge underline-offset-2 hover:text-foreground ${TAP_TARGET}`}
-            >
-              Find an open run
-            </Link>
-          ) : null}
-        </div>
-      )}
-
-      {!over && canPay && !fundingPaused ? (
-        isChallenge ? (
-          // A challenge pool's top-up must carry the sweep disclosure: miss the
-          // goal and sweep() returns the whole pot to the challenger, not
-          // pro-rata to contributors. ChallengeContribute is the funnel that
-          // states that before anyone can add - never the bare FundPool, which
-          // tops up with no disclosure. Re-sharing a challenge uses its private
-          // /c/<token> invite link (handed out at creation and on the landing),
-          // never this gated pool URL, so no share row is offered here.
-          <ChallengeContribute
-            poolId={pool.id}
-            prizeUsd={(() => {
-              // The prize net of every player's own stake, never raw balance.
-              const { prize } = darePot({
-                balance: pool.balance,
-                entryFee: pool.entryFee,
-                participantCount,
-                settled: pool.settled,
-                cancelled: pool.cancelled,
-              });
-              return prize !== null ? formatUsdc(prize) : null;
-            })()}
+        {!isChallenge ? (
+          <AlsoOpen
+            rows={alsoRows}
+            sub={deviceName !== null ? `Other runs your ${deviceName} can check` : "Other runs open now"}
           />
-        ) : (
-          <div className="space-y-4">
-            {/* Share block: bring more people onto a PUBLIC pool. The pool's own
-                page URL is public and safe to send, so it is handed to the
-                existing ShareChallenge for Text / Email / Copy. shareOrigin is
-                read on the client, so the row appears once mounted. */}
-            {shareOrigin !== null ? (
-              <div className="rounded-3xl border-2 border-edge bg-surface p-5 shadow-[var(--shadow-pop-edge)] sm:p-7">
-                <h2 className="mb-1 font-display text-xl font-extrabold">
-                  Bring people in
-                </h2>
-                <p className="mb-4 text-sm text-muted">
-                  More people on the goal makes for a livelier pool. Send it to
-                  someone who should be in.
-                </p>
-                <ShareChallenge
-                  url={`${shareOrigin}/pools/${id}`}
-                  title="Join me on GoHealthMe"
-                  message={`Get in on this goal with me on GoHealthMe: ${goalTitle}.`}
-                  emailSubject="Join this pool on GoHealthMe"
-                  shareLabel="Share pool"
-                />
-              </div>
-            ) : null}
-            <div className="space-y-4">
-              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-                Sweeten the pot
-              </p>
-              <Card>
-                <FundPool poolId={pool.id} />
-              </Card>
-            </div>
-          </div>
-        )
-      ) : null}
-    </div>
-  );
+        ) : null}
 
-  return <div className="mx-auto w-full max-w-3xl">{workbench}</div>;
+        {!over && canPay && !fundingPaused ? (
+          isChallenge ? (
+            // A challenge pool's top-up must carry the sweep disclosure: if
+            // nobody hits, sweep() hands the pot to the creator (on a
+            // stake-on-yourself run, the person backed), never pro-rata to
+            // contributors. ChipInWarning states that before anyone can add.
+            challengeKind !== null ? (
+              <ChallengeContribute
+                poolId={pool.id}
+                // The prize net of every player's own stake, never raw balance.
+                prizeUsd={challengePrize !== null ? formatUsdc(challengePrize) : null}
+                kind={challengeKind}
+                chipIn={chipIn}
+              />
+            ) : null
+          ) : (
+            <Card as="section" aria-labelledby="pot-h">
+              <details className="group">
+                <summary
+                  id="pot-h"
+                  className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-[1.0625rem] font-semibold [&::-webkit-details-marker]:hidden"
+                >
+                  Add to the pot
+                  <Glyph name="chev" className="text-haze transition-transform duration-[120ms] group-open:rotate-90" />
+                </summary>
+                <div className="mt-2">
+                  <FundPool
+                    poolId={pool.id}
+                    heading="Add test USDC to this run's pot"
+                    description="Anyone can add to the pot. It is paid out when the run settles."
+                    ctaLabel="Approve and add to the pot"
+                    chipIn={chipIn}
+                  />
+                </div>
+              </details>
+            </Card>
+          )
+        ) : null}
+
+      </RunLayout>
+    </>
+  );
 }

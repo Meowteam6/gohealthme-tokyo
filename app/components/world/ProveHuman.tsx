@@ -309,16 +309,17 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       data-lane="world-idkit"
       data-phase={phase.kind}
       data-mode={mode}
-      className="rounded-3xl border border-edge bg-surface p-5 sm:p-6"
+      className="rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] px-4 py-[18px] shadow-card min-[960px]:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold tracking-tight">Prove you&apos;re one human.</h2>
+        <h2 className="type-heading m-0 text-[1.75rem] text-balance">Prove you&apos;re one human.</h2>
+        {/* A player sees a chip only when the proof is not the real thing:
+            mocked on a dev or preview build, or World's test network. The
+            real World ID needs no label. */}
         {mode === "mock" ? (
           <Badge tone="warning">Event mode: mocked proofs</Badge>
-        ) : mode === "live" && config?.mode === "live" ? (
-          <Badge tone={config.environment === "production" ? "accent" : "muted"}>
-            World ID {config.environment}
-          </Badge>
+        ) : mode === "live" && config?.mode === "live" && config.environment === "staging" ? (
+          <Badge tone="muted">World ID test mode</Badge>
         ) : null}
       </div>
       <p className="mt-2 text-sm text-muted">
@@ -327,7 +328,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       </p>
 
       {phase.kind === "loading" ? (
-        <p className="mt-4 text-sm text-muted">Checking what this deployment supports…</p>
+        <p className="mt-4 text-sm text-muted">Getting World ID ready…</p>
       ) : null}
 
       {phase.kind === "unavailable" ? (
@@ -344,12 +345,12 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       ) : null}
 
       {phase.kind === "off" ? (
-        <div className="mt-4 rounded-xl border border-edge bg-surface-raised p-4">
+        <div className="mt-4 rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
           <p className="text-sm font-semibold">
             Prove-human is not enabled on this deployment.
           </p>
           <p className="mt-1 text-sm text-muted">
-            {phase.problem ?? "WORLD_VERIFY_MODE is unset, so this step is skipped and the closed-beta list decides access instead."}
+            {phase.problem ?? "It is not switched on for this build, so this step is skipped and the closed-beta list decides who can play."}
           </p>
         </div>
       ) : null}
@@ -357,12 +358,12 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       {phase.kind === "verified" ? (
         <div
           role="status"
-          className="mt-4 rounded-xl border border-accent/40 bg-accent/10 p-4"
+          className="mt-4 rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]"
         >
-          <p className="text-base font-semibold text-accent-strong">
+          <p className="text-base font-semibold text-moonlight">
             Verified: one human.
           </p>
-          <p className="mt-1 text-sm text-foreground/80">
+          <p className="mt-1 text-sm text-muted">
             {phase.mode === "mock"
               ? "Recorded in event mode with a mocked proof. This is not a real World ID verification and would not count outside the hackathon build."
               : `World verified you${
@@ -444,7 +445,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
               onChange={(e) => setIdentity(e.target.value)}
               placeholder="e.g. andre"
               autoComplete="off"
-              className={`rounded-xl border border-edge bg-background px-3 ${TAP_TARGET} justify-start font-normal`}
+              className={`rounded-control bg-surface-deep px-3.5 text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)] placeholder:text-haze ${TAP_TARGET} justify-start font-normal`}
             />
           </label>
           <Button type="submit" pop disabled={phase.kind !== "idle"}>

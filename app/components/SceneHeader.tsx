@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
+import Perch from "@/components/spotter/Perch";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
+import { Card } from "@/components/ui";
+import { asSpotterPose, type SpotterPose } from "@/lib/spotter-poses";
 
-// A Juno-style scenic header: a painterly riverbank meadow behind the title,
-// with a big SPOTTER standing in the grass doing something relevant to the
-// page. The otter is a transparent cutout so he lives IN the scene. A soft
-// scrim over the text side keeps the headline legible; page content renders
-// below on the cream. The scene is decoration, so its layers are aria-hidden.
+// A screen title on the night field (docs/DESIGN.md): the title card, with
+// SPOTTER standing on its top edge doing something relevant to the page. His
+// optional line sits in his caption box inside the card.
 export default function SceneHeader({
   title,
   subtitle,
@@ -16,60 +18,33 @@ export default function SceneHeader({
 }: {
   title: string;
   subtitle?: string;
-  /** Transparent otter file under /spotter, e.g. "spotter-lounging.png". */
-  pose: string;
+  /** A pose name ("wave") or a legacy file name ("spotter-greet.webp"). */
+  pose: SpotterPose | string;
   poseAlt: string;
+  /** A short sentence-case context line above the title. */
   eyebrow?: string;
-  /** A deadpan SPOTTER line, shown as a small speech bubble beside the otter. */
+  /** One SPOTTER line, in his caption box. */
   spotterLine?: string;
   children?: ReactNode;
 }) {
+  const resolved: SpotterPose = asSpotterPose(pose) ?? "wave";
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-edge bg-surface-raised">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/spotter/backdrop.png"
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom"
-      />
-      {/* legibility scrim over the text side */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-surface-raised/85 via-surface-raised/45 to-transparent"
-      />
-
-      <div className="relative z-10 flex min-h-[14rem] items-end justify-between gap-4 px-6 pt-8 sm:min-h-[16rem] sm:px-9">
-        <div className="max-w-md pb-8">
-          {eyebrow !== undefined ? (
-            <p className="text-xs font-semibold uppercase tracking-widest text-accent-strong">
-              {eyebrow}
-            </p>
-          ) : null}
-          <h1 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            {title}
-          </h1>
-          {subtitle !== undefined ? (
-            <p className="mt-2 text-sm leading-relaxed text-foreground/70 sm:text-base">
-              {subtitle}
-            </p>
-          ) : null}
-          {children}
-        </div>
-        <div className="relative hidden shrink-0 self-end sm:block">
-          {spotterLine !== undefined ? (
-            <div className="absolute right-full top-4 z-10 mr-1 w-40 rounded-2xl rounded-br-sm border border-edge bg-surface px-3 py-2 text-xs font-medium leading-snug text-foreground shadow-sm md:w-48">
-              {spotterLine}
-            </div>
-          ) : null}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/spotter/${pose}`}
-            alt={poseAlt}
-            className="otter-float -mb-1 h-44 w-auto drop-shadow-xl sm:h-56"
-          />
-        </div>
-      </div>
-    </section>
+    <Perch pose={resolved} width={[88, 132]} side="right" alt={poseAlt}>
+      <Card as="section">
+        {eyebrow !== undefined ? (
+          <p className="m-0 text-sm font-semibold text-haze">{eyebrow}</p>
+        ) : null}
+        <h1 className="type-title m-0 mt-1 break-words text-[2rem] min-[900px]:text-[2.75rem]">
+          {title}
+        </h1>
+        {subtitle !== undefined ? (
+          <p className="m-0 mt-2 max-w-[60ch] text-base leading-relaxed text-muted">{subtitle}</p>
+        ) : null}
+        {spotterLine !== undefined ? (
+          <SpotterCaption line={spotterLine} className="mt-4 max-w-md" />
+        ) : null}
+        {children}
+      </Card>
+    </Perch>
   );
 }

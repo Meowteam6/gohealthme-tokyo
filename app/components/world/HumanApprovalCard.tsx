@@ -54,6 +54,7 @@ import {
   type WorldRequestStage,
 } from "@/lib/world/credentials";
 import { idkitErrorView } from "@/lib/world/idkit-errors";
+import { Button, Fine } from "@/components/ui";
 
 export type { ApprovalOutcome };
 
@@ -451,17 +452,18 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
   }, [requestAuth, reload]);
 
   // ------------------------------------------------------------- rendering
+  // The card sits inside the Verdict, under its headline, so it carries no
+  // frame of its own: the actions, the countdown and one line of small print.
 
   if (state.kind === "asking") {
     return (
-      <div
-        data-lane="world-agents"
-        className="rounded-xl border border-accent/40 bg-accent/10 p-4 text-sm"
-        aria-busy="true"
-      >
-        <SpotterLabel />
-        <p className="mt-1 text-foreground/80">
-          verdict is in. asking you to confirm before anything moves...
+      <div data-lane="world-agents" aria-busy="true" className={QUIET_WELL}>
+        <p className="m-0 flex items-center gap-3 text-[0.9375rem] text-muted">
+          <span
+            aria-hidden="true"
+            className="animate-night-spin size-[18px] flex-none rounded-full border-2 border-moonlight/25 border-t-moonlight"
+          />
+          Opening the World ID request. Nothing moves before you answer.
         </p>
       </div>
     );
@@ -469,18 +471,13 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
 
   if (state.kind === "blocked") {
     return (
-      <div
-        data-lane="world-agents"
-        className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm"
-        role="alert"
-      >
-        <SpotterLabel />
-        <p className="mt-1 text-foreground/80">
-          i decided to pay, but i cannot ask you to confirm right now.
+      <div data-lane="world-agents" role="alert" className={QUIET_WELL}>
+        <p className="m-0 text-[0.9375rem] font-semibold text-foreground">
+          SPOTTER decided to pay, and cannot ask you to confirm right now.
         </p>
-        <p className="mt-2 text-muted">{state.message}</p>
+        <p className="m-0 mt-1 text-sm text-muted">{state.message}</p>
         {state.retry ? (
-          <button
+          <Button
             type="button"
             onClick={() =>
               void (state.needsSignature
@@ -489,14 +486,14 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
                   ? reload()
                   : ask())
             }
-            className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+            variant="secondary"
+            block
+            className="mt-3"
           >
             {state.needsSignature ? "Sign and try again" : "Try again"}
-          </button>
+          </Button>
         ) : (
-          <p className="mt-2 text-xs text-muted">
-            Nothing is recorded or paid until this is fixed on the deployment.
-          </p>
+          <Fine className="mt-2">Nothing is recorded or paid until this is fixed on the deployment.</Fine>
         )}
       </div>
     );
@@ -504,15 +501,9 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
 
   if (state.kind === "settled") {
     return (
-      <div
-        data-lane="world-agents"
-        data-outcome="settled"
-        className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm"
-        role="status"
-      >
-        <SpotterLabel />
-        <p className="mt-1 font-semibold">the run settled first. nothing to confirm.</p>
-        <p className="mt-1 text-foreground/80">
+      <div data-lane="world-agents" data-outcome="settled" role="status" className={QUIET_WELL}>
+        <p className="m-0 text-[0.9375rem] font-semibold">The run settled first, so there is nothing to confirm.</p>
+        <p className="m-0 mt-1 text-sm text-muted">
           Settle is one-shot, so this payout can no longer happen and there is
           nothing to ask again. The settle credited your stake back; claim it
           on this page.
@@ -522,126 +513,130 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
   }
 
   if (state.kind === "done") {
-    const copy = outcomeCopy(state.outcome);
-    const tone =
-      state.outcome === "approved"
-        ? "border-accent/40 bg-accent/10"
-        : "border-warning/40 bg-warning/10";
     return (
-      <div
-        data-lane="world-agents"
-        data-outcome={state.outcome}
-        className={`rounded-xl border p-4 text-sm ${tone}`}
-        role="status"
-      >
-        <SpotterLabel />
-        <p className="mt-1 font-semibold">{copy.headline}</p>
-        <p className="mt-1 text-foreground/80">{copy.detail}</p>
-        {copy.askAgain ? (
-          <button
-            type="button"
-            onClick={() => void ask()}
-            className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
-          >
-            Ask SPOTTER again
-          </button>
-        ) : null}
+      <div data-lane="world-agents" data-outcome={state.outcome}>
+        <ApprovalOutcomeView outcome={state.outcome} onAskAgain={() => void ask()} />
       </div>
     );
   }
 
   // pending or verifying
   const { request } = state;
-  const left = secondsLeft(request.expiresAt, now);
   const verifying = state.kind === "verifying";
   const world = isWorldRequest(request) ? request : null;
 
   return (
-    <div
-      data-lane="world-agents"
-      data-request-id={request.requestId}
-      className="rounded-xl border border-accent/40 bg-accent/10 p-4 text-sm"
-    >
-      <div className="flex items-baseline justify-between gap-3">
-        <SpotterLabel />
-        <span
-          className={`font-mono text-xs ${left <= 15 ? "text-warning" : "text-muted"}`}
-          aria-live="polite"
-        >
-          {formatCountdown(left)} left
-        </span>
-      </div>
-      <p className="mt-1 text-foreground/80">
-        verdict is in. before i move any USDC i need you, the human, to say
-        yes. this confirms you want the payout; it does not re-check the goal,
-        your wearable already did that.
-      </p>
-      {request.mocked ? (
-        <p
-          data-mocked="true"
-          className="mt-2 inline-block rounded-md border border-edge bg-surface-raised px-2 py-0.5 text-xs text-muted"
-        >
-          event mode, mocked proofs (not production)
-        </p>
+    <div data-lane="world-agents" data-request-id={request.requestId}>
+      <ApprovalAsk
+        secondsLeft={secondsLeft(request.expiresAt, now)}
+        mocked={request.mocked}
+        error={state.kind === "pending" ? state.error : null}
+        verifying={verifying}
+        confirmLabel={world !== null ? "Confirm with World ID" : "Confirm (mocked World ID)"}
+        onConfirm={world !== null ? () => setWidgetOpen(true) : () => void approveMock()}
+        onDecline={() => void decline()}
+      />
+      {world !== null ? (
+        <WorldApprovalWidget
+          open={widgetOpen}
+          onOpenChange={setWidgetOpen}
+          request={world}
+          stage={stage}
+          onVerify={verifyWorld}
+          onSuccess={() => setWidgetOpen(false)}
+          onError={onWorldError}
+        />
       ) : null}
-      {state.kind === "pending" && state.error !== null ? (
-        <p role="alert" className="mt-2 text-warning">
-          {state.error}
-        </p>
-      ) : null}
-
-      <div className="mt-3 flex flex-col gap-2">
-        {world !== null ? (
-          <>
-            <button
-              type="button"
-              disabled={verifying}
-              onClick={() => setWidgetOpen(true)}
-              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {verifying ? "checking your proof..." : "Confirm with World App"}
-            </button>
-            <WorldApprovalWidget
-              open={widgetOpen}
-              onOpenChange={setWidgetOpen}
-              request={world}
-              stage={stage}
-              onVerify={verifyWorld}
-              onSuccess={() => setWidgetOpen(false)}
-              onError={onWorldError}
-            />
-          </>
-        ) : (
-          <button
-            type="button"
-            disabled={verifying}
-            onClick={() => void approveMock()}
-            className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {verifying ? "checking your proof..." : "Confirm (mocked World ID)"}
-          </button>
-        )}
-        <button
-          type="button"
-          disabled={verifying}
-          onClick={() => void decline()}
-          className="w-full rounded-xl border border-edge bg-surface-raised px-5 py-3 text-sm font-semibold text-foreground/80 hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Not now, do not pay
-        </button>
-      </div>
-      <p className="mt-2 text-xs text-muted">
-        Signing proves the wallet is yours; no transaction is sent. Nothing is
-        recorded or paid until you confirm.
-      </p>
     </div>
   );
 }
 
-function SpotterLabel() {
+/** A finished ask: what it means, and "Ask again" where asking can still
+ *  work. Props only, so the state gallery can draw it. */
+export function ApprovalOutcomeView({
+  outcome,
+  onAskAgain,
+}: {
+  outcome: ApprovalOutcome;
+  onAskAgain: () => void;
+}) {
+  const copy = outcomeCopy(outcome);
   return (
-    <span className="text-xs font-semibold uppercase tracking-widest text-muted">
-      SPOTTER asks
-    </span>
+    <div role="status">
+      <p className="m-0 text-sm leading-[1.45] text-haze">{sentence(copy.detail)}</p>
+      {copy.askAgain ? (
+        <Button type="button" onClick={onAskAgain} block className="mt-3">
+          Ask again
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+const QUIET_WELL =
+  "rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]";
+
+/** outcomeCopy is written lower case in SPOTTER's old voice; the card reads in
+ *  sentence case. */
+function sentence(text: string): string {
+  return text.length === 0 ? text : text[0].toUpperCase() + text.slice(1);
+}
+
+/**
+ * The open ask, drawn from props only (docs/DESIGN.md, "Verdict card", confirm
+ * with World ID): the confirm action, the way out, the live countdown and what
+ * the confirmation shares. HumanApprovalCard feeds it the live request; the
+ * state gallery feeds it fixtures.
+ */
+export function ApprovalAsk({
+  secondsLeft: left,
+  mocked,
+  error,
+  verifying,
+  confirmLabel,
+  onConfirm,
+  onDecline,
+}: {
+  secondsLeft: number;
+  /** Event mode: the proof is mocked, and the card says so. */
+  mocked: boolean;
+  error: string | null;
+  verifying: boolean;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onDecline: () => void;
+}) {
+  return (
+    <div>
+      {mocked ? (
+        <p
+          data-mocked="true"
+          className="m-0 mb-3 inline-flex h-[26px] items-center rounded-tag bg-fill-quiet px-2.5 text-[0.8125rem] font-semibold text-muted shadow-[inset_0_0_0_1px_var(--border)]"
+        >
+          Event mode: mocked World ID, not production
+        </p>
+      ) : null}
+      {error !== null ? (
+        <p role="alert" className="m-0 mb-3 text-sm text-danger">
+          {error}
+        </p>
+      ) : null}
+      <div className="grid gap-2">
+        <Button type="button" disabled={verifying} onClick={onConfirm} block>
+          {verifying ? "Checking your proof" : confirmLabel}
+        </Button>
+        <Button type="button" disabled={verifying} onClick={onDecline} variant="tertiary" className="justify-self-center">
+          Not now, do not pay
+        </Button>
+      </div>
+      <p className="num m-0 mt-1 text-[0.8125rem] leading-[1.45] text-haze">
+        <span className={left <= 15 ? "font-semibold text-foreground" : "font-semibold text-muted"}>
+          {formatCountdown(left)} left on this request.
+        </span>{" "}
+        World App asks you to confirm. It shares nothing about your health and
+        sends no transaction, and it does not re-check the goal: your wearable
+        already did.
+      </p>
+    </div>
   );
 }

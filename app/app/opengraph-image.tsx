@@ -1,30 +1,28 @@
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { NIGHT_PALETTE as N } from "@/lib/night-palette";
 
-// The share card behind og:image and twitter:image on every page. Rendered
-// once at build (no request-time input), so it is a static PNG in production.
-// Copy is the locked one-liner plus the testnet chip; nothing here names a
-// price, a return, or anything that could read as real money.
-export const alt =
-  "GoHealthMe - pay someone in USDC the second they hit their health goal";
+// The share card behind og:image and twitter:image on every page, in Night
+// Shift (docs/DESIGN.md): the night field, the moon, SPOTTER asleep in front of
+// it, the headline and the testnet line. Rendered once at build (no request-
+// time input). The renderer cannot read CSS variables or WebP, so colours come
+// from lib/night-palette.ts and the art from PNGs in public/brand/ (written by
+// scripts/relight-spotter.mjs). Nothing here names a price or a return.
+export const alt = "GoHealthMe: put money on yourself. Your wearable decides.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-// Brand tokens mirrored from globals.css. The card cannot read CSS variables,
-// so the values are pinned here; keep them in step with the stylesheet.
-const CREAM = "#faf6ee";
-const INK = "#16211b";
-const MUTED = "#5f6f64";
-const EMERALD = "#059669";
-const EMERALD_SOFT = "#d1fae5";
+async function dataUrl(file: string): Promise<string> {
+  const buf = await readFile(join(process.cwd(), file));
+  return `data:image/png;base64,${buf.toString("base64")}`;
+}
 
 export default async function Image() {
-  // process.cwd() is the Next project directory (app/) at build and at runtime.
-  const otter = await readFile(
-    join(process.cwd(), "public/spotter/spotter-wave.png"),
-  );
-  const otterSrc = `data:image/png;base64,${otter.toString("base64")}`;
+  const [otter, mark] = await Promise.all([
+    dataUrl("public/brand/og-sleep.png"),
+    dataUrl("public/brand/mark-512.png"),
+  ]);
 
   return new ImageResponse(
     (
@@ -33,12 +31,10 @@ export default async function Image() {
           width: "100%",
           height: "100%",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          position: "relative",
           padding: "64px 72px",
-          background: CREAM,
-          color: INK,
-          fontFamily: "Geist, sans-serif",
+          background: `radial-gradient(60% 70% at 80% 30%, rgba(246,228,182,0.14), transparent 70%), ${N.background}`,
+          color: N.foreground,
         }}
       >
         <div
@@ -46,65 +42,49 @@ export default async function Image() {
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
+            width: 580,
             height: "100%",
-            width: 760,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              fontSize: 40,
-              fontWeight: 700,
-              color: EMERALD,
-              letterSpacing: -1,
-            }}
-          >
-            GoHealthMe
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <img src={mark} alt="" width={56} height={56} style={{ width: 56, height: 56 }} />
+            <div style={{ display: "flex", fontSize: 36, fontWeight: 700, letterSpacing: -0.5 }}>
+              GoHealthMe
+            </div>
           </div>
-          <div
-            style={{
-              display: "flex",
-              fontSize: 54,
-              fontWeight: 700,
-              lineHeight: 1.12,
-              letterSpacing: -1.5,
-            }}
-          >
-            You can&apos;t Venmo your grandma in another country to go for a
-            walk. You can pay her in USDC the second she does.
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 16,
-            }}
-          >
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             <div
-              style={{
-                display: "flex",
-                padding: "10px 18px",
-                borderRadius: 999,
-                background: EMERALD_SOFT,
-                color: EMERALD,
-                fontSize: 22,
-                fontWeight: 600,
-              }}
+              style={{ display: "flex", fontSize: 80, fontWeight: 700, lineHeight: 1.02, letterSpacing: -2 }}
             >
-              Testnet, play-money USDC on Base Sepolia
+              Put money on yourself.
             </div>
-            <div style={{ display: "flex", fontSize: 22, color: MUTED }}>
-              Stake on your health goal. Hit it, get paid in USDC.
+            <div style={{ display: "flex", fontSize: 30, color: N.muted, lineHeight: 1.3 }}>
+              Stake on your sleep or workouts. Your wearable decides.
             </div>
+          </div>
+          <div style={{ display: "flex", fontSize: 22, color: N.haze }}>
+            Beta on Base Sepolia with test USDC. No real money moves.
           </div>
         </div>
-        {/* SPOTTER waving, 637x1000 scaled to the card height. */}
+        {/* The moon, and SPOTTER asleep in front of it. */}
+        <div
+          style={{
+            position: "absolute",
+            right: 64,
+            top: 70,
+            width: 330,
+            height: 330,
+            borderRadius: 330,
+            background: `radial-gradient(circle at 36% 32%, ${N.moon1} 0%, ${N.moon2} 45%, ${N.moon3} 82%, ${N.moon4} 100%)`,
+            boxShadow: "0 0 120px 30px rgba(246,228,182,0.22)",
+          }}
+        />
         <img
-          src={otterSrc}
+          src={otter}
           alt=""
-          width={318}
-          height={500}
-          style={{ width: 318, height: 500 }}
+          width={400}
+          height={290}
+          style={{ position: "absolute", right: 64, top: 270, width: 400, height: 290 }}
         />
       </div>
     ),

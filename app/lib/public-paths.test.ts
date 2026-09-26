@@ -1,5 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { isPublicPath } from "@/lib/public-paths";
+import {
+  isPublicPath,
+  isSignedOutPreviewPath,
+  rendersWithoutGate,
+} from "@/lib/public-paths";
+
+describe("run pages: readable signed out, gated once signed in", () => {
+  const signedOut = { ready: true, signedIn: false };
+  const signedIn = { ready: true, signedIn: true };
+  const loading = { ready: false, signedIn: false };
+
+  it("treats only a numeric run id as a preview", () => {
+    expect(isSignedOutPreviewPath("/pools/5")).toBe(true);
+    expect(isSignedOutPreviewPath("/pools/5/")).toBe(true);
+    for (const path of ["/pools/create", "/pools/abc", "/pools/5/edit", "/pools"]) {
+      expect(isSignedOutPreviewPath(path), path).toBe(false);
+    }
+  });
+
+  it("lets a signed-out visitor read a run page", () => {
+    expect(rendersWithoutGate("/pools/5", signedOut)).toBe(true);
+  });
+
+  it("sends a signed-in player through the gate, so nobody is refused at the stake", () => {
+    expect(rendersWithoutGate("/pools/5", signedIn)).toBe(false);
+  });
+
+  it("does not decide before sign-in state is known", () => {
+    expect(rendersWithoutGate("/pools/5", loading)).toBe(false);
+  });
+
+  it("never opens the create form or money surfaces", () => {
+    for (const path of ["/pools/create", "/challenge/new", "/dashboard", "/sponsor", "/settings"]) {
+      expect(rendersWithoutGate(path, signedOut), path).toBe(false);
+    }
+  });
+
+  it("keeps public pages public for everyone", () => {
+    expect(rendersWithoutGate("/pools", signedIn)).toBe(true);
+    expect(rendersWithoutGate("/", loading)).toBe(true);
+  });
+});
 import { PUBLIC_PATHS } from "@/lib/site";
 
 describe("isPublicPath", () => {

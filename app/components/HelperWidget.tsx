@@ -6,7 +6,10 @@
 //
 // It never opens by itself. An auto-opened panel sat on top of the landing
 // hero and the sign-in call to action for every first-time visitor; the
-// bubble's gold dot is the nudge, and the player opens it when they want it.
+// bubble's dot is the nudge, and the player opens it when they want it. It
+// stays off the landing and the run pages (docs/DESIGN.md): there the run card
+// and the stake card carry the one action, and a floating bubble would sit on
+// top of them on a phone.
 //
 // The coach reads the SAME character state as the gate (useCharacter: sign
 // in, prove human, pick a name, pair a sensor) plus the onboarding skips, so
@@ -36,12 +39,24 @@ import {
   MAX_QUESTION_CHARS,
 } from "@/lib/server/help/knowledge";
 import SignInPanel from "@/components/SignInPanel";
+import { Chip, FOCUS_RING, buttonClasses } from "@/components/ui";
 
 type Tab = "coach" | "ask" | "feedback";
 type AskMessage = { role: "you" | "spotter"; text: string };
 type Rating = "easy" | "confusing";
 
 const SESSION_KEY = "ghm-helper-session";
+
+/** Inputs sit on the deepest field with a hairline (docs/DESIGN.md). */
+const INPUT = `w-full resize-none rounded-control bg-surface-deep px-3 py-2.5 text-base text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)] placeholder:text-haze ${FOCUS_RING}`;
+
+/** The flat brand mark: an app control, not a second SPOTTER pose. */
+function Mark({ size }: { size: number }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/brand/mark.svg" width={size} height={size} alt="" className="block flex-none" />
+  );
+}
 
 /** A stable per-browser id for anonymous rate-limiting on Ask and Feedback. */
 function ensureSessionId(): string {
@@ -59,26 +74,14 @@ function ensureSessionId(): string {
 
 // ------------------------------------------------------------------- glyphs
 
-function CompassGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path
-        d="M12 12 15.5 8.5 13 12.5 12 12ZM12 12 8.5 15.5 11 11.5 12 12Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
 function CheckIcon() {
   return (
     <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-      <circle cx="10" cy="10" r="9" fill="var(--accent-deep)" />
+      <circle cx="10" cy="10" r="9" fill="var(--moonlight)" fillOpacity="0.15" />
       <path
         d="M6 10.5 9 13.5 14 7.5"
         fill="none"
-        stroke="var(--accent)"
+        stroke="var(--moonlight)"
         strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -88,7 +91,7 @@ function CheckIcon() {
 }
 
 function RingIcon({ gold }: { gold?: boolean }) {
-  const color = gold ? "var(--gold)" : "var(--accent)";
+  const color = gold ? "var(--gold)" : "var(--foreground)";
   return (
     <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
       <circle cx="10" cy="10" r="8" fill="none" stroke={color} strokeWidth="2" />
@@ -116,8 +119,9 @@ function Checklist({ step, rows }: { step: CoachStep; rows: ChecklistRow[] }) {
         return (
           <li
             key={row.id}
-            className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${
-              current ? "bg-accent/20" : ""
+            aria-current={current ? "step" : undefined}
+            className={`flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-sm ${
+              current ? "bg-surface-raised" : ""
             }`}
           >
             <span className="shrink-0">
@@ -132,12 +136,12 @@ function Checklist({ step, rows }: { step: CoachStep; rows: ChecklistRow[] }) {
             <span
               className={`${
                 row.gold
-                  ? "text-gold-deep"
+                  ? "text-gold"
                   : current
                     ? "font-semibold text-foreground"
                     : done
                       ? "text-muted"
-                      : "text-muted/70"
+                      : "text-haze"
               }`}
             >
               {row.label}
@@ -180,15 +184,15 @@ function CoachTab({
 
   return (
     <div aria-live="polite">
-      <p className="text-sm font-semibold text-accent">{headline}</p>
-      <p className="mt-1 text-sm leading-relaxed text-muted">{body}</p>
+      <p className="m-0 text-base font-semibold text-foreground">{headline}</p>
+      <p className="m-0 mt-1 text-sm leading-relaxed text-muted">{body}</p>
 
       {blocked !== null ? (
         <div className="mt-3">
           <button
             type="button"
             onClick={onRetry}
-            className="min-h-11 rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent"
+            className={`${buttonClasses({ size: "sm" })}`}
           >
             {step.error !== null ? "Try again" : "Check my spot"}
           </button>
@@ -206,7 +210,7 @@ function CoachTab({
             type="button"
             onClick={onPrimary}
             disabled={step.loading}
-            className="min-h-11 rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className={`${buttonClasses({ size: "sm" })}`}
           >
             {copy.primary}
           </button>
@@ -214,7 +218,7 @@ function CoachTab({
             <button
               type="button"
               onClick={onSecondary}
-              className="min-h-11 rounded-lg border border-edge px-4 py-2 text-sm font-medium text-muted hover:text-foreground"
+              className={`${buttonClasses({ variant: "secondary", size: "sm" })}`}
             >
               {copy.secondary}
             </button>
@@ -223,9 +227,7 @@ function CoachTab({
       )}
 
       {step.loading ? (
-        <p className="mt-2 animate-pulse text-xs text-muted motion-reduce:animate-none">
-          Checking where you are...
-        </p>
+        <p className="mt-2 text-sm text-muted">Checking where you are...</p>
       ) : null}
 
       <Checklist step={step} rows={rows} />
@@ -307,8 +309,8 @@ function AskTab({ address }: { address: Address | null }) {
               <span
                 className={`inline-block max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
                   m.role === "you"
-                    ? "bg-accent/10 text-foreground"
-                    : "bg-surface-raised text-muted"
+                    ? "bg-surface-raised text-foreground"
+                    : "bg-background text-foreground shadow-[inset_0_0_0_1px_var(--border)]"
                 }`}
               >
                 {m.text}
@@ -317,7 +319,7 @@ function AskTab({ address }: { address: Address | null }) {
           ))
         )}
         {asking ? (
-          <p className="animate-pulse text-sm text-muted">thinking...</p>
+          <p className="text-sm text-muted">SPOTTER is thinking...</p>
         ) : null}
       </div>
 
@@ -338,15 +340,16 @@ function AskTab({ address }: { address: Address | null }) {
           maxLength={MAX_QUESTION_CHARS}
           rows={2}
           placeholder="How do I get paid?"
-          className="w-full resize-none rounded-lg border border-edge bg-surface-raised px-3 py-2 text-sm text-foreground placeholder:text-muted/60 focus:border-accent/60 focus:outline-none"
+          aria-label="Your question"
+          className={INPUT}
         />
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-xs text-muted">{left} of {ASK_PER_SESSION_CAP} left</span>
+          <span className="num text-xs text-haze">{left} of {ASK_PER_SESSION_CAP} left</span>
           <button
             type="button"
             onClick={() => void submit()}
             disabled={asking || input.trim() === ""}
-            className="min-h-11 rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className={`${buttonClasses({ size: "sm" })}`}
           >
             Ask
           </button>
@@ -405,11 +408,14 @@ function FeedbackTab({
 
   if (done) {
     return (
-      <div className="rounded-xl border border-accent/40 bg-surface-raised p-4">
-        <p className="text-sm font-semibold text-accent">Thanks - noted</p>
-        <p className="mt-1 text-sm text-muted">
-          Your note went straight to the founders. It helps more than you know.
-        </p>
+      <div aria-live="polite" className="flex items-start gap-3 rounded-control bg-surface-raised p-4 shadow-[inset_0_0_0_1px_var(--border)]">
+        <CheckIcon />
+        <div className="min-w-0">
+          <p className="m-0 text-base font-semibold text-foreground">Noted</p>
+          <p className="m-0 mt-1 text-sm text-muted">
+            Your note went straight to the founders. It helps more than you know.
+          </p>
+        </div>
       </div>
     );
   }
@@ -421,31 +427,23 @@ function FeedbackTab({
       </p>
       <div className="mt-3 flex gap-2">
         {(["easy", "confusing"] as Rating[]).map((r) => (
-          <button
-            key={r}
-            type="button"
-            onClick={() => setRating(r)}
-            className={`min-h-11 flex-1 rounded-lg border px-3 py-2 text-sm font-medium capitalize ${
-              rating === r
-                ? "border-accent/60 bg-accent/10 text-accent-strong"
-                : "border-edge bg-surface-raised text-muted hover:text-foreground"
-            }`}
-          >
+          <Chip key={r} selected={rating === r} onClick={() => setRating(r)} className="flex-1 capitalize">
             {r}
-          </button>
+          </Chip>
         ))}
       </div>
 
-      <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-muted">
+      <label htmlFor="helper-feedback" className="mt-3 block text-sm font-semibold text-foreground">
         What tripped you up?
       </label>
       <textarea
+        id="helper-feedback"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         maxLength={1000}
         rows={3}
         placeholder="Optional - anything that was unclear"
-        className="mt-1 w-full resize-none rounded-lg border border-edge bg-surface-raised px-3 py-2 text-sm text-foreground placeholder:text-muted/60 focus:border-accent/60 focus:outline-none"
+        className={`mt-1 ${INPUT}`}
       />
 
       {error !== null ? (
@@ -456,7 +454,7 @@ function FeedbackTab({
         type="button"
         onClick={() => void submit()}
         disabled={busy}
-        className="mt-3 min-h-11 w-full rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+        className={`${buttonClasses({ size: "sm" })} mt-3 w-full`}
       >
         {busy ? "Sending..." : "Send feedback"}
       </button>
@@ -472,7 +470,26 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "feedback", label: "Feedback" },
 ];
 
+/** Routes where the helper bubble never renders: the landing and the run
+ *  page (SPOTTER already stands on them), and the forms where a floating
+ *  button would sit on a field or the submit (character creation, the
+ *  challenge link, the create forms). */
+function helperHidden(pathname: string): boolean {
+  return (
+    pathname === "/" ||
+    /^\/pools\/\d+\/?$/.test(pathname) ||
+    /^\/(character|challenge\/new|pools\/create)\/?$/.test(pathname) ||
+    pathname.startsWith("/c/")
+  );
+}
+
 export default function HelperWidget() {
+  const pathname = usePathname();
+  if (helperHidden(pathname)) return null;
+  return <HelperWidgetPanel />;
+}
+
+function HelperWidgetPanel() {
   const router = useRouter();
   const pathname = usePathname();
   const view = useCharacter();
@@ -542,7 +559,10 @@ export default function HelperWidget() {
     setOpen(false);
   }, []);
 
-  const pending = step.id !== "enterRun";
+  // The dot means the helper holds something for this player: a character
+  // step (World ID, a name, a wearable) a signed-in player has not done. A
+  // signed-out first visit has nothing waiting, so no dot.
+  const pending = step.id !== "enterRun" && step.id !== "signIn";
 
   if (!open) {
     return (
@@ -550,11 +570,14 @@ export default function HelperWidget() {
         type="button"
         aria-label="Open the GoHealthMe helper"
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-accent-strong text-background shadow-lg shadow-black/40 hover:bg-accent"
+        className={`fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 grid size-[52px] place-items-center rounded-full bg-surface-raised shadow-[inset_0_0_0_1px_var(--border-strong),0_12px_28px_-10px_rgba(0,0,0,0.7)] transition-[background-color,transform] duration-[90ms] hover:bg-surface-hover active:scale-[0.96] ${FOCUS_RING}`}
       >
-        <CompassGlyph />
+        <Mark size={40} />
         {pending ? (
-          <span className="absolute right-1 top-1 h-3 w-3 rounded-full border-2 border-background bg-gold" />
+          <span
+            aria-hidden="true"
+            className="absolute right-0.5 top-0.5 size-3 rounded-full bg-moonlight shadow-[0_0_0_3px_var(--surface-raised)]"
+          />
         ) : null}
       </button>
     );
@@ -567,35 +590,35 @@ export default function HelperWidget() {
       onKeyDown={(e) => {
         if (e.key === "Escape") close();
       }}
-      className="fixed bottom-4 right-4 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-[360px] flex-col rounded-2xl border border-edge bg-surface shadow-xl shadow-black/50"
+      className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-[360px] flex-col rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] shadow-[inset_0_1px_0_rgba(246,228,182,0.12),inset_0_0_0_1px_var(--border-strong),0_28px_60px_-20px_rgba(0,0,0,0.8)]"
     >
       <div className="flex items-center justify-between border-b border-edge px-4 py-3">
-        <div className="flex items-center gap-2 text-accent">
-          <CompassGlyph />
-          <span className="text-sm font-semibold text-foreground">
-            Getting started
-          </span>
+        <div className="flex items-center gap-2">
+          <Mark size={32} />
+          <span className="type-heading text-xl text-foreground">Getting started</span>
         </div>
         <button
           type="button"
           aria-label="Close the helper"
           onClick={close}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-lg leading-none text-muted hover:text-foreground"
+          className={`grid size-11 place-items-center rounded-control text-muted hover:bg-fill-quiet hover:text-foreground ${FOCUS_RING}`}
         >
-          &times;
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
         </button>
       </div>
 
-      <div className="flex gap-1 px-3 pt-3">
+      <div className="mx-3 mt-3 grid grid-cols-3 gap-1 rounded-2xl bg-fill-quiet p-1 shadow-[inset_0_0_0_1px_var(--border)]">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             aria-pressed={tab === t.id}
-            className={`min-h-11 rounded-full px-3 text-xs font-semibold ${
+            className={`min-h-11 rounded-xl text-sm font-semibold transition-[background-color,color] duration-[120ms] ${FOCUS_RING} ${
               tab === t.id
-                ? "bg-accent/10 text-accent-strong"
+                ? "bg-accent text-accent-foreground shadow-selected"
                 : "text-muted hover:text-foreground"
             }`}
           >

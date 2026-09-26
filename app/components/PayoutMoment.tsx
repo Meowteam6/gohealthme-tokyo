@@ -1,213 +1,147 @@
-"use client";
-
-// THE DROP — the settlement moment, the emotional peak of the whole product.
-// SPOTTER settles your win and holds up the coin; the world leans in. Fires only
-// on a real settled payout: paidUsd comes from the ledger's settle entry (the
-// AchieverPaid delta), never from a transaction merely succeeding.
+// The payout receipt (docs/DESIGN.md, "Verdict card", paid): a paper receipt
+// on the night field with SPOTTER standing on its top edge, the exact amount,
+// the split, when it settled and the public transaction. It fires only on a
+// real settled payout: paidUsd comes from the ledger's settle entry (the
+// AchieverPaid figure), never from a transaction merely succeeding.
 //
-// Honest about the money's state: AchieverPaid CREDITS owed[] on a pull-payment
-// contract, it does not move USDC to the wallet. So this moment says the win is
-// settled and credited, and points at the one-tap claim (ClaimPayout / withdraw)
-// that pulls it into the wallet - it never asserts the money is already there.
+// Honest about where the money is: AchieverPaid CREDITS owed[] on a
+// pull-payment contract, it does not move USDC to the wallet. So the receipt
+// says paid and credited, and the claim (ClaimPayout) pulls it in; it never
+// says the money is already in the wallet.
 //
-// Honest-core: the amount is the gold mono Money, still, no count-up. Two paid
-// branches share the exact same celebration because money moved in both - only
-// the TRUST ribbon differs. A self-reported payout is celebrated just as hard
-// but NEVER reads as "verified": amber ribbon, no check/shield, no enclave
-// claim. Dismissing the takeover reveals the compact receipt left behind.
+// A self-reported payout gets the same receipt, because money moved, but never
+// reads as verified: its chip says self-reported. The amount never animates.
 
-import { useEffect, useState } from "react";
-import { ArcTxLink, Money, Stamp } from "@/components/ui";
-import Confetti from "@/components/Confetti";
+import { SpotterFigure } from "@/components/spotter/Spotter";
+import { Glyph } from "@/components/run/glyphs";
+import { baseTxUrl } from "@/lib/chains";
+import { paidSplitOf } from "@/lib/game/run-page";
+
+/** "Sun 27 Sep, 08:41", in the viewer's zone. */
+function paidAtLabel(iso: string): string | null {
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return null;
+  const d = new Date(ms);
+  const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
+  const month = d.toLocaleDateString("en-US", { month: "short" });
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return `${weekday} ${d.getDate()} ${month}, ${time}`;
+}
 
 export default function PayoutMoment({
   paidUsd,
   txHash,
   selfReported = false,
   selfStaked = false,
-  initialOpen = true,
+  entryFee,
+  payee = null,
+  paidAt = null,
+  spotter = true,
+  tuck = false,
+  headline,
+  headlineId,
 }: {
   paidUsd: string;
   txHash: string | null;
-  /** The low-trust tier. When true the moment NEVER claims "verified". */
+  /** The low-trust tier. When true the receipt NEVER claims "verified". */
   selfReported?: boolean;
   /**
    * Self-staked commitment pool (bountyModel 2). Independent of selfReported:
    * this is the economic model, not the proof tier. When true, the payout is
-   * the achiever's own stake back PLUS a share of the forfeited stakes, so the
-   * moment says so above the hype line. Does not touch the trust ribbon.
+   * the achiever's own stake back plus a share of what was left in the pot.
    */
   selfStaked?: boolean;
-  /** Dev/preview only: start with the takeover already dismissed. */
-  initialOpen?: boolean;
+  /** The run's stake, so a commitment payout splits into stake back plus the
+   *  rest, the way commitmentOutcome splits it. */
+  entryFee?: bigint;
+  /** The ENS name or handle the payout went to. */
+  payee?: string | null;
+  /** When the settle landed (the ledger entry's time), ISO-8601. */
+  paidAt?: string | null;
+  /** SPOTTER on the receipt's edge. Off where another pose owns the view. */
+  spotter?: boolean;
+  /** SPOTTER stands up into the header space above (the verdict card keeps
+   *  its headline clear of him), instead of the receipt reserving his height. */
+  tuck?: boolean;
+  /** Standalone use (the proof panels) puts its own headline above. */
+  headline?: string;
+  headlineId?: string;
+  /** Retired: the receipt no longer bleeds to the card's edge. */
+  bleed?: boolean;
 }) {
-  const [open, setOpen] = useState(initialOpen);
-  // Respect reduced-motion: only the celebration VIDEO carries motion, so it
-  // falls back to the static riverbank scene. Starts static (SSR-safe) and
-  // upgrades to video on mount when motion is allowed.
-  const [motionOK, setMotionOK] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setMotionOK(!mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-
-  const tierChip = selfReported ? (
-    <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
-      Self-reported
-    </span>
-  ) : (
-    <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/12 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-strong">
-      Verified
-    </span>
-  );
-
-  // The record left behind after the takeover is dismissed - the event becomes
-  // a warm little receipt, SPOTTER still holding your coin. Not a flat gold box.
-  const record = (
-    <div className="flex items-center gap-4 rounded-2xl border border-edge bg-surface p-5 shadow-sm sm:gap-5 sm:p-6">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/spotter/spotter-payday.png"
-        alt="SPOTTER the otter with your coin"
-        className="h-20 w-auto shrink-0 sm:h-24"
-      />
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <Stamp tone="gold">Settled</Stamp>
-          {tierChip}
-        </div>
-        <p className="mt-2">
-          <Money usd={paidUsd} tone="gold" sign="+" size="xl" />
-        </p>
-        <p className="mt-1 text-sm font-semibold text-foreground">
-          SPOTTER settled your win.
-        </p>
-        <p className="text-sm text-muted">
-          Credited to you on-chain. Claim your USDC to pull it into your wallet.
-        </p>
-        {selfStaked ? (
-          <p className="text-sm text-muted">
-            Your stake back, plus your share of the pot.
-          </p>
-        ) : null}
-        <p className="text-sm text-muted">Absolute unit. Run it back.</p>
-        {txHash !== null ? (
-          <p className="mt-2">
-            <ArcTxLink txHash={txHash} label="See the public receipt" />
-            <span className="mt-0.5 block text-xs text-muted">
-              (anyone can check this — that&apos;s the point)
-            </span>
-          </p>
-        ) : null}
-      </div>
-    </div>
-  );
-
-  if (!open) return record;
-
+  const split = selfStaked && entryFee !== undefined ? paidSplitOf(paidUsd, entryFee) : null;
+  const when = paidAt !== null ? paidAtLabel(paidAt) : null;
   return (
-    <>
-      {record}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="SPOTTER settled your win"
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <div>
+      {headline !== undefined ? (
+        <h2
+          id={headlineId}
+          className={`type-heading m-0 text-[1.875rem] ${spotter ? "max-w-[calc(100%-100px)]" : ""}`}
+        >
+          {headline}
+        </h2>
+      ) : null}
+      <article
+        aria-label="Payout receipt"
+        className={`relative rounded-[18px] bg-[linear-gradient(180deg,var(--paper-top),var(--paper))] px-[18px] pb-3 pt-4 text-ink shadow-paper ${
+          spotter && !tuck && headline === undefined ? "mt-[100px]" : "mt-5"
+        }`}
       >
-        <button
-          type="button"
-          aria-label="Dismiss"
-          onClick={() => setOpen(false)}
-          className="absolute inset-0 cursor-default bg-foreground/40 backdrop-blur-sm"
-        />
-        <div className="animate-payout-pop relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-edge bg-surface shadow-2xl">
-          {/* the scene: SPOTTER holds up your coin on the riverbank. Motion on =
-              the celebration video; reduced-motion = the still + confetti. */}
-          <div className="relative aspect-video overflow-hidden bg-surface-raised">
-            {motionOK ? (
-              <video
-                className="absolute inset-0 h-full w-full object-cover"
-                src="/spotter/spotter-thedrop.mp4"
-                poster="/spotter/spotter-payday.png"
-                autoPlay
-                muted
-                loop
-                playsInline
-                aria-hidden="true"
-              />
-            ) : (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/spotter/backdrop.png"
-                  alt=""
-                  aria-hidden="true"
-                  className="absolute inset-0 h-full w-full object-cover object-bottom"
-                />
-                <Confetti />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/spotter/spotter-payday.png"
-                  alt="SPOTTER the otter holding up a gold coin"
-                  className="otter-float absolute bottom-0 left-1/2 h-40 w-auto -translate-x-1/2 drop-shadow-xl"
-                />
-              </>
-            )}
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-surface to-transparent"
-            />
-          </div>
-
-          <div className="px-6 pb-6 pt-3 text-center">
-            <div className="flex justify-center">
-              {selfReported ? (
-                <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-warning">
-                  Self-reported · we took your word for it
-                </span>
-              ) : (
-                <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/12 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent-strong">
-                  Verified · only the verdict touched the chain
-                </span>
-              )}
-            </div>
-            <p className="mt-4">
-              <Money usd={paidUsd} tone="gold" sign="+" size="xl" />
-            </p>
-            <p className="mt-2 text-base font-semibold text-foreground">
-              SPOTTER settled your win.
-            </p>
-            <p className="mt-1 text-sm text-muted">
-              Credited to you on-chain. Claim your USDC to pull it into your
-              wallet.
-            </p>
-            {selfStaked ? (
-              <p className="mt-1 text-sm text-muted">
-                Your stake back, plus your share of the pot.
-              </p>
+        {spotter ? (
+          <span className="pointer-events-none absolute bottom-[calc(100%-4px)] right-[18px]">
+            <SpotterFigure pose="thumbsup" width={[84, 84]} alt="SPOTTER giving a thumbs up" />
+          </span>
+        ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex h-[26px] items-center rounded-tag bg-ink px-2.5 text-[0.8125rem] font-semibold text-paper">
+              Paid
+            </span>
+            {selfReported ? (
+              <span className="inline-flex h-[26px] items-center rounded-tag px-2 text-[0.8125rem] font-semibold text-ink-2 shadow-[inset_0_0_0_1px_var(--ink-2)]">
+                Self-reported, not verified
+              </span>
             ) : null}
-            <p className="mt-1 text-sm text-muted">Absolute unit. Run it back.</p>
-            {txHash !== null ? (
-              <p className="mt-4">
-                <ArcTxLink txHash={txHash} label="See the public receipt" />
-                <span className="mt-0.5 block text-xs text-muted">
-                  (anyone can check this — that&apos;s the point)
-                </span>
-              </p>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-accent-strong px-6 py-2 text-sm font-semibold text-background hover:bg-accent"
-            >
-              Done
-            </button>
-          </div>
+          </span>
+          {payee !== null ? (
+            <span className="min-w-0 truncate text-sm font-medium text-ink-2">{payee}</span>
+          ) : null}
         </div>
-      </div>
-    </>
+        <p className="num m-0 mt-3 text-[2.5rem] font-bold leading-none tracking-[-0.02em]">
+          <span className="sr-only">Payout: </span>
+          {paidUsd}
+          <small className="ml-1.5 text-[0.9375rem] font-semibold tracking-normal text-ink-2">USDC</small>
+        </p>
+        {split !== null ? (
+          <div className="num mt-3 grid gap-1 border-t border-dashed border-ink/20 pt-2.5 text-[0.9375rem]">
+            <div className="flex justify-between gap-3">
+              <span className="text-ink-2">Your stake back</span>
+              <span className="font-semibold">{split.stake}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-ink-2">Your share of the pot</span>
+              <span className="font-semibold">{split.rest}</span>
+            </div>
+          </div>
+        ) : null}
+        <div className="num mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[0.8125rem] text-ink-2">
+          <span>{when ?? "Settled on Base Sepolia"}</span>
+          {txHash !== null ? (
+            <a
+              href={baseTxUrl(txHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-10 items-center gap-1.5 font-semibold text-ink underline decoration-ink/30 underline-offset-[3px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              View on Basescan
+              <Glyph name="out" />
+            </a>
+          ) : null}
+        </div>
+      </article>
+      <p className="m-0 mt-2.5 text-[0.8125rem] leading-[1.45] text-haze">
+        The settle credited this to you on chain. Claiming pulls it into your wallet.
+      </p>
+    </div>
   );
 }

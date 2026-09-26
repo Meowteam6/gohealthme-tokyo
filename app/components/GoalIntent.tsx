@@ -6,6 +6,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { buttonClasses } from "@/components/ui";
 
 export default function GoalIntent() {
   const router = useRouter();
@@ -38,7 +39,7 @@ export default function GoalIntent() {
           on the goal, not collecting somebody else's money. */}
       <button
         type="submit"
-        className="rounded-xl bg-accent-strong px-8 py-4 text-base font-semibold text-background hover:bg-accent"
+        className={`${buttonClasses()}`}
       >
         Stake on it
       </button>

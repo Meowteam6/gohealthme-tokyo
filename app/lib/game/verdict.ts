@@ -11,6 +11,7 @@
 //   - A declined, expired or cancelled human approval is its own screen with a
 //     retry, and nothing is paid from it.
 
+import type { SpotterPose } from "@/lib/spotter-poses";
 import {
   currentAttesterIdOf,
   currentReasonEntry,
@@ -384,8 +385,8 @@ function formatMoment(ms: number): string {
 export interface VerdictCopy {
   headline: string;
   body: string;
-  /** SPOTTER pose for the stage (a real /spotter/spotter-<pose>.png). */
-  pose: string;
+  /** SPOTTER pose for the stage (lib/spotter-poses.ts). */
+  pose: SpotterPose;
 }
 
 /**
@@ -409,7 +410,7 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
         body:
           screen.confirmByMs !== undefined
             ? `The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. Confirm before ${formatMoment(screen.confirmByMs)}: the run settles by then, and a hit that is not confirmed gets its stake back without a share.`
-            : "The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. No confirmation, no payout.",
+            : "The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. No confirmation, no share: your stake still comes back when the run settles.",
         pose: "watching",
       };
     case "confirmed":
@@ -443,7 +444,7 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
           }
         : {
             headline: "Banked",
-            body: "Verified and recorded on chain. I pay out when the run closes. Nothing for you to do but come back.",
+            body: "Verified and recorded on chain. The contract pays out when the run settles. Nothing for you to do but come back.",
             pose: "cheer",
           };
     case "won":
@@ -474,7 +475,8 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
               ? "Your wearable shows the goal was not met, but nobody hit, so every stake came back, yours included. Claim it below."
               : screen.outcome === "cancelled"
                 ? "Your wearable shows the goal was not met, but the creator cancelled the run before it settled, so every stake can be claimed back, yours included."
-                : `Your wearable covered the whole run and shows the goal was not met, so the miss is recorded on chain. ${stake} goes to the players who hit. If nobody hit, every stake comes back, yours included, and so does a run the creator cancels before it settles.`,
+                : // Pending until settle, so conditional (docs/MONEY-FLOWS.md section 3).
+                  `Your wearable covered the whole run and shows the goal was not met, so the miss is recorded on chain. At settle ${stake.charAt(0).toLowerCase()}${stake.slice(1)} goes to who hits, or comes back if nobody does. A run the creator cancels before it settles gives every stake back too.`,
         pose: "standing",
       };
     }

@@ -1,20 +1,30 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import ChallengeAccept from "@/components/ChallengeAccept";
 import ChallengeContribute from "@/components/ChallengeContribute";
-import ShareChallenge from "@/components/ShareChallenge";
-import SpotterSays from "@/components/SpotterSays";
 import Lobby from "@/components/game/Lobby";
-import { TAP_TARGET } from "@/components/ui";
 import {
+  BackerView,
+  ChallengeIntro,
+  ChallengeInvalid,
+  ChallengePausedCard,
+  RallyCard,
+} from "@/components/challenges/ChallengeLanding";
+import { PAGE_COLUMN } from "@/components/night/kit";
+import {
+  fetchCommitmentFeeBps,
   fetchParticipants,
   fetchPool,
   formatUsdc,
   type PoolInfo,
 } from "@/lib/contract";
-import { darePot, isBackerView, type DarePot } from "@/lib/challenges";
+import {
+  challengePauseReason,
+  darePot,
+  isBackerView,
+} from "@/lib/challenges";
+import { challengeRunKindOf, creatorStakedIn } from "@/lib/game/money-sharing";
+import { missRulePool } from "@/lib/miss-rule";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
-import { needsDocumentVerifier } from "@/lib/game/lobby";
 import { approvalModeStatus } from "@/lib/server/agent/approval-mode-status";
 import { getChallengeByToken } from "@/lib/server/challenges";
 import { fetchPoolFunding, type PoolFunding } from "@/lib/server/pool-funders";
@@ -41,54 +51,18 @@ function nowUnixSeconds(): bigint {
 // This is a private, person-aimed link. It must never be indexed, and its
 // title/description must never leak the goal (which is health-adjacent) into a
 // search result or a link-preview card. The goal is visible ON the page only,
-// behind the unguessable token. Title stays deliberately neutral.
-export const metadata: Metadata = {
-  title: "You've been challenged",
-  robots: NOINDEX,
-};
-
-/** A friendly dead-end for a bad or expired-from-existence link, with no leak
- *  of whether any given token exists beyond "this one does not resolve". */
-function InvalidLink() {
-  return (
-    <div className="mx-auto max-w-md py-12">
-      <h1 className="font-display text-5xl font-black leading-[0.95]">
-        This dare link does not open
-      </h1>
-      <p className="mt-3 text-base text-foreground/80">
-        It may have been mistyped, or the dare no longer exists. Ask whoever
-        sent it for a fresh link.
-      </p>
-      <Link
-        href="/pools"
-        className={`mt-6 rounded-lg bg-accent font-semibold text-white hover:bg-accent-strong ${TAP_TARGET}`}
-      >
-        Go to the lobby
-      </Link>
-    </div>
-  );
-}
-
-/** The one money line under the headline. pool.balance counts every player's
- *  own stake, so the prize is stated net of stakes and the challenger's seed
- *  is split from friends' top-ups. No figure at all when it cannot be stated
- *  honestly (settled, cancelled, or a read missed). */
-function PrizeLine({ pot, backer }: { pot: DarePot; backer: boolean }) {
-  if (pot.prize === null) return null;
-  const fromFriends =
-    pot.seed !== null && pot.prize > pot.seed ? pot.prize - pot.seed : 0n;
-  return (
-    <p className="text-base text-foreground/80">
-      Prize:{" "}
-      <span className="font-mono font-semibold text-foreground">
-        {formatUsdc(pot.prize)} USDC
-      </span>
-      {fromFriends > 0n ? ` (${formatUsdc(fromFriends)} of it from backers)` : ""}
-      {backer
-        ? ", paid on top of their own lock-in when they hit the goal."
-        : ", paid on top of your own lock-in back when you hit the goal."}
-    </p>
-  );
+// behind the unguessable token. Title stays deliberately neutral; a "Back me"
+// link previews as backing, never as being challenged.
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  const backer = isBackerView((await searchParams).as);
+  return {
+    title: backer ? "Back a friend" : "You've been challenged",
+    robots: NOINDEX,
+  };
 }
 
 export default async function ChallengeLandingPage({
@@ -102,13 +76,13 @@ export default async function ChallengeLandingPage({
   const backer = isBackerView((await searchParams).as);
 
   const challenge = await getChallengeByToken(token);
-  if (challenge === null) return <InvalidLink />;
+  if (challenge === null) return <ChallengeInvalid />;
 
   let poolIdBig: bigint;
   try {
     poolIdBig = BigInt(challenge.poolId);
   } catch {
-    return <InvalidLink />;
+    return <ChallengeInvalid />;
   }
 
   // The goal and the reward are read LIVE from the chain, never from the
@@ -117,22 +91,26 @@ export default async function ChallengeLandingPage({
   let pool: PoolInfo;
   let phase: ReturnType<typeof poolPhase>;
   let canPay: boolean;
-  let uploadProof: boolean;
   try {
     pool = await fetchPool(poolIdBig);
     canPay = poolCanPay(pool);
     phase = poolPhase(pool, nowUnixSeconds());
-    uploadProof = needsDocumentVerifier(pool.goalSpec);
   } catch {
-    return <InvalidLink />;
+    return <ChallengeInvalid />;
   }
 
   // Checked on the server, from the same facts the judge and the approval gate
-  // decide on: a dare nobody can be verified on, or one whose win could not
-  // pay, takes no more money from anyone. The accept control shows the same
-  // limit as a lock (lib/game/lobby.ts); this stops the chip-in and the rally.
-  const verifierOff = uploadProof && !documentProofStatus().available;
-  const payoutsPaused = approvalModeStatus("challenge-page") === "misconfigured";
+  // decide on: a challenge whose win could not pay (or an older document
+  // challenge while the checker is off) takes no more money from anyone. A
+  // wearable challenge never waits on the document checker. The accept control
+  // shows the same limit as a lock (lib/game/lobby.ts); this stops the chip-in
+  // and the rally.
+  const pauseReason = challengePauseReason({
+    goalSpec: pool.goalSpec,
+    documentCheckerAvailable: documentProofStatus().available,
+    payoutsMisconfigured:
+      approvalModeStatus("challenge-page") === "misconfigured",
+  });
 
   // Resolve the challenger to a handle when they have claimed one; otherwise
   // show the truncated address. This is public identity, never a health label.
@@ -144,12 +122,12 @@ export default async function ChallengeLandingPage({
 
   // Best-effort reads for the money line. A miss leaves that figure unknown
   // (PrizeLine then says less), never wrong.
-  const [participantCount, funding] = await Promise.all([
-    fetchParticipants(poolIdBig)
-      .then((list) => list.length)
-      .catch(() => null),
+  const [participants, funding, feeBps] = await Promise.all([
+    fetchParticipants(poolIdBig).catch((): string[] | null => null),
     fetchPoolFunding(poolIdBig).catch((): PoolFunding | null => null),
+    fetchCommitmentFeeBps().catch(() => null),
   ]);
+  const participantCount = participants?.length ?? null;
   const pot = darePot({
     balance: pool.balance,
     entryFee: pool.entryFee,
@@ -177,133 +155,95 @@ export default async function ChallengeLandingPage({
   // Friends can grow the pot and rally more friends only while the challenge is
   // live, can actually pay, and can be checked and paid on this build. The
   // same gate the accept block uses.
-  const paused = verifierOff || payoutsPaused;
+  const paused = pauseReason !== null;
   const canGrow = phase === "live" && canPay && !paused;
 
-  const headline =
-    pot.seed !== null && pot.seed > 0n
-      ? `${challengerName} put ${formatUsdc(pot.seed)} USDC on you`
-      : `${challengerName} dared you`;
+  // Stake on yourself ("Match my stake" / "Back me") or a reward challenge,
+  // told apart money first (lib/game/money-sharing): the challenger's own
+  // seed where the funding read split it from backers' money, the pot net of
+  // stakes otherwise, then the creator's own stake. Decided once here; the
+  // headline, the chips and the terms all follow it. The chip-in warning
+  // names the creator: on a stake-on-yourself run, the person backed.
+  const creatorStaked =
+    participants !== null && creatorStakedIn(pool.creator, participants);
+  const kind = challengeRunKindOf({
+    creatorStaked,
+    reward: pot.seed ?? pot.prize,
+    named: challenge.targetHandle !== null || challenge.message !== null,
+  });
+
+  // The commitment terms before the accept, only for a commitment pool
+  // (bountyModel 2) that is live, can pay and is not paused, and only from
+  // numbers read from chain: the entry fee, the players already in and the
+  // sponsor pot (balance net of stakes). A missed read shows no terms rather
+  // than invented ones.
+  const terms =
+    pool.bountyModel === 2 &&
+    phase === "live" &&
+    canPay &&
+    !paused &&
+    participantCount !== null &&
+    pot.prize !== null
+      ? {
+          entryFee: pool.entryFee,
+          players: participantCount,
+          sponsorPot: pot.prize,
+          recordsMisses: missRulePool(pool).ok,
+          feeBps,
+        }
+      : null;
+
   const target =
     challenge.targetHandle !== null ? `@${challenge.targetHandle}` : "their friend";
+  const chipIn = {
+    bountyModel: pool.bountyModel,
+    creator: { name: challengerName, you: false },
+    selfStake: creatorStaked,
+    stakers: participantCount,
+  };
 
-  const backedBy =
-    contributorNames.length > 0 ? (
-      <p className="text-sm text-muted">
-        Backed by{" "}
-        <span className="font-semibold text-foreground">
-          {contributorNames.slice(0, 3).join(", ")}
-        </span>
-        {contributorNames.length > 3 ? ` and ${contributorNames.length - 3} more` : ""}
-      </p>
-    ) : null;
-
-  const rally = (
-    <div className="space-y-3 rounded-xl border-2 border-foreground/15 bg-surface p-5">
-      <div className="space-y-1">
-        <h2 className="font-display text-2xl font-extrabold">Rally your boys</h2>
-        <p className="text-sm text-muted">
-          This link opens as a backer page: friends can chip in to grow the
-          prize, and it never signs them up for the dare.
-        </p>
-      </div>
-      <ShareChallenge
-        token={token}
-        backer
-        title="Back this dare on GoHealthMe"
-        message="Back this dare - there is USDC riding on hitting the goal. Chip in and grow the prize:"
-        emailSubject="Back this dare"
-        shareLabel="Rally friends"
-      />
-    </div>
-  );
-
-  // BACKER VIEW: the rally link. Leads with chipping in, never offers accept,
-  // so a friend who came to help is never staked into the dare as a player.
   if (backer) {
     return (
-      <div className="mx-auto max-w-3xl space-y-8">
-        <header className="space-y-4">
-          <p className="text-sm font-semibold text-accent">Back the dare</p>
-          <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl">
-            {challengerName} dared {target}
-          </h1>
-          {challenge.message !== null ? (
-            <blockquote className="border-l-4 border-accent pl-4 text-lg text-foreground/90">
-              {challenge.message}
-            </blockquote>
-          ) : null}
-          <PrizeLine pot={pot} backer />
-          {backedBy}
-        </header>
-
-        {canGrow ? (
-          <>
-            <ChallengeContribute
-              poolId={poolIdBig}
-              prizeUsd={pot.prize !== null ? formatUsdc(pot.prize) : null}
-            />
-            {rally}
-          </>
-        ) : (
-          <div className="rounded-xl border border-edge bg-surface-raised p-5 text-sm">
-            <p className="font-semibold">This dare is not taking backers anymore</p>
-            <p className="mt-1 text-foreground/80">
-              Its window has closed or it has already paid out, so nothing can be
-              added. Nothing was charged.
-            </p>
-          </div>
-        )}
-
-        <p className="text-sm text-muted">
-          Are you the one who got dared?{" "}
-          <Link
-            href={`/c/${token}`}
-            className="font-semibold text-accent-strong underline underline-offset-2"
-          >
-            Open the dare to accept it
-          </Link>
-        </p>
-      </div>
+      <BackerView
+        kind={kind}
+        token={token}
+        poolId={poolIdBig}
+        challengerName={challengerName}
+        target={target}
+        message={challenge.message}
+        pot={pot}
+        backers={contributorNames}
+        canGrow={canGrow}
+        chipIn={chipIn}
+      />
     );
   }
 
-  // The dare leads the same Lobby component /pools renders, with this run
+  // The challenge leads the same Lobby component /pools renders, with this run
   // highlighted and its accept control inside the slip. The lock logic is the
-  // lobby's, so the dare link and the board can never disagree.
-  const intro = (
-    <header className="space-y-4">
-      <p className="text-sm font-semibold text-accent">You have been dared</p>
-      <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl">
-        {headline}
-      </h1>
-      {challenge.targetHandle !== null ? (
-        <p className="text-sm text-muted">For {challenge.targetHandle}</p>
-      ) : null}
-      {challenge.message !== null ? (
-        <blockquote className="border-l-4 border-accent pl-4 text-lg text-foreground/90">
-          {challenge.message}
-        </blockquote>
-      ) : null}
-      <PrizeLine pot={pot} backer={false} />
-      {backedBy}
-      <SpotterSays
-        surface="join"
-        state="joined"
-        pose="cheer"
-        say="Accept and your stake goes in. Hit it and it comes back with the prize. Only the yes or no verdict goes on chain, never your data."
-      />
-    </header>
-  );
-
+  // lobby's, so the challenge link and the board can never disagree.
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className={`${PAGE_COLUMN} [&>*+*]:mt-8`}>
       <Lobby
         highlightId={challenge.poolId}
         returnTo={`/c/${token}`}
-        intro={intro}
+        intro={
+          <ChallengeIntro
+            kind={kind}
+            challengerName={challengerName}
+            seed={pot.seed}
+            targetHandle={challenge.targetHandle}
+            message={challenge.message}
+            terms={terms}
+            backers={contributorNames}
+          />
+        }
         highlightAction={
-          <ChallengeAccept poolId={challenge.poolId} returnTo={`/c/${token}`} />
+          <ChallengeAccept
+            poolId={challenge.poolId}
+            returnTo={`/c/${token}`}
+            termsAbove={terms !== null}
+          />
         }
       />
 
@@ -312,15 +252,13 @@ export default async function ChallengeLandingPage({
           <ChallengeContribute
             poolId={poolIdBig}
             prizeUsd={pot.prize !== null ? formatUsdc(pot.prize) : null}
+            kind={kind}
+            chipIn={chipIn}
           />
-          {rally}
+          <RallyCard token={token} kind={kind} name={challengerName} />
         </>
-      ) : phase === "live" && canPay && paused ? (
-        <p className="rounded-xl border-2 border-foreground/15 bg-surface-raised p-4 text-sm">
-          Chipping in is paused too. I am not taking anyone&apos;s money for a
-          dare I cannot {verifierOff ? "check" : "pay out"} right now. Nothing has
-          been charged.
-        </p>
+      ) : phase === "live" && canPay && pauseReason !== null ? (
+        <ChallengePausedCard reason={pauseReason} />
       ) : null}
     </div>
   );

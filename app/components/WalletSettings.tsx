@@ -10,6 +10,7 @@
 // DynamicContextProvider). The private key and recovery phrase never pass
 // through this component or the app; the SDK shows them in isolation.
 
+import { SignInLoadingCard } from "@/components/night/SlowSignInNotice";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useEmbeddedReveal } from "@dynamic-labs/sdk-react-core";
@@ -19,21 +20,32 @@ import { formatUsdc } from "@/lib/contract";
 import { fetchWalletUsdc } from "@/lib/faucet-funding";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useCharacter, type CharacterView } from "@/lib/game/useCharacter";
-import { Badge, Skeleton } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Fine,
+  Money,
+  Skeleton,
+  TEXT_LINK,
+  buttonClasses,
+} from "@/components/ui";
+import { CARD_TITLE, Notice } from "@/components/night/kit";
 import { CopyAddressButton } from "@/components/FundingHelp";
 import DisconnectDeviceButton from "@/components/DisconnectDeviceButton";
 import SignInPanel from "@/components/SignInPanel";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-edge py-3 first:border-t-0">
-      <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-        {label}
-      </span>
-      <span className="text-sm text-foreground">{children}</span>
+    <div className="flex min-h-[52px] flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-edge py-2.5">
+      <dt className="text-[0.9375rem] text-haze">{label}</dt>
+      <dd className="m-0 min-w-0 text-right text-[0.9375rem] text-foreground">{children}</dd>
     </div>
   );
 }
+
+/** A quiet retry or fix inside a row: underlined, 44px tall. */
+const ROW_ACTION = `${TEXT_LINK} text-[0.9375rem]`;
 
 type ExportMode = "phrase" | "key";
 
@@ -62,48 +74,49 @@ function BackupSection() {
   };
 
   return (
-    <section className="mt-6 rounded-2xl border border-edge bg-surface p-5">
-      <h2 className="text-lg font-semibold">Back up this wallet</h2>
-      <p className="mt-2 text-sm text-muted">
-        This is optional. It shows a secret code for your account. Anyone who
-        sees it can take your money - never share it, not even with someone from
-        GoHealthMe. Only open this somewhere private.
-      </p>
+    <Card as="section" aria-labelledby="backup-heading">
+      <h2 id="backup-heading" className={CARD_TITLE}>
+        Back up this wallet
+      </h2>
+      <Notice tone="limit" className="mt-3">
+        Optional. It shows a secret code for your account. Anyone who sees it can
+        take your money, so never share it, not even with someone from
+        GoHealthMe. Only open it somewhere private.
+      </Notice>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <button
+        {/* Both reveals are optional and sensitive, so neither wears the
+            primary: a backup is never what this page pushes. */}
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          aria-busy={busy === "phrase"}
           disabled={busy !== null}
           onClick={() => {
             void runExport("phrase");
           }}
-          className="min-h-11 rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {busy === "phrase"
-            ? "Opening..."
-            : "Show my backup code (keep private)"}
-        </button>
-        <button
+          {busy === "phrase" ? "Opening" : "Show my backup code"}
+        </Button>
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          aria-busy={busy === "key"}
           disabled={busy !== null}
           onClick={() => {
             void runExport("key");
           }}
-          className="min-h-11 rounded-xl border border-edge px-5 py-3 text-sm font-semibold text-foreground hover:border-accent/50 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {busy === "key"
-            ? "Opening..."
-            : "Show my secret key (keep private)"}
-        </button>
+          {busy === "key" ? "Opening" : "Show my secret key"}
+        </Button>
       </div>
       {error !== null ? (
-        <p
-          role="alert"
-          className="mt-3 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-foreground/80"
-        >
+        <Notice tone="error" className="mt-3">
           {error}
-        </p>
+        </Notice>
       ) : null}
-    </section>
+    </Card>
   );
 }
 
@@ -116,16 +129,12 @@ function BackupSection() {
 function NameValue({ view }: { view: CharacterView }) {
   const step = view.steps.name;
   if (step.status === "loading") {
-    return <span className="text-muted">Reading...</span>;
+    return <span className="text-haze">Reading</span>;
   }
   if (view.ensLane === "error") {
     return (
-      <button
-        type="button"
-        onClick={view.refresh}
-        className="inline-flex min-h-11 items-center text-accent underline underline-offset-2"
-      >
-        Could not read your name - retry
+      <button type="button" onClick={view.refresh} className={ROW_ACTION}>
+        Could not read your name. Retry
       </button>
     );
   }
@@ -133,10 +142,7 @@ function NameValue({ view }: { view: CharacterView }) {
   if (step.status === "done" && name !== null) {
     if (view.nameMode === "handle" && name.startsWith("@")) {
       return (
-        <Link
-          href={`/u/${name.slice(1)}`}
-          className="font-semibold text-foreground hover:text-accent"
-        >
+        <Link href={`/u/${name.slice(1)}`} className={`${ROW_ACTION} text-foreground`}>
           {name}
         </Link>
       );
@@ -145,26 +151,20 @@ function NameValue({ view }: { view: CharacterView }) {
   }
   if (step.status === "locked") {
     return (
-      <Link
-        href="/character?step=human"
-        className="inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-2"
-      >
+      <Link href="/character?step=human" className={ROW_ACTION}>
         {step.note}
       </Link>
     );
   }
   return (
-    <Link
-      href="/character"
-      className="inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-2"
-    >
+    <Link href="/character" className={ROW_ACTION}>
       Pick a name
     </Link>
   );
 }
 
 /**
- * The paired sensor and the one control that revokes it. The privacy notice
+ * The paired wearable and the one control that revokes it. The privacy notice
  * promises disconnect "from your account"; this is where that lives for every
  * paired player, whether or not they are in a run.
  */
@@ -184,51 +184,51 @@ function DeviceSection({
   } else if (view.sensor.kind === "unchecked") {
     body = (
       <>
-        <p className="text-sm text-muted">
+        <p className="text-[0.9375rem] text-muted">
           Sign once with your wallet to see which wearable is paired. It costs
           nothing and moves no money.
         </p>
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          aria-busy={view.checkingSensor}
           disabled={view.checkingSensor}
           onClick={() => {
             void view.checkSensor();
           }}
-          className="mt-3 min-h-11 rounded-xl border border-edge px-5 py-3 text-sm font-semibold text-foreground hover:border-accent/50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-3"
         >
           {view.checkingSensor ? "Waiting for your signature" : "Show my wearable"}
-        </button>
+        </Button>
       </>
     );
   } else if (view.sensor.kind === "unavailable") {
     body = (
-      <p role="status" className="text-sm text-muted">
+      <Notice tone="limit" role="status">
         Could not read your wearable right now. Nothing is wrong with the
-        device; try again in a minute.
-      </p>
+        wearable; try again in a minute.
+      </Notice>
     );
   } else if (connected === null) {
     body = (
       <>
-        <p className="text-sm text-muted">
+        <p className="text-[0.9375rem] text-muted">
           No wearable paired. Runs are checked against a paired wearable.
         </p>
-        <Link
-          href="/character"
-          className="mt-3 inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-2"
-        >
-          Pair a wearable
+        <Link href="/character?step=sensor" className={`${buttonClasses({ size: "sm" })} mt-3`}>
+          Pair my wearable
         </Link>
       </>
     );
   } else {
     body = (
       <>
-        <p className="text-sm text-foreground">
+        <p className="text-[0.9375rem] text-foreground">
           <span className="font-semibold">{connected.label}</span>
           <span className="text-muted"> is paired to this wallet.</span>
         </p>
-        <p className="mt-1 text-sm text-muted">
+        <p className="mt-1 text-[0.9375rem] text-muted">
           Disconnecting stops SPOTTER reading it. A run you are in can only be
           checked while a wearable is paired.
         </p>
@@ -238,17 +238,14 @@ function DeviceSection({
   }
 
   return (
-    <section
-      aria-labelledby="sensor-heading"
-      className="rounded-2xl border border-edge bg-surface p-5"
-    >
-      <h2 id="sensor-heading" className="text-lg font-semibold">
+    <Card as="section" aria-labelledby="sensor-heading">
+      <h2 id="sensor-heading" className={CARD_TITLE}>
         Your wearable
       </h2>
       <div className="mt-2" aria-live="polite">
         {body}
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -264,10 +261,61 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
   });
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-edge bg-surface p-5">
+    <WalletDetailView
+      address={address}
+      isEmbedded={isEmbedded}
+      connectorName={connectorName}
+      view={view}
+      balance={{
+        isLoading: balanceQuery.isLoading,
+        isError: balanceQuery.isError,
+        data: balanceQuery.data,
+        refetch: () => {
+          void balanceQuery.refetch();
+        },
+      }}
+      logout={() => {
+        void logout();
+      }}
+    />
+  );
+}
+
+/** What the balance row needs from its read. */
+export interface BalanceRead {
+  isLoading: boolean;
+  isError: boolean;
+  data: bigint | undefined;
+  refetch: () => void;
+}
+
+/**
+ * The signed-in settings, drawn from what the hooks read. Split from
+ * WalletDetail so the dev gallery can render each state from fixtures; the
+ * reads and the sign-out stay in WalletDetail.
+ */
+export function WalletDetailView({
+  address,
+  isEmbedded,
+  connectorName,
+  view,
+  balance: balanceQuery,
+  logout,
+}: {
+  address: `0x${string}`;
+  isEmbedded: boolean | null;
+  connectorName: string | null;
+  view: CharacterView;
+  balance: BalanceRead;
+  logout: () => void;
+}) {
+  return (
+    <div className="[&>*+*]:mt-6">
+      <Card as="section" aria-labelledby="wallet-heading">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Your wallet</h2>
+          <h2 id="wallet-heading" className={CARD_TITLE}>
+            Your wallet
+          </h2>
           {isEmbedded === null ? (
             <Skeleton className="h-6 w-28" />
           ) : isEmbedded ? (
@@ -276,46 +324,39 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
             <Badge tone="muted">Connected wallet</Badge>
           )}
         </div>
-        <p className="mt-2 text-sm text-muted">
+        <p className="mt-2 text-[0.9375rem] leading-[1.5] text-muted">
           {isEmbedded === false
             ? `An external wallet you connected${
                 connectorName !== null ? ` (${connectorName})` : ""
               }. Its keys live in that wallet, not here.`
-            : "We created this wallet for you from your email. No seed phrase or extension needed to use it - back it up below when you want the keys."}
+            : "We made this wallet for you from your email. No seed phrase or extension needed to use it; back it up below when you want the keys."}
         </p>
 
         <div className="mt-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            Address
-          </p>
+          <p className="mb-2 text-[0.8125rem] text-haze">Address</p>
           <CopyAddressButton address={address} />
         </div>
 
-        <div className="mt-2">
+        <dl className="mt-4">
           <Row label="Name">
             <NameValue view={view} />
           </Row>
-          <Row label="Mode">
-            Practice
-            <span className="ml-1 text-muted">(test network)</span>
+          <Row label="Money">
+            Test USDC <span className="text-haze">on Base Sepolia</span>
           </Row>
           <Row label="Balance">
             {balanceQuery.isLoading ? (
-              <span className="text-muted">Reading...</span>
+              <span className="text-haze">Reading</span>
             ) : balanceQuery.isError ? (
               <button
                 type="button"
-                onClick={() => {
-                  void balanceQuery.refetch();
-                }}
-                className="text-accent underline underline-offset-2"
+                onClick={balanceQuery.refetch}
+                className={ROW_ACTION}
               >
-                Could not read - retry
+                Could not read it. Retry
               </button>
             ) : (
-              <span className="font-mono tabular-nums">
-                {formatUsdc(balanceQuery.data ?? 0n)} USDC
-              </span>
+              <Money usd={formatUsdc(balanceQuery.data ?? 0n)} size="md" />
             )}
           </Row>
           <Row label="Public record">
@@ -323,13 +364,13 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
               href={arcAddressUrl(address)}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-accent underline underline-offset-2"
+              className={ROW_ACTION}
             >
               See the public receipt
             </a>
           </Row>
-        </div>
-      </section>
+        </dl>
+      </Card>
 
       <DeviceSection address={address} view={view} />
 
@@ -338,9 +379,11 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
           straight to their own wallet, which keeps the shared treasury for
           everyone else. Test USDC only - no real value, same as the rest of
           this page. */}
-      <section className="rounded-2xl border border-dashed border-edge bg-surface-raised p-5">
-        <h2 className="text-sm font-semibold">Want more test USDC?</h2>
-        <p className="mt-1 text-sm text-muted">
+      <Card as="section" aria-labelledby="faucet-heading">
+        <h2 id="faucet-heading" className={CARD_TITLE}>
+          Want more test USDC?
+        </h2>
+        <p className="mt-2 text-[0.9375rem] leading-[1.5] text-muted">
           Grab 20 USDC free from Circle&apos;s testnet faucet: copy your address
           above, choose{" "}
           <span className="font-medium text-foreground">Base Sepolia</span> as
@@ -350,12 +393,12 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
           href="https://faucet.circle.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-accent underline underline-offset-2"
+          className={`mt-3 ${buttonClasses({ variant: "secondary", size: "sm" })}`}
         >
-          Open Circle faucet
-          <span aria-hidden="true">-&gt;</span>
+          Open the Circle faucet
         </a>
-      </section>
+        <Fine className="mt-2">Test USDC only. It has no real value.</Fine>
+      </Card>
 
       {isEmbedded === true ? <BackupSection /> : null}
 
@@ -364,37 +407,39 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
         // drops the connected wallet and lands on WalletSettings' signed-out
         // branch, which renders the email-first SignInPanel - so the next
         // wallet is the provisioned embedded one, with no reconnect prompts.
-        <section className="rounded-2xl border border-accent/40 bg-accent/20 p-5">
-          <h2 className="text-lg font-semibold">
+        <Card as="section" aria-labelledby="switch-heading">
+          <h2 id="switch-heading" className={CARD_TITLE}>
             Switch to your GoHealthMe email wallet
           </h2>
-          <p className="mt-2 text-sm text-muted">
+          <p className="mt-2 text-[0.9375rem] leading-[1.5] text-muted">
             You are on an external wallet. If a transaction keeps asking you to
-            reconnect, switch to the wallet we make from your email - no
+            reconnect, switch to the wallet we make from your email, with no
             extension and no reconnect prompts. This signs you out of the
             connected wallet, then you sign back in with an email code.
           </p>
-          <button
+          <Button
             type="button"
+            block
             onClick={() => {
               void logout();
             }}
-            className="mt-4 min-h-11 w-full rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
+            className="mt-4"
           >
             Switch to my email wallet
-          </button>
-        </section>
+          </Button>
+        </Card>
       ) : null}
 
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        block
         onClick={() => {
           void logout();
         }}
-        className="min-h-11 w-full rounded-xl border border-edge px-5 py-3 text-sm font-medium text-muted hover:text-foreground"
       >
         Sign out
-      </button>
+      </Button>
     </div>
   );
 }
@@ -409,20 +454,20 @@ export default function WalletSettings() {
 
   if (!ready) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-40" />
-        <Skeleton className="h-24" />
-      </div>
+      <SignInLoadingCard label="Loading your wallet">
+        <Skeleton className="h-6 w-1/3" />
+        <Skeleton className="mt-4 h-[52px] w-full" />
+        <Skeleton className="mt-4 h-4 w-2/3" />
+      </SignInLoadingCard>
     );
   }
 
   if (!authenticated || address === null) {
+    // The sign-in card is the floor SPOTTER stands on here.
     return (
-      <div className="space-y-4">
-        <p className="text-sm text-muted">
-          Sign in to see your wallet address, balance, and backup options.
-        </p>
-        <SignInPanel />
+      <div className="[&>*+*]:mt-3">
+        <SignInPanel surface="card" />
+        <Fine>Sign in to see your wallet address, balance and backup options.</Fine>
       </div>
     );
   }

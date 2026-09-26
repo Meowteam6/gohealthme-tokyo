@@ -264,6 +264,13 @@ export const healthPoolsAbi = [
   },
   {
     type: "function",
+    name: "commitmentFeeBps",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint16" }],
+  },
+  {
+    type: "function",
     name: "computeGoalId",
     stateMutability: "view",
     inputs: [
@@ -1036,6 +1043,23 @@ export async function fetchRefundLiability(id: bigint): Promise<bigint> {
     functionName: "refundLiability",
     args: [id],
   });
+}
+
+/**
+ * The fee on missed stakes in commitment runs (bountyModel 2), in basis
+ * points. Read from the chain so "no cut" is never asserted on a build whose
+ * owner changed it.
+ */
+export async function fetchCommitmentFeeBps(): Promise<number> {
+  const address = getHealthPoolsAddress();
+  if (address === null) throw new ContractNotConfiguredError();
+  const client = getArcPublicClient();
+  const bps = await client.readContract({
+    address,
+    abi: healthPoolsAbi,
+    functionName: "commitmentFeeBps",
+  });
+  return Number(bps);
 }
 
 /** Every participant's on-chain result for one pool, read after it closes so

@@ -20,8 +20,9 @@
 // every read for the session. A refused prompt shows the reason and a way to
 // try again, never an empty card that reads as "you have no wearable".
 
+import { SignInLoadingCard } from "@/components/night/SlowSignInNotice";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import BalanceCard from "@/components/BalanceCard";
 import ClaimPayout from "@/components/ClaimPayout";
@@ -33,10 +34,24 @@ import {
   Badge,
   Button,
   Card,
-  EmptyState,
   ErrorNote,
+  FOCUS_RING,
   Skeleton,
+  buttonClasses,
 } from "@/components/ui";
+import {
+  CARD_TITLE,
+  EmptyCard,
+  FIELD_HINT,
+  Notice,
+  PAGE_LEAD,
+  PAGE_TITLE,
+  PerchedHeader,
+  QUIET_ACTION,
+  SECTION_TITLE,
+  type NoticeTone,
+} from "@/components/night/kit";
+import type { NightPose } from "@/lib/spotter-poses";
 import {
   displayGoalSpec,
   evidenceTypeOf,
@@ -70,7 +85,6 @@ import {
 import { parseStatus } from "@/lib/world/approval-client";
 import RunBoard from "@/components/game/RunBoard";
 import CharacterCard from "@/components/game/CharacterCard";
-import HeroActivityTicker from "@/components/HeroActivityTicker";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { MY_RUNS_KEY, fetchMyRuns } from "@/lib/game/useLobby";
 import DisconnectDeviceButton from "@/components/DisconnectDeviceButton";
@@ -131,17 +145,12 @@ function DeferredNote({
   settlesAt: bigint;
 }) {
   const { lead, tone, selfReported } = dashboardDeferredLead(tier);
-  const cls =
-    tone === "warning"
-      ? "border-warning/40 bg-warning/10 text-warning"
-      : "border-accent/30 bg-accent/20 text-accent-deep";
   return (
-    <p className={`mt-3 rounded-xl border border-dashed p-3 text-sm ${cls}`}>
+    <Notice tone={tone === "warning" ? "limit" : "ok"} role="status">
       {lead} SPOTTER settles this {selfReported ? "self-reported claim " : ""}
-      at {formatSettleMoment(settlesAt)} (
-      <Countdown periodStart={0n} periodEnd={settlesAt} />). Nothing for you to
-      do.
-    </p>
+      at <b>{formatSettleMoment(settlesAt)}</b> (
+      <Countdown periodStart={0n} periodEnd={settlesAt} />). Nothing for you to do.
+    </Notice>
   );
 }
 
@@ -154,24 +163,22 @@ function ApprovalRunNote({
   line: RunApprovalLine;
   poolId: bigint;
 }) {
-  const cls =
-    line.tone === "warning"
-      ? "border-warning/40 bg-warning/10"
-      : line.tone === "accent"
-        ? "border-accent/30 bg-accent/15"
-        : "border-edge bg-surface";
+  const tone: NoticeTone =
+    line.tone === "warning" ? "limit" : line.tone === "accent" ? "ok" : "info";
   return (
-    <div className={`rounded-xl border p-3 text-sm ${cls}`} role="status">
-      <p className="text-foreground/85">{line.text}</p>
-      {line.openRun ? (
-        <Link
-          href={`/pools/${poolId.toString()}`}
-          className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-2 hover:text-accent-strong"
-        >
-          Open this run
-        </Link>
-      ) : null}
-    </div>
+    <Notice
+      tone={tone}
+      role="status"
+      action={
+        line.openRun ? (
+          <Link href={`/pools/${poolId.toString()}`} className={QUIET_ACTION}>
+            Open this run
+          </Link>
+        ) : undefined
+      }
+    >
+      {line.text}
+    </Notice>
   );
 }
 
@@ -264,7 +271,8 @@ function ConnectButton({
       <Button
         type="button"
         variant={secondary ? "secondary" : "primary"}
-        pop
+        size="sm"
+        aria-busy={opening}
         disabled={opening}
         onClick={() => {
           setError(null);
@@ -297,13 +305,9 @@ function ConnectButton({
         {opening ? "Opening the connect flow" : label}
       </Button>
       {phoneSteps !== null ? (
-        <p
-          role="status"
-          aria-live="polite"
-          className="mt-3 rounded-xl border border-accent/30 bg-accent/15 p-4 text-sm text-accent-deep"
-        >
+        <Notice tone="info" role="status" live className="mt-3">
           {phoneSteps}
-        </p>
+        </Notice>
       ) : null}
       {error !== null ? (
         <div className="mt-3">
@@ -320,11 +324,11 @@ function ConnectButton({
             href={fallbackUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={`inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
+            className={buttonClasses()}
           >
             Open the wearable connect page
           </a>
-          <p className="mt-2 text-xs text-muted">
+          <p className={FIELD_HINT}>
             Your browser blocked the auto-open. Tap to continue to the secure
             connect page. Nothing is charged.
           </p>
@@ -399,9 +403,7 @@ function ProviderChoice({ address }: { address: `0x${string}` }) {
       {offered.map((option) => (
         <div
           key={option.id}
-          // bg-surface: without a fill the card's dot-grid shows through the
-          // option boxes and they read as holes rather than choices.
-          className="rounded-xl border border-edge bg-surface p-3 text-sm"
+          className="rounded-control bg-fill-quiet p-3.5 text-[0.9375rem] shadow-[inset_0_0_0_1px_var(--border-strong)]"
         >
           {/* flex-wrap and min-w-0 so a longer provider name and its badge
               stack instead of overflowing at 390px. */}
@@ -411,7 +413,7 @@ function ProviderChoice({ address }: { address: `0x${string}` }) {
             </p>
             {option.connected ? <Badge tone="accent">Connected</Badge> : null}
           </div>
-          <p className="mt-1 text-muted">{copy[option.id].blurb}</p>
+          <p className="m-0 mt-1 text-[0.8125rem] leading-[1.45] text-haze">{copy[option.id].blurb}</p>
           <ConnectButton
             address={address}
             provider={option.id}
@@ -464,10 +466,10 @@ function StreakCard({
   };
 
   return (
-    <Card pop className="bg-dot-grid">
-      <h2 className="font-display text-lg font-semibold">Streak progress</h2>
+    <Card>
+      <h2 className={CARD_TITLE}>Your streak</h2>
       {healthQuery.isLoading ? (
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 [&>*+*]:mt-2">
           <Skeleton className="h-8 w-40" />
           <Skeleton className="h-4 w-64" />
         </div>
@@ -476,13 +478,13 @@ function StreakCard({
         // us, the connect call fails too, so offering it is a loop with no
         // exit. Document-verified pools still work, so point at those.
         <>
-          <p className="mt-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm text-foreground/80">
+          <Notice tone="limit" className="mt-3">
             {downReason} Connecting a device would not change it, so there is
             nothing for you to do here right now.
-          </p>
+          </Notice>
           <Link
             href="/pools"
-            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border-2 border-edge bg-secondary px-5 py-2.5 font-display text-sm font-bold text-secondary-foreground transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className={`mt-3 ${buttonClasses({ variant: "secondary", size: "sm" })}`}
           >
             Find a goal you can still prove
           </Link>
@@ -491,18 +493,18 @@ function StreakCard({
         // Locked, not empty. Offering the connect flow here would tell someone
         // with a linked device to link it again.
         <>
-          <p className="mt-3 rounded-xl border border-accent/40 bg-accent/20 p-4 text-sm text-foreground/80">
+          <Notice tone="info" className="mt-3">
             {authReason}
-          </p>
-          <Button type="button" pop onClick={unlock} className="mt-3">
+          </Notice>
+          <Button type="button" size="sm" onClick={unlock} className="mt-3">
             Sign and show my streak
           </Button>
         </>
       ) : !providerConnected(state) ? (
         <>
-          <p className="mt-3 rounded-xl border border-dashed border-edge p-4 text-sm text-muted">
-            No wearable connected yet. Connect one to start tracking your
-            streak toward your goal.
+          <p className="m-0 mt-2 text-[0.9375rem] text-muted">
+            No wearable connected yet. Connect one to start tracking your streak
+            toward your goal.
           </p>
           {/* Owns the connect affordance in both shapes: the picker when this
               deployment offers a choice, a single button when it does not.
@@ -514,11 +516,11 @@ function StreakCard({
         // Syncing, but this device does not produce a sleep score. A delay
         // message here would be advice that can never come true.
         <>
-          <p className="mt-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm text-foreground/80">
-            Your device is syncing, and it does not report a sleep score, so
-            there is no streak to show here. That is the hardware, not a delay.
-            Connect a device that scores your sleep and this fills in.
-          </p>
+          <Notice tone="limit" className="mt-3">
+            Your device is syncing, and it does not report a sleep score, so there
+            is no streak to show here. That is the hardware, not a delay. Connect a
+            device that scores your sleep and this fills in.
+          </Notice>
           <ProviderChoice address={address} />
           <ConnectButton
             address={address}
@@ -532,11 +534,11 @@ function StreakCard({
         // somebody whose device simply has not uploaded. Every new user passes
         // through this state.
         <>
-          <p className="mt-3 rounded-xl border border-accent/30 bg-accent/15 p-4 text-sm text-accent-deep">
-            Your device is connected and has not sent anything yet. The first
-            sync usually lands within a few minutes. SPOTTER will not check this
-            goal until the data is here, so nothing is charged while you wait.
-          </p>
+          <Notice tone="info" className="mt-3">
+            Your device is connected and has not sent anything yet. The first sync
+            usually lands within a few minutes. SPOTTER will not check this goal
+            until the data is here, so nothing is charged while you wait.
+          </Notice>
           <ConnectButton
             address={address}
             label="Connect a different device"
@@ -545,36 +547,30 @@ function StreakCard({
         </>
       ) : (
         <div className="mt-3">
-          {/* The streak count is the dashboard's one hero moment, so SPOTTER
-           *  speaks to it. An active streak gets a cheering, dry nudge; a count
-           *  of zero has nothing to celebrate yet, so the bubble stays a dry
-           *  empty-state line - never a loud one, which is reserved for a
-           *  verified payout. */}
-          <div className="mb-3">
-            {(progress?.streakDays ?? 0) > 0 ? (
-              <SpotterSays
-                surface="dashboard-header"
-                state="streak-nudge"
-                pose="cheer"
-              />
-            ) : (
-              <SpotterSays surface="dashboard-empty" state="empty" />
-            )}
-          </div>
-          <p className="font-display text-4xl font-bold text-accent">
+          {/* The streak count is the one big figure on this card, in Figtree
+           *  like every number. SPOTTER speaks to it in his caption box only:
+           *  the page already has its one pose. */}
+          <p className="num m-0 text-[3rem] font-semibold leading-none tracking-[-0.03em] text-foreground">
             {progress?.streakDays ?? 0}
-            <span className="font-display text-lg font-semibold text-foreground">
+            <span className="text-lg font-medium tracking-normal text-muted">
               {progress?.targetDays !== null && progress?.targetDays !== undefined
                 ? ` of ${progress.targetDays} days`
                 : " days"}
             </span>
           </p>
-          <p className="mt-1 text-sm text-muted">
+          <p className="m-0 mt-2 text-[0.9375rem] text-haze">
             {progress?.metric ?? "Verified streak"}
             {progress?.lastSync !== null && progress?.lastSync !== undefined
-              ? ` · last sync ${progress.lastSync}`
+              ? `. Last sync ${progress.lastSync}`
               : ""}
           </p>
+          <div className="mt-3">
+            {(progress?.streakDays ?? 0) > 0 ? (
+              <SpotterSays surface="dashboard-header" state="streak-nudge" bare />
+            ) : (
+              <SpotterSays surface="dashboard-empty" state="empty" bare />
+            )}
+          </div>
           <ConnectButton
             address={address}
             label="Connect / switch provider"
@@ -676,8 +672,8 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
 
   return (
     <Card>
-      <h2 className="font-display text-lg font-semibold">Latest synced data</h2>
-      <p className="mt-1 text-sm text-muted">
+      <h2 className={CARD_TITLE}>Latest synced data</h2>
+      <p className="m-0 mt-1 text-[0.9375rem] text-haze">
         {data.provider === null || data.provider === undefined
           ? "Pulled live from your linked device."
           : SOURCE_NOTE[data.provider]}
@@ -685,14 +681,16 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {data.sleep.length > 0 && (
           <div>
-            <h3 className="font-display text-sm font-semibold text-muted">Sleep</h3>
-            <ul className="mt-2 space-y-1 text-sm">
+            <h3 className="m-0 text-[0.9375rem] font-semibold text-muted">Sleep</h3>
+            <ul className="num m-0 mt-2 list-none divide-y divide-edge p-0 text-[0.9375rem]">
               {data.sleep.slice(0, 7).map((d) => (
-                <li key={`s-${d.date}`} className="flex justify-between">
-                  <span className="text-muted">{d.date}</span>
-                  <span className="font-medium">
-                    {d.hours !== null ? `${d.hours}h` : "—"}
-                    {d.score !== null ? ` · score ${d.score}` : ""}
+                <li key={`s-${d.date}`} className="flex justify-between gap-3 py-1.5">
+                  <span className="text-haze">{d.date}</span>
+                  <span className="font-semibold text-foreground">
+                    {d.hours !== null ? `${d.hours}h` : "No data"}
+                    {d.score !== null ? (
+                      <span className="font-normal text-haze">, score {d.score}</span>
+                    ) : null}
                   </span>
                 </li>
               ))}
@@ -701,13 +699,13 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
         )}
         {data.activity.length > 0 && (
           <div>
-            <h3 className="font-display text-sm font-semibold text-muted">Steps</h3>
-            <ul className="mt-2 space-y-1 text-sm">
+            <h3 className="m-0 text-[0.9375rem] font-semibold text-muted">Steps</h3>
+            <ul className="num m-0 mt-2 list-none divide-y divide-edge p-0 text-[0.9375rem]">
               {data.activity.slice(0, 7).map((d) => (
-                <li key={`a-${d.date}`} className="flex justify-between">
-                  <span className="text-muted">{d.date}</span>
-                  <span className="font-medium">
-                    {d.steps !== null ? d.steps.toLocaleString() : "—"}
+                <li key={`a-${d.date}`} className="flex justify-between gap-3 py-1.5">
+                  <span className="text-haze">{d.date}</span>
+                  <span className="font-semibold text-foreground">
+                    {d.steps !== null ? d.steps.toLocaleString() : "No data"}
                   </span>
                 </li>
               ))}
@@ -772,18 +770,10 @@ function WhoopReturnNote({ liveConnected }: { liveConnected: boolean | null }) {
     return <ErrorNote title="WHOOP was not connected" detail={note.message} />;
   }
 
-  // Light emerald tint with deep-emerald text, not a translucent dark box:
-  // bg-accent-deep at low opacity renders as sage grey on the cream theme and
-  // puts bright emerald text near 1.6:1 contrast on it.
-  const tone =
-    note.tone === "ok"
-      ? "border-accent/30 bg-accent/15 text-accent-deep"
-      : "border-edge bg-surface text-muted";
-
   return (
-    <p className={`rounded-xl border p-4 text-sm ${tone}`} role="status">
+    <Notice tone={note.tone === "ok" ? "ok" : "info"} role="status">
       {note.message}
-    </p>
+    </Notice>
   );
 }
 
@@ -865,10 +855,11 @@ export default function DashboardContent() {
 
   if (!ready) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-32" />
-        <Skeleton className="h-32" />
-      </div>
+      <MyRunsFrame pose="detective">
+        <SignInLoadingCard label="Loading your runs">
+          <LoadingLines />
+        </SignInLoadingCard>
+      </MyRunsFrame>
     );
   }
 
@@ -878,18 +869,12 @@ export default function DashboardContent() {
     // bare login() button here means a first-time visitor never has to guess
     // what "Sign in" will pop up.
     return (
-      <div className="mx-auto max-w-md space-y-4">
-        <div className="text-center">
-          <p className="font-display text-lg font-semibold">
-            Sign in to see your goals
-          </p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            Your joined pools, streak progress, and payouts live here once you
-            sign in.
-          </p>
-        </div>
-        <SignInPanel />
-      </div>
+      <MyRunsFrame
+        pose="wave"
+        lead="Sign in to see your runs, your nights and your payouts. Base Sepolia test USDC."
+      >
+        <SignInPanel surface="card" />
+      </MyRunsFrame>
     );
   }
 
@@ -901,12 +886,66 @@ export default function DashboardContent() {
     ({ pool }) =>
       !pool.settled && !pool.cancelled && evidenceTypeOf(pool.goalSpec) === "wearable",
   );
+  const openRuns = runs.filter(({ pool }) => !pool.settled && !pool.cancelled);
+  const finishedRuns = runs.filter(({ pool }) => pool.settled || pool.cancelled);
+
+  // The one otter on the page: a run board carries its own scene, so when a
+  // live run leads the page the header stands no second pose; otherwise
+  // SPOTTER stands on the first card, in the pose that fits what it says.
+  const headerPose: NightPose | null = joinedQuery.isLoading
+    ? "detective"
+    : joinedQuery.isError
+      ? "thinking"
+      : runs.length === 0
+        ? "meditate"
+        : openRuns.length > 0
+          ? null
+          : "thumbsup";
+
+  const firstCard = joinedQuery.isLoading ? (
+    <LoadingCard label="Reading your runs from Base Sepolia" />
+  ) : joinedQuery.isError ? (
+    <Card>
+      <ErrorNote
+        title="Could not read your runs"
+        detail="I could not read your runs from Base Sepolia just now. Nothing changed on your side."
+        retryLabel="Read my runs again"
+        onRetry={() => void joinedQuery.refetch()}
+      />
+    </Card>
+  ) : runs.length === 0 ? (
+    <EmptyCard
+      title="You are not in a run yet"
+      detail="Pick a run in the lobby and put money on yourself. Your nights show up here."
+      action={
+        <Link href="/pools" className={buttonClasses({ size: "sm" })}>
+          Find a run
+        </Link>
+      }
+    />
+  ) : (
+    <CharacterCard view={character} variant="strip" />
+  );
 
   return (
-    <div className="space-y-8">
+    <div className="[&>*+*]:mt-8">
+      {headerPose !== null ? (
+        <PerchedHeader title="My runs" lead={MY_RUNS_LEAD} pose={headerPose}>
+          {firstCard}
+        </PerchedHeader>
+      ) : (
+        <div className="[&>*+*]:mt-5">
+          <header>
+            <h1 className={PAGE_TITLE}>My runs</h1>
+            <p className={PAGE_LEAD}>{MY_RUNS_LEAD}</p>
+          </header>
+          {firstCard}
+        </div>
+      )}
+
       {/* A settled win is CREDITED on-chain but not in the wallet until the
-       *  winner withdraws, so the claim leads the page: it renders only when
-       *  the chain says money is owed. */}
+       *  winner withdraws, so the claim comes right after the header: it
+       *  renders only when the chain says money is owed. */}
       <ClaimPayout address={address} />
 
       {/* Says what WHOOP's redirect just did, since the OAuth flow takes over
@@ -917,120 +956,67 @@ export default function DashboardContent() {
         }
       />
 
-      <CharacterCard view={character} variant="strip" />
-
-      {joinedQuery.isLoading ? (
-        <div className="space-y-3" aria-busy="true">
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
-        </div>
-      ) : joinedQuery.isError ? (
-        <div role="alert" className="rounded-xl border-2 border-danger/40 bg-danger/5 p-4">
-          <p className="font-semibold">I could not read your runs from Base Sepolia just now.</p>
-          <p className="mt-1 text-sm text-foreground/80">Nothing changed on your side.</p>
-          <Button type="button" variant="secondary" className="mt-3" onClick={() => void joinedQuery.refetch()}>
-            Read my runs again
-          </Button>
-        </div>
-      ) : runs.length === 0 ? (
-        <EmptyState
-          title="You are not in a run yet"
-          detail="Pick a run in the lobby, stake on yourself, and your nights show up here."
-          action={
-            <Link
-              href="/pools"
-              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-6 font-semibold text-white hover:bg-accent-strong"
-            >
-              Go to the lobby
-            </Link>
-          }
-        />
-      ) : (
+      {runs.length > 0 && !joinedQuery.isLoading && !joinedQuery.isError ? (
         <>
-          {runs
-            .filter(({ pool }) => !pool.settled && !pool.cancelled)
-            .map((entry) => {
-              const settlesAt = deferredUntil(entry);
-              const approval = approvalQuery.data?.get(entry.pool.id.toString());
-              const approvalLine = runApprovalLine(
-                approval?.status ?? "none",
-                {
-                  settled: entry.pool.settled,
-                  cancelled: entry.pool.cancelled,
-                  resultRecorded: entry.participant.resultRecorded,
-                },
-                hitOf(approval, entry.pool),
-              );
-              return (
-                <div key={entry.pool.id.toString()} className="space-y-3">
-                  <RunBoard
-                    pool={entry.pool}
-                    address={address}
-                    promptForData
-                    showLink
+          {openRuns.map((entry) => {
+            const settlesAt = deferredUntil(entry);
+            const approval = approvalQuery.data?.get(entry.pool.id.toString());
+            const approvalLine = runApprovalLine(
+              approval?.status ?? "none",
+              {
+                settled: entry.pool.settled,
+                cancelled: entry.pool.cancelled,
+                resultRecorded: entry.participant.resultRecorded,
+              },
+              hitOf(approval, entry.pool),
+            );
+            return (
+              <div key={entry.pool.id.toString()} className="[&>*+*]:mt-3">
+                <RunBoard pool={entry.pool} address={address} promptForData showLink />
+                {approvalLine !== null ? (
+                  <ApprovalRunNote line={approvalLine} poolId={entry.pool.id} />
+                ) : null}
+                {settlesAt !== null ? (
+                  <DeferredNote
+                    tier={deferredTierQuery.data?.get(entry.pool.id.toString()) ?? null}
+                    settlesAt={settlesAt}
                   />
-                  {approvalLine !== null ? (
-                    <ApprovalRunNote line={approvalLine} poolId={entry.pool.id} />
-                  ) : null}
-                  {settlesAt !== null ? (
-                    <DeferredNote
-                      tier={deferredTierQuery.data?.get(entry.pool.id.toString()) ?? null}
-                      settlesAt={settlesAt}
-                    />
-                  ) : null}
-                </div>
-              );
-            })}
+                ) : null}
+              </div>
+            );
+          })}
 
-          {runs.some(({ pool }) => pool.settled || pool.cancelled) ? (
-            <section className="space-y-3">
-              <h2 className="font-display text-3xl font-extrabold">Finished runs</h2>
-              {runs
-                .filter(({ pool }) => pool.settled || pool.cancelled)
-                .map((entry) => {
-                  const { pool, participant } = entry;
-                  const approval = approvalQuery.data?.get(pool.id.toString());
-                  const result = resultLabel(
-                    pool,
-                    participant,
-                    finalApprovalOf(approval?.status),
-                    approval?.hit === true,
-                  );
-                  return (
-                    <div
-                      key={pool.id.toString()}
-                      className="rounded-xl border-2 border-foreground/15 bg-surface p-4"
-                    >
-                      <Link
-                        href={`/pools/${pool.id.toString()}`}
-                        className="block hover:text-accent"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="font-display text-2xl font-extrabold leading-tight">
-                            {displayGoalSpec(pool.goalSpec)}
-                          </h3>
-                          <Badge tone={result.tone}>{result.text}</Badge>
-                        </div>
-                        <p className="mt-1 text-sm text-muted">
-                          {/* After settle this is what was NOT paid out; calling
-                              it the prize read as if the winner won nothing. */}
-                          Left in pool {formatUsdc(pool.balance)} test USDC
-                        </p>
-                      </Link>
-                      {pool.cancelled && !participant.refunded ? (
-                        <RefundClaim
-                          poolId={pool.id}
-                          entryFee={pool.entryFee}
-                          address={address}
-                        />
-                      ) : null}
-                    </div>
-                  );
-                })}
+          {finishedRuns.length > 0 ? (
+            <section aria-labelledby="finished-runs" className="[&>*+*]:mt-3">
+              <h2 id="finished-runs" className={SECTION_TITLE}>
+                Finished runs
+              </h2>
+              {finishedRuns.map((entry) => {
+                const { pool, participant } = entry;
+                const approval = approvalQuery.data?.get(pool.id.toString());
+                const result = resultLabel(
+                  pool,
+                  participant,
+                  finalApprovalOf(approval?.status),
+                  approval?.hit === true,
+                );
+                return (
+                  <FinishedRunRow
+                    key={pool.id.toString()}
+                    pool={pool}
+                    result={result}
+                    refund={
+                      pool.cancelled && !participant.refunded ? (
+                        <RefundClaim poolId={pool.id} entryFee={pool.entryFee} address={address} />
+                      ) : null
+                    }
+                  />
+                );
+              })}
             </section>
           ) : null}
         </>
-      )}
+      ) : null}
 
       {/* The general streak card earns its place only when no live wearable
        *  run already shows the nights on its own board. */}
@@ -1038,12 +1024,84 @@ export default function DashboardContent() {
       (wearableConnected || providerAuthReason(connectionQuery.data) !== null) ? (
         <StreakCard address={address} />
       ) : null}
-      <section className="space-y-3">
-        <h2 className="font-display text-3xl font-extrabold">On the river tonight</h2>
-        <HeroActivityTicker />
-      </section>
       <RecentDataCard address={address} />
       <BalanceCard address={address} />
     </div>
+  );
+}
+
+export const MY_RUNS_LEAD = "Every run you are in, night by night, and what each one paid.";
+
+/** A finished run: its goal, the result the chain recorded, what is left in
+ *  it, and the refund when it was cancelled. */
+export function FinishedRunRow({
+  pool,
+  result,
+  refund,
+}: {
+  pool: PoolInfo;
+  result: { text: string; tone: "accent" | "muted" | "warning" };
+  refund?: ReactNode;
+}) {
+  return (
+    <Card variant="flat" padding="none" className="px-4 py-3.5">
+      <Link
+        href={`/pools/${pool.id.toString()}`}
+        className={`-mx-2 -my-1.5 block rounded-control px-2 py-1.5 no-underline hover:bg-fill-quiet ${FOCUS_RING}`}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h3 className="m-0 min-w-[12rem] flex-1 break-words text-base font-semibold leading-snug text-foreground">
+            {displayGoalSpec(pool.goalSpec)}
+          </h3>
+          <Badge tone={result.tone}>{result.text}</Badge>
+        </div>
+        <p className="num m-0 mt-1.5 text-[0.9375rem] text-haze">
+          {/* After settle this is what was NOT paid out; calling it the prize
+              read as if the player who hit won nothing. */}
+          Left in the run <span className={`font-semibold ${pool.balance > 0n ? "text-gold" : "text-dusk"}`}>{formatUsdc(pool.balance)}</span>{" "}
+          test USDC
+        </p>
+      </Link>
+      {refund !== null && refund !== undefined ? <div className="mt-3">{refund}</div> : null}
+    </Card>
+  );
+}
+
+/** The page frame for the states before any run is on screen. */
+export function MyRunsFrame({
+  pose,
+  lead = MY_RUNS_LEAD,
+  children,
+}: {
+  pose: NightPose;
+  lead?: string;
+  children: ReactNode;
+}) {
+  return (
+    <PerchedHeader title="My runs" lead={lead} pose={pose}>
+      {children}
+    </PerchedHeader>
+  );
+}
+
+/** The loading card's three lines, on their own for SignInLoadingCard. */
+function LoadingLines() {
+  return (
+    <>
+      <Skeleton className="h-6 w-1/2" />
+      <Skeleton className="mt-3 h-4 w-full" />
+      <Skeleton className="mt-2 h-4 w-3/4" />
+    </>
+  );
+}
+
+export function LoadingCard({ label }: { label: string }) {
+  return (
+    <Card aria-busy="true">
+      <p className="sr-only" role="status">
+        {label}
+      </p>
+      <LoadingLines />
+    </Card>
   );
 }

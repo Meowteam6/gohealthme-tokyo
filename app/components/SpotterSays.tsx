@@ -1,7 +1,7 @@
 "use client";
 
-// A small transparent SPOTTER + an anchored speech bubble, for empty/loading
-// slots so no screen is ever just the run-across easter egg.
+// SPOTTER standing on the top edge of his caption box, for empty and loading
+// slots (docs/DESIGN.md: one pose, on a card's edge, his line in the box).
 //
 // Hydration: the pick is random, so it is drawn ONLY on the client, through
 // useSyncExternalStore with a null server snapshot - the server render and the
@@ -12,34 +12,26 @@
 // The game screens pass `say` instead: a fixed line per state, so the same
 // state always reads the same sentence (a judge sees it twice and it matches).
 
+
 import { useSyncExternalStore } from "react";
+import Perch from "@/components/spotter/Perch";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
 import { spotterSays, type SpotterPick } from "@/lib/spotter-says";
-import type { Locale, Surface, SpotterState, Tone } from "@/lib/spotter-lines";
+import type { Locale, Surface, SpotterState } from "@/lib/spotter-lines";
+import type { SpotterPose } from "@/lib/spotter-poses";
 
-// State -> a TRANSPARENT pose (spotter-*.png cutouts only; never the cream-bg
-// card poses, which would show a square).
-const POSE_BY_STATE: Record<SpotterState, string> = {
-  idle: "lounging",
-  empty: "peek",
+// State -> one of the eight night poses.
+const POSE_BY_STATE: Record<SpotterState, SpotterPose> = {
+  idle: "meditate",
+  empty: "detective",
   verifying: "detective",
-  "won-verified": "payday",
-  "paid-self-reported": "standing",
-  broke: "broke",
+  "won-verified": "thumbsup",
+  "paid-self-reported": "wave",
+  broke: "facepalm",
   error: "facepalm",
-  "streak-nudge": "flex",
-  joined: "cheer",
+  "streak-nudge": "thumbsup",
+  joined: "sleep",
 };
-
-// Tone -> a subtle bubble accent. GOLD is never used here: gold is money in
-// motion, which lives in the mono amount slot, not SPOTTER's mouth.
-const TONE_BORDER: Record<Tone, string> = {
-  loud: "border-accent",
-  warn: "border-warning/60",
-  dry: "border-foreground",
-  deadpan: "border-foreground",
-};
-
-const SIZE: Record<string, string> = { sm: "w-16", md: "w-24" };
 
 const picks = new Map<string, SpotterPick | null>();
 
@@ -63,15 +55,19 @@ export default function SpotterSays({
   align = "left",
   locale,
   say,
+  bare = false,
 }: {
   surface: Surface;
   state: SpotterState;
   /** A fixed line for this state. Skips the random pick. */
   say?: string;
-  pose?: string;
+  pose?: SpotterPose;
   size?: "sm" | "md";
   align?: "left" | "right";
   locale?: Locale;
+  /** Only his caption box, no figure: for a card on a page that already has
+   *  its one pose (docs/DESIGN.md, one pose per viewport). */
+  bare?: boolean;
 }) {
   const picked = useSyncExternalStore(
     noSubscription,
@@ -79,28 +75,20 @@ export default function SpotterSays({
     () => null,
   );
 
-  const pick: SpotterPick | null =
-    say !== undefined ? { id: "fixed", text: say, tone: "dry" } : picked;
-  if (pick === null) return null;
-  const resolvedPose = pose ?? POSE_BY_STATE[state];
+  const text = say ?? picked?.text;
+  if (text === undefined) return null;
+  if (bare) return <SpotterCaption line={text} className="max-w-md" />;
 
   return (
-    <div
-      className={`flex items-end gap-2 ${align === "right" ? "flex-row-reverse" : ""}`}
+    <Perch
+      pose={pose ?? POSE_BY_STATE[state]}
+      width={size === "md" ? [88, 104] : [68, 76]}
+      side={align === "right" ? "right" : "left"}
+      inset={[14, 18]}
+      decorative
+      className="max-w-md"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`/spotter/spotter-${resolvedPose}.png`}
-        alt=""
-        aria-hidden="true"
-        className={`${SIZE[size]} h-auto shrink-0 self-end`}
-      />
-      <div
-        className={`max-w-[17rem] rounded-2xl ${align === "left" ? "rounded-bl-none" : "rounded-br-none"} border-2 ${TONE_BORDER[pick.tone]} bg-surface px-3 py-2 text-sm font-medium leading-snug text-foreground`}
-      >
-        <span className="sr-only">SPOTTER says: </span>
-        {pick.text}
-      </div>
-    </div>
+      <SpotterCaption line={text} />
+    </Perch>
   );
 }

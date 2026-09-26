@@ -34,8 +34,17 @@ import type {
   PublicFeedScreen,
 } from "@/lib/server/agent/feed-view";
 import { settleMomentLine } from "@/components/AgentReceipt";
-import { EmptyState, ErrorNote, Money, Skeleton } from "@/components/ui";
-import SpotterSays from "@/components/SpotterSays";
+import {
+  Badge,
+  Card,
+  Chip,
+  ErrorNote,
+  Money,
+  Skeleton,
+  TEXT_LINK,
+  buttonClasses,
+} from "@/components/ui";
+import { CARD_TITLE } from "@/components/night/kit";
 
 // The feed's human-readable stage names for a stalled claim. The feed-view
 // only ever sends this fixed vocabulary (or "other"), never error prose.
@@ -43,7 +52,7 @@ const STAGE_LABEL: Record<string, string> = {
   buy: "buying the check",
   attester: "reading the evidence",
   record: "recording the result on-chain",
-  settle: "settling the pool",
+  settle: "settling the run",
   approval: "the payout confirmation",
   other: "an internal step",
 };
@@ -57,37 +66,32 @@ const APPROVAL_LINE: Record<
   PublicFeedApproval["status"],
   { text: string; tone: "accent" | "warning" | "muted" }
 > = {
-  requested: { text: "asked the winner to confirm with World ID", tone: "muted" },
-  approved: { text: "winner confirmed with World ID", tone: "accent" },
-  declined: { text: "winner declined. Nothing moved.", tone: "warning" },
-  expired: { text: "confirmation window closed. Nothing moved.", tone: "warning" },
-  cancelled: { text: "run settled before the winner confirmed. Nothing moved.", tone: "warning" },
+  requested: { text: "Asked the player to confirm with World ID", tone: "muted" },
+  approved: { text: "Player confirmed with World ID", tone: "accent" },
+  declined: { text: "Player declined. Nothing moved.", tone: "warning" },
+  expired: { text: "Confirmation window closed. Nothing moved.", tone: "warning" },
+  cancelled: { text: "Run settled before the player confirmed. Nothing moved.", tone: "warning" },
 };
 
 const SCREEN_LINE: Record<
   PublicFeedScreen["status"],
   { text: string; tone: "accent" | "warning" | "muted" }
 > = {
-  clear: { text: "payout wallet screened: clear", tone: "muted" },
-  blocked: { text: "payout blocked by wallet screening", tone: "warning" },
-  unavailable: { text: "payout held: wallet screening did not answer", tone: "warning" },
+  clear: { text: "Payout wallet screened: clear", tone: "muted" },
+  blocked: { text: "Payout blocked by wallet screening", tone: "warning" },
+  unavailable: { text: "Payout held: wallet screening did not answer", tone: "warning" },
 };
 
 const TONE_CLASS = {
-  accent: "text-accent",
+  accent: "text-moonlight",
   warning: "text-warning",
-  muted: "text-muted",
+  muted: "text-haze",
 } as const;
 
-function Tag({ children }: { children: string }) {
-  return (
-    <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 font-sans text-[10px] font-semibold uppercase tracking-wide text-warning">
-      {children}
-    </span>
-  );
-}
+/** A tx link on a claim row: quiet, underlined, 44px tall. */
+const TX_LINK = `${TEXT_LINK} text-sm`;
 
-function ClaimCard({ claim, own }: { claim: PublicFeedClaim; own: boolean }) {
+export function ClaimCard({ claim, own = false }: { claim: PublicFeedClaim; own?: boolean }) {
   // A recorded miss pays nobody on this claim: it says where the stake goes
   // instead of leaving a bare "no pay" next to a tx link that reads like one.
   const missLine = missLineOf(claim, own);
@@ -102,28 +106,33 @@ function ClaimCard({ claim, own }: { claim: PublicFeedClaim; own: boolean }) {
     claim.approval !== null ? APPROVAL_LINE[claim.approval.status] : null;
   const screen = claim.screen !== undefined ? SCREEN_LINE[claim.screen.status] : null;
   const resultTx = claim.recordTxs?.resultTx ?? null;
+  // DESIGN.md History: a claim that paid gets the verified pose; anything
+  // still being checked, held, declined or refused gets the magnifier.
+  const paid =
+    settle !== null &&
+    (settle.status === "settled" || settle.status === "already-settled") &&
+    claim.decision === "pay";
 
   return (
-    <li className="rounded-3xl border border-edge bg-surface-raised p-4 sm:p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="flex flex-wrap items-center gap-2 font-mono text-xs text-muted">
-          {shortGoal(claim.goalId)}
-          {claim.selfReported ? <Tag>self-reported</Tag> : null}
-          {claim.approval?.provider === "mock" ? <Tag>mocked World ID</Tag> : null}
+    <li className="border-t border-edge py-4 first:border-t-0 first:pt-0 last:pb-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-xs text-haze">{shortGoal(claim.goalId)}</span>
+          {paid ? <Badge tone="accent">Paid</Badge> : null}
+          {claim.selfReported ? <Badge tone="warning">Self-reported</Badge> : null}
+          {claim.approval?.provider === "mock" ? <Badge tone="warning">Mocked World ID</Badge> : null}
           {claim.approval?.credential != null ? (
-            <Tag>{`World ID: ${credentialLabel(claim.approval.credential)}`}</Tag>
+            <Badge tone="muted">{`World ID: ${credentialLabel(claim.approval.credential)}`}</Badge>
           ) : null}
         </span>
-        <span className="text-xs text-muted">
-          {new Date(claim.at).toLocaleString()}
-        </span>
+        <span className="num text-[0.8125rem] text-haze">{new Date(claim.at).toLocaleString()}</span>
       </div>
-      <div className="mt-2 space-y-1 text-sm">
+      <div className="mt-2.5 [&>*+*]:mt-1.5 text-[0.9375rem]">
         {claim.spends.map((spend, index) => (
-          <p key={index} className="flex items-baseline justify-between gap-3">
-            <span className="min-w-0">
+          <p key={index} className="m-0 flex items-baseline justify-between gap-3">
+            <span className="min-w-0 text-muted">
               {spend.label}
-              <span className="ml-2 text-xs text-muted">
+              <span className="ml-2 text-[0.8125rem] text-haze">
                 {spend.settlement === "x402" ? "paid via x402" : "metered"}
               </span>
             </span>
@@ -131,61 +140,45 @@ function ClaimCard({ claim, own }: { claim: PublicFeedClaim; own: boolean }) {
           </p>
         ))}
         {claim.decision !== null ? (
-          <p className="flex flex-wrap items-baseline gap-x-2">
-            <span className="text-xs uppercase tracking-wide text-muted">
-              decision
-            </span>
+          <p className="m-0 flex flex-wrap items-center gap-x-2">
+            <span className="text-haze">SPOTTER&apos;s decision</span>
             <span
-              className={
-                claim.decision === "pay" ? "text-accent" : "text-warning"
-              }
+              className={`font-semibold ${
+                claim.decision === "pay" ? "text-moonlight" : "text-warning"
+              }`}
             >
-              {claim.decision === "pay" ? "pay" : "no pay"}
+              {claim.decision === "pay" ? "Pay" : "No pay"}
             </span>
             {resultTx !== null ? (
-              <a
-                href={baseTxUrl(resultTx)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-accent underline"
-              >
-                verdict tx
+              <a href={baseTxUrl(resultTx)} target="_blank" rel="noopener noreferrer" className={TX_LINK}>
+                Verdict tx
               </a>
             ) : null}
           </p>
         ) : null}
-        {missLine !== null ? <p className="text-sm">{missLine}</p> : null}
+        {missLine !== null ? <p className="m-0 text-foreground">{missLine}</p> : null}
         {approval !== null ? (
-          <p className={`text-xs ${TONE_CLASS[approval.tone]}`}>{approval.text}</p>
+          <p className={`m-0 ${TONE_CLASS[approval.tone]}`}>{approval.text}</p>
         ) : null}
-        {screen !== null ? (
-          <p className={`text-xs ${TONE_CLASS[screen.tone]}`}>{screen.text}</p>
-        ) : null}
-        {settle !== null &&
-        settle.status === "settled" &&
-        settle.paidUsd !== null ? (
-          <p className="flex items-baseline justify-between gap-3">
-            <span className="text-accent">
-              paid <Money usd={toUsd2(settle.paidUsd)} sign="+" size="sm" />
+        {screen !== null ? <p className={`m-0 ${TONE_CLASS[screen.tone]}`}>{screen.text}</p> : null}
+        {settle !== null && settle.status === "settled" && settle.paidUsd !== null ? (
+          <p className="m-0 flex items-center justify-between gap-3">
+            <span className="font-semibold text-foreground">
+              Paid <Money usd={toUsd2(settle.paidUsd)} sign="+" size="sm" />
             </span>
             {settle.txHash !== null ? (
-              <a
-                href={baseTxUrl(settle.txHash)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-accent underline"
-              >
-                payout tx
+              <a href={baseTxUrl(settle.txHash)} target="_blank" rel="noopener noreferrer" className={TX_LINK}>
+                Payout tx
               </a>
             ) : null}
           </p>
         ) : settle !== null && settle.status === "already-settled" ? (
-          <p className="text-xs text-muted">paid in the pool&apos;s settle</p>
+          <p className="m-0 text-haze">Paid in the run&apos;s settle</p>
         ) : deferredLine !== null ? (
-          <p className="text-xs text-muted">{deferredLine}</p>
+          <p className="m-0 text-haze">{deferredLine}</p>
         ) : null}
         {claim.problem !== undefined ? (
-          <p className="text-xs text-warning">
+          <p className="m-0 text-warning">
             SPOTTER hit a problem at {STAGE_LABEL[claim.problem.stage] ?? STAGE_LABEL.other}.
             Nothing has been paid on this claim yet.
           </p>
@@ -233,90 +226,78 @@ export default function AgentFeed() {
   const items = feed.data !== undefined ? historyItems(feed.data, view) : [];
 
   return (
-    <section className="space-y-3" aria-live="polite">
+    <Card as="section" aria-labelledby="history-feed" className="[&>*+*]:mt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-lg font-bold">
+        <h2 id="history-feed" className={CARD_TITLE}>
           {view === "mine" ? "Your history" : "Everyone's claims"}
         </h2>
         {signedIn ? (
-          <div
-            role="group"
-            aria-label="Whose history"
-            className="inline-flex rounded-full border-2 border-foreground p-0.5"
-          >
+          <div role="group" aria-label="Whose history" className="flex gap-2">
             {(["mine", "everyone"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                onClick={() => setPicked(v)}
-                className={`min-h-11 rounded-full px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-                  view === v ? "bg-foreground text-background" : "text-muted hover:text-foreground"
-                }`}
-              >
+              <Chip key={v} selected={view === v} onClick={() => setPicked(v)}>
                 {TOGGLE_LABEL[v]}
-              </button>
+              </Chip>
             ))}
           </div>
         ) : null}
       </div>
       {!signedIn ? (
-        <p className="text-sm text-muted">
+        <p className="m-0 text-[0.9375rem] text-muted">
           <Link
             href={`/character?next=${encodeURIComponent(pathname)}`}
-            className="font-semibold text-accent underline"
+            className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4"
           >
             Sign in
           </Link>{" "}
           to see your own verdicts and payouts first.
         </p>
       ) : null}
-      {feed.isPending ? (
-        <Skeleton className="h-24 w-full" />
-      ) : items.length > 0 ? (
-        <ol className="space-y-3">
-          {items.map((claim) => (
-            <ClaimCard key={claim.goalId} claim={claim} own={view === "mine"} />
-          ))}
-        </ol>
-      ) : feed.isError ? (
-        <ErrorNote
-          title="Could not read SPOTTER's claims right now"
-          detail="This is a read problem on our side, not an empty ledger. It retries on its own every few seconds."
-          onRetry={() => {
-            void feed.refetch();
-          }}
-        />
-      ) : view === "mine" ? (
-        <EmptyState
-          title="Nothing in your history yet."
-          detail="When SPOTTER checks one of your runs, its verdict, your World ID confirmation and the payout land here. Everyone's claims are one tap away."
-          action={
-            <Link
-              href="/pools"
-              className="inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-            >
-              See the open runs
-            </Link>
-          }
-        />
-      ) : (
-        <div className="space-y-4">
-          <SpotterSays surface="agent-empty" state="empty" size="md" />
-          <EmptyState
-            title="SPOTTER has not settled a claim yet."
-            detail="Enter a run, prove it from your wearable or an uploaded record, and SPOTTER checks the result and pays out here when the run settles."
-            action={
-              <Link
-                href="/pools"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none"
-              >
-                See the open runs
-              </Link>
+      <div aria-live="polite">
+        {feed.isPending ? (
+          <div role="status" className="[&>*+*]:mt-2">
+            <span className="sr-only">Reading SPOTTER&apos;s claims</span>
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : items.length > 0 ? (
+          <ol className="m-0 list-none p-0">
+            {items.map((claim) => (
+              <ClaimCard key={claim.goalId} claim={claim} own={view === "mine"} />
+            ))}
+          </ol>
+        ) : feed.isError ? (
+          <ErrorNote
+            title="Could not read SPOTTER's claims right now"
+            detail="This is a read problem on our side, not an empty ledger. It retries on its own every few seconds."
+            retryLabel="Read the claims again"
+            onRetry={() => {
+              void feed.refetch();
+            }}
+          />
+        ) : (
+          <FeedEmpty
+            title={view === "mine" ? "Nothing in your history yet" : "No claims settled yet"}
+            detail={
+              view === "mine"
+                ? "When SPOTTER checks one of your runs, its verdict, your World ID confirmation and the payout land here. Everyone's claims are one tap away."
+                : "Enter a run and wear your wearable. SPOTTER checks the result and the payout shows here when the run settles."
             }
           />
-        </div>
-      )}
-    </section>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** The empty feed, inside the feed card: what lands here and the one action. */
+export function FeedEmpty({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="rounded-control bg-fill-quiet px-4 py-6 text-center shadow-[inset_0_0_0_1px_var(--border)]">
+      <p className="type-heading m-0 text-[1.5rem]">{title}</p>
+      <p className="m-0 mx-auto mt-2 max-w-md text-[0.9375rem] text-muted">{detail}</p>
+      <Link href="/pools" className={`mt-5 ${buttonClasses({ size: "sm" })}`}>
+        See the open runs
+      </Link>
+    </div>
   );
 }

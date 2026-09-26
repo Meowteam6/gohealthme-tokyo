@@ -22,7 +22,8 @@ import { useState } from "react";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { fetchWithWalletAuth, authBlockReason } from "@/lib/client-auth";
-import { TAP_TARGET } from "@/components/ui";
+import { Button } from "@/components/ui";
+import { FIELD, FIELD_HINT, Notice } from "@/components/night/kit";
 import { stateBlockReason } from "@/lib/geo-blocklist";
 import type { AccessStatus } from "@/lib/useAccess";
 
@@ -83,33 +84,24 @@ const US_STATES: ReadonlyArray<{ code: string; name: string }> = [
   { code: "WY", name: "Wyoming" },
 ];
 
+// Lives inside character creation's step 2, under the title card SPOTTER
+// already stands on, so it is a left-aligned step body with no otter of its
+// own (one pose per screen).
 function Shell({ children }: { children: React.ReactNode }) {
+  return <div className="flex w-full flex-col gap-4">{children}</div>;
+}
+
+function Heading({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto flex max-w-lg flex-col items-center gap-6 py-10 text-center">
+    <h2 className="m-0 break-words text-lg font-semibold leading-tight text-foreground">
       {children}
-    </div>
+    </h2>
   );
 }
 
-function Otter({ pose, alt }: { pose: string; alt: string }) {
-  return (
-    <div className="relative w-full max-w-xs">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-6 -z-10 rounded-full bg-accent/20 blur-3xl"
-      />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`/spotter/${pose}`}
-        alt={alt}
-        className="mx-auto aspect-square w-56 rounded-3xl border border-edge bg-surface object-cover shadow-sm"
-      />
-    </div>
-  );
-}
+const inputClass = FIELD;
 
-const inputClass =
-  "w-full rounded-xl border border-edge bg-surface px-4 py-3 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30";
+const labelClass = "text-[0.9375rem] font-semibold text-foreground";
 
 export default function RequestAccess({
   status,
@@ -132,17 +124,10 @@ export default function RequestAccess({
   if (status === "pending") {
     return (
       <Shell>
-        <Otter pose="spotter-watching.png" alt="SPOTTER the otter keeping watch" />
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            You&apos;re on the list.
-          </h1>
-          <p className="mx-auto mt-3 max-w-sm text-muted">
-            Andre reviews requests himself. Once you&apos;re approved this page
-            turns into the app — no need to ask twice.
-          </p>
-        </div>
-        <p className="text-sm text-muted">Watching the door so you don&apos;t have to.</p>
+        <Notice tone="limit" title="You're on the list" live>
+          Andre reviews requests himself. Once you&apos;re approved this page
+          turns into the app. No need to ask twice.
+        </Notice>
       </Shell>
     );
   }
@@ -150,24 +135,22 @@ export default function RequestAccess({
   if (status === "denied" && !reopen) {
     return (
       <Shell>
-        <Otter pose="spotter-neutral.png" alt="SPOTTER the otter, unimpressed" />
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Not this round.</h1>
-          <p className="mx-auto mt-3 max-w-sm text-muted">
-            The beta is small on purpose. If you think this is a mistake, ask
-            again with a line on how you know Andre or Nikki.
-          </p>
-        </div>
-        <button
+        <Notice tone="limit" title="Not this round">
+          The beta is small on purpose. If you think this is a mistake, ask
+          again with a line on how you know Andre or Nikki.
+        </Notice>
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          className="self-start"
           onClick={() => {
             setError(null);
             setReopen(true);
           }}
-          className={`rounded-xl border border-edge bg-surface font-semibold text-foreground hover:bg-surface-raised ${TAP_TARGET}`}
         >
           Ask again
-        </button>
+        </Button>
       </Shell>
     );
   }
@@ -181,7 +164,7 @@ export default function RequestAccess({
     // A state must be picked: the server geo gate reads it, and an empty value
     // would fail open. Require a choice rather than sending a blank.
     if (state === "") {
-      setError("Pick your US state so we can confirm the pilot is available there.");
+      setError("Pick your US state so we can confirm the beta is open there.");
       return;
     }
     // Client-side geo pre-check: block a restricted state with the honest reason
@@ -206,7 +189,7 @@ export default function RequestAccess({
       if (auth.kind !== "ok") {
         setError(
           authBlockReason(auth) ??
-            "This just confirms it's really you — nothing is charged.",
+            "This just confirms it's really you. Nothing is charged.",
         );
         return;
       }
@@ -227,18 +210,15 @@ export default function RequestAccess({
 
   return (
     <Shell>
-      <Otter pose="spotter-greet.png" alt="SPOTTER the otter waving hello" />
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Ask for a spot.</h1>
-        <p className="mx-auto mt-3 max-w-sm text-muted">
-          GoHealthMe is in a closed family-and-friends beta. Tell Andre who you
-          are and he&apos;ll let you in. Play-money testnet — nothing here can
-          cost you anything.
-        </p>
-      </div>
-      <form onSubmit={submit} className="flex w-full flex-col gap-3 text-left">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
+      <Heading>Ask for a spot</Heading>
+      <p className="m-0 -mt-2 text-[0.9375rem] leading-[1.5] text-muted">
+        GoHealthMe is in a closed family-and-friends beta. Tell Andre who you
+        are and he&apos;ll let you in. Base Sepolia test money, so nothing here
+        can cost you anything.
+      </p>
+      <form onSubmit={submit} className="flex w-full flex-col gap-4 text-left">
+        <label className="flex flex-col gap-2">
+          <span className={labelClass}>
             Your name
           </span>
           <input
@@ -250,9 +230,9 @@ export default function RequestAccess({
             autoComplete="name"
           />
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
-            Email <span className="normal-case text-muted/70">(so Andre can reach you)</span>
+        <label className="flex flex-col gap-2">
+          <span className={labelClass}>
+            Email <span className="font-normal text-haze">(so Andre can reach you)</span>
           </span>
           <input
             className={inputClass}
@@ -264,9 +244,9 @@ export default function RequestAccess({
             autoComplete="email"
           />
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
-            US state <span className="normal-case text-muted/70">(where you live)</span>
+        <label className="flex flex-col gap-2">
+          <span className={labelClass}>
+            US state <span className="font-normal text-haze">(where you live)</span>
           </span>
           <select
             className={inputClass}
@@ -274,44 +254,38 @@ export default function RequestAccess({
             onChange={(e) => setState(e.target.value)}
             autoComplete="address-level1"
           >
-            <option value="">Select your state…</option>
+            <option value="">Select your state</option>
             {US_STATES.map((s) => (
               <option key={s.code} value={s.code}>
                 {s.name}
               </option>
             ))}
           </select>
-          <span className="text-xs text-muted">
-            The self-staked pilot is not yet available in every state. We check
-            this so nobody stakes where they cannot.
+          <span className={FIELD_HINT}>
+            The beta is not open in every state yet. We check this before you
+            stake, so nobody stakes where they cannot.
           </span>
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
+        <label className="flex flex-col gap-2">
+          <span className={labelClass}>
             How do you know Andre or Nikki?
           </span>
           <textarea
             className={`${inputClass} min-h-20 resize-y`}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="We went to school together / Nikki invited me / …"
+            placeholder="We went to school together, Nikki invited me"
             maxLength={500}
           />
         </label>
         {error !== null ? (
-          <p role="alert" className="text-sm font-medium text-danger">
-            {error}
-          </p>
+          <Notice tone="error">{error}</Notice>
         ) : null}
-        <button
-          type="submit"
-          disabled={submitting}
-          className={`rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-strong hover:bg-accent/15 disabled:opacity-60 ${TAP_TARGET}`}
-        >
-          {submitting ? "Sending…" : "Request access"}
-        </button>
-        <p className="text-center text-xs text-muted">
-          This just confirms it&apos;s really you — nothing is charged.
+        <Button type="submit" disabled={submitting} block>
+          {submitting ? "Sending your request" : "Ask for my spot"}
+        </Button>
+        <p className="m-0 -mt-1 text-[0.8125rem] text-haze">
+          You sign once to prove the wallet is yours. Nothing is charged.
         </p>
       </form>
     </Shell>

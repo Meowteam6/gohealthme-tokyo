@@ -52,12 +52,12 @@ export type DareFlowResult =
   | { kind: "done"; poolId: bigint; token: string };
 
 export const HEALTH_UNREACHABLE_MESSAGE =
-  "Could not confirm dares are live right now. Nothing was charged. Try again in a moment.";
+  "Could not confirm challenges are live right now. Nothing was charged. Try again in a moment.";
 
 const POOL_NOT_FOUND_MESSAGE =
   "Your reward is in, but we could not find the new pool yet. Retry the link in a moment.";
 
-const LINK_FAILED_MESSAGE = "Could not mint the dare link.";
+const LINK_FAILED_MESSAGE = "Could not mint the challenge link.";
 
 /**
  * Run a dare from wherever it stands. Pass `funded = null` for a fresh dare

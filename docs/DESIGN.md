@@ -1,68 +1,175 @@
-# GoHealthMe V4 design system
+# GoHealthMe V4 design system: Night Shift
 
-Decided before the first V4 component (UX lane, ETHGlobal Tokyo 2026). Every screen in the game loop follows it. When a screen disagrees with this file, the screen is wrong.
+Adopted 2026-09-26 by Andre over SPOTTER's Riverbank, after three directions were built as real mocks and judged (investor, player, designer). Every screen follows this file. When a screen disagrees with it, the screen is wrong. The approved mocks, art and state screenshots are listed in the Decisions log.
 
-## Point of view
+## Product context
 
-**Bet with your boys, honestly.** The product is a dare with your own money: you put a stake down, a sensor decides, you get paid or you do not. That is already a game, so the UI is a scoreboard in a bar and a slip in your pocket, not a SaaS dashboard. The wrapper is loud; the money, the verdict and anything about health data are plain and exact.
+- **What this is:** put your own (test) money on a health goal, your wearable decides, and the players who follow through split the stakes of the ones who do not (commitment model, carried from V3). SPOTTER, the settlement agent, reads the wearable's result; the run's contract holds and pays the money.
+- **Who it is for:** people who want a reason to sleep and train, and friends who challenge each other. Mobile first.
+- **Memorable thing:** **put money on yourself.** H1 "Put money on yourself." Sub "Stake on your sleep or workouts. Your wearable decides."
+- **Stage:** beta on Base Sepolia test USDC. Never "live" or "production" in copy.
 
-The player meets four screens, in this order, and never a wall in between:
+## Thesis
 
-1. **Character creation** (once): sign in, prove you are one human, pick your name, pair your sensor. The result is a character card that every later screen reads.
-2. **The Lobby** (`/pools`, `/c/[token]`): every run marked playable or locked for your device, with the reason and the fix. Limits surface here, before a stake.
-3. **The Run** (`/dashboard`): the scoreboard for each run you are in. Nights banked, tonight, who is still in, time left.
-4. **The Verdict** (inside the pool page): SPOTTER checks, you confirm you are you, the payout is screened, you win or you do not, and the screen says which in plain words.
-
-Gate logic is evaluated once and shown as state. A refusal is a lock on the lobby row with its fix, never a new screen after the player committed something.
+The run happens while you sleep, so the brand lives at night. The page is a deep indigo field with one warm light, the moon. SPOTTER sleeps on the top edge of the real run card, which acts as the horizon, and gold appears only on money. The first screen is the product: the headline, the live run card with exact numbers, and the action inside that card. Every limit shows before a stake, and nothing on the page promises something the chain does not do.
 
 ## Tokens (`app/app/globals.css`)
 
-Semantic names are unchanged so every existing component re-themes with the values; only the values below moved.
+Dark only for now. Every colour is a semantic CSS variable; components never hard-code a hex. **A light theme is one more block** that redefines the same variables under `:root[data-theme="light"]` (plus `color-scheme: light`); nothing else changes. The few consumers that cannot read CSS variables (the share card, the viewport theme colour) read `lib/night-palette.ts`, which a test keeps equal to `globals.css`.
 
-| Token | Value | Role |
+| Token (Tailwind name) | Value | Role |
 |---|---|---|
-| `--background` | `#ECEEF1` | Concrete paper. Cool, never cream. |
-| `--surface` / `--surface-raised` | `#FFFFFF` / `#F5F6F8` | Slips and rows sit on the paper. |
-| `--border` | `#D3D8DF` | Hairline between slips. |
-| `--foreground` | `#0D1B2A` | Navy ink. Text, and the scoreboard panel. |
-| `--muted` | `#4F5D6F` | Secondary text, passes AA on paper and surface. |
-| `--accent` | `#2346D8` | **The one accent.** Varsity cobalt. Primary actions, playable state, the human stamp. White text on it passes AA. |
-| `--accent-strong` / `--accent-deep` | `#1834B0` / `#0E1F6B` | Hover and text-on-tint. |
-| `--gold` family | `#FFC93C` / `#8A5E00` | Money only. Bulb yellow for stake and prize on the scoreboard; deep gold for money text on paper. Never a verdict, never decoration. |
-| `--danger` / `--warning` | `#C8283A` / `#9A4A00` | Semantic states, not accents. Locked rows use warning; a lost run uses ink, not red. |
-| `--coral` | = accent | Retired as a second accent. Kept as an alias so old call sites do not break. |
-| `--shadow-pop` | `0 3px 0 0 var(--foreground)` | A printed-slip offset, not candy. |
+| `--surface-deep` (`surface-deep`) | `#070C20` | Footer, inputs, deepest |
+| `--background` | `#0B1330` | The page |
+| `--surface` | `#111B3D` | Cards (`--surface-top` `#16214A` is the lit top edge) |
+| `--surface-raised` | `#18244D` | Chips, wells, SPOTTER's caption box |
+| `--border` (`edge`) / `--border-strong` (`edge-strong`) | `rgba(214,222,255,.10)` / `.18` | Hairlines |
+| `--fill-quiet` / `--fill-quiet-hover` | `rgba(214,222,255,.06)` / `.10` | Secondary buttons, chips, rows over a card |
+| `--foreground` | `#F3EBDD` | Primary text (15.4:1) and the moon face |
+| `--muted` | `#C4CAE0` | Secondary text (10.3:1 on a card) |
+| `--haze` | `#8F98B8` | Meta text (5.9 on a card, 5.3 on raised) |
+| `--accent` / `--accent-top` / `--accent-bottom` | `#F3EBDD` / `#FBF5EA` / `#E9DFCC` | The moon face gradient on primary buttons |
+| `--accent-foreground` | `#0B1330` | Ink text on the moon face |
+| `--accent-deep` | `#C4CAE0` | Links; always underlined or chevroned, never colour alone |
+| `--gold` | `#F5B94A` | **Money only**: stake figures, pots, payouts, the hold ring (9.6 on a card) |
+| `--moonlight` | `#F6E4B6` | The moon, tags, "Hit" status, the sleep block, banked nights |
+| `--dusk` / `--dusk-ink` | `#7C85A6` / `#8F98B8` | A miss and 0.00, never red. Dusk is 4.6 on a card; on raised use dusk-ink |
+| `--danger` | `#F4A3A3` | Real form and transport errors (8.5 on a card) |
+| `--warning` | `#DCE1F2` | Locks and outages: neutral on purpose, stated plainly with an icon |
+| `--paper` / `--ink` / `--ink-2` | `#F3EBDD` / `#0B1330` / `#4A5372` | The receipt (ink-2 is 6.4 on paper) |
+| `--otter` | `#3FAF8E` | SPOTTER's art and the brand mark only, never UI |
 
-Radius tightens globally through the Tailwind theme (`--radius-xl/2xl/3xl` down to 8/10/12px): slips and tickets, not bubbles. Pills stay pills.
+Radii: `rounded-control` 14px, `rounded-card` 22px, `rounded-tag` 8px (legacy `rounded-xl/2xl/3xl` land on 14/18/22). Depth utilities: `shadow-card`, `shadow-card-hero`, `shadow-moon`, `shadow-moon-pressed`, `shadow-secondary`, `shadow-selected`, `shadow-paper`. Gutter: `px-gutter` (16px phone, 32px from 768px). Page column 1200px. Film grain and the top sky glow sit on `body`; `body.lights-out` dims the glow to 35% after a stake.
+
+Deleted with Riverbank: coral, the 4px slab shadow (`--shadow-pop*`), `--accent-strong`, board/chalk night panel, Patrick Hand and `--font-hand`, backdrop art, speech bubbles.
 
 ## Type
 
-- **Display and numbers:** Big Shoulders (700 to 900, the variable family that replaced Big Shoulders Display). Chicago scoreboard lettering. Used for screen titles, stake and prize figures, the night count and the verdict headline. Numbers are tabular.
-- **Body:** Barlow (400 to 600). A plain grotesque with a little sports-programme flavour. All running copy, buttons, labels.
-- **Mono:** Geist Mono, only for addresses, tx hashes and the existing `Money` primitive. Never for labels.
-- Scale: 14 / 16 / 20 / 28 / 44 / 72. Headlines are set tight (line-height 0.95) and never mixed-colour. Sentence case everywhere; no all-caps eyebrows above headings.
+- **Fraunces** (variable, SOFT 50, WONK 0, weight 560) sets words: the H1, section titles, the wordmark, "of sleep, Saturday night", verdict headlines, "You're in. Goodnight." Use the role utilities, size at the call site:
+  - `type-display` (opsz 144): H1, 44px phone, 80px from 900px.
+  - `type-title` (opsz 96): section titles, 32 / 48.
+  - `type-heading` (opsz 72): card and verdict headlines, 26 to 30.
+  - `type-wordmark` (600, opsz 36): "GoHealthMe".
+- **Figtree 400 to 700** sets all UI text and **every number**, including the one big figure ("7 hours", 60px phone, 112px desktop). Money uses `.num` (lining, tabular).
+- Words in the serif, numbers in the sans. **Geist Mono** only for tx hashes and addresses. No all-caps labels, no handwriting face.
+
+## SPOTTER on a night field
+
+Only eight relit poses may stand on the indigo field: `sleep`, `wearable`, `wave`, `thumbsup`, `meditate`, `detective`, `facepalm`, `thinking`. They live in `app/public/spotter/night/`, re-matted and relit by `app/scripts/relight-spotter.mjs` (`node scripts/relight-spotter.mjs`; never writes into `public/spotter/`). `lib/spotter-poses.ts` resolves any older pose name (payday, greet, cheer, a baked-background card) to the night pose with the same meaning, so none of them can reach the page.
+
+One pose per viewport, **always standing on a card's top edge with a contact shadow** (`<Perch>`). His lines go in his caption box (`SpotterCaption`), never a comic bubble.
+
+| Surface / state (`SpotterScreenState`) | Pose | Width phone / desktop |
+|---|---|---|
+| Landing hero (`landing-hero`), breathing, in front of the moon | `sleep` | 176 / 280 |
+| Landing hero after a tap (`landing-woke`), "I watch your wearable, not your wallet." once | `wave` | 74 / 118 |
+| How a run pays (`outcome-hit` / `outcome-miss` / `outcome-none`) | `thumbsup` / `facepalm` / `meditate` | 92 / 116 |
+| Run page before joining (`run-open`) | `wearable` | 96 / 176 |
+| Run page after joining (`run-joined`), "You're in. I'm asleep till 08:30. You should be too." | `sleep` | 132 / 260 |
+| Verdict: confirm with World ID / denied or expired / lost (`verdict-confirm` / `verdict-denied` / `verdict-lost`) | `detective` / `thinking` / `facepalm` | 96 / 176 |
+| Verdict paid (`verdict-paid`), on the paper receipt | `thumbsup` | 84 |
+
+Motion for him: he breathes only while asleep (5.2s, scale 1.006 x 1.018).
+
+## Components
+
+All in `app/components/ui.tsx` and `app/components/spotter/`. Server-safe unless marked client.
+
+- **Button** `({ variant?: "primary" | "secondary" | "tertiary", size?: "md" | "sm", block?: boolean, ...button })`. Primary is the moon: cream gradient, lit top edge, 2px inner bottom shade, soft glow, ink text. Secondary is a faint fill with an inset hairline. Tertiary is an underlined text action, still 44px. md 52px, sm 44px, radius 14. Press is a 0.98 scale over 90ms; never an offset slab. Disabled drops to the quiet fill with haze text (a dimmed moon reads as broken). Legacy `ghost` renders secondary, `coral` primary.
+- **buttonClasses** `({ variant, size, block }) => string` for anything that is not a `<button>`; **ButtonLink** is a `next/link` with the same look; **ChevronLink** is "See all 3 open runs >"; **TEXT_LINK** is the inline underlined link class; **FOCUS_RING** the shared focus outline.
+- **Chip** `({ selected, role?, ...button })`: 44px, quiet fill with hairline, the moon face when selected. `role="radio"` inside a `role="radiogroup"` reports `aria-checked`; otherwise `aria-pressed`.
+- **Tag** `({ tone?: "live" | "ended" | "muted", dot?, children })`: "Open tonight" in moonlight with a dot.
+- **Card** `({ as?, variant?: "default" | "hero" | "flat" | "raised" | "paper", padding?: "md" | "sm" | "none", ...div })`. Default is the lit card, hero the run card (moonlight hairline on top), flat a row, raised a well inside a card, paper the receipt.
+- **StatRow** (a `<dl>` with hairline dividers; three stats split 1.1 / 1.1 / 0.8) and **Stat** `({ label, value, unit?, tone?: "default" | "money" | "dusk", size?: "md" | "lg" })`.
+- **RunCard** `({ id?, tag?, ends?, title, titleAs?, stats?, note?, action?, fine?, children? })`: the hero run card shell. Slots only; the caller brings live numbers.
+- **Fine** small print (13px haze). Test money and beta always appear twice: under the money action and in the footer.
+- **BrandLockup** mark plus wordmark, linking home. The mark is `public/brand/mark.svg` (`app/icon.svg`, `app/apple-icon.png`, `app/favicon.ico` from the same file).
+- **Money** `({ usd, sign?, size? })` gold, tabular. **Verdict**, **Stamp** `({ tone?: "accent" | "danger" | "ink" })` (sentence case, flat), **Badge**, **ErrorNote** `({ title, detail?, raw?, onRetry?, retryLabel? })`, **EmptyState** `({ title, detail, action?, pose?, line? })`, **Skeleton**.
+- **Spotter** `({ pose | state, width?: number | [phone, desktop], size?, line?, linePlacement?, decorative?, alt?, priority?, contact?, breathe? })`. **SpotterFigure** is the bare art plus contact shadow.
+- **Perch** `({ pose | state, width?, side?: "left" | "right", inset?, overlap?, reserve?, children })`: SPOTTER standing on the wrapped card's top edge; reserves his height so nothing overlaps. Give side-by-side cards the same `reserve` so their tops line up.
+- **SpotterCaption** `({ line, live?, label? })`: his caption box.
+- **Moon** `({ diameter?: number | [phone, desktop], id?, className })`: the one warm light; the caller positions it.
+- **RunRow** (`components/game/RunRow.tsx`) is the one open-run card, shared by the landing's Open runs and the lobby, so a run reads the same in both places. It carries the run's lock and its fix (from `LockPanel`) before any stake control.
+- **LockPanel** (`components/game/LockPanel.tsx`) states a lock and its one fix on the card it locks. It no longer draws its own SPOTTER: the page's pose is the one pose in the viewport. The run page's stake card has the same lock as `run/StakeLock`.
+- **Night kit** (`components/night/kit.tsx`) holds the page pieces the non-mocked screens share: `PerchedHeader` (the page title, then SPOTTER standing on the first card with the pose picked from the page's state), `EmptyCard`, `BackLink`, `Notice`, `PAGE_COLUMN`, `PAGE_TITLE`, `SECTION_TITLE`, the `FIELD*` classes, `optionCard` and `DefRow`.
+- **Spacing:** Tailwind v4 gives `space-y-*` zero specificity, so a child with `m-0` (Fine, SpotterCaption, a StatRow) loses its gap. Stack with the owl selector `[&>*+*]:mt-N` instead.
+- **HoldCoin** (client) is the hold button: the moon primary at 60px with an ink disc, a USDC glyph, a gold conic ring and a gold tint that fills left to right over 1.2s. Space or Enter commits; "Tap to confirm instead" opens an inline confirm (`confirmPrompt`, `confirmLabel`, "Not now"); status is announced through `aria-live`. Waiting states (balance check, wallet, in flight) drop to the quiet fill. Props: `onCommit, label, hint?, tapLabel?, confirmPrompt?, confirmLabel?, committedHint?, disabled?, disabledReason?, durationMs?`. Logic in `hold-commit.ts` (node-tested); commits once per mount, remount with a new `key` to retry.
+
+### Chrome
+
+- **Header:** transparent over the page, then `--header-scrolled` with a 14px blur once scrolled, so nothing shows through it. Signed out: brand, Runs and How it pays (from 640px), Sign in. Signed in: Lobby, My runs, History, Challenges, Settings inline from 1024px, otherwise a menu that also carries the wallet name, copy-address and the test USDC chip. **No status strip**: SPOTTER's line appears under the bar only while checks are paused (he is out of check money).
+- **Footer:** the deepest field, brand, the beta and privacy line, Runs, How it pays, About SPOTTER, Privacy, Terms.
+- **Helper bubble:** never on the landing or a run page.
+- **Sign-in:** Dynamic's own modal, themed dark (`theme="dark"`, `--dynamic-*` variables on `.dynamic-shadow-dom`, one `cssOverrides` rule for ink text on the moon brand button). World's IDKit widget as is.
 
 ## Layout
 
-- Phone first at 390px with 16px gutters; desktop is the same column widened to 44rem for play screens, with the lobby going two-up only past 1024px.
-- **The scoreboard** is the one bold element: a navy panel with bulb-yellow figures for prize and stake, chalk-white for time left and nights. It appears on the run and at the top of a lobby row's detail. Nothing else on a screen competes with it.
-- **The night tally** is a row of boxes, one per night the goal needs: filled ink square for a banked night, outlined for a night still to play, struck through for a night that can no longer count. "3 of 5 banked" is always written next to it in words.
-- Rows over cards in the lobby: a run is a slip (goal, stake to prize, time left, status) with the lock reason inline.
+- Phone first at 360 to 390px, 16px gutters, no horizontal scroll, 44px targets. Wide layouts switch at 900px (landing) and 960px (run page).
+- The landing's first viewport holds the H1, the run card with exact numbers, and its action. The run page's hero is the one big figure ("7 hours") with the stake card beside it on desktop and a phone hold bar once the card's own action scrolls away.
+- Nights are pebbles: moonlight when banked, outlined to play, dim when they can no longer count, always with "1 of 2 nights banked" written next to them.
 
 ## Motion
 
-Only where it means something. A banked night stamps in once (160ms). The verdict headline stamps in once. Everything else is still. `prefers-reduced-motion` turns both off and the screens read the same.
+Feedback, never decoration. The moon's glow fades in once (900ms). Hold fill 1.2s, header 160ms, sheet 180ms, tabs and chips 120ms. After staking the page glow dims ("lights out"). No confetti, no fade-ins as sections scroll. `prefers-reduced-motion` turns every animation off and the screens read the same.
 
 ## Voice
 
-SPOTTER is deadpan and dry (`lib/spotter-lines.ts`). The game screens use fixed SPOTTER lines per state (not random picks) so a judge sees the same sentence twice. Rules:
-
-- Money, verdict and health-data copy is plain and exact. "Run lost. The goal was not met, so this run pays nothing." Never softened, never hyped.
-- No plumbing reaches the player: no env var names, no raw provider strings, no "unexpected response", no "Stopped before payout". A deployment that lacks a lane says "not switched on for this build" and keeps going.
-- Testnet stays visible (the "Base Sepolia test money" slip marker) and the stage word stays honest: V4 is in beta on testnet (CLAUDE.md hard rule, 2026-09-26), never "production", with the ETHGlobal Tokyo origin in the footer.
-- No wager or odds language. It is a stake on yourself, a run, a dare. No emojis, no exclamation marks.
-- Buttons are verbs with objects: "Pair my sensor", "Check my sensor", "Enter the run", "Claim my USDC", "Take my stake back".
+- Say stake, put money on yourself, run, pot, challenge. **Never bet, wager, odds, luck, winner** (hard rule). Players see "wearable", never "sensor"; "challenge", never "dare".
+- SPOTTER is the referee who reads the wearable. **The contract holds the money**; he never claims to hold it.
+- Money, verdict and health-data copy is plain and exact. No plumbing reaches the player.
+- No emojis, no exclamation marks. Buttons are verbs with objects: "Put 1 USDC on myself", "Hold to stake 1.00 USDC", "Add free test USDC", "Pair a different wearable", "Challenge a friend into this run", "Go again tonight".
 
 ## States
 
-Every game component renders default, loading, empty, error, success and disabled. A disabled control says why next to it. A lane that is not on this deployment is a state, not an error.
+Every stateful component renders default, loading, empty, error, success and disabled; the run page adds guest, zero balance, locked, pending, failed and joined; the verdict adds confirm, paid, denied or expired, lost. A disabled control says why. A lane that is off on this deployment is a state, not an error.
+
+### State gallery (`/dev/states`)
+
+Dev only. On any production build (previews included) a `beforeFiles` rewrite in `app/next.config.ts` sends `/dev/*` to a path no route matches, a real 404; the page also calls `notFound()` in production as a second guard. Run `NEXT_PUBLIC_ACCESS_GATE_DISABLED=1 npx next dev -p <port>` (never write that flag to a file) and open `/dev/states`, `/dev/states?only=<section>` or `/dev/states?only=<section>#<state>`.
+
+- Each screen owns one file in `app/app/dev/states/_sections/` (foundation, landing, run, verdict, lobby, shell, onboarding, challenges). The registry (`_sections/index.ts`) already lists them, with their id, title and owner, so filling a section never touches another file.
+- A section component takes `{ meta }: SectionProps` and returns `<GallerySection meta={meta}>` with one `<StateFrame name="run-zero-balance" note="..." phone?>` per state. Names are kebab-case, unique, prefixed by the screen. Add `"use client"` to the section file when a state needs local state or handlers.
+- Render the real components with fixture props. Numbers come from `lib/commitment.ts`, never typed.
+
+## The commitment model
+
+This is the product's money rule and its compliance line, so every run with `bountyModel` 2 says it in plain words, before any stake. It mirrors `HealthPoolsV3._settleCommitment`.
+
+- **Everyone puts in the same stake.** Your result depends only on your own effort, verified by your wearable, never on chance.
+- **Hit your goal:** your own stake comes back, plus an equal share of the stakes of players who missed, plus any sponsor pot.
+- **Miss (your wearable shows it):** your stake goes to the players who hit, **on a run that can record a miss** (`lib/miss-rule.ts`: commitment model, wearable only, sleep or workouts, one plain count, pool id at or after `MISS_RULE_FROM_POOL_ID`). Every other run refunds a miss at settle and says so before the stake.
+- **No wearable data for the run:** your stake comes back.
+- **Nobody hits:** everyone gets their stake back.
+- **No cut on V4:** `commitmentFeeBps()` is read from chain; "No cut on this build" shows only when it reads 0.
+- **Test money:** "Test USDC during beta" under the action and in the footer. Lead with "your stake back", never a prize.
+
+**Rule: numbers come only from `app/lib/commitment.ts`** (`commitmentOutcome`, `commitmentRange`) and wording from `app/lib/game/commitment-copy.ts`, `app/lib/commitment-copy.ts` and `app/components/CommitmentTerms.tsx`. No component does its own payout arithmetic.
+
+**Rule: every stake line knows whether the run can record a miss.** `recordsMissesOf(pool)` (`lib/game/commitment-copy.ts`, from `missRulePool`) feeds `recordsMisses` into `commitmentRange`, `hitRange`, `stakeTermsOf`, `soloLineOf`, `friendMathOf`, `commitmentFacts`, `commitmentReminder`, `CommitmentRangeLine`, `CommitmentTermsList` and the landing's `termsOf`. On a run that cannot record a miss, a miss is refunded before the split (B-2), so the range never counts another player's stake, and the copy says "this run cannot record a miss". With `MISS_RULE_FROM_POOL_ID` unset, no run can, and the landing's generic tabs and challenge band promise no forfeit.
+
+| Where | What it says | Source |
+|---|---|---|
+| Landing | Outcome tabs (hit, miss, nobody hits) with the featured run's worked number | `outcomeCopy`, `heroNote`, `challengeNote` in `lib/game/landing.ts` |
+| Create run, create challenge | Range line under the stake field | `CommitmentRangeLine` |
+| `/c/[token]` | The terms list before accepting | `CommitmentTermsList` |
+| Lobby row | "Stake 1.00, get it back plus a share if you hit" | `commitmentRowTerms` |
+| Run page | The terms on the stake card with this run's live count and pot, before the hold button, plus how SPOTTER reads the goal when it can record a miss | `stakeTermsOf`, `soloLineOf`, `missRuleReading`, `feeLine` |
+| Under the hold button | One range line: hit, miss, nobody hits | `CommitmentRangeLine` |
+| The run | "If you hit" range and the three outcomes | `hitRange`, `commitmentReminder` |
+| Verdict, paid | Stake back plus share, split from the amount the settle credited | `paidBreakdown` |
+| Verdict, not met | What the chain recorded (miss to the hitters, nobody hit, or refunded) | `commitmentLostCopy`, `verdictCopy` for `missed` and `hit-unconfirmed` |
+
+SPOTTER records `verdict=false` on chain since `fix/record-misses` (merged to main, then into Night Shift): only on a run the miss rule covers, only when the wearable synced every day of the run, after the grace window. A run it does not cover refunds the unrecorded player at settle (B-2). The verdict always states what actually happened.
+
+## Decisions log
+
+| Date | Decision | Rationale |
+|---|---|---|
+| 2026-09-26 | Replaced the "bet with your boys" scoreboard system with SPOTTER's Riverbank | Andre: the UI was plain and the otter barely used. Revert: tag `pre-redesign-2026-09-26`. |
+| 2026-09-26 | Memorable thing: put money on yourself, commitment model | Andre. Worded as stake, never bet (hard rule). |
+| 2026-09-26 | "Dare" renamed to "challenge" everywhere players see it | Andre: dare read too aggressive. Routes and identifiers keep the old names. |
+| 2026-09-26 | **Night Shift adopted by Andre over Riverbank.** Dark only for now; a light theme comes later by redefining the same tokens under `[data-theme="light"]` | Andre rejected Riverbank as unfundable (painterly backdrops, coral slabs, the product not in the first viewport). Three directions were mocked and judged; Night won on memorability and on telling the story (the run happens while you sleep) with no jargon, with River Ink's funnel (action inside the hero run card, sign-in that returns to the run, zero-balance faucet step, phone hold bar) and Arcade's character work (outcome tabs, tap-to-wake SPOTTER, a fit line that names the limit) grafted on. Mocks, art and state screenshots: `directions/final/` in the design session scratchpad (landing.html, run.html, art/, state-*.png). |
+| 2026-09-26 | Foundation: tokens, Fraunces + Figtree, relit poses, primitives, dark Dynamic modal, `/dev/states` | Branch `design/night-shift`. Every hand-rolled coral button moved onto `buttonClasses` (the token flip made cream text on a cream face). SPOTTER's run-page line no longer says he holds the stake. |
+| 2026-09-26 | Run pages readable signed out, gated again once signed in | "Put 1 USDC on myself" must land on the run, not a wall. A signed-in player who has not proved they are one person goes through character creation before the hold button is in front of them, so nobody is refused at the stake. Server still enforces `isAllowed`. |
+| 2026-09-26 | Header status strip removed; SPOTTER's line shows only during an outage | The strip was operator chrome on every screen. The outage is a real limit before a stake, so it stays, under the bar, only while true. |
+| 2026-09-26 | Night Shift integrated: landing, run page and the rest of the app merged with main's recorded misses | Branches `design/ns-landing`, `design/ns-run`, `design/ns-rest` and `origin/main` merged on `design/night-shift`. The mocks promised a forfeit on every run; after the miss rule the copy follows `recordsMisses` per run, so no screen promises a missed stake a run cannot record. `HowThisRunPays` was unmounted by the run page's stake card and is removed. |

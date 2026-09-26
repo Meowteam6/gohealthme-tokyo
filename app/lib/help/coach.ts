@@ -155,9 +155,9 @@ export function coachCopy(id: CoachAction, humanMode: HumanMode): CoachCopy {
     case "enterRun":
       return {
         headline: "Now pick a run",
-        body: "Stake test USDC on yourself, bank your nights, and SPOTTER pays when the run settles. Or dare a friend.",
+        body: "Stake test USDC on yourself, bank your nights, and SPOTTER reads the result; the contract pays when the run settles. Or challenge a friend.",
         primary: "Open the lobby",
-        secondary: "Dare a friend",
+        secondary: "Challenge a friend",
       };
   }
 }

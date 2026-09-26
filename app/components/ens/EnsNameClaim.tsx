@@ -32,7 +32,8 @@ import {
   sepoliaTxUrl,
 } from "@/lib/ens/names";
 import { forgetName, rememberName } from "@/lib/ens/client-cache";
-import { ErrorNote } from "@/components/ui";
+import { ErrorNote, FOCUS_RING, buttonClasses } from "@/components/ui";
+import { FIELD, FIELD_HINT, FIELD_LABEL, Notice } from "@/components/night/kit";
 import SignInGate from "@/components/SignInGate";
 
 export interface EnsNameClaimProps {
@@ -283,29 +284,19 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
     const name = status.kind === "done" ? status.name : (currentName as string);
     const tx = status.kind === "done" ? status.tx : null;
     return (
-      <div
-        data-lane="ens"
-        className="space-y-3 rounded-2xl border border-accent/40 bg-accent/20 p-5"
-      >
-        <p className="text-base font-semibold text-accent-deep">You are {name}</p>
-        {isOwnSubname(name) ? (
-          <p className="text-sm text-foreground/80">
-            Resolves on ENSv2 Sepolia to this wallet. The name is yours: the
-            token sits in your wallet and any ENS client can look it up.
-          </p>
-        ) : (
-          <p className="text-sm text-foreground/80">
-            Your own ENS name, checked against this wallet on Ethereum and
-            Sepolia. If it stops pointing here, it stops showing.
-          </p>
-        )}
-        <div className="flex flex-wrap gap-3 text-sm">
+      <div data-lane="ens" className="[&>*+*]:mt-3">
+        <Notice tone="ok" title={<span className="break-all">You are {name}</span>}>
+          {isOwnSubname(name)
+            ? "Resolves on ENSv2 Sepolia to this wallet. The name is yours: the token sits in your wallet and any ENS client can look it up."
+            : "Your own ENS name, checked against this wallet on Ethereum and Sepolia. If it stops pointing here, it stops showing."}
+        </Notice>
+        <div className="flex flex-wrap gap-2">
           {isOwnSubname(name) ? (
             <a
               href={ensAppUrl(name)}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-edge px-4 py-2 font-medium text-foreground hover:bg-surface-raised"
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
             >
               View on the ENS app
             </a>
@@ -315,7 +306,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
               href={sepoliaTxUrl(tx)}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-edge px-4 py-2 font-medium text-muted hover:text-foreground"
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
             >
               Sepolia transaction
             </a>
@@ -328,7 +319,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
               setLabel("");
               if (outOfPicks) setMode("link");
             }}
-            className="rounded-xl border border-edge px-4 py-2 font-medium text-muted hover:text-foreground"
+            className={buttonClasses({ variant: "tertiary", size: "sm" })}
           >
             {outOfPicks
               ? "Use a name I already own"
@@ -337,7 +328,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
                 : "Pick another"}
           </button>
         </div>
-        {outOfPicks ? <p className="text-xs text-muted">{NAME_CAP_REACHED}</p> : null}
+        {outOfPicks ? <p className={FIELD_HINT}>{NAME_CAP_REACHED}</p> : null}
       </div>
     );
   }
@@ -351,7 +342,11 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
   const ownNameReady = ownName.trim().includes(".") && !busy && ready;
 
   const modeSwitch = (
-    <div role="tablist" className="flex flex-wrap gap-2 text-sm">
+    <div
+      role="tablist"
+      aria-label="How you get your name"
+      className="grid grid-cols-2 gap-1 rounded-control bg-surface-deep p-1 shadow-[inset_0_0_0_1px_var(--border-strong)]"
+    >
       {(
         [
           ["claim", "Pick a gohealthme.eth name"],
@@ -368,10 +363,10 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
             setMode(id);
             setStatus({ kind: "idle" });
           }}
-          className={`min-h-11 rounded-xl border px-3 py-2 font-medium ${
+          className={`min-h-11 rounded-[11px] px-3 py-2 text-sm font-semibold leading-tight transition-[background-color,color] duration-[120ms] ${FOCUS_RING} ${
             mode === id
-              ? "border-accent bg-accent/15 text-foreground"
-              : "border-edge text-muted hover:text-foreground"
+              ? "bg-accent text-accent-foreground shadow-selected"
+              : "text-muted hover:text-foreground"
           }`}
         >
           {text}
@@ -391,10 +386,10 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
 
   if (mode === "link") {
     return (
-      <div data-lane="ens" className="space-y-4">
+      <div data-lane="ens" className="[&>*+*]:mt-4">
         {modeSwitch}
-        <label className="block text-sm font-medium">
-          Your ENS name
+        <label className="block">
+          <span className={FIELD_LABEL}>Your ENS name</span>
           <input
             type="text"
             value={ownName}
@@ -404,9 +399,9 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
             autoCorrect="off"
             spellCheck={false}
             disabled={busy}
-            className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-4 py-3 text-base outline-none"
+            className={FIELD}
           />
-          <span className="mt-1 block text-xs text-muted">
+          <span className={`${FIELD_HINT} block`}>
             It must resolve to this wallet ({address.slice(0, 6)}...{address.slice(-4)}) on
             Ethereum or Sepolia. Set that in the ENS app first if it does not.
           </span>
@@ -423,19 +418,19 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
                 }
                 void submitLink();
               }}
-              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              className={`${buttonClasses()} w-full`}
             >
               {status.kind === "signing"
-                ? "Waiting for your signature..."
+                ? "Waiting for your signature"
                 : status.kind === "linking"
-                  ? "Checking the name on Ethereum and Sepolia..."
+                  ? "Checking the name on Ethereum and Sepolia"
                   : authenticated
                     ? "Use this name"
                     : "Sign in to use your name"}
             </button>
           )}
         </SignInGate>
-        <p className="text-xs text-muted">
+        <p className={FIELD_HINT}>
           Signing proves the wallet is yours. Nothing is minted and nothing is
           charged.
         </p>
@@ -445,11 +440,11 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
   }
 
   return (
-    <div data-lane="ens" className="space-y-4">
+    <div data-lane="ens" className="[&>*+*]:mt-4">
       {modeSwitch}
-      <label className="block text-sm font-medium">
-        Your name
-        <div className="mt-1 flex items-center rounded-xl border border-edge bg-surface-raised px-3">
+      <label className="block">
+        <span className={FIELD_LABEL}>Your name</span>
+        <div className="flex min-h-[52px] items-center rounded-control bg-surface-deep px-3 shadow-[inset_0_0_0_1px_var(--border-strong)] transition-shadow duration-[120ms] focus-within:shadow-[inset_0_0_0_1.5px_var(--foreground)]">
           <input
             type="text"
             value={label}
@@ -460,23 +455,23 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
             autoCorrect="off"
             spellCheck={false}
             disabled={busy}
-            className="w-full bg-transparent px-1 py-3 text-base outline-none"
+            className="w-full min-w-0 bg-transparent px-1 py-3 text-base text-foreground outline-none placeholder:text-haze"
           />
-          <span className="whitespace-nowrap text-sm text-muted">.gohealthme.eth</span>
+          <span className="whitespace-nowrap text-[0.9375rem] text-haze">.gohealthme.eth</span>
         </div>
-        <span className="mt-1 block text-xs text-muted">
+        <span className={`${FIELD_HINT} block`}>
           Lowercase letters and numbers, 3 to {ENS_LABEL_MAX} characters. Minted
           on ENSv2 Sepolia, owned by your wallet.
         </span>
       </label>
 
-      <p className="min-h-5 text-sm" aria-live="polite">
+      <p className="m-0 min-h-5 text-[0.9375rem]" aria-live="polite">
         {outOfPicks ? (
           <span className="text-muted">{NAME_CAP_REACHED}</span>
         ) : availability.kind === "checking" ? (
-          <span className="text-muted">Checking the registry...</span>
+          <span className="text-haze">Checking the registry</span>
         ) : availability.kind === "available" ? (
-          <span className="text-accent-deep">{availability.name} is available.</span>
+          <span className="text-moonlight">{availability.name} is available.</span>
         ) : availability.kind === "unavailable" ? (
           <span className="text-danger">{availability.reason}</span>
         ) : null}
@@ -494,14 +489,14 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
               }
               void submit();
             }}
-            className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className={`${buttonClasses()} w-full`}
           >
             {status.kind === "signing"
-              ? "Waiting for your signature..."
+              ? "Waiting for your signature"
               : status.kind === "minting"
-                ? "Minting on Sepolia..."
+                ? "Minting on Sepolia"
                 : status.kind === "confirming"
-                  ? "Waiting for the name to resolve..."
+                  ? "Waiting for the name to resolve"
                   : authenticated
                     ? "Claim this name"
                     : "Sign in to claim"}
@@ -510,14 +505,14 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
       </SignInGate>
 
       {status.kind === "confirming" ? (
-        <p className="text-xs text-muted">
+        <p className={FIELD_HINT} aria-live="polite">
           Minted as {status.name}.{" "}
           {status.tx !== null ? (
             <a
               href={sepoliaTxUrl(status.tx)}
               target="_blank"
               rel="noreferrer"
-              className="underline"
+              className="text-muted underline underline-offset-4 hover:text-foreground"
             >
               Sepolia transaction
             </a>
@@ -527,7 +522,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
           Waiting for resolution ({status.polls + 1}/{MAX_POLLS}).
         </p>
       ) : (
-        <p className="text-xs text-muted">
+        <p className={FIELD_HINT}>
           Claiming signs a message to prove the wallet is yours. GoHealthMe pays
           the Sepolia gas; nothing is charged to you.
         </p>

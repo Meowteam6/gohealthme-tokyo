@@ -50,7 +50,7 @@ import {
 import AgentReceipt from "@/components/AgentReceipt";
 import Countdown from "@/components/Countdown";
 import PayoutMoment from "@/components/PayoutMoment";
-import { ErrorNote, Skeleton } from "@/components/ui";
+import { Badge, ErrorNote, Skeleton, buttonClasses } from "@/components/ui";
 import SignInGate from "@/components/SignInGate";
 
 // text/plain stays accepted so old sample records keep working, but it is
@@ -622,7 +622,7 @@ function EvidenceUploadInner({
                 type="button"
                 disabled={!ready}
                 onClick={openSignIn}
-                className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                className={`${buttonClasses()} w-full`}
               >
                 Sign in to see this claim
               </button>
@@ -632,7 +632,7 @@ function EvidenceUploadInner({
           <button
             type="button"
             onClick={unlockClaim}
-            className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent"
+            className={`${buttonClasses()} w-full`}
           >
             Sign and show my claim
           </button>
@@ -689,7 +689,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={unlockClaim}
-              className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
+              className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
             >
               Sign and show the rows
             </button>
@@ -758,7 +758,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={resetUpload}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
             >
               Upload a different file
             </button>
@@ -781,7 +781,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={resetUpload}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
             >
               Submit new evidence
             </button>
@@ -815,7 +815,7 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={resetUpload}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
             >
               Try again
             </button>
@@ -840,9 +840,7 @@ function EvidenceUploadInner({
           {selfReported ? "Self-report it." : "Prove it."}
         </h3>
         {selfReported ? (
-          <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-warning">
-            Self-reported · low-trust
-          </span>
+          <Badge tone="warning">Self-reported, low trust</Badge>
         ) : null}
       </div>
       {selfReported ? (
@@ -916,7 +914,7 @@ function EvidenceUploadInner({
                 }
                 void submit();
               }}
-              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              className={`${buttonClasses()} w-full`}
             >
               {authenticated
                 ? "Submit and get paid"

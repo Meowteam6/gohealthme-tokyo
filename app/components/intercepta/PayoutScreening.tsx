@@ -26,20 +26,19 @@ export interface PayoutScreeningProps {
 }
 
 const COPY: Record<ScreeningStatus, string> = {
-  pending: "Payout screening: checking this wallet against mainnet risk data (Intercepta).",
-  clear: "Payout screening: clear. Intercepta found no sanctions or scam traits on this wallet.",
-  blocked: "Payout screening: blocked. This wallet cannot receive a payout.",
-  unavailable:
-    "Payout screening: Intercepta did not answer. The payout is held until it does.",
-  unconfigured: "Payout screening not enabled on this deployment.",
+  pending: "Intercepta is checking this wallet against sanctions and scam lists before anything is sent.",
+  clear: "Checked against sanctions and scam lists by Intercepta: clear.",
+  blocked: "Intercepta flagged this wallet, so it cannot receive a payout.",
+  unavailable: "Intercepta did not answer, so the payout is held until it does.",
+  unconfigured: "Payout screening is not on for this build.",
 };
 
 const TONE: Record<ScreeningStatus, string> = {
   pending: "text-muted",
-  clear: "text-accent",
+  clear: "text-muted",
   blocked: "text-danger",
   unavailable: "text-warning",
-  unconfigured: "text-muted",
+  unconfigured: "text-haze",
 };
 
 export default function PayoutScreening({ status, reason }: PayoutScreeningProps) {

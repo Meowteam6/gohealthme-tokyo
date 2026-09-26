@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPOTTER's Riverbank</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible+Next:wght@400;500;700&family=Patrick+Hand&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #F6EFDF;
+    --cream-deep: #EDE2CA;
+    --card: #FFFBF2;
+    --ink: #0F2A2E;
+    --pond: #1E6F6A;
+    --coral: #F2764F;
+    --coral-deep: #D95E38;
+    --gold: #F5B82E;
+    --gold-deep: #8A6200;
+    --dusk: #6B7A8F;
+    --teal: #3FAF8E;
+    --line: #E2D6BB;
+    --muted: #4E5E5F;
+    --art: "../../app/public/spotter/";
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--cream); color: var(--ink);
+    font-family: "Atkinson Hyperlegible Next", system-ui, sans-serif; font-size: 16px; line-height: 1.5;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 48px 16px 96px; }
+  h1, h2, h3, .num { font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; letter-spacing: -0.02em; line-height: 0.95; margin: 0; }
+  .num { font-variant-numeric: tabular-nums; }
+  .hand { font-family: "Patrick Hand", cursive; font-size: 20px; line-height: 1.2; }
+  .mono { font-family: "Geist Mono", monospace; font-size: 12px; }
+
+  /* intro */
+  .intro { display: grid; grid-template-columns: 1.2fr 1fr; gap: 32px; align-items: end; margin-bottom: 56px; }
+  .intro h1 { font-size: clamp(48px, 8vw, 96px); }
+  .intro p { max-width: 36rem; color: var(--muted); font-size: 18px; }
+  .intro .tag { display: inline-block; font-size: 13px; font-weight: 700; color: var(--pond); margin-bottom: 12px; }
+  .intro img { width: 100%; max-width: 360px; justify-self: end; filter: drop-shadow(0 18px 24px rgba(15,42,46,.18)); }
+
+  section { margin-top: 64px; }
+  section > h2 { font-size: 36px; margin-bottom: 8px; }
+  section > p.lede { color: var(--muted); margin: 0 0 24px; max-width: 44rem; }
+
+  /* swatches + type */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .sw { border-radius: 16px; overflow: hidden; background: var(--card); border: 1px solid var(--line); }
+  .sw div { height: 80px; }
+  .sw p { margin: 0; padding: 10px 12px; font-size: 13px; }
+  .sw b { display: block; font-size: 14px; }
+  .type { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .spec { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 20px; }
+  .spec small { color: var(--muted); font-size: 12px; display: block; margin-bottom: 8px; }
+
+  /* phones */
+  .phones { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 28px; }
+  .phone-wrap h3 { font-size: 20px; margin: 0 0 10px; }
+  .phone-wrap p { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
+  .phone {
+    position: relative; width: 100%; max-width: 360px; aspect-ratio: 360 / 740; border-radius: 36px; overflow: hidden;
+    background: var(--cream); border: 8px solid var(--ink); box-shadow: 0 24px 48px rgba(15,42,46,.18);
+    display: flex; flex-direction: column;
+  }
+  .bar { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px 8px; font-size: 13px; }
+  .bar .brand { font-family: "Bricolage Grotesque"; font-weight: 800; font-size: 18px; }
+  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+  .chip.money { color: var(--gold-deep); font-weight: 700; }
+  .testnet { font-size: 11px; color: var(--muted); text-align: center; padding: 6px; }
+  .btn {
+    display: block; width: 100%; border: 0; border-radius: 18px; padding: 16px; font: 700 17px "Atkinson Hyperlegible Next";
+    background: var(--coral); color: var(--ink); cursor: pointer; box-shadow: 0 4px 0 var(--coral-deep);
+  }
+  .btn.ghost { background: transparent; box-shadow: none; border: 2px solid var(--ink); }
+  .bubble {
+    position: relative; background: #fff; border: 2px solid var(--ink); border-radius: 18px; padding: 10px 14px; max-width: 240px;
+  }
+  .bubble::after { content: ""; position: absolute; left: 28px; bottom: -10px; width: 16px; height: 16px; background: #fff; border-right: 2px solid var(--ink); border-bottom: 2px solid var(--ink); transform: rotate(45deg); }
+
+  /* lobby */
+  .lobby { padding: 4px 16px 0; flex: 1; display: flex; flex-direction: column; gap: 10px; position: relative; }
+  .lobby h4 { font: 800 30px "Bricolage Grotesque"; margin: 6px 0 2px; letter-spacing: -0.02em; }
+  .run { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+  .run .t { font-weight: 700; }
+  .run .m { font-size: 13px; color: var(--muted); }
+  .run .coin { font: 800 22px "Bricolage Grotesque"; color: var(--gold-deep); text-align: right; font-variant-numeric: tabular-nums; }
+  .run.locked { opacity: 1; background: var(--cream-deep); }
+  .run.locked .lock { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink); }
+  .run.locked .lock img { width: 40px; }
+  .peek { position: absolute; bottom: -6px; right: -10px; width: 170px; }
+
+  /* run */
+  .runscreen { flex: 1; display: flex; flex-direction: column; padding: 0 16px; position: relative; }
+  .big { font: 800 64px "Bricolage Grotesque"; letter-spacing: -0.03em; line-height: .9; }
+  .pebbles { display: flex; gap: 10px; margin: 12px 0 4px; }
+  .peb { width: 44px; height: 30px; border-radius: 50% 50% 46% 54% / 60% 60% 40% 40%; background: #CFC3A6; border: 2px solid var(--ink); }
+  .peb.on { background: var(--gold); box-shadow: inset -6px -4px 0 rgba(138,98,0,.35); }
+  .night { background: var(--ink); color: var(--cream); border-radius: 24px; padding: 16px; margin-top: auto; margin-bottom: 14px; position: relative; overflow: hidden; }
+  .night img { position: absolute; right: -14px; bottom: -8px; width: 170px; }
+  .night .hand { color: var(--cream); max-width: 150px; }
+
+  /* verdicts */
+  .verdict { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 0 18px 18px; position: relative; }
+  .verdict.win { background: radial-gradient(circle at 50% 38%, #FFE6A6 0%, var(--cream) 62%); }
+  .verdict.lose { background: linear-gradient(180deg, #DADFE6 0%, #C3CBD6 100%); }
+  .verdict img.hero { width: 78%; margin-top: 8px; filter: drop-shadow(0 16px 18px rgba(15,42,46,.2)); }
+  .verdict.lose img.hero { filter: grayscale(.25) drop-shadow(0 16px 18px rgba(15,42,46,.2)); }
+  .stamp { display: inline-block; border: 3px solid var(--ink); border-radius: 10px; padding: 2px 10px; font: 800 14px "Bricolage Grotesque"; letter-spacing: .06em; transform: rotate(-4deg); background: var(--gold); margin-top: -6px; }
+  .verdict.lose .stamp { background: #fff; }
+  .verdict h5 { font: 800 40px "Bricolage Grotesque"; margin: 12px 0 4px; letter-spacing: -0.03em; line-height: .95; }
+  .verdict .plain { font-size: 15px; margin: 0 0 14px; max-width: 290px; }
+  .verdict .actions { margin-top: auto; width: 100%; display: grid; gap: 10px; }
+  .coinflip { position: absolute; top: 18%; left: 58%; width: 56px; height: 56px; border-radius: 50%; background: var(--gold); border: 3px solid var(--ink); display: grid; place-items: center; font: 800 18px "Bricolage Grotesque"; animation: flip 1.6s ease-out infinite; }
+  @keyframes flip { 0% { transform: translateY(40px) rotateY(0); opacity: 0 } 30% { opacity: 1 } 70% { transform: translateY(-40px) rotateY(540deg) } 100% { transform: translateY(-30px) rotateY(720deg); opacity: 1 } }
+
+  /* hold to commit */
+  .commit { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 8px 18px 18px; text-align: center; }
+  .commit img { width: 72%; margin-top: 4px; }
+  .holdcoin {
+    --p: 0; position: relative; width: 132px; height: 132px; border-radius: 50%; border: 0; cursor: pointer; margin-top: auto;
+    background: conic-gradient(var(--coral) calc(var(--p) * 1turn), #E9DDC2 0); display: grid; place-items: center; user-select: none; -webkit-user-select: none; touch-action: none;
+  }
+  .holdcoin span { width: 104px; height: 104px; border-radius: 50%; background: var(--gold); border: 3px solid var(--ink); display: grid; place-items: center; font: 800 26px "Bricolage Grotesque"; box-shadow: inset -8px -6px 0 rgba(138,98,0,.3); }
+  .holdcoin.done span { background: var(--teal); color: #fff; }
+  .commit small { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .linkbtn { background: none; border: 0; color: var(--pond); font: 700 14px "Atkinson Hyperlegible Next"; text-decoration: underline; cursor: pointer; margin-top: 6px; }
+
+  .notes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .note { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 18px 20px; }
+  .note h3 { font-size: 22px; margin-bottom: 8px; }
+  .note ul { margin: 0; padding-left: 18px; }
+  .note li { margin: 4px 0; }
+
+  @media (max-width: 820px) {
+    .intro, .type, .notes { grid-template-columns: 1fr; }
+    .intro img { justify-self: start; max-width: 240px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .coinflip { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="intro">
+    <div>
+      <span class="tag">GoHealthMe V4 · proposed design system · revert tag pre-redesign-2026-09-26</span>
+      <h1>SPOTTER's Riverbank</h1>
+      <p>SPOTTER holds your stake. You put a coin on yourself, he tucks it in his pouch, and your wearable decides whether he hands it back with the pot. Warm, painterly, a little smug. Money and verdicts stay plain and exact.</p>
+    </div>
+    <img src="../../../../../../../Users/andrechuabio/Desktop/eth/gohealthme-tokyo/app/public/spotter/spotter-wallet.webp" alt="SPOTTER holding a wallet" data-pose="spotter-wallet">
+  </div>
+
+  <section>
+    <h2>The screens</h2>
+    <p class="lede">Real SPOTTER art, proposed system. Try the coin on "Put money on yourself": press and hold it.</p>
+    <div class="phones">
+
+      <div class="phone-wrap">
+        <h3>Lobby</h3>
+        <div class="phone">
+          <div class="bar"><span class="brand">GoHealthMe</span><span class="chip money">48.00 USDC</span></div>
+          <div class="lobby">
+            <h4>Tonight's runs</h4>
+            <div class="run"><div><div class="t">Sleep 7 hours Saturday night</div><div class="m">Ends Sun 08:30 · 3 in</div></div><div class="coin">1 → 3</div></div>
+            <div class="run"><div><div class="t">One workout today</div><div class="m">Ends Sun 08:00 · 1 in</div></div><div class="coin">1 → 3</div></div>
+            <div class="run locked"><div><div class="t">Sleep efficiency 85</div><div class="m">Ends Sun 10:30</div></div><div class="coin">1 → 2</div>
+              <div class="lock"><img data-pose="spotter-detective" alt=""><span><b>Locked:</b> your wearable has not synced a night yet. Wear it tonight.</span></div></div>
+            <img class="peek" data-pose="spotter-peek" alt="SPOTTER peeking">
+          </div>
+          <div class="testnet">Base Sepolia test money · beta</div>
+        </div>
+        <p>SPOTTER peeks from the bottom edge. Locks live on the row, with the fix, before any stake.</p>
+      </div>
+
+      <div class="phone-wrap">
+        <h3>Put money on yourself</h3>
+        <div class="phone">
+          <div class="bar"><span class="brand">GoHealthMe</span><span class="chip">andre.gohealthme.eth</span></div>
+          <div class="commit">
+            <div class="bubble hand">Hand it over. I'll keep it safe until your WHOOP says otherwise.</div>
+            <img data-pose="spotter-payday" alt="SPOTTER with his pouch">
+            <button class="holdcoin" id="hold" aria-label="Hold to stake 1 USDC"><span class="num">1</span></button>
+            <small id="holdmsg">Hold the coin to stake 1 USDC on "Sleep 7 hours Saturday night"</small>
+            <button class="linkbtn" id="tapfallback">Or tap here to confirm</button>
+          </div>
+        </div>
+        <p>Hold to commit (1.2s). No popup, hard to fat-finger, with a plain tap fallback for accessibility.</p>
+      </div>
+
+      <div class="phone-wrap">
+        <h3>The run</h3>
+        <div class="phone">
+          <div class="bar"><span class="brand">GoHealthMe</span><span class="chip money">1 USDC in the pouch</span></div>
+          <div class="runscreen">
+            <div class="m" style="font-size:13px;color:var(--muted)">Sleep 7 hours Saturday night</div>
+            <div class="big num">7h 12m</div>
+            <div style="font-size:14px">Friday night, from WHOOP. Goal is 7h.</div>
+            <div class="pebbles"><div class="peb on"></div><div class="peb"></div></div>
+            <div style="font-size:14px"><b>1 of 2 nights banked.</b> Tonight counts.</div>
+            <div class="night">
+              <div style="font-size:13px;opacity:.8">Lights out in</div>
+              <div class="num" style="font:800 40px 'Bricolage Grotesque'">2h 40m</div>
+              <div class="hand">I'm counting. Phone down.</div>
+              <img data-pose="spotter-sleep" alt="SPOTTER asleep">
+            </div>
+          </div>
+        </div>
+        <p>One big number. Nights are pebbles; banked ones turn gold. SPOTTER's pose follows the clock.</p>
+      </div>
+
+      <div class="phone-wrap">
+        <h3>Verdict: paid</h3>
+        <div class="phone">
+          <div class="bar"><span class="brand">GoHealthMe</span><span class="chip money">51.00 USDC</span></div>
+          <div class="verdict win">
+            <img class="hero" data-pose="spotter-payday" alt="SPOTTER celebrating">
+            <div class="coinflip">+3</div>
+            <span class="stamp">CONFIRMED</span>
+            <h5>You slept it.<br>Here's your coin.</h5>
+            <p class="plain">3.00 USDC paid to andre.gohealthme.eth: your 1.00 stake back plus 2.00 from the pot.</p>
+            <div class="actions"><button class="btn">Run it back</button><button class="btn ghost">See the receipt</button></div>
+          </div>
+        </div>
+        <p>The one place with a show: coin flips out of the pouch, gold wash, then the exact sentence.</p>
+      </div>
+
+      <div class="phone-wrap">
+        <h3>Verdict: not this time</h3>
+        <div class="phone">
+          <div class="bar"><span class="brand">GoHealthMe</span><span class="chip money">47.00 USDC</span></div>
+          <div class="verdict lose">
+            <img class="hero" data-pose="spotter-facepalm" alt="SPOTTER facepalming">
+            <span class="stamp">NOT MET</span>
+            <h5>Five hours.<br>We both saw it.</h5>
+            <p class="plain">The goal was 7 hours, so this run pays nothing. Your 1.00 USDC stays in the pot for the people who slept.</p>
+            <div class="actions"><button class="btn">Try tonight's run</button><button class="btn ghost">See the receipt</button></div>
+          </div>
+        </div>
+        <p>Dusk wash, never red. The dry joke is aimed at the night, not the player. The money line is plain.</p>
+      </div>
+
+      <div class="phone-wrap">
+        <h3>Empty</h3>
+        <div class="phone">
+          <div class="bar"><span class="brand">GoHealthMe</span><span class="chip money">48.00 USDC</span></div>
+          <div class="verdict" style="justify-content:center">
+            <img class="hero" data-pose="spotter-lounging" alt="SPOTTER lounging" style="width:86%">
+            <h5 style="font-size:32px">Nothing running.<br>I'm on break.</h5>
+            <p class="plain">Pick a run tonight and I'll hold your coin.</p>
+            <div class="actions"><button class="btn">Find a run</button><button class="btn ghost">Dare a friend</button></div>
+          </div>
+        </div>
+        <p>Every empty state is a pose with a line and one next action.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Color</h2>
+    <p class="lede">Built from the otter. Teal belongs to SPOTTER alone so he always pops. Gold only ever means money.</p>
+    <div class="swatches">
+      <div class="sw"><div style="background:#F6EFDF"></div><p><b>Meadow cream</b>#F6EFDF · background</p></div>
+      <div class="sw"><div style="background:#0F2A2E"></div><p><b>River ink</b>#0F2A2E · text, night panels</p></div>
+      <div class="sw"><div style="background:#F2764F"></div><p><b>Coral nose</b>#F2764F · primary action</p></div>
+      <div class="sw"><div style="background:#F5B82E"></div><p><b>Coin gold</b>#F5B82E · money only</p></div>
+      <div class="sw"><div style="background:#1E6F6A"></div><p><b>Deep pond</b>#1E6F6A · links, text on tint</p></div>
+      <div class="sw"><div style="background:#6B7A8F"></div><p><b>Dusk slate</b>#6B7A8F · a lost run, never red</p></div>
+      <div class="sw"><div style="background:#3FAF8E"></div><p><b>Otter teal</b>#3FAF8E · SPOTTER only</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Type</h2>
+    <div class="type">
+      <div class="spec"><small>Display and numbers · Bricolage Grotesque 800</small><div class="num" style="font:800 56px 'Bricolage Grotesque';letter-spacing:-.03em;line-height:.9">3.00 USDC</div><div style="font:800 28px 'Bricolage Grotesque';margin-top:8px">1 of 2 nights banked</div></div>
+      <div class="spec"><small>Body · Atkinson Hyperlegible Next</small><p style="margin:0">Your wearable decides. SPOTTER reads the summary, never the raw data, and only the verdict goes on chain. Built for reading at 1am with one eye open.</p></div>
+      <div class="spec"><small>SPOTTER speaks · Patrick Hand (bubbles only)</small><div class="hand" style="font-size:26px">Lights out in 30. I'm counting.</div><div class="mono" style="margin-top:12px;color:var(--muted)">0x6df8...78b7 · Geist Mono for hashes only</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Rules</h2>
+    <div class="notes">
+      <div class="note"><h3>Keep</h3><ul><li>Gold means money, nothing else.</li><li>Money, verdict and health copy is plain and exact.</li><li>Locks show in the lobby, before a stake.</li><li>Motion only where it means something; reduced motion honoured.</li><li>Deadpan SPOTTER voice; stake, run, dare. Never bet or odds.</li></ul></div>
+      <div class="note"><h3>Cut</h3><ul><li>Navy scoreboard panel, cobalt, concrete paper.</li><li>Big Shoulders and Barlow.</li><li>Printed-slip offset shadows and 8px ticket corners (now 16 to 20px, soft).</li><li>Hero banners with a small otter in the corner.</li><li>Centered empty boxes with two identical buttons.</li></ul></div>
+    </div>
+  </section>
+
+</div>
+<script>
+  // Resolve pose images from the repo's public folder, relative to this file's real location.
+  const ART = "file:///Users/andrechuabio/Desktop/eth/gohealthme-tokyo/app/public/spotter/";
+  document.querySelectorAll("[data-pose]").forEach((img) => { img.src = ART + img.dataset.pose + ".webp"; });
+
+  // Hold to commit: 1.2s press fills the ring, then SPOTTER pockets the coin.
+  const hold = document.getElementById("hold");
+  const msg = document.getElementById("holdmsg");
+  let start = 0, raf = 0;
+  const HOLD_MS = 1200;
+  function done() {
+    hold.classList.add("done"); hold.style.setProperty("--p", 1);
+    hold.querySelector("span").textContent = "In";
+    msg.textContent = "Staked. SPOTTER has your coin. Sleep 7 hours and it comes back with the pot.";
+  }
+  function tick(t) {
+    const p = Math.min(1, (t - start) / HOLD_MS);
+    hold.style.setProperty("--p", p);
+    if (p >= 1) { done(); return; }
+    raf = requestAnimationFrame(tick);
+  }
+  function down(e) { e.preventDefault(); if (hold.classList.contains("done")) return; start = performance.now(); raf = requestAnimationFrame(tick); }
+  function up() { if (hold.classList.contains("done")) return; cancelAnimationFrame(raf); hold.style.setProperty("--p", 0); }
+  hold.addEventListener("pointerdown", down);
+  ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => hold.addEventListener(ev, up));
+  hold.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") done(); });
+  document.getElementById("tapfallback").addEventListener("click", done);
+</script>
+</body>
+</html>

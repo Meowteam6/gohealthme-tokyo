@@ -34,39 +34,44 @@
 // creator's OWN challenges page - they are entitled to see their own goal text.
 // The public redaction rule (feed / profile / pool metadata) is untouched.
 
+import { SignInLoadingCard } from "@/components/night/SlowSignInNotice";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import Countdown from "@/components/Countdown";
-import SceneHeader from "@/components/SceneHeader";
 import SignInPanel from "@/components/SignInPanel";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
+import { useApprovalProbe } from "@/components/game/ApprovalNote";
+import { EmptyCard } from "@/components/night/kit";
 import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  ErrorNote,
-  Money,
-  Skeleton,
-  TAP_TARGET,
-} from "@/components/ui";
+  Frame,
+  InChallengeCard,
+  InvitedChallengeCard,
+  PAUSED_TITLE,
+  PRIMARY_LINK,
+  SectionHead,
+  SentChallengeCard,
+  StartAction,
+  StartCard,
+  type InChallenge,
+  type InvitedChallenge,
+  type MyChallenges,
+  type SentChallenge,
+} from "@/components/challenges/ChallengeCards";
+import {
+  challengeCreateBlock,
+  payoutStateOf,
+} from "@/lib/game/join-checks";
+import { Card, ErrorNote, Skeleton } from "@/components/ui";
 import {
   ContractNotConfiguredError,
-  displayGoalSpec,
   fetchGoalId,
   fetchParticipant,
   fetchParticipants,
   fetchPool,
   fetchPools,
   fetchProofTier,
-  formatUsdc,
-  type ParticipantInfo,
-  type PoolInfo,
 } from "@/lib/contract";
-import { challengeAwaitingSettleStatus, type ProofTier } from "@/lib/proof-tier";
-import { challengeShareUrl, darePot } from "@/lib/challenges";
+import { challengeShareUrl } from "@/lib/challenges";
 import { fetchWithWalletAuth, type WalletAuthRequester } from "@/lib/client-auth";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
@@ -76,47 +81,9 @@ import { useDisplayNames } from "@/lib/use-display-names";
  *  CHALLENGE_INITIATIVE in CreateChallenge.tsx, which writes it at createPool. */
 const CHALLENGE_INITIATIVE = "challenge";
 
-interface InChallenge {
-  pool: PoolInfo;
-  participant: ParticipantInfo;
-  /** Players in the pool, so the reward is shown net of their own stakes.
-   *  null when the count read missed. */
-  participantCount: number | null;
-  /** On-chain trust tier for a recorded-but-unsettled challenge, so its status
-   *  badge never reads "Verified" for a self-reported claim. null when the
-   *  challenge has no pending passing verdict (status does not need it). */
-  tier: ProofTier | null;
-}
-
-interface SentChallenge {
-  pool: PoolInfo;
-  /** Accepters, or null when the count read missed (the card still renders). */
-  participantCount: number | null;
-  /** Whether YOU staked into your own pool. A commitment you staked on yourself
-   *  reads differently from a reward you put up for a friend, and the two are
-   *  the same on-chain object (a bountyModel-2 pool), so the creator's own
-   *  participation is what tells them apart. */
-  selfStaked: boolean;
-}
-
-interface MyChallenges {
-  inChallenges: InChallenge[];
-  sentChallenges: SentChallenge[];
-}
-
 /** The invite row the signed route returns, before the on-chain pool read. */
 interface RawInvite {
   poolId: string;
-  inviteToken: string;
-  challengerAddress: string;
-  message: string | null;
-}
-
-/** A dare aimed at you that you have NOT yet accepted, resolved against chain. */
-interface InvitedChallenge {
-  pool: PoolInfo;
-  /** Players already in, so the reward excludes their stakes. */
-  participantCount: number | null;
   inviteToken: string;
   challengerAddress: string;
   message: string | null;
@@ -132,40 +99,6 @@ function participantCountOf(poolId: bigint): Promise<number | null> {
   return fetchParticipants(poolId)
     .then((list) => list.length)
     .catch(() => null);
-}
-
-/** The reward figure for a challenge card. pool.balance includes every
- *  player's own stake, so the reward is balance minus stakes (darePot). A
- *  settled or cancelled pool's balance is payouts and refunds, not a reward,
- *  so it gets a state word instead of a number. */
-function RewardFigure({
-  pool,
-  participantCount,
-}: {
-  pool: PoolInfo;
-  participantCount: number | null;
-}) {
-  if (pool.cancelled) return <span>Cancelled, stakes refundable</span>;
-  if (pool.settled) return <span>Settled</span>;
-  const { prize } = darePot({
-    balance: pool.balance,
-    entryFee: pool.entryFee,
-    participantCount,
-    settled: pool.settled,
-    cancelled: pool.cancelled,
-  });
-  return (
-    <>
-      {prize !== null ? (
-        <span>
-          Reward <Money usd={formatUsdc(prize)} size="sm" />
-        </span>
-      ) : null}
-      <span>
-        Lock-in <Money usd={formatUsdc(pool.entryFee)} size="sm" />
-      </span>
-    </>
-  );
 }
 
 /**
@@ -305,210 +238,16 @@ async function fetchInvitedChallenges(
   return resolved.filter((entry): entry is InvitedChallenge => entry !== null);
 }
 
-/** The participant's standing on a challenge they are in, read from the chain
- *  alone: recorded + verdict + settled is all it takes to say where the money
- *  is. Labels match the page's stated set (Not started / awaiting settle / Paid)
- *  plus the honest "Goal missed" the contract can also report. */
-function challengeStatus(
-  pool: PoolInfo,
-  p: ParticipantInfo,
-  tier: ProofTier | null,
-): { label: string; tone: "accent" | "muted" | "warning" } {
-  if (p.resultRecorded && p.verdict) {
-    // Awaiting settle: a self-reported challenge is a real, pending win but must
-    // never read "Verified". Its tier decides the badge.
-    return pool.settled
-      ? { label: "Paid", tone: "accent" }
-      : challengeAwaitingSettleStatus(tier);
-  }
-  if (p.resultRecorded && !p.verdict) {
-    return { label: "Goal missed", tone: "muted" };
-  }
-  return { label: "Not started", tone: "warning" };
-}
-
-function InvitedChallengeCard({
-  entry,
-  challengerName,
-  acceptUrl,
-}: {
-  entry: InvitedChallenge;
-  challengerName: string;
-  acceptUrl: string;
-}) {
-  const { pool, message } = entry;
-
-  return (
-    <Card pop>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Badge>Challenge</Badge>
-        <Badge tone="accent">Invited</Badge>
-      </div>
-      <p className="mt-3 text-sm text-muted">
-        <span className="font-semibold text-foreground">{challengerName}</span>{" "}
-        invited you
-      </p>
-      <h3 className="mt-1 font-display text-lg font-semibold leading-snug">
-        {displayGoalSpec(pool.goalSpec)}
-      </h3>
-      {message !== null ? (
-        <p className="mt-2 text-sm italic text-muted">{message}</p>
-      ) : null}
-      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
-        <RewardFigure pool={pool} participantCount={entry.participantCount} />
-        <Countdown periodStart={pool.periodStart} periodEnd={pool.periodEnd} />
-      </div>
-      <Link
-        href={acceptUrl}
-        className={`mt-4 w-full rounded-full bg-accent font-display font-bold text-white hover:bg-accent-strong ${TAP_TARGET}`}
-      >
-        Accept the dare
-      </Link>
-    </Card>
-  );
-}
-
-function InChallengeCard({
-  entry,
-  challengerName,
-}: {
-  entry: InChallenge;
-  challengerName: string;
-}) {
-  const { pool, participant } = entry;
-  const status = challengeStatus(pool, participant, entry.tier);
-  // Nothing recorded yet means the proof is still owed - lead with the upload.
-  const needsProof = !participant.resultRecorded;
-  const id = pool.id.toString();
-
-  return (
-    <Card>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Badge>Challenge</Badge>
-        <Badge tone={status.tone}>{status.label}</Badge>
-      </div>
-      <p className="mt-3 text-sm text-muted">
-        <span className="font-semibold text-foreground">{challengerName}</span>{" "}
-        challenged you
-      </p>
-      <h3 className="mt-1 font-display text-lg font-semibold leading-snug">
-        {displayGoalSpec(pool.goalSpec)}
-      </h3>
-      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
-        <RewardFigure pool={pool} participantCount={entry.participantCount} />
-        <Countdown periodStart={pool.periodStart} periodEnd={pool.periodEnd} />
-      </div>
-      <Link
-        href={`/pools/${id}`}
-        className={`mt-4 w-full rounded-full font-display font-bold ${TAP_TARGET} ${
-          needsProof
-            ? "bg-accent text-white hover:bg-accent-strong"
-            : "border-2 border-edge text-foreground hover:border-accent/50"
-        }`}
-      >
-        {needsProof ? "Upload your proof" : "View challenge"}
-      </Link>
-    </Card>
-  );
-}
-
-function SentChallengeCard({ entry }: { entry: SentChallenge }) {
-  const { pool, participantCount, selfStaked } = entry;
-  const id = pool.id.toString();
-  // A commitment you started reads as one when you have staked into it, or when
-  // it holds no reward yet and you have not (a dare always seeds a reward above
-  // zero at creation, so a zero-balance pool you made is an unlocked commitment
-  // waiting for your stake). Best-effort display only; the money reads honestly
-  // either way - your own stake, never a "reward" that is not there.
-  //
-  // "No reward" is balance net of every player's stake, not a raw zero
-  // balance: friends who staked on a commitment before its creator did put
-  // their own money in, and that money is never a reward you put up.
-  const netReward = darePot({
-    balance: pool.balance,
-    entryFee: pool.entryFee,
-    participantCount,
-    settled: pool.settled,
-    cancelled: pool.cancelled,
-  }).prize;
-  const commitment =
-    selfStaked ||
-    (!pool.settled &&
-      (netReward !== null ? netReward === 0n : pool.balance === 0n));
-  const stakerWord = commitment ? "staked" : "accepted";
-  const countLabel =
-    participantCount === null
-      ? null
-      : participantCount === 0
-        ? commitment
-          ? selfStaked
-            ? "Just you so far"
-            : "Stake to lock it in"
-          : "No one has accepted yet"
-        : participantCount === 1
-          ? `1 person ${stakerWord}`
-          : `${participantCount} people ${stakerWord}`;
-
-  return (
-    <Card>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Badge>{commitment ? "Commitment" : "Challenge"}</Badge>
-        {pool.settled ? <Badge tone="muted">Settled</Badge> : null}
-      </div>
-      <p className="mt-3 text-sm text-muted">
-        {selfStaked
-          ? "You staked on your own goal"
-          : commitment
-            ? "Your commitment - lock in your stake"
-            : "A reward you put up for a friend"}
-      </p>
-      <h3 className="mt-1 font-display text-lg font-semibold leading-snug">
-        {displayGoalSpec(pool.goalSpec)}
-      </h3>
-      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
-        {commitment ? (
-          <span>
-            Your stake <Money usd={formatUsdc(pool.entryFee)} size="sm" />
-          </span>
-        ) : (
-          <RewardFigure pool={pool} participantCount={participantCount} />
-        )}
-        <Countdown periodStart={pool.periodStart} periodEnd={pool.periodEnd} />
-        {countLabel !== null ? <span>{countLabel}</span> : null}
-      </div>
-      <Link
-        href={`/pools/${id}`}
-        className={`mt-4 w-full rounded-full border-2 border-edge font-display font-bold text-foreground hover:border-accent/50 ${TAP_TARGET}`}
-      >
-        View challenge
-      </Link>
-    </Card>
-  );
-}
-
-/** The two honest ways to start a challenge, side by side. Both land on
- *  /challenge/new with the matching variant preselected. Emerald for the stake
- *  you put on yourself; coral for the human act of daring a friend - coral is
- *  warmth, never a number. */
-function StartChallengeCTAs() {
-  const router = useRouter();
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-      <Button
-        pop
-        onClick={() => router.push("/challenge/new?v=self")}
-      >
-        Stake on yourself
-      </Button>
-      <Button
-        variant="coral"
-        pop
-        onClick={() => router.push("/challenge/new?v=dare")}
-      >
-        Dare a friend
-      </Button>
-    </div>
-  );
+/** Whether a new challenge can start on this build. Every challenge is a
+ *  wearable run, so the document checker never gates it; the one thing that
+ *  can is a verified win that could not pay (the same approval probe
+ *  /challenge/new decides on, lib/game/join-checks). Read-only: the create
+ *  page checks again before any money moves. Checking or a failed probe keeps
+ *  the normal action. */
+function useChallengePause(): { detail: string } | null {
+  const approval = useApprovalProbe();
+  const block = challengeCreateBlock("available", payoutStateOf(approval.mode));
+  return block.kind === "paused" ? { detail: block.detail } : null;
 }
 
 function MyChallengesContent() {
@@ -547,16 +286,23 @@ function MyChallengesContent() {
     [query.data, invitedQuery.data],
   );
   const { displayName } = useDisplayNames(nameAddresses);
+  const pause = useChallengePause();
 
   const origin =
     typeof window === "undefined" ? "" : window.location.origin;
 
   if (!ready) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-32" />
-        <Skeleton className="h-32" />
-      </div>
+      <Frame
+        pose="detective"
+        first={
+          <SignInLoadingCard label="Loading your challenges">
+            <Skeleton className="h-6 w-2/3" />
+            <Skeleton className="mt-3 h-4 w-full" />
+            <Skeleton className="mt-5 h-11 w-44" />
+          </SignInLoadingCard>
+        }
+      />
     );
   }
 
@@ -564,44 +310,54 @@ function MyChallengesContent() {
     // Email-first panel, the same signed-out path the dashboard uses: we make
     // the wallet, an external wallet is the deliberate second choice inside it.
     return (
-      <div className="mx-auto max-w-md space-y-4">
-        <div className="text-center">
-          <p className="font-display text-lg font-semibold">
-            Sign in to see your challenges
-          </p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            The dares aimed at you and the ones you have sent live here once you
-            sign in.
-          </p>
-        </div>
-        <SignInPanel />
-      </div>
+      <Frame
+        pose="wave"
+        lead="Sign in to see the challenges aimed at you and the ones you sent. Base Sepolia test USDC."
+        first={<SignInPanel surface="card" />}
+      />
     );
   }
 
-  if (query.isLoading) {
+  if (query.isLoading || (query.isSuccess && invitedLoadingOnEmpty(query.data, invitedQuery.isLoading))) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-28" />
-        <Skeleton className="h-28" />
-      </div>
+      <Frame
+        pose="detective"
+        first={
+          <Card aria-busy="true">
+            <p className="sr-only" role="status">
+              Reading your challenges from Base Sepolia
+            </p>
+            <Skeleton className="h-6 w-2/3" />
+            <Skeleton className="mt-3 h-4 w-full" />
+            <Skeleton className="mt-5 h-11 w-44" />
+          </Card>
+        }
+      />
     );
   }
 
   if (query.isError) {
     return (
-      <ErrorNote
-        title="Could not load your challenges"
-        detail="We could not read your challenges from Base Sepolia. Try again."
-        raw={
-          query.error instanceof Error &&
-          !(query.error instanceof ContractNotConfiguredError)
-            ? query.error.message
-            : undefined
+      <Frame
+        pose="thinking"
+        first={
+          <Card>
+            <ErrorNote
+              title="Could not load your challenges"
+              detail="I could not read your challenges from Base Sepolia. Nothing changed. Try again."
+              raw={
+                query.error instanceof Error &&
+                !(query.error instanceof ContractNotConfiguredError)
+                  ? query.error.message
+                  : undefined
+              }
+              retryLabel="Read my challenges again"
+              onRetry={() => {
+                void query.refetch();
+              }}
+            />
+          </Card>
         }
-        onRetry={() => {
-          void query.refetch();
-        }}
       />
     );
   }
@@ -613,39 +369,40 @@ function MyChallengesContent() {
     data.sentChallenges.length === 0 &&
     invited.length === 0;
 
-  // A freshly-invited user has no sent or joined challenges, so hold the empty
-  // state until the (signature-gated) invited read settles - otherwise the page
-  // flashes "No challenges yet" and then pops an invite in above it.
-  if (nothing && invitedQuery.isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-28" />
-      </div>
-    );
-  }
-
   if (nothing) {
-    return (
-      <EmptyState
-        title="No challenges yet"
-        detail="Stake on your own goal, or dare a friend and put up a reward. When someone dares you back, it shows up here too."
-        action={<StartChallengeCTAs />}
+    return pause !== null ? (
+      <Frame
+        pose="thinking"
+        first={
+          <EmptyCard
+            title={PAUSED_TITLE}
+            detail={pause.detail}
+            action={<StartAction paused />}
+          />
+        }
+      />
+    ) : (
+      <Frame
+        pose="meditate"
+        first={
+          <EmptyCard
+            title="No challenges yet"
+            detail="Stake on your own goal, or put up a reward and challenge a friend. Your wearable decides. When someone challenges you, it shows up here too."
+            action={<StartAction paused={false} />}
+          />
+        }
       />
     );
   }
 
   return (
-    <div className="space-y-8">
+    <Frame pose={pause !== null ? "thinking" : "wave"} first={<StartCard pause={pause} />}>
       {invited.length > 0 ? (
-        <section className="space-y-4">
-          <div>
-            <h2 className="font-display text-lg font-semibold">Invited to you</h2>
-            <p className="mt-1 text-sm text-muted">
-              Dares aimed straight at your handle. Accept one, stake the small
-              lock-in, and go for the goal - hit it and you collect your lock-in
-              back plus the reward, the second it is verified.
-            </p>
-          </div>
+        <section className="[&>*+*]:mt-4">
+          <SectionHead
+            title="Invited to you"
+            lead="Challenges aimed at your name. Accept one and stake the small lock-in. Hit the goal and your lock-in comes back plus the reward when the run settles."
+          />
           {invited.map((entry) => (
             <InvitedChallengeCard
               key={entry.inviteToken}
@@ -657,21 +414,15 @@ function MyChallengesContent() {
         </section>
       ) : null}
 
-      <section className="space-y-4">
-        <div>
-          <h2 className="font-display text-lg font-semibold">
-            Challenges you&apos;re in
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Dares a friend aimed at you and you accepted with a lock-in stake.
-            Upload your proof and you collect your stake back plus the reward the
-            second it is verified.
-          </p>
-        </div>
+      <section className="[&>*+*]:mt-4">
+        <SectionHead
+          title="Challenges you're in"
+          lead="Challenges a friend aimed at you that you accepted with a lock-in stake. Your wearable decides; hit it and your stake comes back plus the reward."
+        />
         {data.inChallenges.length === 0 ? (
-          <EmptyState
-            title="No challenges aimed at you yet"
-            detail="When a friend dares you and you open their link to accept, the challenge shows up here."
+          <EmptyCard
+            title="None aimed at you yet"
+            detail="When a friend challenges you and you open their link to accept, it shows up here."
           />
         ) : (
           data.inChallenges.map((entry) => (
@@ -684,22 +435,15 @@ function MyChallengesContent() {
         )}
       </section>
 
-      <section className="space-y-4">
-        <div>
-          <h2 className="font-display text-lg font-semibold">
-            Challenges you started
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Commitments you staked on your own goal, and rewards you put up for a
-            friend. Either way you never keep a participant&apos;s stake.
-          </p>
-        </div>
+      <section className="[&>*+*]:mt-4">
+        <SectionHead
+          title="Challenges you started"
+          lead="Commitments you staked on your own goal, and rewards you put up for a friend. You never keep another player's stake."
+        />
         {data.sentChallenges.length === 0 ? (
-          <EmptyState
-            title="You have not started any challenges yet"
-            detail="Stake on your own goal, or put up a reward and dare a friend to hit theirs."
-            action={<StartChallengeCTAs />}
-            pose="point"
+          <EmptyCard
+            title="You have not started one yet"
+            detail="Stake on your own goal, or put up a reward and challenge a friend to hit theirs."
           />
         ) : (
           data.sentChallenges.map((entry) => (
@@ -707,36 +451,34 @@ function MyChallengesContent() {
           ))
         )}
       </section>
-    </div>
+    </Frame>
   );
 }
 
+/** A freshly invited player has no sent or joined challenges, so the empty
+ *  state waits for the (signature-gated) invited read to settle; otherwise the
+ *  page flashes "No challenges yet" and then pops an invite in above it. */
+function invitedLoadingOnEmpty(data: MyChallenges | undefined, invitedLoading: boolean): boolean {
+  if (data === undefined) return false;
+  return invitedLoading && data.inChallenges.length === 0 && data.sentChallenges.length === 0;
+}
+
 export default function ChallengesPage() {
+  if (DYNAMIC_CONFIGURED) return <MyChallengesContent />;
   return (
-    <div className="space-y-6">
-      <SceneHeader
-        title="My challenges"
-        subtitle="The goals you have put testnet USDC behind - your own commitments, the dares you sent, and the ones aimed at you."
-        pose="spotter-greet.png"
-        poseAlt="SPOTTER the otter waving hello, ready to introduce your dares"
-        spotterLine="Dare a friend, or stake on yourself. I hold the pot either way."
-      />
-      {DYNAMIC_CONFIGURED ? (
-        <MyChallengesContent />
-      ) : (
-        <EmptyState
+    <Frame
+      pose="meditate"
+      first={
+        <EmptyCard
           title="Sign-in is off on this build"
-          detail="This part is not switched on for this build yet. Nothing is wrong on your side."
+          detail="Challenges need a signed-in wallet, and this build has sign-in off. Nothing is wrong on your side. The open runs are still there to look at."
           action={
-            <Link
-              href="/pools"
-              className="inline-block rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
-            >
-              Browse pools instead
+            <Link href="/pools" className={PRIMARY_LINK}>
+              See the open runs
             </Link>
           }
         />
-      )}
-    </div>
+      }
+    />
   );
 }

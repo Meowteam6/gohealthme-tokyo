@@ -8,7 +8,8 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { displayGoalSpec, formatUsdc } from "@/lib/contract";
 import { commitmentShortCopy } from "@/lib/commitment-copy";
-import { Badge, EmptyState, ErrorNote, Money, Skeleton } from "@/components/ui";
+import { Badge, EmptyState, ErrorNote, Money, Skeleton, buttonClasses } from "@/components/ui";
+import { PAGE_COLUMN, PAGE_TITLE, SECTION_TITLE } from "@/components/night/kit";
 
 interface Match {
   poolId: string;
@@ -45,15 +46,15 @@ function MatchCard({ match, lead }: { match: Match; lead: boolean }) {
   return (
     <Link
       href={`/pools/${match.poolId}`}
-      className={`block rounded-2xl border bg-surface p-5 transition-colors hover:border-accent/50 ${
-        lead ? "border-accent/40" : "border-edge"
+      className={`relative block rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] px-4 py-[18px] text-foreground no-underline transition-shadow duration-[120ms] min-[960px]:p-6 ${
+        lead ? "shadow-card-hero" : "shadow-card hover:shadow-card-hero"
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Badge>{match.initiative}</Badge>
-        {lead ? <Badge tone="accent">closest match</Badge> : null}
+        <Badge tone="muted">{match.initiative}</Badge>
+        {lead ? <Badge tone="accent">Closest match</Badge> : null}
       </div>
-      <p className="mt-3 text-base font-semibold">
+      <p className="m-0 mt-3 text-[1.0625rem] font-semibold leading-snug">
         {displayGoalSpec(match.goalSpec)}
       </p>
       {/* A self-staked commitment pool (model 2) is funded by the participants'
@@ -64,8 +65,8 @@ function MatchCard({ match, lead }: { match: Match; lead: boolean }) {
           (lib/commitment-copy.ts). */}
       {match.bountyModel === 2 ? (
         entryFeeUsd !== null ? (
-          <p className="mt-2 text-sm text-muted">
-            Stake <Money usd={entryFeeUsd} size="sm" /> USDC on yourself.{" "}
+          <p className="m-0 mt-2 text-[0.9375rem] leading-[1.45] text-muted">
+            Stake <Money usd={entryFeeUsd} size="sm" /> on yourself.{" "}
             {commitmentShortCopy({
               id: /^\d+$/.test(match.poolId) ? BigInt(match.poolId) : 0n,
               bountyModel: match.bountyModel,
@@ -74,15 +75,15 @@ function MatchCard({ match, lead }: { match: Match; lead: boolean }) {
           </p>
         ) : null
       ) : balanceUsd !== null ? (
-        <p className="mt-2 text-sm text-muted">
-          <Money usd={balanceUsd} size="sm" /> USDC in the pot.
+        <p className="m-0 mt-2 text-[0.9375rem] leading-[1.45] text-muted">
+          <Money usd={balanceUsd} size="sm" /> in the pot.
         </p>
       ) : null}
       {entryFeeUsd !== null || deadline !== null ? (
-        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted">
+        <div className="num mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-haze">
           {entryFeeUsd !== null ? (
             <span>
-              Entry fee <Money usd={entryFeeUsd} size="sm" />
+              Stake <Money usd={entryFeeUsd} size="sm" />
             </span>
           ) : null}
           {deadline !== null ? <span>Ends {deadline}</span> : null}
@@ -113,57 +114,51 @@ export default function GoalMatch({ query }: { query: string }) {
   const others = query === "" ? [] : all.filter((m) => m.score <= 0);
 
   return (
-    <div className="space-y-6">
+    <div className={`${PAGE_COLUMN} [&>*+*]:mt-6`}>
       <div className="min-w-0">
-        <p className="text-sm font-semibold uppercase tracking-widest text-accent">
+        <p className="m-0 text-sm font-semibold text-haze">
           {query === "" ? "Open runs" : "Money on this goal"}
         </p>
-        <h1 className="mt-2 break-words text-3xl font-bold tracking-tight">
+        <h1 className={`${PAGE_TITLE} mt-1.5`}>
           {query === "" ? "Open goals with money behind them" : `"${query}"`}
         </h1>
       </div>
 
       {matches.isPending ? (
-        <div className="space-y-3" aria-busy="true">
+        <div className="[&>*+*]:mt-3" aria-busy="true">
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
         </div>
       ) : matches.isError ? (
         <ErrorNote
-          title="Could not load pools"
+          title="Could not load the open runs"
           detail="Base Sepolia did not answer. Try again in a moment."
           onRetry={() => {
             void matches.refetch();
           }}
         />
       ) : matched.length === 0 ? (
-        <div className="space-y-6">
+        <div className="[&>*+*]:mt-6">
           <EmptyState
             title="Nothing staked on this one yet."
-            detail="No open run matches your goal. Create the pool and stake your goal, or look at what is already open."
+            detail="No open run matches your goal. Create the run and stake on your goal, or look at what is already open."
             action={
               <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link
                   href="/pools/create"
-                  className="inline-flex min-h-11 items-center rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
+                  className={`${buttonClasses({ size: "sm" })}`}
                 >
-                  Create the pool
+                  Create the run
                 </Link>
-                <Link
-                  href="/pools"
-                  className="inline-flex min-h-11 items-center rounded-xl border border-edge px-6 py-3 text-sm font-semibold text-foreground hover:bg-surface-raised"
-                >
+                <Link href="/pools" className={buttonClasses({ variant: "secondary", size: "sm" })}>
                   Browse open runs
                 </Link>
               </div>
             }
           />
           {others.length > 0 ? (
-            <section className="space-y-3" aria-labelledby="other-open-runs">
-              <h2
-                id="other-open-runs"
-                className="text-sm font-semibold uppercase tracking-widest text-muted"
-              >
+            <section className="[&>*+*]:mt-3" aria-labelledby="other-open-runs">
+              <h2 id="other-open-runs" className={SECTION_TITLE}>
                 Other open runs
               </h2>
               {others.map((match) => (
@@ -173,7 +168,7 @@ export default function GoalMatch({ query }: { query: string }) {
           ) : null}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="[&>*+*]:mt-3">
           {matched.map((match, index) => (
             <MatchCard
               key={match.poolId}
@@ -182,11 +177,8 @@ export default function GoalMatch({ query }: { query: string }) {
             />
           ))}
           {others.length > 0 ? (
-            <section className="space-y-3 pt-4" aria-labelledby="other-open-runs">
-              <h2
-                id="other-open-runs"
-                className="text-sm font-semibold uppercase tracking-widest text-muted"
-              >
+            <section className="pt-4 [&>*+*]:mt-3" aria-labelledby="other-open-runs">
+              <h2 id="other-open-runs" className={SECTION_TITLE}>
                 Other open runs
               </h2>
               {others.map((match) => (

@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import Link from "next/link";
-import { Barlow, Big_Shoulders, Geist_Mono } from "next/font/google";
+import { Figtree, Fraunces, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 import Header from "@/components/Header";
 import HelperWidget from "@/components/HelperWidget";
 import { Analytics } from "@vercel/analytics/next";
 import AccessGate from "@/components/AccessGate";
+import SiteFooter from "@/components/SiteFooter";
+import { NIGHT_PALETTE } from "@/lib/night-palette";
 import {
   DEFAULT_DESCRIPTION,
   DEFAULT_TITLE,
@@ -15,20 +16,22 @@ import {
   TITLE_TEMPLATE,
 } from "@/lib/site";
 
-// Type system (docs/DESIGN.md): Big Shoulders is the scoreboard face for
-// titles and the big stake, prize and night figures; Barlow carries every line
-// of running copy; Geist Mono is kept only for addresses, tx hashes and Money.
-const barlow = Barlow({
-  variable: "--font-barlow",
+// Type system (docs/DESIGN.md, Night Shift): Fraunces sets words (headlines,
+// section titles, the wordmark, verdict lines), with its SOFT, WONK and
+// optical-size axes so it softens at display sizes. Figtree sets every control,
+// all running copy and every number. Geist Mono is for tx hashes and addresses
+// only. Words in the serif, numbers in the sans.
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  axes: ["SOFT", "WONK", "opsz"],
   display: "swap",
 });
 
-const shoulders = Big_Shoulders({
-  variable: "--font-shoulders",
+const figtree = Figtree({
+  variable: "--font-figtree",
   subsets: ["latin"],
-  weight: ["600", "700", "800", "900"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -96,6 +99,9 @@ const structuredData = JSON.stringify({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
+  themeColor: NIGHT_PALETTE.background,
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -106,7 +112,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${barlow.variable} ${shoulders.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${figtree.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <script
@@ -115,30 +121,10 @@ export default function RootLayout({
         />
         <Providers>
           <Header />
-          <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+          <main className="mx-auto w-full max-w-[75rem] flex-1 px-gutter pb-24 pt-5 sm:pb-12 min-[900px]:pt-8">
             <AccessGate>{children}</AccessGate>
           </main>
-          <footer className="border-t border-edge px-4 py-6 text-center text-xs text-muted">
-            <p>
-              GoHealthMe V4 is in beta on Base Sepolia test money, built at
-              ETHGlobal Tokyo 2026 and settled by SPOTTER. Your health data
-              never touches the chain.
-            </p>
-            <nav className="mt-2 flex items-center justify-center gap-4">
-              <Link
-                href="/privacy"
-                className="inline-flex min-h-11 items-center hover:text-foreground hover:underline"
-              >
-                Privacy
-              </Link>
-              <Link
-                href="/terms"
-                className="inline-flex min-h-11 items-center hover:text-foreground hover:underline"
-              >
-                Terms
-              </Link>
-            </nav>
-          </footer>
+          <SiteFooter />
           <HelperWidget />
         </Providers>
         {/* Vercel Web Analytics: anonymous page-view counts so the pilot has a

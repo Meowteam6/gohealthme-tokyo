@@ -63,9 +63,31 @@ const wagmiConfig = createConfig({
   ssr: true,
 });
 
+// Night Shift theme for Dynamic's own sign-in modal (docs/DESIGN.md). Colours,
+// fonts and radii come from the --dynamic-* custom properties set on
+// .dynamic-shadow-dom in globals.css, which inherit through the shadow root.
+// A custom property cannot restyle a selector, so the rules that need one
+// live here: Dynamic hard-codes white text on its brand button, and the brand
+// colour is the cream moon face, so the button takes the moon gradient with ink
+// text. Every value is a token from globals.css, inherited through the host.
+const DYNAMIC_CSS_OVERRIDES = `
+.button--brand-primary {
+  color: var(--accent-foreground);
+  background: linear-gradient(180deg, var(--accent-top) 0%, var(--accent) 55%, var(--accent-bottom) 100%);
+  box-shadow: var(--elev-moon-flat);
+}
+.button--brand-primary:hover:enabled { box-shadow: var(--elev-moon-flat); filter: brightness(1.04); }
+.button--brand-primary .spinner { color: var(--accent-foreground) !important; }
+.button--brand-primary:disabled {
+  background: var(--fill-quiet);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.button--brand-primary:disabled, .button--brand-primary:disabled * { color: var(--haze) !important; }
+`;
+
 function DynamicMissingBanner() {
   return (
-    <div className="border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-warning">
+    <div className="border-b border-edge bg-surface-raised px-gutter py-2 text-sm text-warning">
       Sign-in is off on this build, so you can look around but nobody can
       play here yet.
     </div>
@@ -105,6 +127,7 @@ export default function Providers({ children }: { children: ReactNode }) {
 
   return (
     <DynamicContextProvider
+      theme="dark"
       settings={{
         environmentId,
         // connect-only skips the SIWE ownership signature on login — the step
@@ -170,6 +193,8 @@ export default function Providers({ children }: { children: ReactNode }) {
         transactionConfirmation: { required: false },
         // Inert unless NEXT_PUBLIC_GUARD_INJECTED_WALLET is set (see above).
         ...injectedWalletGuard,
+        // Theme only (see DYNAMIC_CSS_OVERRIDES above).
+        cssOverrides: DYNAMIC_CSS_OVERRIDES,
       }}
     >
       <WagmiProvider config={wagmiConfig}>

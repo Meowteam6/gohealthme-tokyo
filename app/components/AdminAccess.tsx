@@ -14,7 +14,8 @@ import {
   authBlockReason,
   type WalletAuthRequester,
 } from "@/lib/client-auth";
-import { Badge, ErrorNote, TAP_TARGET } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, Skeleton } from "@/components/ui";
+import { EmptyCard, PAGE_COLUMN, PAGE_TITLE } from "@/components/night/kit";
 
 type Decision = "approve" | "deny";
 
@@ -45,6 +46,12 @@ function whenText(iso: string): string {
   if (!Number.isFinite(t)) return "";
   return new Date(t).toLocaleString();
 }
+
+const STATUS_LABEL: Record<AccessRecord["status"], string> = {
+  pending: "Pending",
+  approved: "Approved",
+  denied: "Denied",
+};
 
 function statusTone(status: AccessRecord["status"]): "accent" | "muted" | "warning" {
   if (status === "approved") return "accent";
@@ -143,118 +150,124 @@ export default function AdminAccess() {
   }
 
   if (!ready) {
-    return <p className="py-10 text-center text-sm text-muted">Loading…</p>;
+    return (
+      <div className={PAGE_COLUMN} aria-busy="true">
+        <Skeleton className="h-10 w-2/3" />
+        <Skeleton className="mt-6 h-32" />
+      </div>
+    );
   }
 
   if (!authenticated || load.state === "need-signin") {
     const reason = authBlockReason({ kind: "no-wallet" });
     return (
-      <div className="mx-auto max-w-md py-10 text-center">
-        <h1 className="text-2xl font-bold tracking-tight">Admin access</h1>
-        <p className="mx-auto mt-3 max-w-sm text-muted">
-          {reason ?? "Sign in with your admin wallet to review requests."}
-        </p>
-        <button
-          type="button"
-          onClick={login}
-          className={`mt-5 rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-strong hover:bg-accent/15 ${TAP_TARGET}`}
-        >
-          Sign in
-        </button>
+      <div className={PAGE_COLUMN}>
+        <h1 className={PAGE_TITLE}>Admin access</h1>
+        <Card className="mt-6">
+          <p className="m-0 text-muted">
+            {reason ?? "Sign in with your admin wallet to review requests."}
+          </p>
+          <Button onClick={login} className="mt-4">
+            Sign in
+          </Button>
+        </Card>
       </div>
     );
   }
 
   if (load.state === "forbidden") {
     return (
-      <div className="mx-auto max-w-md py-10 text-center">
-        <h1 className="text-2xl font-bold tracking-tight">Not an admin.</h1>
-        <p className="mx-auto mt-3 max-w-sm text-muted">
-          This wallet can&apos;t review access requests. Switch to the admin
-          wallet listed in ADMIN_ADDRESSES.
-        </p>
+      <div className={PAGE_COLUMN}>
+        <h1 className={PAGE_TITLE}>Not an admin.</h1>
+        <Card className="mt-6">
+          <p className="m-0 text-muted">
+            This wallet can&apos;t review access requests. Switch to the admin
+            wallet listed in ADMIN_ADDRESSES.
+          </p>
+        </Card>
       </div>
     );
   }
 
   if (load.state === "error") {
     return (
-      <div className="mx-auto max-w-md py-10">
+      <div className={PAGE_COLUMN}>
         <ErrorNote title="Could not load the queue." detail={load.message} onRetry={() => void refresh()} />
       </div>
     );
   }
 
   if (load.state === "loading") {
-    return <p className="py-10 text-center text-sm text-muted">Loading the queue…</p>;
+    return (
+      <div className={PAGE_COLUMN} aria-busy="true">
+        <p className="sr-only">Loading the queue</p>
+        <Skeleton className="h-10 w-2/3" />
+        <Skeleton className="mt-6 h-32" />
+        <Skeleton className="mt-3 h-32" />
+      </div>
+    );
   }
 
   const { requests } = load;
   const pending = requests.filter((r) => r.status === "pending");
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <div className="flex items-center justify-between gap-4">
+    <div className={PAGE_COLUMN}>
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Access requests</h1>
-          <p className="mt-1 text-sm text-muted">
+          <h1 className={PAGE_TITLE}>Access requests</h1>
+          <p className="num m-0 mt-1.5 text-muted">
             {pending.length} pending · {requests.length} total
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          className={`rounded-xl border border-edge bg-surface font-medium text-foreground hover:bg-surface-raised ${TAP_TARGET}`}
-        >
+        <Button variant="secondary" size="sm" onClick={() => void refresh()}>
           Refresh
-        </button>
+        </Button>
       </div>
 
       {requests.length === 0 ? (
-        <p className="mt-10 rounded-2xl border border-dashed border-edge bg-surface/50 px-6 py-12 text-center text-muted">
-          No requests yet. When someone asks to join, they show up here.
-        </p>
+        <div className="mt-6">
+          <EmptyCard title="No requests yet" detail="When someone asks to join, they show up here." />
+        </div>
       ) : (
-        <ul className="mt-6 flex flex-col gap-3">
+        <ul className="m-0 mt-6 flex list-none flex-col gap-3 p-0">
           {requests.map((r) => (
-            <li
-              key={r.address}
-              className="rounded-2xl border border-edge bg-surface p-5"
-            >
+            <li key={r.address}>
+              <Card>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <span className="font-semibold">
                     {r.name.trim() !== "" ? r.name : "Someone"}
                   </span>
-                  <Badge tone={statusTone(r.status)}>{r.status}</Badge>
+                  <Badge tone={statusTone(r.status)}>{STATUS_LABEL[r.status]}</Badge>
                 </div>
-                <span className="font-mono text-xs text-muted">{shortAddr(r.address)}</span>
+                <span className="font-mono text-xs text-haze">{shortAddr(r.address)}</span>
               </div>
               {r.email.trim() !== "" ? (
-                <p className="mt-2 break-all text-sm text-muted">{r.email}</p>
+                <p className="m-0 mt-2 break-all text-sm text-muted">{r.email}</p>
               ) : null}
               {r.reason.trim() !== "" ? (
-                <p className="mt-2 text-sm text-foreground/80">{r.reason}</p>
+                <p className="m-0 mt-2 text-[0.9375rem] text-foreground">{r.reason}</p>
               ) : null}
-              <p className="mt-2 text-xs text-muted">Asked {whenText(r.requestedAt)}</p>
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
+              <p className="num m-0 mt-2 text-[0.8125rem] text-haze">Asked {whenText(r.requestedAt)}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
                   disabled={deciding === r.address || r.status === "approved"}
                   onClick={() => void decide(r.address, "approve")}
-                  className={`rounded-lg border border-accent/40 bg-accent/10 font-semibold text-accent-strong hover:bg-accent/15 disabled:opacity-50 ${TAP_TARGET}`}
                 >
                   {r.status === "approved" ? "Approved" : "Approve"}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   disabled={deciding === r.address || r.status === "denied"}
                   onClick={() => void decide(r.address, "deny")}
-                  className={`rounded-lg border border-edge bg-surface font-semibold text-foreground hover:bg-surface-raised disabled:opacity-50 ${TAP_TARGET}`}
                 >
                   {r.status === "denied" ? "Denied" : "Deny"}
-                </button>
+                </Button>
               </div>
+              </Card>
             </li>
           ))}
         </ul>

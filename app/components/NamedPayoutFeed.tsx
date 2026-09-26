@@ -10,7 +10,10 @@
 // time only, and this component renders exactly those. There is no goal text,
 // no initiative, no service label on this surface.
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { Badge, Card, ErrorNote, FOCUS_RING, Money, Skeleton, buttonClasses } from "@/components/ui";
+import { CARD_TITLE } from "@/components/night/kit";
 import { arcTxUrl } from "@/lib/chains";
 import { shortAddress } from "@/lib/social";
 
@@ -78,42 +81,37 @@ async function fetchFeed(): Promise<FeedResponse> {
   return (await res.json()) as FeedResponse;
 }
 
-function PayoutRow({ payout, index }: { payout: NamedPayout; index: number }) {
+export function PayoutRow({ payout }: { payout: NamedPayout }) {
   return (
-    <li
-      className="ghm-rise-in flex items-center gap-3 rounded-2xl border border-edge bg-surface p-4"
-      style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
-    >
+    <li className="flex items-center gap-3 border-t border-edge py-3.5 first:border-t-0 first:pt-0 last:pb-0">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-sm text-foreground">
+        <span className="truncate text-base text-foreground">
           <span className="font-semibold">{nameOf(payout)}</span>
           <span className="text-muted"> got paid</span>
         </span>
-        <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
-          {payout.selfReported === true ? (
-            <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
-              self-reported
-            </span>
-          ) : null}
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] text-haze">
+          {/* A photo-backed payout is tagged, so the tier never reads as
+              verified. */}
+          {payout.selfReported === true ? <Badge tone="warning">Self-reported</Badge> : null}
           <span>{relativeTime(payout.at)}</span>
-          <span aria-hidden="true">&middot;</span>
           <a
             href={arcTxUrl(payout.txHash)}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-accent underline underline-offset-2 hover:text-accent-strong"
+            className={`inline-flex min-h-11 items-center text-muted underline decoration-muted/35 underline-offset-4 hover:text-foreground ${FOCUS_RING}`}
           >
             Basescan
           </a>
         </span>
       </div>
-      <span className="shrink-0 font-mono tabular-nums text-base text-gold-deep">
-        {payout.amountUsd}
-        <span className="text-gold-deep/80"> USDC</span>
+      <span className="shrink-0">
+        <Money usd={payout.amountUsd} size="md" />
       </span>
     </li>
   );
 }
+
+export type { NamedPayout };
 
 export default function NamedPayoutFeed() {
   const query = useQuery({
@@ -125,54 +123,56 @@ export default function NamedPayoutFeed() {
   const payouts = query.data?.payouts ?? [];
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium uppercase tracking-wider text-muted">
-          Payout feed
-        </h2>
-        <p className="flex items-center gap-1.5 text-xs text-accent">
-          <ShieldLockIcon className="h-3.5 w-3.5 shrink-0" />
-          <span>{PRIVACY_COPY}</span>
-        </p>
-      </div>
+    <Card as="section" aria-labelledby="payout-feed">
+      <h2 id="payout-feed" className={CARD_TITLE}>
+        Payout feed
+      </h2>
+      <p className="mt-1.5 flex items-center gap-1.5 text-[0.8125rem] text-haze">
+        <ShieldLockIcon className="size-3.5 shrink-0" />
+        <span>{PRIVACY_COPY}</span>
+      </p>
 
-      {query.isLoading ? (
-        <div className="flex flex-col gap-3">
-          <div className="h-16 animate-pulse rounded-2xl bg-surface-raised" />
-          <div className="h-16 animate-pulse rounded-2xl bg-surface-raised" />
-        </div>
-      ) : query.isError ? (
-        <div
-          role="status"
-          className="rounded-2xl border border-warning/40 bg-surface p-5 text-sm text-muted"
-        >
-          <p>Could not read the payout feed right now.</p>
-          <button
-            type="button"
-            onClick={() => {
+      <div className="mt-4" aria-live="polite">
+        {query.isLoading ? (
+          <div role="status" className="[&>*+*]:mt-2">
+            <span className="sr-only">Reading the payout feed</span>
+            <Skeleton className="h-14" />
+            <Skeleton className="h-14" />
+          </div>
+        ) : query.isError ? (
+          <ErrorNote
+            title="Could not read the payout feed right now"
+            detail="This is a read problem, not an empty feed."
+            retryLabel="Read the feed again"
+            onRetry={() => {
               void query.refetch();
             }}
-            className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-4"
-          >
-            Try again
-          </button>
-        </div>
-      ) : payouts.length === 0 ? (
-        <p className="rounded-2xl border border-edge bg-surface p-5 text-sm text-muted">
-          No recent payouts to show. Runs pay when they settle, and the next
-          one lands here.
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {payouts.map((payout, index) => (
-            <PayoutRow
-              key={`${payout.txHash}-${index}`}
-              payout={payout}
-              index={index}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
+          />
+        ) : payouts.length === 0 ? (
+          <PayoutFeedEmpty />
+        ) : (
+          <ul className="list-none">
+            {payouts.map((payout, index) => (
+              <PayoutRow key={`${payout.txHash}-${index}`} payout={payout} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** Nobody paid yet: what lands here and the one action. */
+export function PayoutFeedEmpty() {
+  return (
+    <div className="rounded-control bg-fill-quiet px-4 py-6 text-center shadow-[inset_0_0_0_1px_var(--border)]">
+      <p className="type-heading text-[1.5rem]">Nobody paid yet</p>
+      <p className="mx-auto mt-2 max-w-md text-[0.9375rem] text-muted">
+        Runs pay when they settle, and the next one lands here.
+      </p>
+      <Link href="/pools" className={`mt-5 ${buttonClasses({ size: "sm" })}`}>
+        Find a run
+      </Link>
+    </div>
   );
 }

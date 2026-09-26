@@ -1,49 +1,41 @@
-// SPOTTER, placed. Every surface gets the otter doing something relevant to
-// that page - watching the ledger, handing over a payout, nodding a verdict.
-// One component, a pose per page, so the character reads as one system and no
-// screen is just the run-across Easter egg.
+import Perch from "@/components/spotter/Perch";
+import type { SpotterPose } from "@/lib/spotter-poses";
 
-type Pose = "nature" | "watching" | "verified" | "payout" | "neutral";
+// SPOTTER standing on the top edge of a small caption card: his name or a
+// one-line label, then a quiet sublabel. Draws through components/spotter so
+// the art, alt text and contact shadow stay in one place.
 
-const WIDTHS: Record<string, string> = {
-  sm: "w-28",
-  md: "w-40",
-  lg: "w-56",
+const WIDTH: Record<"sm" | "md" | "lg", readonly [number, number]> = {
+  sm: [72, 84],
+  md: [96, 120],
+  lg: [132, 176],
 };
 
 export default function SpotterMascot({
-  pose = "neutral",
+  pose = "wave",
   caption,
   sublabel,
   size = "md",
-  float = true,
   className = "",
 }: {
-  pose?: Pose;
+  pose?: SpotterPose;
   caption?: string;
   sublabel?: string;
   size?: "sm" | "md" | "lg";
+  /** Retired: SPOTTER no longer idles (motion answers the player only). */
   float?: boolean;
   className?: string;
 }) {
   return (
-    <div className={`shrink-0 ${className}`}>
-      <div
-        className={`${float ? "otter-float" : ""} ${WIDTHS[size]} overflow-hidden rounded-2xl border border-edge bg-surface-raised shadow-sm`}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/spotter/spotter-${pose}.png`}
-          alt={caption ?? "SPOTTER, the GoHealthMe otter"}
-          className="aspect-square w-full object-cover"
-        />
+    <Perch pose={pose} width={WIDTH[size]} side="left" inset={[14, 18]} alt={caption} className={className}>
+      <div className="rounded-control bg-surface-raised px-3.5 py-3 shadow-[inset_0_0_0_1px_var(--border)]">
+        {caption !== undefined ? (
+          <p className="m-0 text-[0.9375rem] font-semibold text-foreground">{caption}</p>
+        ) : null}
+        {sublabel !== undefined ? (
+          <p className="m-0 mt-0.5 text-[0.8125rem] text-haze">{sublabel}</p>
+        ) : null}
       </div>
-      {caption !== undefined ? (
-        <p className="mt-2 text-center text-sm font-semibold">{caption}</p>
-      ) : null}
-      {sublabel !== undefined ? (
-        <p className="mt-0.5 text-center text-xs text-muted">{sublabel}</p>
-      ) : null}
-    </div>
+    </Perch>
   );
 }

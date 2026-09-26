@@ -16,6 +16,7 @@ import { formatUsdc, shortAddress } from "@/lib/contract";
 import { FAUCET_GRANT_UUSDC } from "@/lib/money-guards";
 import { FAUCET_URL, FUNDING_STEPS } from "@/lib/tx-errors";
 import { type FundingResult, useTestUsdcFunding } from "@/lib/faucet-funding";
+import { buttonClasses } from "@/components/ui";
 
 type CopyState = { kind: "idle" } | { kind: "copied" } | { kind: "failed" };
 
@@ -60,7 +61,7 @@ export function CopyAddressButton({
         onClick={run}
         title={`Tap to copy ${address}`}
         aria-label={`Copy wallet address ${address}`}
-        className="inline-flex min-h-11 items-center rounded-lg border border-edge bg-surface-raised px-3 py-2 font-mono text-xs text-muted hover:text-foreground"
+        className="num inline-flex min-h-11 items-center rounded-control bg-fill-quiet px-3 py-2 text-[0.8125rem] font-medium text-muted shadow-[inset_0_0_0_1px_var(--border)] hover:text-foreground"
       >
         <span aria-live="polite">
           {copy.kind === "copied"
@@ -80,14 +81,14 @@ export function CopyAddressButton({
         onClick={run}
         title={`Tap to copy ${address}`}
         aria-label={`Copy wallet address ${address}`}
-        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-edge bg-surface-raised px-3 py-3 text-left font-mono text-xs text-foreground/80 hover:border-accent/50 hover:text-foreground"
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-control bg-surface-deep px-3 py-3 text-left font-mono text-xs text-muted shadow-[inset_0_0_0_1px_var(--border-strong)] hover:text-foreground"
       >
         <span className="break-all">{address}</span>
-        <span className="shrink-0 font-sans text-xs font-semibold uppercase tracking-wide text-accent">
+        <span className="shrink-0 font-sans text-xs font-semibold text-foreground">
           {copy.kind === "copied" ? "Copied" : "Tap to copy"}
         </span>
       </button>
-      <p aria-live="polite" className="text-xs text-muted">
+      <p aria-live="polite" className="m-0 text-xs text-haze">
         {copy.kind === "failed"
           ? "Copying is blocked in this browser - select the address by hand."
           : copy.kind === "copied"
@@ -109,7 +110,7 @@ export default function FundingHelp({
   address,
   balance,
   needed = 0n,
-  headline = "One quick thing first",
+  headline = "You need a little test USDC first.",
   note,
   onRecheck,
   recheckLabel = "I added it, check again",
@@ -174,9 +175,9 @@ export default function FundingHelp({
 
   const primaryLabel = funding
     ? phase === "moving"
-      ? "Delivering..."
-      : "Adding..."
-    : "Add practice money";
+      ? "Delivering your test USDC"
+      : "Adding test USDC"
+    : "Add free test USDC";
 
   // Shown only when the in-app grant could not fund the wallet (budget spent,
   // nothing to move, an error). The manual faucet steps always live in the
@@ -191,80 +192,129 @@ export default function FundingHelp({
           ? "The in-app faucet had nothing to grant right now."
           : null;
 
+  const extra = [note, needed > 0n ? `This uses ${formatUsdc(needed)} USDC.` : undefined]
+    .filter((line): line is string => line !== undefined && line !== "")
+    .join(" ");
+
   return (
-    <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
-      <p className="text-base font-semibold text-warning">{headline}</p>
-      <p className="mt-1 text-sm text-foreground/80">
-        Your account needs a little practice money before it can do anything —
-        we&apos;re adding it for you now. It is practice money on a test network
-        and has no real value.
-        {note !== undefined && note !== "" ? ` ${note}` : ""}
-        {balance !== null ? ` You have $${formatUsdc(balance)} right now.` : ""}
-        {needed > 0n ? ` This uses $${formatUsdc(needed)}.` : ""}
-      </p>
+    <FundingHelpView
+      address={address}
+      balance={balance}
+      headline={headline}
+      extra={extra}
+      funding={funding}
+      primaryLabel={primaryLabel}
+      onFund={() => {
+        void runFunding();
+      }}
+      funded={outcome !== null && outcome.kind === "funded"}
+      fallbackReason={fallbackReason}
+      onRecheck={onRecheck}
+      recheckLabel={recheckLabel}
+    />
+  );
+}
 
-      {address !== null ? (
-        <>
-          <button
-            type="button"
-            disabled={funding}
-            onClick={() => {
-              void runFunding();
-            }}
-            className="mt-4 min-h-11 w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {primaryLabel}
-          </button>
-          <p className="mt-2 text-xs text-muted">
-            One tap adds ${formatUsdc(FAUCET_GRANT_UUSDC)} of practice money to
-            your account. Test network only, never real money.
-          </p>
-          {outcome !== null && outcome.kind === "funded" ? (
-            <p
-              className="mt-2 text-sm font-semibold text-accent"
-              aria-live="polite"
-            >
-              Practice money added. Continuing...
-            </p>
-          ) : null}
-        </>
-      ) : (
-        <p className="mt-4 text-sm text-muted">
-          Sign in to add practice money.
-        </p>
-      )}
-
-      {fallbackReason !== null ? (
-        <p className="mt-3 text-sm text-foreground/80" role="status">
-          {`We could not add it for you automatically: ${fallbackReason} You can add it yourself in the advanced options below.`}
+/**
+ * The zero-balance step, drawn from props only: the wallet line, the one-tap
+ * add, and the by-hand faucet steps behind a disclosure. FundingHelp feeds it
+ * live state; the state gallery feeds it fixtures without touching a faucet.
+ */
+export function FundingHelpView({
+  address,
+  balance,
+  headline,
+  extra,
+  funding,
+  primaryLabel,
+  onFund,
+  funded,
+  fallbackReason,
+  onRecheck,
+  recheckLabel,
+}: {
+  address: string | null;
+  balance: bigint | null;
+  headline: string;
+  extra: string;
+  funding: boolean;
+  primaryLabel: string;
+  onFund: () => void;
+  funded: boolean;
+  fallbackReason: string | null;
+  onRecheck?: () => void;
+  recheckLabel: string;
+}) {
+  return (
+    <div>
+      {headline !== "" ? (
+        <p className="m-0 flex items-start gap-2.5 text-sm leading-[1.45] text-muted [&_b]:font-semibold [&_b]:text-foreground">
+          <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" className="mt-px flex-none">
+            <rect x="2" y="4" width="12" height="9" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M10.5 8.5h1.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            <path d="M4 4 10.5 2.2V4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+          </svg>
+          <span className="num">
+            {balance !== null ? (
+              <>
+                Your wallet has <b>{formatUsdc(balance)}</b> test USDC.{" "}
+              </>
+            ) : null}
+            {headline}
+            {extra !== "" ? ` ${extra}` : ""}
+          </span>
         </p>
       ) : null}
 
-      {/* The raw faucet steps are the power-user path now, tucked behind a
-          disclosure so the plain "we're adding it for you" flow above is the
-          default. Kept fully available for anyone who wants to fund by hand. */}
-      <details className="mt-4 border-t border-warning/30 pt-4">
-        <summary className="min-h-11 cursor-pointer text-sm font-semibold text-foreground/80">
-          Having trouble? Show advanced options
-        </summary>
-        <div className="mt-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Your wallet address
+      {address !== null ? (
+        <div className="mt-4">
+          <button
+            type="button"
+            disabled={funding}
+            onClick={onFund}
+            className={buttonClasses({ block: true })}
+          >
+            {primaryLabel}
+          </button>
+          <p className="num m-0 mt-2 text-[0.8125rem] leading-[1.45] text-haze">
+            Free on Base Sepolia, never real money. One tap adds{" "}
+            {formatUsdc(FAUCET_GRANT_UUSDC)} test USDC, then this carries on where it stopped.
           </p>
-          {address === null ? (
-            <p className="mt-1 text-sm text-muted">
-              Sign in to see the address to fund.
+          {funded ? (
+            <p className="m-0 mt-2 text-sm font-semibold text-moonlight" aria-live="polite">
+              Test USDC added. Checking your balance again.
             </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="m-0 mt-4 text-sm text-muted">Sign in to add test USDC.</p>
+      )}
+
+      {fallbackReason !== null ? (
+        <p className="m-0 mt-3 text-sm text-muted" role="status">
+          {`It did not land automatically: ${fallbackReason} You can add it yourself below.`}
+        </p>
+      ) : null}
+
+      {/* The raw faucet steps are the power-user path, tucked behind a
+          disclosure so the one-tap add above is the default. Kept fully
+          available for anyone who wants to fund by hand. */}
+      <details className="mt-3 border-t border-edge pt-2">
+        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-muted hover:text-foreground">
+          Add it by hand instead
+        </summary>
+        <div className="mt-2">
+          <p className="m-0 text-[0.8125rem] font-semibold text-haze">Your wallet address</p>
+          {address === null ? (
+            <p className="m-0 mt-1 text-sm text-muted">Sign in to see the address to fund.</p>
           ) : (
             <div className="mt-1">
               <CopyAddressButton address={address} />
             </div>
           )}
 
-          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted">
-            Add practice money yourself
-          </p>
-          <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm text-foreground/80">
+          <p className="m-0 mt-3 text-[0.8125rem] font-semibold text-haze">From the Circle faucet</p>
+          <ol className="m-0 mt-1 list-decimal space-y-1 pl-5 text-sm text-muted">
             {FUNDING_STEPS.map((step) => (
               <li key={step}>{step}</li>
             ))}
@@ -274,14 +324,14 @@ export default function FundingHelp({
             href={FAUCET_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-base font-semibold text-accent hover:bg-accent/10"
+            className={`mt-3 ${buttonClasses({ variant: "secondary", block: true })}`}
           >
             Open the Circle faucet
           </a>
 
-          <p className="mt-3 text-sm text-foreground/80">
+          <p className="m-0 mt-3 text-sm text-muted">
             Or top up in-app from the balance card on{" "}
-            <Link href="/dashboard" className="text-accent underline">
+            <Link href="/dashboard" className="text-foreground underline decoration-muted/35 underline-offset-4">
               your dashboard
             </Link>
             .
@@ -291,7 +341,7 @@ export default function FundingHelp({
             <button
               type="button"
               onClick={onRecheck}
-              className="mt-4 min-h-11 w-full rounded-xl border border-edge bg-surface-raised px-5 py-3 text-base font-semibold text-foreground hover:border-accent/50 disabled:opacity-60"
+              className={`mt-3 ${buttonClasses({ variant: "secondary", block: true })}`}
             >
               {recheckLabel}
             </button>

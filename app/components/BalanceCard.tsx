@@ -8,7 +8,7 @@ import {
   FAUCET_GRANT_UUSDC,
   WITHDRAW_DAILY_CAP_UUSDC,
 } from "@/lib/money-guards";
-import { ErrorNote } from "@/components/ui";
+import { ErrorNote, buttonClasses } from "@/components/ui";
 
 /**
  * GoHealthMe balance card.
@@ -193,7 +193,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
   return (
     <section className="rounded-2xl border border-edge bg-surface p-5">
       <h2 className="text-lg font-semibold">GoHealthMe balance</h2>
-      <p className="mt-3 text-3xl font-bold text-accent">
+      <p className="mt-3 text-3xl font-bold text-accent-deep">
         {formatUsdc(balance)}
         <span className="ml-1 text-lg font-semibold text-foreground">USDC</span>
       </p>
@@ -208,7 +208,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
         onClick={() => {
           void claimFaucet();
         }}
-        className="mt-4 w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+        className={`${buttonClasses()} mt-4 w-full`}
       >
         {claiming
           ? "Claiming from the faucet..."
@@ -220,7 +220,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
         is charged and nothing leaves your wallet.
       </p>
       {faucet.kind === "granted" ? (
-        <div className="mt-2 rounded-xl border border-accent/40 bg-accent/20 p-3">
+        <div className="mt-2 rounded-xl border border-edge bg-surface-raised p-3">
           <p className="text-sm font-semibold text-accent-deep">
             Granted {formatUsdc(FAUCET_GRANT_UUSDC)} test USDC to your balance.
           </p>
@@ -241,7 +241,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
         onClick={() => {
           void moveToArc();
         }}
-        className="mt-3 w-full rounded-xl bg-accent-strong px-5 py-3 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+        className={`${buttonClasses()} mt-3 w-full`}
       >
         {moving
           ? "Moving to Base wallet..."
@@ -253,7 +253,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
       </p>
 
       {move.kind === "done" ? (
-        <div className="mt-2 rounded-xl border border-accent/40 bg-accent/20 p-3">
+        <div className="mt-2 rounded-xl border border-edge bg-surface-raised p-3">
           <p className="text-sm font-semibold text-accent-deep">
             Moved to your Base wallet. It is now spendable on goals and pools.
           </p>
@@ -261,7 +261,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
             href={arcTxUrl(move.txHash)}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-1 inline-block break-all text-sm text-accent underline"
+            className="mt-1 inline-block break-all text-sm text-accent-deep underline"
           >
             See the public receipt
           </a>

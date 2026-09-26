@@ -35,7 +35,7 @@ function PaymasterMissingNote() {
 
   return (
     <p
-      className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs font-medium text-warning"
+      className="m-0 rounded-lg bg-fill-quiet px-3 py-2 text-[0.8125rem] text-muted shadow-[inset_0_0_0_1px_var(--border-strong)]"
       aria-live="polite"
     >
       There may be a small network fee for this one.
@@ -49,7 +49,7 @@ export default function GaslessBadge({ status }: { status: GaslessStatus }) {
   if (status.dripLine !== undefined && status.dripLine !== null) {
     return (
       <p
-        className="rounded-xl border border-edge bg-surface-raised px-3 py-2 text-xs font-medium text-muted"
+        className="m-0 rounded-lg bg-fill-quiet px-3 py-2 text-[0.8125rem] text-muted shadow-[inset_0_0_0_1px_var(--border)]"
         role="status"
         aria-live="polite"
       >
@@ -61,12 +61,10 @@ export default function GaslessBadge({ status }: { status: GaslessStatus }) {
   if (status.willSponsor) {
     return (
       <p
-        className="flex items-center gap-2 rounded-xl border border-accent/40 bg-accent/20 px-3 py-2 text-xs font-medium text-accent-deep"
+        className="m-0 text-[0.8125rem] leading-[1.45] text-haze"
         aria-live="polite"
       >
-        <span aria-hidden="true">*</span>
-        Gas-free: sponsored by the Base paymaster. You pay no ETH gas on this
-        transaction.
+        Gas-free: the Base paymaster covers the network fee, so you pay no ETH.
       </p>
     );
   }

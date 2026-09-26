@@ -35,8 +35,8 @@ export function resultLabel(
   // it and flips `refunded`. Nothing about verification applies any more.
   if (pool.cancelled === true) {
     return p.refunded === true
-      ? { text: "Pool cancelled - refund claimed", tone: "muted" }
-      : { text: "Pool cancelled - claim your refund", tone: "warning" };
+      ? { text: "Run called off - stake claimed back", tone: "muted" }
+      : { text: "Run called off - claim your stake back", tone: "warning" };
   }
   if (!p.resultRecorded) {
     if (pool.settled && approval !== undefined && approval !== null) {

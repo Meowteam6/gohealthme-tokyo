@@ -1,123 +1,473 @@
 @import "tailwindcss";
 
-/* V4 scoreboard theme (docs/DESIGN.md). Concrete paper, navy ink, one accent
-   (varsity cobalt), bulb gold for money only. Semantic names are unchanged so
-   every existing component re-themes from the values alone. */
+/* Night Shift (docs/DESIGN.md). The run happens while you sleep, so the page is
+   a deep indigo field with one warm light, the moon. Cream "moon" faces the
+   primary action, gold is money and nothing else, teal is SPOTTER's art and the
+   brand mark only, never UI.
+
+   Every colour is a semantic token below; components never hard-code a hex. A
+   light theme is a second block that redefines these same variables under
+   :root[data-theme="light"] (plus color-scheme: light). Nothing else changes.
+
+   Contrast (WCAG AA 4.5:1 for text), checked 2026-09-26:
+   foreground on background 15.4, muted on surface 10.3, haze on surface 5.9
+   and on raised 5.3, gold on surface 9.6, danger on surface 8.5, dusk on
+   surface 4.6 (never text on raised, where it is 4.1; use dusk-ink there),
+   ink on the moon face 15.4, ink-2 on paper 6.4. */
 :root {
-  color-scheme: light;
-  --background: #eceef1;       /* concrete paper, cool - never cream */
-  --surface: #ffffff;          /* slips and rows */
-  --surface-raised: #f5f6f8;   /* wells inside a slip */
-  --border: #d3d8df;           /* hairline between slips */
-  --foreground: #0d1b2a;       /* navy ink; also the scoreboard panel */
-  --muted: #4f5d6f;            /* secondary text, AA on paper and surface */
-  --accent: #2346d8;           /* THE accent: varsity cobalt */
-  --accent-strong: #1834b0;    /* hover, emphasis text */
-  --accent-deep: #0e1f6b;      /* text on accent tints */
-  /* Coral is retired as a second accent. Aliased so old call sites render in
-     the one accent instead of breaking. */
-  --coral: #2346d8;
-  --coral-strong: #1834b0;
-  --danger: #c8283a;
-  /* Caution. A locked lobby row, an outage. Never money, never a verdict. */
-  --warning: #9a4a00;
-  /* Money only: bulb yellow for stake and prize on the scoreboard, deep gold
-     for money text on paper. Never a verdict, never decoration. */
-  --gold: #ffc93c;
-  --gold-strong: #f2b321;
-  --gold-deep: #8a5e00;
-  /* Chips and quiet wells. */
-  --secondary: #e3e7ec;
-  --secondary-foreground: #0d1b2a;
-  /* The scoreboard panel and its chalk figures. */
-  --board: #0d1b2a;
-  --board-edge: #243650;
-  --chalk: #f4f6f9;
-  /* A printed-slip offset instead of candy depth. */
-  --shadow-pop: 0 3px 0 0 var(--foreground);
-  --shadow-pop-coral: 0 3px 0 0 var(--foreground);
-  --shadow-pop-edge: 0 2px 0 0 var(--border);
-  --radius-card: 0.75rem;
+  color-scheme: dark;
+
+  /* Fields, deepest to highest. */
+  --surface-deep: #070c20;     /* footer, inputs */
+  --background: #0b1330;       /* the page */
+  --surface: #111b3d;          /* cards */
+  --surface-top: #16214a;      /* a card's lit top edge (gradient start) */
+  --surface-hover: #142046;    /* a pressable row under the pointer */
+  --surface-raised: #18244d;   /* chips, wells, SPOTTER's caption box */
+
+  /* Hairlines. */
+  --border: rgba(214, 222, 255, 0.1);
+  --border-strong: rgba(214, 222, 255, 0.18);
+
+  /* Quiet fills: secondary buttons, chips, wells, rows over a card. */
+  --fill-quiet: rgba(214, 222, 255, 0.06);
+  --fill-quiet-hover: rgba(214, 222, 255, 0.1);
+
+  /* Text. */
+  --foreground: #f3ebdd;       /* primary text; also the moon face */
+  --muted: #c4cae0;            /* secondary text */
+  --haze: #8f98b8;             /* meta text */
+
+  /* The one action colour: the moon face, with ink text on it. */
+  --accent: #f3ebdd;
+  --accent-top: #fbf5ea;       /* the lit top of the moon face gradient */
+  --accent-bottom: #e9dfcc;    /* its shaded bottom */
+  --accent-hover: #fbf5ea;
+  --accent-foreground: #0b1330;
+  /* Links and emphasis on tints. Underlined or chevroned, never colour alone. */
+  --accent-deep: #c4cae0;
+
+  /* Moonlight: the moon, tags, "Hit" status, the sleep block. */
+  --moonlight: #f6e4b6;
+
+  /* Money only: stakes, pots, payouts, the hold progress ring. */
+  --gold: #f5b94a;
+  --gold-strong: #e9a93a;
+  --gold-deep: var(--gold);    /* legacy name: money text is plain gold now */
+
+  /* A miss and 0.00. Dusk, never red. */
+  --dusk: #7c85a6;
+  --dusk-ink: #8f98b8;         /* dusk as text on raised fields */
+
+  /* Real form and transport errors. */
+  --danger: #f4a3a3;
+  /* Locks and outages. Neutral on purpose: a limit is stated plainly, with an
+     icon, not alarmed about. Brighter than muted so it still reads first. */
+  --warning: #dce1f2;
+
+  /* The receipt: paper, ink, ink-2. */
+  --paper: #f3ebdd;
+  --paper-top: #fbf6ec;
+  --ink: #0b1330;
+  --ink-2: #4a5372;
+
+  /* SPOTTER's teal. Art and brand mark only. */
+  --otter: #3faf8e;
+
+  /* Quiet wells (legacy names). */
+  --secondary: #18244d;
+  --secondary-foreground: #f3ebdd;
+
+  /* Page atmosphere. */
+  --glow-moon: rgba(246, 228, 182, 0.1);
+  --glow-sky: rgba(84, 104, 196, 0.14);
+  --scrim: rgba(4, 7, 20, 0.62);
+  --header-scrolled: rgba(11, 19, 48, 0.96);
+
+  /* Depth. Soft light from above, never an offset slab. */
+  --elev-card:
+    inset 0 1px 0 rgba(246, 228, 182, 0.12), inset 0 0 0 1px var(--border),
+    0 24px 48px -28px rgba(0, 0, 0, 0.6);
+  --elev-card-hero:
+    inset 0 1px 0 rgba(246, 228, 182, 0.16), inset 0 0 0 1px var(--border),
+    0 24px 48px -24px rgba(0, 0, 0, 0.6);
+  --elev-moon:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -2px 0 rgba(11, 19, 48, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 28px -8px rgba(246, 228, 182, 0.45);
+  /* The moon face without its outer glow, for a host that clips it (Dynamic's
+     modal form cut the glow into a grey band under its button). */
+  --elev-moon-flat:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -2px 0 rgba(11, 19, 48, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.45);
+  --elev-moon-pressed:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 1px 3px rgba(11, 19, 48, 0.18),
+    0 1px 1px rgba(0, 0, 0, 0.4), 0 6px 18px -8px rgba(246, 228, 182, 0.4);
+  --elev-secondary:
+    inset 0 0 0 1px var(--border-strong), inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+  --elev-selected: inset 0 1px 0 #fff, 0 1px 2px rgba(0, 0, 0, 0.4);
+  --elev-paper:
+    inset 0 1px 0 #fff, 0 1px 2px rgba(0, 0, 0, 0.35),
+    0 28px 50px -22px rgba(0, 0, 0, 0.7);
+  --contact-shadow: rgba(0, 3, 14, 0.58);
+
+  /* Radii: controls, cards, tags. */
+  --r-control: 14px;
+  --r-card: 22px;
+  --r-tag: 8px;
+
+  /* Page gutter: 16px on a phone, 32px from tablet up. */
+  --gutter: 16px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-surface: var(--surface);
-  --color-surface-raised: var(--surface-raised);
-  --color-edge: var(--border);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-accent: var(--accent);
-  --color-accent-strong: var(--accent-strong);
-  --color-accent-deep: var(--accent-deep);
-  --color-danger: var(--danger);
-  --color-warning: var(--warning);
-  --color-gold: var(--gold);
-  --color-gold-strong: var(--gold-strong);
-  --color-gold-deep: var(--gold-deep);
-  --color-coral: var(--coral);
-  --color-coral-strong: var(--coral-strong);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-board: var(--board);
-  --color-board-edge: var(--board-edge);
-  --color-chalk: var(--chalk);
-  --font-sans: var(--font-barlow);
-  --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-shoulders);
-  /* Slips and tickets, not bubbles: every rounded-xl/2xl/3xl in the app
-     tightens from here. Pills stay pills. */
-  --radius-xl: 0.5rem;
-  --radius-2xl: 0.625rem;
-  --radius-3xl: 0.75rem;
-}
-
-@layer utilities {
-  /* Retired decoration: kept as a no-op so old call sites stay valid. */
-  .bg-dot-grid {
-    background-image: none;
+@media (min-width: 768px) {
+  :root {
+    --gutter: 32px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-barlow), system-ui, sans-serif;
+@theme inline {
+  --color-surface-deep: var(--surface-deep);
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-top: var(--surface-top);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-raised: var(--surface-raised);
+  --color-edge: var(--border);
+  --color-edge-strong: var(--border-strong);
+  --color-fill-quiet: var(--fill-quiet);
+  --color-fill-quiet-hover: var(--fill-quiet-hover);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-haze: var(--haze);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-deep: var(--accent-deep);
+  --color-moonlight: var(--moonlight);
+  --color-gold: var(--gold);
+  --color-gold-strong: var(--gold-strong);
+  --color-gold-deep: var(--gold-deep);
+  --color-dusk: var(--dusk);
+  --color-dusk-ink: var(--dusk-ink);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-otter: var(--otter);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  /* Words in the serif, UI and every number in the sans. */
+  --font-sans: var(--font-figtree), system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-display--font-variation-settings: "SOFT" 50, "WONK" 0;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --tracking-display: -0.018em;
+  --leading-display: 1.02;
+
+  --radius-control: var(--r-control);
+  --radius-card: var(--r-card);
+  --radius-tag: var(--r-tag);
+
+  /* Depth utilities: shadow-card, shadow-card-hero, shadow-moon, ... */
+  --shadow-card: var(--elev-card);
+  --shadow-card-hero: var(--elev-card-hero);
+  --shadow-moon: var(--elev-moon);
+  --shadow-moon-pressed: var(--elev-moon-pressed);
+  --shadow-secondary: var(--elev-secondary);
+  --shadow-selected: var(--elev-selected);
+  --shadow-paper: var(--elev-paper);
+  /* Legacy radius steps now land on the Night scale. */
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+  --radius-3xl: 22px;
 }
 
-/* Horizontal-overflow guard. SPOTTER's run-across easter egg is position:fixed
-   and animates to translateX(124vw), which pushes past the right viewport edge
-   and would raise a horizontal scrollbar on a narrow phone. Clip the horizontal
-   axis at the root so that overflow is hidden without ever affecting vertical
-   scroll. `clip` is preferred because — unlike `hidden` — it does not create a
-   scroll container, so the sticky header keeps working and vertical page scroll
-   is untouched; `hidden` is the fallback for browsers without `clip`. Only the
-   decorative, off-screen otter is affected: all real content lives inside the
-   centered max-w-5xl column and never intends to sit past the edge. */
+/* Money and every other figure: lining, tabular. */
+@utility num {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* The page gutter as padding, for full-width bands. */
+@utility px-gutter {
+  padding-inline: var(--gutter);
+}
+
+/* Fraunces roles. Size comes from a text-* class at the call site; these set
+   the face, the weight, the axes and the tracking for each role. */
+@utility type-display {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 560;
+  font-variation-settings: "SOFT" 50, "WONK" 0, "opsz" 144;
+  letter-spacing: -0.018em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+@utility type-title {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 560;
+  font-variation-settings: "SOFT" 50, "WONK" 0, "opsz" 96;
+  letter-spacing: -0.015em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+@utility type-heading {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 560;
+  font-variation-settings: "SOFT" 50, "WONK" 0, "opsz" 72;
+  letter-spacing: -0.012em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+@utility type-wordmark {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-weight: 600;
+  font-variation-settings: "SOFT" 50, "WONK" 0, "opsz" 36;
+  letter-spacing: -0.015em;
+  line-height: 1;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  position: relative;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-figtree), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Film grain, so the night gradients never band. Above everything, inert. */
+body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* The sky: moonlight top right, a cool wash top left. Dims to 35% once the
+   player has staked ("lights out", body.lights-out). */
+body::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 900px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(50% 50% at 80% 12%, var(--glow-moon), transparent 70%),
+    radial-gradient(40% 40% at 0% 30%, var(--glow-sky), transparent 70%);
+  transition: opacity 600ms ease;
+}
+
+body.lights-out::after {
+  opacity: 0.35;
+}
+
+:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgba(246, 228, 182, 0.28);
+  color: var(--foreground);
+}
+
+/* Horizontal-overflow guard. Decorative art (the moon's glow, a perched
+   SPOTTER) may bleed past the column; clip only the horizontal axis at the
+   root. `clip` does not create a scroll container, so sticky headers and
+   vertical scroll are untouched; `hidden` is the fallback. */
 html,
 body {
   overflow-x: hidden;
   overflow-x: clip;
 }
 
-/* Motion is decoration here, never information: every animated element reads
-   identically with animation off, which is what the reduced-motion block
-   guarantees. */
-@keyframes stamp-in {
-  0% {
-    transform: scale(1.6) rotate(-8deg);
+/* Dynamic renders its sign-in modal inside .dynamic-shadow-dom. Custom
+   properties inherit through the shadow root, so the modal takes the night
+   tokens from here. Rules that need selectors (the brand button's text colour)
+   live in the cssOverrides string in app/providers.tsx. */
+.dynamic-shadow-dom {
+  --dynamic-font-family-primary: var(--font-figtree), system-ui, sans-serif;
+  --dynamic-font-family-numbers: var(--font-figtree), system-ui, sans-serif;
+  --dynamic-base-1: var(--surface);
+  --dynamic-base-2: var(--surface-raised);
+  --dynamic-base-3: #1d2a58;
+  --dynamic-base-4: #22305f;
+  --dynamic-text-primary: var(--foreground);
+  --dynamic-text-secondary: var(--muted);
+  --dynamic-text-tertiary: var(--haze);
+  --dynamic-text-link: var(--moonlight);
+  --dynamic-brand-primary-color: var(--accent);
+  --dynamic-brand-secondary-color: rgba(243, 235, 221, 0.12);
+  --dynamic-brand-hover-color: var(--accent-hover);
+  --dynamic-border-radius: var(--r-card);
+  --dynamic-connect-button-radius: var(--r-control);
+  --dynamic-hover: rgba(214, 222, 255, 0.06);
+  --dynamic-overlay: var(--scrim);
+  --dynamic-modal-backdrop-background: var(--scrim);
+  --dynamic-modal-border: 1px solid var(--border-strong);
+  --dynamic-footer-background-color: var(--surface-deep);
+  --dynamic-search-bar-background: var(--surface-deep);
+  --dynamic-search-bar-border: 1px solid var(--border-strong);
+  --dynamic-wallet-list-tile-background: var(--surface-raised);
+  --dynamic-wallet-list-tile-background-hover: #1d2a58;
+  --dynamic-wallet-list-tile-border: 1px solid var(--border);
+  --dynamic-button-primary-background: var(--surface-raised);
+  --dynamic-connect-button-background: var(--surface-raised);
+  --dynamic-connect-button-color: var(--foreground);
+  --dynamic-error-1: var(--danger);
+  --dynamic-shadow-down-1: none;
+}
+
+@layer components {
+  /* SPOTTER staging (components/spotter). One pose per viewport, standing on a
+     card's top edge with a contact shadow. Widths come in as --sw-sm (phone) and
+     --sw-lg (from 900px) so the same markup stages at both sizes. */
+  .night-figure {
+    --sw: var(--sw-sm);
+    position: relative;
+    width: var(--sw);
+    flex: none;
+  }
+
+  .night-contact {
+    position: absolute;
+    left: 12%;
+    right: 10%;
+    bottom: -3px;
+    height: 12px;
+    z-index: -1;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, var(--contact-shadow), transparent);
+    pointer-events: none;
+  }
+
+  /* The perch: the wrapped card with SPOTTER standing on its top edge. The
+     padding reserves his height (width x aspect), less the few pixels his feet
+     sink into the card. A caller can reserve a fixed height instead
+     (--perch-reserve-sm/-lg), so cards side by side line up whatever the pose;
+     his feet stay on the card edge either way. */
+  .night-perch {
+    --sw: var(--sw-sm);
+    --perch-reserve: var(--perch-reserve-sm);
+    --perch-own: calc(var(--sw) * var(--perch-ratio) - var(--perch-overlap, 6px));
+    --perch-pad: var(--perch-reserve, var(--perch-own));
+    position: relative;
+    isolation: isolate;
+    padding-top: var(--perch-pad);
+  }
+
+  .night-perch > .night-figure {
+    position: absolute;
+    top: calc(var(--perch-pad) - var(--perch-own));
+    z-index: 3;
+  }
+
+  @media (min-width: 900px) {
+    .night-figure,
+    .night-perch {
+      --sw: var(--sw-lg, var(--sw-sm));
+    }
+
+    .night-perch {
+      --perch-reserve: var(--perch-reserve-lg, var(--perch-reserve-sm));
+    }
+  }
+
+  /* The moon: an SVG disc with a soft glow behind it. Size by --moon-d. */
+  .night-moon {
+    position: relative;
+    width: var(--moon-d-sm);
+    aspect-ratio: 1;
+    pointer-events: none;
+  }
+
+  .night-moon::before {
+    content: "";
+    position: absolute;
+    inset: -60%;
+    border-radius: 50%;
+    background: radial-gradient(
+      closest-side,
+      rgba(246, 228, 182, 0.3) 0%,
+      rgba(246, 228, 182, 0.12) 42%,
+      rgba(246, 228, 182, 0.04) 70%,
+      transparent 100%
+    );
+  }
+
+  @media (min-width: 900px) {
+    .night-moon {
+      width: var(--moon-d-lg, var(--moon-d-sm));
+    }
+  }
+}
+
+/* The moon's surface stops, for the SVG gradient. */
+:root {
+  --moon-1: #fff8e6;
+  --moon-2: #f7e6bb;
+  --moon-3: #e8ce95;
+  --moon-4: #d8b978;
+}
+
+/* Motion is feedback, never information: every animated element reads the
+   same with animation off, which the reduced-motion block guarantees. */
+
+/* The moon's glow fades in once. */
+@keyframes night-moonrise {
+  from {
     opacity: 0;
   }
-  60% {
-    transform: scale(0.94) rotate(-3deg);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1) rotate(-3deg);
+  to {
     opacity: 1;
   }
 }
 
+.animate-moonrise {
+  animation: night-moonrise 900ms ease-out both;
+}
+
+/* SPOTTER breathes only while asleep. Transform only, so nothing reflows. */
+@keyframes night-breathe {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  45% {
+    transform: scale(1.006, 1.018);
+  }
+}
+
+.animate-breathe {
+  transform-origin: 50% 90%;
+  animation: night-breathe 5.2s ease-in-out infinite;
+}
+
+@keyframes night-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-night-spin {
+  animation: night-spin 800ms linear infinite;
+}
+
+/* Rows that arrive with data (a payout, a receipt) settle in once. */
 @keyframes rise-in {
   from {
     transform: translateY(6px);
@@ -129,53 +479,15 @@ body {
   }
 }
 
-/* Staggered entrance for payout/win rows. Decoration only: with animation off
-   the row is at rest, in place, and fully legible. */
-@keyframes ghm-rise-in {
-  from {
-    transform: translateY(6px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.animate-stamp-in {
-  animation: stamp-in 240ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
-}
-
-.animate-rise-in {
-  animation: rise-in 200ms ease-out both;
-}
-
+.animate-rise-in,
 .ghm-rise-in {
-  animation: ghm-rise-in 260ms ease-out both;
+  animation: rise-in 180ms ease-out both;
 }
 
-/* Mr Otter idles with a slow, gentle float - alive, never distracting. */
-@keyframes otter-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-8px);
-  }
-}
-
-/* V4: idle floating is decoration, and motion here only answers something the
-   player did (docs/DESIGN.md). The class stays so old call sites are valid. */
-.otter-float {
-  animation: none;
-}
-
-/* A banked night and a verdict headline stamp in once. That is all the motion
-   the game screens have. */
+/* A verdict headline lands once. */
 @keyframes ghm-stamp {
   0% {
-    transform: scale(1.35);
+    transform: scale(1.12);
     opacity: 0;
   }
   100% {
@@ -188,81 +500,13 @@ body {
   animation: ghm-stamp 160ms ease-out both;
 }
 
-/* The run-across-the-screen Easter egg: SPOTTER dashes left to right along the
-   very bottom, then gets out of the way. Fires occasionally, not constantly. */
-@keyframes otter-dash {
-  0%,
-  80% {
-    transform: translateX(-24vw) translateY(0);
-    opacity: 0;
-  }
-  82% {
-    opacity: 1;
-  }
-  88% {
-    transform: translateX(40vw) translateY(-12px);
-  }
-  90% {
-    transform: translateX(48vw) translateY(0);
-  }
-  98% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(124vw) translateY(0);
-    opacity: 0;
-  }
-}
-
-.otter-dash {
-  animation: otter-dash 24s ease-in-out infinite;
-}
-
-/* THE DROP: the payout takeover pops in, and a one-shot confetti burst rains
-   coral + gold from the coin. The gold amount itself never animates - the
-   number is real and stays still (honest-core). */
-@keyframes payout-pop {
-  0% {
-    transform: scale(0.92) translateY(10px);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1) translateY(0);
-    opacity: 1;
-  }
-}
-
-.animate-payout-pop {
-  animation: payout-pop 340ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
-}
-
-@keyframes confetti-fall {
-  0% {
-    transform: translate(-50%, -50%) rotate(0deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)))
-      rotate(var(--rot));
-    opacity: 0;
-  }
-}
-
-.confetti-piece {
-  position: absolute;
-  border-radius: 2px;
-  animation: confetti-fall 1100ms cubic-bezier(0.15, 0.6, 0.4, 1) forwards;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .ghm-stamp,
-  .animate-stamp-in,
-  .animate-rise-in,
-  .ghm-rise-in,
-  .otter-float,
-  .otter-dash,
-  .animate-payout-pop,
-  .confetti-piece {
-    animation: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

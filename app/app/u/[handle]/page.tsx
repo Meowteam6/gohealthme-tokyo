@@ -12,6 +12,9 @@ import { errorMessage, newCorrelationId } from "@/lib/server/http";
 import { getSocialStats } from "@/lib/server/social-stats";
 import { NOINDEX } from "@/lib/site";
 import { checkHandle } from "@/lib/social";
+import { Card, buttonClasses } from "@/components/ui";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
+import { Notice, PAGE_COLUMN, PerchedHeader } from "@/components/night/kit";
 
 // Live on-chain stats and a Supabase lookup on every view, so never prerender.
 export const dynamic = "force-dynamic";
@@ -49,41 +52,35 @@ export async function generateMetadata({
  *  farmed into an endless set of 200 pages. */
 function NotAHandle({ handle }: { handle: string }) {
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 py-12 text-center">
-      <h1 className="max-w-full break-words text-2xl font-bold tracking-tight">
-        @{handle}
-      </h1>
-      <p className="text-sm text-muted">
-        That is not a player name anyone can hold here.
-      </p>
-      <Link
-        href="/feed"
-        className="inline-flex min-h-11 items-center rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
-      >
-        See who got paid
-      </Link>
-    </div>
+    <PerchedHeader
+      className={PAGE_COLUMN}
+      title={`@${handle}`}
+      lead="That is not a player name anyone can hold here."
+      pose="thinking"
+    >
+      <Card>
+        <SpotterCaption line="Nobody can go by that name here." />
+        <Link href="/feed" className={`mt-4 ${buttonClasses({ size: "sm" })}`}>
+          See who got paid
+        </Link>
+      </Card>
+    </PerchedHeader>
   );
 }
 
 /** The profile store did not answer. Not a 404: the handle may well exist. */
 function LookupFailed({ handle, reference }: { handle: string; reference: string }) {
   return (
-    <main className="min-h-screen bg-background px-4 py-16 text-foreground">
-      <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 text-center">
-        <h1 className="text-2xl font-bold tracking-tight">@{handle}</h1>
-        <p role="alert" className="text-sm text-muted">
-          This profile could not be loaded right now. That is a problem on our
-          side, not a missing page. Reference {reference}.
-        </p>
-        <Link
-          href={`/u/${handle}`}
-          className="rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
-        >
-          Try again
+    <PerchedHeader className={PAGE_COLUMN} title={`@${handle}`} pose="thinking">
+      <Card>
+        <Notice tone="error" title="This profile could not be loaded right now">
+          That is a problem on our side, not a missing page. Reference {reference}.
+        </Notice>
+        <Link href={`/u/${handle}`} className={`mt-4 ${buttonClasses({ size: "sm" })}`}>
+          Load it again
         </Link>
-      </div>
-    </main>
+      </Card>
+    </PerchedHeader>
   );
 }
 

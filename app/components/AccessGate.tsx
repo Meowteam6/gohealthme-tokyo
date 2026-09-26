@@ -20,22 +20,31 @@
 
 import { useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { Skeleton } from "@/components/ui";
+import { Card, Skeleton } from "@/components/ui";
+import Perch from "@/components/spotter/Perch";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
 import CharacterCreation from "@/components/game/CharacterCreation";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useOnboarding } from "@/lib/game/onboarding-store";
 import { creationBlocks, hardGateClosed } from "@/lib/game/character";
-import { isPublicPath } from "@/lib/public-paths";
+import { rendersWithoutGate } from "@/lib/public-paths";
+import { useEmbeddedWallet } from "@/lib/wallet";
 
-function GateLoading() {
+export function GateLoading() {
   return (
-    <div className="mx-auto w-full max-w-xl space-y-4 py-2" aria-busy="true">
+    <div className="mx-auto w-full max-w-xl py-2" aria-busy="true">
       <p className="sr-only" aria-live="polite">
         Loading your player
       </p>
-      <Skeleton className="h-14 w-2/3" />
-      <Skeleton className="h-5 w-full" />
-      <Skeleton className="h-64 w-full" />
+      {/* The same shape as the character card it resolves into, so nothing
+          jumps when the player loads. */}
+      <Perch state="loading" width={[84, 120]} side="right" inset={[16, 28]} decorative>
+        <Card>
+          <Skeleton className="h-10 w-2/3" />
+          <SpotterCaption line="Looking up your player." className="mt-4" />
+          <Skeleton className="mt-4 h-40 w-full rounded-control" />
+        </Card>
+      </Perch>
     </div>
   );
 }
@@ -90,9 +99,13 @@ function CharacterGate({ children }: { children: ReactNode }) {
 
 export default function AccessGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { ready, authenticated } = useEmbeddedWallet();
   // Playwright-only switch (playwright.config.ts). Never set on a deployed
   // environment: it opens the closed beta (CLAUDE.md landmine 3).
   const gateDisabled = process.env.NEXT_PUBLIC_ACCESS_GATE_DISABLED === "1";
-  if (gateDisabled || isPublicPath(pathname)) return <>{children}</>;
+  // A run page is a read-only preview while signed out (lib/public-paths.ts).
+  if (gateDisabled || rendersWithoutGate(pathname, { ready, signedIn: authenticated })) {
+    return <>{children}</>;
+  }
   return <CharacterGate>{children}</CharacterGate>;
 }

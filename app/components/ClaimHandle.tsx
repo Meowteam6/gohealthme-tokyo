@@ -20,7 +20,8 @@ import {
   isUserRejection,
 } from "@/lib/client-auth";
 import { checkEmoji, checkHandle, HANDLE_MAX, EMOJI_MAX } from "@/lib/social";
-import { ErrorNote } from "@/components/ui";
+import { Button, ErrorNote, buttonClasses } from "@/components/ui";
+import { FIELD, FIELD_HINT, FIELD_LABEL, Notice } from "@/components/night/kit";
 import SignInGate from "@/components/SignInGate";
 
 type Status =
@@ -123,33 +124,28 @@ function ClaimHandleInner() {
 
   if (status.kind === "done") {
     return (
-      <div className="space-y-3 rounded-2xl border border-accent/40 bg-accent/20 p-5">
-        <p className="text-base font-semibold text-accent-deep">
-          Handle claimed as @{status.handle}
-        </p>
-        <p className="text-sm text-foreground/80">
-          Your public page is live. Share it - it shows your verified wins and
-          payouts, never the health category behind them.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href={`/u/${status.handle}`}
-            className="rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
-          >
-            View your page
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              setStatus({ kind: "idle" });
-              setHandle("");
-              setEmoji("");
-            }}
-            className="rounded-xl border border-edge px-5 py-3 text-sm font-medium text-muted hover:text-foreground"
-          >
-            Change it
-          </button>
-        </div>
+      <div role="status" className="[&>*+*]:mt-3">
+        <Notice tone="ok" title={<span className="break-all">Handle claimed as @{status.handle}</span>}>
+          Your public page is up. It shows the runs you hit and what they paid,
+          never the health goal behind them.
+        </Notice>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/u/${status.handle}`} className={buttonClasses({ size: "sm" })}>
+              View your page
+            </Link>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setStatus({ kind: "idle" });
+                setHandle("");
+                setEmoji("");
+              }}
+            >
+              Change it
+            </Button>
+          </div>
       </div>
     );
   }
@@ -157,11 +153,11 @@ function ClaimHandleInner() {
   const saving = status.kind === "saving";
 
   return (
-    <div className="space-y-4">
-      <label className="block text-sm font-medium">
-        Handle
-        <div className="mt-1 flex items-center rounded-xl border border-edge bg-surface-raised px-3">
-          <span className="text-muted">@</span>
+    <div className="[&>*+*]:mt-4">
+      <label className="block">
+        <span className={FIELD_LABEL}>Handle</span>
+        <div className="flex min-h-[52px] items-center rounded-control bg-surface-deep px-3 shadow-[inset_0_0_0_1px_var(--border-strong)] transition-shadow duration-[120ms] focus-within:shadow-[inset_0_0_0_1.5px_var(--foreground)]">
+          <span className="text-haze">@</span>
           <input
             type="text"
             value={handle}
@@ -171,31 +167,34 @@ function ClaimHandleInner() {
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            className="w-full bg-transparent px-1 py-3 text-base outline-none"
+            className="w-full min-w-0 bg-transparent px-1 py-3 text-base text-foreground outline-none placeholder:text-haze"
           />
         </div>
-        <span className="mt-1 block text-xs text-muted">
+        <span className={`${FIELD_HINT} block`}>
           Lowercase letters, numbers, and underscores. 3 to {HANDLE_MAX}{" "}
           characters.
         </span>
       </label>
 
-      <label className="block text-sm font-medium">
-        Avatar glyph (optional)
+      <label className="block">
+        <span className={FIELD_LABEL}>
+          Avatar letter <span className="font-normal text-haze">(optional)</span>
+        </span>
         <input
           type="text"
           value={emoji}
           maxLength={EMOJI_MAX}
           onChange={(e) => setEmoji(e.target.value)}
           placeholder="a single character"
-          className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
+          className={FIELD}
         />
       </label>
 
       <SignInGate note="Sign in to claim your handle.">
         {(openSignIn) => (
-          <button
+          <Button
             type="button"
+            block
             disabled={!ready || saving}
             onClick={() => {
               if (!authenticated) {
@@ -204,18 +203,17 @@ function ClaimHandleInner() {
               }
               void submit();
             }}
-            className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving
-              ? "Signing and saving..."
+              ? "Signing and saving"
               : authenticated
                 ? "Claim handle"
                 : "Sign in to claim"}
-          </button>
+          </Button>
         )}
       </SignInGate>
 
-      <p className="text-xs text-muted">
+      <p className={FIELD_HINT}>
         Claiming signs a message to prove the wallet is yours. Nothing is
         charged and no transaction is sent.
       </p>

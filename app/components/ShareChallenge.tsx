@@ -19,7 +19,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { challengeBackerUrl, challengeShareUrl } from "@/lib/challenges";
-import { TAP_TARGET } from "@/components/ui";
+import { buttonClasses } from "@/components/ui";
 
 type CopyState = "idle" | "copied" | "failed";
 
@@ -126,26 +126,26 @@ export default function ShareChallenge({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="[&>*+*]:mt-2">
       <div className="flex flex-wrap gap-2">
         {canNativeShare ? (
           <button
             type="button"
             onClick={nativeShare}
-            className={`flex-1 rounded-xl bg-accent-strong font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
+            className={`${buttonClasses({ size: "sm" })} flex-1`}
           >
             {shareLabel}
           </button>
         ) : null}
         <a
           href={smsHref(body)}
-          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent hover:bg-accent/10 ${TAP_TARGET}`}
+          className={`${buttonClasses({ variant: "secondary", size: "sm" })} flex-1 text-center`}
         >
           Text
         </a>
         <a
           href={mailtoHref(emailSubject, body)}
-          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent hover:bg-accent/10 ${TAP_TARGET}`}
+          className={`${buttonClasses({ variant: "secondary", size: "sm" })} flex-1 text-center`}
         >
           Email
         </a>
@@ -153,7 +153,7 @@ export default function ShareChallenge({
           <button
             type="button"
             onClick={runCopy}
-            className={`flex-1 rounded-xl border border-edge bg-surface-raised font-semibold text-muted hover:text-foreground ${TAP_TARGET}`}
+            className={`${buttonClasses({ variant: "secondary", size: "sm" })} flex-1`}
           >
             <span aria-live="polite">
               {copy === "copied"
@@ -166,8 +166,8 @@ export default function ShareChallenge({
         ) : null}
       </div>
       {copy === "failed" ? (
-        <p aria-live="polite" className="text-xs text-muted">
-          Copying is blocked in this browser - use Text or Email, or select the
+        <p aria-live="polite" className="m-0 text-[0.8125rem] leading-[1.45] text-haze">
+          Copying is blocked in this browser. Use Text or Email, or select the
           link by hand.
         </p>
       ) : null}

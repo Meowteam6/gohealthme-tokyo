@@ -1,7 +1,7 @@
 // POST /api/challenges - mint the shareable challenge link for a pool.
 //
 // A challenge IS a pool: the client has already created the pool on-chain
-// (challenger-funded, entryFee 0, split-pot) through the same useUsdcDeposit
+// (a commitment pool, bountyModel 2, on a wearable launch goal) through the same useUsdcDeposit
 // funnel the sponsor create flow uses. This route writes the one off-chain row
 // that makes the pool "aimed at a person" - an unguessable invite token plus
 // the challenger's framing text - and returns the token so the client can
@@ -20,6 +20,7 @@
 
 import { getAddress } from "viem";
 import { fetchPool } from "@/lib/contract";
+import { challengeGoalIssue } from "@/lib/challenges";
 import { poolCanPay } from "@/lib/pool-lifecycle";
 import { createChallenge } from "@/lib/server/challenges";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
@@ -92,10 +93,12 @@ export async function POST(request: Request) {
     // unreadable pool fails closed rather than minting a link to nothing.
     let creator: string;
     let canPay: boolean;
+    let goalIssue: string | null;
     try {
       const pool = await fetchPool(poolIdValue);
       creator = getAddress(pool.creator);
       canPay = poolCanPay(pool);
+      goalIssue = challengeGoalIssue(pool.goalSpec);
     } catch {
       return jsonError(404, "That pool could not be found on Base.");
     }
@@ -113,6 +116,14 @@ export async function POST(request: Request) {
         409,
         "This pool cannot pay out, so it cannot be sent as a challenge.",
       );
+    }
+
+    // Every challenge is a wearable run on a launch goal, so whoever accepts
+    // can be checked by their own wearable. A hand-built request for a
+    // document or photo goal, or a metric not every wearable measures, gets
+    // the same launch-goal sentence the form shows. No link, nothing charged.
+    if (goalIssue !== null) {
+      return jsonError(422, goalIssue);
     }
 
     const result = await createChallenge({

@@ -1,17 +1,19 @@
 "use client";
 
-// The Run: one run's scoreboard. Prize, stake and time left on the panel, the
-// night-by-night tally from the progress read scoped to this run's period and
-// metric, tonight's standing in SPOTTER's words, and who else is still in.
-// The waits are a run timer, never a "pending" label.
+// The Run (docs/DESIGN.md). Time left in the run as the one figure, the nights
+// as pebbles from the progress read scoped to this run's period and metric,
+// SPOTTER's line for where the run stands, the money in gold, and who else is
+// in. The run page reads the same pieces (useRunNights, usePlayers) into its
+// Your night and Who's in cards; the dashboard renders the whole board. No
+// otter here: a board can repeat down a page, and a viewport gets one pose.
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import EnsName from "@/components/ens/EnsName";
-import SpotterSays from "@/components/SpotterSays";
-import { Skeleton, TAP_TARGET } from "@/components/ui";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
+import { Button, Card, Skeleton, Stat, StatRow, TEXT_LINK } from "@/components/ui";
 import NightTally from "@/components/game/NightTally";
-import Scoreboard from "@/components/game/Scoreboard";
 import {
   displayGoalSpec,
   evidenceTypeOf,
@@ -30,35 +32,26 @@ import {
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import { useWalletAuth } from "@/lib/useWalletAuth";
-import { formatRunClock, nightTally, runClock, type RunStanding } from "@/lib/game/tally";
+import { nightTally, runClock, type NightTally as Tally, type RunStanding } from "@/lib/game/tally";
+import { runFigureOf } from "@/lib/game/run-scene";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
+import { commitmentReminder, hitRange, recordsMissesOf } from "@/lib/game/commitment-copy";
+import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
 
-const STANDING_LINE: Record<RunStanding, { say: string; pose: string }> = {
-  "on-target": {
-    say: "That is enough nights. Have me check it and the verdict is mine to make.",
-    pose: "flex",
-  },
-  alive: {
-    say: "Still alive. Tonight counts. Wear the thing.",
-    pose: "cheer",
-  },
-  out: {
-    say: "Not enough nights left to make it. I am not going to pretend otherwise.",
-    pose: "facepalm",
-  },
-  over: {
-    say: "Time is up. The verdict is all that is left.",
-    pose: "detective",
-  },
+export const STANDING_LINE: Record<RunStanding, string> = {
+  "on-target": "That is enough nights. Have me check it and the verdict is mine to make.",
+  alive: "Still alive. Tonight counts. Wear the thing.",
+  out: "Not enough nights left to make it. I am not going to pretend otherwise.",
+  over: "Time is up. The verdict is all that is left.",
 };
 
-interface Player {
+export interface Player {
   address: string;
   hit: boolean;
 }
 
-/** Who else is in the run, and who already banked the goal, from the chain. */
-function usePlayers(poolId: bigint) {
+/** Who is in the run, and who already banked the goal, from the chain. */
+export function usePlayers(poolId: bigint) {
   return useQuery({
     queryKey: ["run-players", poolId.toString()],
     queryFn: async (): Promise<Player[]> => {
@@ -73,19 +66,21 @@ function usePlayers(poolId: bigint) {
   });
 }
 
-export default function RunBoard({
+/**
+ * The nights for one player on one run, in whichever state the wearable read
+ * is in. Every branch says what is true and what, if anything, the player can
+ * do. `promptForData` lets the dashboard ask for the one signature; the run
+ * page never opens a prompt on load and shows a button instead.
+ */
+export function useRunNights({
   pool,
   address,
   promptForData,
-  showLink = false,
 }: {
   pool: PoolInfo;
   address: `0x${string}`;
-  /** The dashboard asks for a signature to read your own data; the run page
-   *  does not open a prompt on load. */
   promptForData: boolean;
-  showLink?: boolean;
-}) {
+}): { nights: ReactNode; tally: Tally | null; line: string | undefined } {
   const requestAuth = useWalletAuth();
   const now = useNowSeconds();
   const wearable = evidenceTypeOf(pool.goalSpec) === "wearable";
@@ -106,7 +101,6 @@ export default function RunBoard({
     enabled: wearable,
     retry: false,
   });
-  const players = usePlayers(pool.id);
 
   const state = progressQuery.data;
   const banked = state?.kind === "ok" ? state.progress.streakDays : null;
@@ -120,142 +114,209 @@ export default function RunBoard({
           periodEnd: pool.periodEnd,
           nowSec: now,
         });
-  const clock = now === null ? null : runClock(pool.periodStart, pool.periodEnd, now);
+
+  const quiet = "m-0 text-[0.9375rem] leading-[1.45] text-muted";
+  let nights: ReactNode;
+  if (!wearable) {
+    nights = (
+      <p className={quiet}>
+        This run is proven with a document, not a wearable, so there is no
+        nightly tally. Hand SPOTTER the proof on the run page.
+      </p>
+    );
+  } else if (progressQuery.isLoading) {
+    nights = (
+      <div className="grid gap-2" aria-busy="true">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-5 w-48" />
+      </div>
+    );
+  } else if (providerDownReason(state) !== null) {
+    nights = (
+      <p className={quiet}>
+        The wearable service is not answering me right now, so I cannot count
+        your nights this minute. Nights you already slept still count once it
+        is back.
+      </p>
+    );
+  } else if (providerAuthReason(state) !== null) {
+    nights = (
+      <div className="grid justify-items-start gap-3">
+        <p className={quiet}>
+          Your nights are private, so I need one signature to count them. Free,
+          no transaction.
+        </p>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            void requestAuth({ refresh: true }).then(() => progressQuery.refetch());
+          }}
+        >
+          Show my nights
+        </Button>
+      </div>
+    );
+  } else if (providerMetricUnavailable(state)) {
+    nights = (
+      <p className="m-0 text-[0.9375rem] font-semibold leading-[1.45] text-foreground">
+        Your wearable syncs, and it does not report what this run is scored on.
+        That is the hardware. Your result settles on what the run can read.
+      </p>
+    );
+  } else if (providerAwaitingFirstSync(state)) {
+    nights = (
+      <p className={quiet}>
+        Your wearable is paired and has not sent a night yet. The first sync
+        usually lands within minutes. Nothing is counted against you while you
+        wait.
+      </p>
+    );
+  } else if (tally !== null) {
+    nights = <NightTally tally={tally} />;
+  } else {
+    nights = <p className={quiet}>No nights counted yet.</p>;
+  }
+
+  return { nights, tally, line: tally !== null ? STANDING_LINE[tally.standing] : undefined };
+}
+
+export default function RunBoard({
+  pool,
+  address,
+  promptForData,
+  showLink = false,
+  showTitle = true,
+}: {
+  pool: PoolInfo;
+  address: `0x${string}`;
+  /** The dashboard asks for a signature to read your own data; the run page
+   *  does not open a prompt on load. */
+  promptForData: boolean;
+  showLink?: boolean;
+  /** Off where the page's own heading already names the run. */
+  showTitle?: boolean;
+}) {
+  const now = useNowSeconds();
+  const { nights, line } = useRunNights({ pool, address, promptForData });
+  const players = usePlayers(pool.id);
   const selfStaked = pool.bountyModel === 2;
+  const feeBps = useCommitmentFee(selfStaked).bps;
+
+  const clock = now === null ? null : runClock(pool.periodStart, pool.periodEnd, now);
+  const figure = runFigureOf(clock);
 
   const playerList = players.data ?? [];
   const hitCount = playerList.filter((p) => p.hit).length;
+  // What a hit pays today, from lib/commitment.ts: every other player hitting
+  // at the low end, only you at the high end. Before settle only, and only
+  // with the player count and the fee both read.
+  const recordsMisses = recordsMissesOf(pool);
+  const ifYouHit =
+    selfStaked && !pool.settled && !pool.cancelled && players.data !== undefined
+      ? hitRange(
+          { entryFee: pool.entryFee, players: playerList.length, balance: pool.balance, feeBps, recordsMisses },
+          false,
+        )
+      : null;
+  const goal = displayGoalSpec(pool.goalSpec);
 
   return (
-    <article className="space-y-4" aria-label={`Run: ${displayGoalSpec(pool.goalSpec)}`}>
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <h2 className="font-display text-3xl font-extrabold leading-tight text-balance sm:text-4xl">
-          {displayGoalSpec(pool.goalSpec)}
-        </h2>
-        {showLink ? (
-          <Link
-            href={`/pools/${pool.id.toString()}`}
-            className={`-mr-4 font-semibold text-accent underline underline-offset-2 ${TAP_TARGET}`}
-          >
-            Open this run
-          </Link>
-        ) : null}
+    <Card as="article" aria-label={`Run: ${goal}`}>
+      {showTitle || showLink ? (
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3">
+          {showTitle ? (
+            <h2 className="m-0 min-w-0 break-words text-[1.1875rem] font-semibold leading-snug text-balance">
+              {goal}
+            </h2>
+          ) : null}
+          {showLink ? (
+            <Link href={`/pools/${pool.id.toString()}`} className={TEXT_LINK}>
+              Open this run
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+
+      <p className="num m-0 text-[2.75rem] font-bold leading-[0.95] tracking-[-0.03em] min-[900px]:text-[3.5rem]">
+        {figure.figure}
+      </p>
+      <p className="m-0 mt-1 text-sm text-haze">{figure.caption}</p>
+
+      <div className="mt-4">{nights}</div>
+      {line !== undefined ? <SpotterCaption line={line} className="mt-4 max-w-md" /> : null}
+
+      <div className="mt-4 border-t border-edge pt-3.5">
+        <StatRow>
+          <Stat label={selfStaked ? "Your stake" : "Entry"} value={formatUsdc(pool.entryFee)} unit="USDC" tone="money" />
+          <Stat label="In the pot" value={formatUsdc(pool.balance)} unit="USDC" tone="money" />
+          {ifYouHit !== null ? (
+            <Stat
+              label="If you hit"
+              tone="money"
+              value={
+                ifYouHit.low === ifYouHit.high
+                  ? formatUsdc(ifYouHit.low)
+                  : `${formatUsdc(ifYouHit.low)} to ${formatUsdc(ifYouHit.high)}`
+              }
+            />
+          ) : (
+            <Stat label="Players in" value={players.data !== undefined ? playerList.length : "--"} />
+          )}
+        </StatRow>
       </div>
+      {selfStaked && !pool.settled && !pool.cancelled ? (
+        <p className="m-0 mt-3 text-sm leading-[1.45] text-muted">
+          {commitmentReminder({
+            recordable: recordsMisses,
+            players: players.data !== undefined ? playerList.length : null,
+          })}
+        </p>
+      ) : null}
 
-      <Scoreboard
-        caption="Run scoreboard"
-        cells={[
-          { label: "Prize pool", value: formatUsdc(pool.balance), tone: "money", unit: "test USDC" },
-          {
-            label: selfStaked ? "Your stake" : "Entry",
-            value: formatUsdc(pool.entryFee),
-            tone: "money",
-            unit: "test USDC",
-          },
-          {
-            label: "Time left",
-            value: clock === null ? "--" : formatRunClock(clock),
-            unit: clock?.ended === true ? "verdict next" : "on the clock",
-          },
-        ]}
-      />
-
-      <div className="rounded-xl border-2 border-foreground/15 bg-surface p-4 sm:p-5">
-        {!wearable ? (
-          <p className="text-sm text-foreground/80">
-            This run is proven with a document, not a wearable, so there is no
-            nightly tally. Hand SPOTTER the proof on the run page.
-          </p>
-        ) : progressQuery.isLoading ? (
-          <div className="space-y-2" aria-busy="true">
-            <Skeleton className="h-7 w-48" />
-            <Skeleton className="h-10 w-72" />
-          </div>
-        ) : providerDownReason(state) !== null ? (
-          <p className="text-sm text-foreground/80">
-            The wearable service is not answering me right now, so I cannot
-            count your nights this minute. Nights you already slept still count
-            once it is back.
-          </p>
-        ) : providerAuthReason(state) !== null ? (
-          <div className="space-y-2">
-            <p className="text-sm text-foreground/80">
-              Your nights are private, so I need one signature to count them.
-              Free, no transaction.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                void requestAuth({ refresh: true }).then(() => progressQuery.refetch());
-              }}
-              className={`rounded-lg bg-accent font-semibold text-white hover:bg-accent-strong ${TAP_TARGET}`}
-            >
-              Show my nights
+      <section aria-label="Who is in" className="mt-4 border-t border-edge pt-3.5">
+        <h3 className="m-0 text-base font-semibold">Who&apos;s in</h3>
+        {players.isLoading ? (
+          <Skeleton className="mt-3 h-6 w-40" />
+        ) : players.isError ? (
+          <div className="mt-1 flex flex-wrap items-center gap-x-3">
+            <p className="m-0 text-sm text-muted">I could not read the players just now.</p>
+            <button type="button" onClick={() => void players.refetch()} className={TEXT_LINK}>
+              Read them again
             </button>
           </div>
-        ) : providerMetricUnavailable(state) ? (
-          <p className="text-sm text-warning">
-            Your wearable syncs, and it does not report what this run is scored
-            on. That is the hardware. Your result settles on what the run can
-            read.
-          </p>
-        ) : providerAwaitingFirstSync(state) ? (
-          <p className="text-sm text-foreground/80">
-            Your wearable is paired and has not sent a night yet. The first sync
-            usually lands within minutes. Nothing is counted against you while
-            you wait.
-          </p>
-        ) : tally !== null ? (
-          <div className="space-y-4">
-            <NightTally tally={tally} />
-            <SpotterSays
-              surface="dashboard-header"
-              state="streak-nudge"
-              pose={STANDING_LINE[tally.standing].pose}
-              say={STANDING_LINE[tally.standing].say}
-            />
-          </div>
-        ) : (
-          <p className="text-sm text-muted">No nights counted yet.</p>
-        )}
-      </div>
-
-      <div className="rounded-xl border-2 border-foreground/15 bg-surface p-4 sm:p-5">
-        <h3 className="font-display text-2xl font-extrabold">Who is in</h3>
-        {players.isLoading ? (
-          <Skeleton className="mt-2 h-6 w-40" />
-        ) : players.isError ? (
-          <p className="mt-1 text-sm text-muted">I could not read the players just now.</p>
         ) : (
           <>
-            <p className="mt-1 text-sm text-foreground/80">
+            <p className="num m-0 mt-0.5 text-sm text-haze">
               {playerList.length} in the run, {hitCount} already banked the goal.
             </p>
-            <ul className="mt-3 flex flex-wrap gap-2">
-              {playerList.slice(0, 8).map((p) => (
-                <li
-                  key={p.address}
-                  className={`inline-flex min-h-9 items-center gap-2 rounded-md border-2 px-2 text-sm ${
-                    p.hit ? "border-accent text-accent" : "border-edge"
-                  } ${p.address.toLowerCase() === address.toLowerCase() ? "font-semibold" : ""}`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`size-2 rounded-full ${p.hit ? "bg-accent" : "bg-foreground/40"}`}
-                  />
-                  <EnsName address={p.address} />
-                  <span className="sr-only">{p.hit ? "banked the goal" : "still going"}</span>
-                </li>
-              ))}
+            <ul className="m-0 mt-2 list-none p-0">
+              {playerList.slice(0, 8).map((p) => {
+                const you = p.address.toLowerCase() === address.toLowerCase();
+                return (
+                  <li
+                    key={p.address}
+                    className="flex min-h-11 items-center justify-between gap-3 border-t border-edge first:border-t-0"
+                  >
+                    <span className={`min-w-0 truncate text-[0.9375rem] ${you ? "font-semibold" : ""}`}>
+                      <EnsName address={p.address} />
+                      {you ? <span className="text-haze"> (you)</span> : null}
+                    </span>
+                    <span className={`shrink-0 text-sm ${p.hit ? "font-semibold text-moonlight" : "text-haze"}`}>
+                      {p.hit ? "Hit" : "Still going"}
+                    </span>
+                  </li>
+                );
+              })}
               {playerList.length > 8 ? (
-                <li className="inline-flex min-h-9 items-center text-sm text-muted">
+                <li className="flex min-h-11 items-center border-t border-edge text-sm text-haze">
                   and {playerList.length - 8} more
                 </li>
               ) : null}
             </ul>
           </>
         )}
-      </div>
-    </article>
+      </section>
+    </Card>
   );
 }
