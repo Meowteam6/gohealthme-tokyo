@@ -337,9 +337,11 @@ describe("lockCopy", () => {
     expect(copy.title).toBe("Your wearable has not synced yet");
     // Nikki, 2026-09-27: "Check again" opened a wallet signature with no
     // explanation and read as a transaction. The detail says what to do and
-    // the button says what the tap is.
+    // the button says what the tap is. A player Dynamic signed in checks on
+    // their session token with no prompt at all, and the copy cannot know
+    // which path this tap takes, so it says "may" and stays true for both.
     expect(copy.detail).toBe(
-      "Open the Junction app so it syncs, then come back. Checking asks your wallet for a signature, not a payment: nothing moves.",
+      "Open the Junction app so it syncs, then come back. Checking may ask your wallet to sign; it never sends a payment.",
     );
     expect(copy.fix).toEqual({ kind: "check-sensor", label: "Check my wearable" });
     expect(copy.tone).toBe("wait");
