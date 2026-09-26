@@ -1,41 +1,32 @@
-// The payout: the one place the product puts on a show (docs/DESIGN.md,
-// "Celebration only at the verdict"). SPOTTER in the payday pose on a gold
-// wash, a coin flips out of the pouch once, the stamp lands, then the exact
-// money sentence. Fires only on a real settled payout: paidUsd comes from the
-// ledger's settle entry (the AchieverPaid delta), never from a transaction
-// merely succeeding.
+// The payout receipt (docs/DESIGN.md, "Verdict card", paid): a paper receipt
+// on the night field with SPOTTER standing on its top edge, the exact amount,
+// the split, when it settled and the public transaction. It fires only on a
+// real settled payout: paidUsd comes from the ledger's settle entry (the
+// AchieverPaid figure), never from a transaction merely succeeding.
 //
 // Honest about where the money is: AchieverPaid CREDITS owed[] on a
-// pull-payment contract, it does not move USDC to the wallet. So this says the
-// win is settled and credited, and points at the claim (ClaimPayout) that
-// pulls it in; it never says the money is already in the wallet.
+// pull-payment contract, it does not move USDC to the wallet. So the receipt
+// says paid and credited, and the claim (ClaimPayout) pulls it in; it never
+// says the money is already in the wallet.
 //
-// A self-reported payout gets the same show, because money moved, but never
-// reads as confirmed: its stamp is PAID and its chip says self-reported.
-//
-// Motion: the coin flip is 1.2s, one shot, and only when the player allows
-// motion. With reduced motion the coin rests beside SPOTTER and the screen
-// reads the same. The amount itself never animates.
+// A self-reported payout gets the same receipt, because money moved, but never
+// reads as verified: its chip says self-reported. The amount never animates.
 
-import { ArcTxLink, Money, Stamp } from "@/components/ui";
-import Spotter from "@/components/spotter/Spotter";
-import { paidBreakdown } from "@/lib/game/commitment-copy";
+import { SpotterFigure } from "@/components/spotter/Spotter";
+import { Glyph } from "@/components/run/glyphs";
+import { baseTxUrl } from "@/lib/chains";
+import { paidSplitOf } from "@/lib/game/run-page";
 
-const COIN_FLIP_CSS = `
-@keyframes ghm-coin-flip {
-  0% { transform: translateY(48px) rotateY(0deg) scale(0.6); opacity: 0; }
-  25% { opacity: 1; }
-  70% { transform: translateY(-36px) rotateY(540deg) scale(1); }
-  100% { transform: translateY(0) rotateY(720deg) scale(1); opacity: 1; }
+/** "Sun 27 Sep, 08:41", in the viewer's zone. */
+function paidAtLabel(iso: string): string | null {
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return null;
+  const d = new Date(ms);
+  const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
+  const month = d.toLocaleDateString("en-US", { month: "short" });
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return `${weekday} ${d.getDate()} ${month}, ${time}`;
 }
-@media (prefers-reduced-motion: no-preference) {
-  .ghm-coin-flip { animation: ghm-coin-flip 1200ms cubic-bezier(0.2, 0.8, 0.3, 1) both; }
-}
-`;
-
-/** Gold wash behind the paid verdict. Gold here means money moved. */
-const GOLD_WASH =
-  "radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--gold) 38%, var(--surface)) 0%, var(--surface) 64%)";
 
 export default function PayoutMoment({
   paidUsd,
@@ -43,100 +34,114 @@ export default function PayoutMoment({
   selfReported = false,
   selfStaked = false,
   entryFee,
+  payee = null,
+  paidAt = null,
+  spotter = true,
+  tuck = false,
   headline,
   headlineId,
-  bleed = false,
 }: {
   paidUsd: string;
   txHash: string | null;
-  /** The low-trust tier. When true the moment NEVER claims "verified". */
+  /** The low-trust tier. When true the receipt NEVER claims "verified". */
   selfReported?: boolean;
   /**
    * Self-staked commitment pool (bountyModel 2). Independent of selfReported:
    * this is the economic model, not the proof tier. When true, the payout is
-   * the achiever's own stake back plus a share of the stakes left in the pot.
+   * the achiever's own stake back plus a share of what was left in the pot.
    */
   selfStaked?: boolean;
-  /** The run's stake, so a commitment payout reads as stake back plus the
-   *  rest (lib/game/commitment-copy.ts paidBreakdown). */
+  /** The run's stake, so a commitment payout splits into stake back plus the
+   *  rest, the way commitmentOutcome splits it. */
   entryFee?: bigint;
-  /** The Verdict passes its headline so the stage reads hero, stamp,
-   *  headline, money, in that order. Standalone, SPOTTER's own line leads. */
+  /** The ENS name or handle the payout went to. */
+  payee?: string | null;
+  /** When the settle landed (the ledger entry's time), ISO-8601. */
+  paidAt?: string | null;
+  /** SPOTTER on the receipt's edge. Off where another pose owns the view. */
+  spotter?: boolean;
+  /** SPOTTER stands up into the header space above (the verdict card keeps
+   *  its headline clear of him), instead of the receipt reserving his height. */
+  tuck?: boolean;
+  /** Standalone use (the proof panels) puts its own headline above. */
   headline?: string;
   headlineId?: string;
-  /** Inside the Verdict card: the wash runs edge to edge of its padding. */
+  /** Retired: the receipt no longer bleeds to the card's edge. */
   bleed?: boolean;
 }) {
+  const split = selfStaked && entryFee !== undefined ? paidSplitOf(paidUsd, entryFee) : null;
+  const when = paidAt !== null ? paidAtLabel(paidAt) : null;
   return (
-    <div
-      className={`overflow-hidden text-center ${
-        bleed
-          ? "-mx-4 px-4 pb-2 pt-4 sm:-mx-6 sm:px-6"
-          : "rounded-3xl border border-edge px-4 pb-5 pt-4 sm:px-6"
-      }`}
-      style={{ background: GOLD_WASH }}
-    >
-      <style href="ghm-coin-flip" precedence="default">
-        {COIN_FLIP_CSS}
-      </style>
-      <div className="relative mx-auto w-fit [perspective:600px]">
-        <Spotter
-          state="verdict-paid"
-          alt="SPOTTER giving a thumbs up"
-          line={
-            selfReported
-              ? "Paid on your word. Still not stamped."
-              : "That happened. I saw it, I paid it."
-          }
-        />
-        <span
-          aria-hidden="true"
-          className="ghm-coin-flip absolute bottom-[22%] right-0 grid h-14 w-14 place-items-center rounded-full bg-ink text-lg font-bold text-gold shadow-[0_0_0_3px_var(--gold)] sm:h-16 sm:w-16"
-        >
-          +
-        </span>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
-        <Stamp tone="gold">{selfReported ? "Paid" : "Confirmed"}</Stamp>
-        {selfReported ? (
-          <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-bold text-warning">
-            Self-reported, not verified
-          </span>
-        ) : null}
-      </div>
-
+    <div>
       {headline !== undefined ? (
         <h2
           id={headlineId}
-          className="ghm-stamp mt-4 font-display text-[clamp(2.25rem,10vw,3.5rem)] font-extrabold leading-display tracking-display text-balance"
+          className={`type-heading m-0 text-[1.875rem] ${spotter ? "max-w-[calc(100%-100px)]" : ""}`}
         >
           {headline}
         </h2>
       ) : null}
-
-      <p className="mt-3">
-        <span className="sr-only">Payout: </span>
-        <span className="[&>span]:text-[clamp(2.5rem,13vw,4rem)]">
-          <Money usd={paidUsd} sign="+" size="xl" />
-        </span>
-      </p>
-      <p className="mx-auto mt-2 max-w-sm text-base text-foreground text-pretty">
-        {selfStaked && entryFee !== undefined
-          ? `${paidBreakdown(paidUsd, entryFee)} Credited to you on chain.`
-          : selfStaked
-            ? `${paidUsd} USDC is credited to you on chain: your stake back, plus a share of what the players who missed left in the pot.`
-            : `${paidUsd} USDC is credited to you on chain.`}{" "}
-        Claim it to pull it into your wallet.
-      </p>
-      {txHash !== null ? (
-        <p className="mt-3">
-          <ArcTxLink txHash={txHash} label="See the receipt" />
-          <span className="mt-0.5 block text-xs text-muted">
-            Public on Base Sepolia. Anyone can check it.
+      <article
+        aria-label="Payout receipt"
+        className={`relative rounded-[18px] bg-[linear-gradient(180deg,var(--paper-top),var(--paper))] px-[18px] pb-3 pt-4 text-ink shadow-paper ${
+          spotter && !tuck && headline === undefined ? "mt-[100px]" : "mt-5"
+        }`}
+      >
+        {spotter ? (
+          <span className="pointer-events-none absolute bottom-[calc(100%-4px)] right-[18px]">
+            <SpotterFigure pose="thumbsup" width={[84, 84]} alt="SPOTTER giving a thumbs up" />
           </span>
+        ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex h-[26px] items-center rounded-tag bg-ink px-2.5 text-[0.8125rem] font-semibold text-paper">
+              Paid
+            </span>
+            {selfReported ? (
+              <span className="inline-flex h-[26px] items-center rounded-tag px-2 text-[0.8125rem] font-semibold text-ink-2 shadow-[inset_0_0_0_1px_var(--ink-2)]">
+                Self-reported, not verified
+              </span>
+            ) : null}
+          </span>
+          {payee !== null ? (
+            <span className="min-w-0 truncate text-sm font-medium text-ink-2">{payee}</span>
+          ) : null}
+        </div>
+        <p className="num m-0 mt-3 text-[2.5rem] font-bold leading-none tracking-[-0.02em]">
+          <span className="sr-only">Payout: </span>
+          {paidUsd}
+          <small className="ml-1.5 text-[0.9375rem] font-semibold tracking-normal text-ink-2">USDC</small>
         </p>
-      ) : null}
+        {split !== null ? (
+          <div className="num mt-3 grid gap-1 border-t border-dashed border-ink/20 pt-2.5 text-[0.9375rem]">
+            <div className="flex justify-between gap-3">
+              <span className="text-ink-2">Your stake back</span>
+              <span className="font-semibold">{split.stake}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-ink-2">Missed stakes and pot</span>
+              <span className="font-semibold">{split.rest}</span>
+            </div>
+          </div>
+        ) : null}
+        <div className="num mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[0.8125rem] text-ink-2">
+          <span>{when ?? "Settled on Base Sepolia"}</span>
+          {txHash !== null ? (
+            <a
+              href={baseTxUrl(txHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-10 items-center gap-1.5 font-semibold text-ink underline decoration-ink/30 underline-offset-[3px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              View on Basescan
+              <Glyph name="out" />
+            </a>
+          ) : null}
+        </div>
+      </article>
+      <p className="m-0 mt-2.5 text-[0.8125rem] leading-[1.45] text-haze">
+        The settle credited this to you on chain. Claiming pulls it into your wallet.
+      </p>
     </div>
   );
 }

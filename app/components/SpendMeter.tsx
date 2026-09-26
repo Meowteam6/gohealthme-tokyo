@@ -21,14 +21,14 @@ export default function SpendMeter({
   return (
     <div>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-bold text-foreground">SPOTTER&apos;s spend</p>
+        <p className="m-0 text-sm font-semibold text-foreground">SPOTTER&apos;s spend</p>
         {atCap ? (
-          <span className="text-sm font-bold text-warning">At the cap</span>
+          <span className="text-sm font-semibold text-foreground">At the cap</span>
         ) : null}
       </div>
 
       <div
-        className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface-raised"
+        className="mt-2 h-2 w-full overflow-hidden rounded-full bg-fill-quiet-hover"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
@@ -40,14 +40,14 @@ export default function SpendMeter({
             planning
               ? "w-1/3 animate-pulse bg-gold/40 motion-reduce:animate-none"
               : atCap
-                ? "bg-warning transition-[width] duration-200 motion-reduce:transition-none"
+                ? "bg-gold transition-[width] duration-200 motion-reduce:transition-none"
                 : "bg-gold transition-[width] duration-200 motion-reduce:transition-none"
           }`}
           style={planning ? undefined : { width: `${pct}%` }}
         />
       </div>
 
-      <p className="mt-2 text-sm">
+      <p className="num m-0 mt-2 text-sm">
         {planning ? (
           <span className="text-muted">
             SPOTTER is pricing the buys it needs.

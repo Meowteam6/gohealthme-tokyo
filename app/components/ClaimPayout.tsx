@@ -13,9 +13,8 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Address } from "viem";
-import { ArcTxLink, Button, Card, ErrorNote, Money, Stamp } from "@/components/ui";
+import { ArcTxLink, Button, Card, ErrorNote, Fine, Money, Stamp } from "@/components/ui";
 import GaslessBadge from "@/components/GaslessBadge";
-import Spotter from "@/components/spotter/Spotter";
 import { formatUsdc, readOwed } from "@/lib/contract";
 import { useWithdraw } from "@/lib/useWithdraw";
 
@@ -57,36 +56,22 @@ export default function ClaimPayout({
   // one place the copy may say so. Driven by the hook's asserted amount, never a
   // guess.
   if (status.kind === "done") {
-    return (
-      <Card className={`border-gold/40 ${className}`}>
-        <div className="flex items-center gap-4 sm:gap-5">
-          {quiet ? null : (
-            <Spotter pose="thumbsup" size="xs" alt="SPOTTER giving a thumbs up" />
-          )}
-          <div className="min-w-0">
-            <Stamp tone="gold">Claimed</Stamp>
-            <p className="mt-2">
-              <Money
-                usd={formatUsdc(status.amount)}
-                sign="+"
-                size={quiet ? "lg" : "xl"}
-              />
-            </p>
-            <p className="mt-1 text-sm font-bold text-foreground">
-              It is in your wallet now.
-            </p>
-            {status.txHash !== null ? (
-              <p className="mt-2">
-                <ArcTxLink txHash={status.txHash} label="See the receipt" />
-                <span className="mt-0.5 block text-xs text-muted">
-                  Public on Base Sepolia. Anyone can check it.
-                </span>
-              </p>
-            ) : null}
+    const body = (
+      <div role="status">
+        <Stamp tone="accent">Claimed</Stamp>
+        <p className="m-0 mt-2">
+          <Money usd={formatUsdc(status.amount)} sign="+" size={quiet ? "lg" : "xl"} />
+        </p>
+        <p className="m-0 mt-1 text-[0.9375rem] font-semibold text-foreground">It is in your wallet now.</p>
+        {status.txHash !== null ? (
+          <div className="mt-1">
+            <ArcTxLink txHash={status.txHash} label="See the claim on Basescan" />
+            <Fine>Public on Base Sepolia. Anyone can check it.</Fine>
           </div>
-        </div>
-      </Card>
+        ) : null}
+      </div>
     );
+    return quiet ? <div className={className}>{body}</div> : <Card className={className}>{body}</Card>;
   }
 
   // A failed owed() read is not "nothing owed": a winner whose credit is on
@@ -110,14 +95,9 @@ export default function ClaimPayout({
   if (owed <= 0n) return null;
 
   const action = (
-    <div className="space-y-3">
-      <Button
-        type="button"
-        disabled={busy}
-        onClick={onClaim}
-        className="w-full sm:w-auto"
-      >
-        {busy ? "Claiming your USDC" : "Claim my USDC"}
+    <div className="grid gap-3">
+      <Button type="button" disabled={busy} onClick={onClaim} block>
+        {busy ? "Claiming your USDC" : `Claim ${formatUsdc(owed)} USDC`}
       </Button>
       <GaslessBadge status={gasless} />
       {status.kind === "error" ? (
@@ -126,18 +106,19 @@ export default function ClaimPayout({
           detail={status.message}
           raw={status.raw}
           onRetry={reset}
+          retryLabel="Try the claim again"
         />
       ) : null}
     </div>
   );
 
-  // Inside the paid Verdict the payout above is the screen's one big number,
-  // so the claim is a plain sentence and the button.
+  // Inside a Verdict the receipt above is the screen's one big number, so the
+  // claim is one sentence and the button.
   if (quiet) {
     return (
-      <div className={`space-y-3 text-center sm:text-left ${className}`}>
-        <p className="text-sm text-foreground">
-          <Money usd={formatUsdc(owed)} size="sm" /> is ready to claim. One tap
+      <div className={className}>
+        <p className="num m-0 mb-3 text-[0.9375rem] text-muted">
+          <Money usd={formatUsdc(owed)} size="sm" /> is credited to you on chain. One tap
           pulls it into your wallet.
         </p>
         {action}
@@ -146,21 +127,16 @@ export default function ClaimPayout({
   }
 
   return (
-    <Card className={`border-gold/40 ${className}`}>
-      <div className="flex items-start gap-4 sm:gap-5">
-        <Spotter pose="thumbsup" size="xs" alt="SPOTTER giving a thumbs up" />
-        <div className="min-w-0 flex-1">
-          <Stamp tone="gold">Ready to claim</Stamp>
-          <p className="mt-2">
-            <Money usd={formatUsdc(owed)} sign="+" size="xl" />
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            Settled and waiting. It is credited to you on chain, and one tap
-            pulls it into your wallet.
-          </p>
-          <div className="mt-4">{action}</div>
-        </div>
-      </div>
+    <Card as="section" aria-label="Ready to claim" className={className}>
+      <Stamp tone="accent">Ready to claim</Stamp>
+      <p className="m-0 mt-2">
+        <Money usd={formatUsdc(owed)} sign="+" size="xl" />
+      </p>
+      <p className="m-0 mt-1 text-[0.9375rem] text-muted">
+        Settled and waiting. It is credited to you on chain, and one tap pulls
+        it into your wallet.
+      </p>
+      <div className="mt-4">{action}</div>
     </Card>
   );
 }

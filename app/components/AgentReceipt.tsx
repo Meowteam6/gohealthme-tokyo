@@ -216,7 +216,7 @@ function SpendRow({ row }: { row: SpendReceiptRow }) {
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 break-words text-sm font-medium">
           {row.paidUsd !== null ? (
-            <span aria-hidden className="mr-2 font-mono text-accent-deep">
+            <span aria-hidden className="mr-2 font-mono text-moonlight">
               [x]
             </span>
           ) : (
@@ -226,7 +226,7 @@ function SpendRow({ row }: { row: SpendReceiptRow }) {
           )}
           {row.label}
           {!row.planned ? (
-            <span className="ml-2 text-xs font-bold text-warning">
+            <span className="ml-2 text-xs font-semibold text-foreground">
               Unplanned
             </span>
           ) : null}
@@ -265,7 +265,7 @@ function SpendRow({ row }: { row: SpendReceiptRow }) {
         </p>
       ) : null}
       {note !== null ? (
-        <p className="mt-1 break-words pl-7 text-sm text-foreground/80">
+        <p className="mt-1 break-words pl-7 text-sm text-muted">
           {note}
         </p>
       ) : null}
@@ -331,8 +331,8 @@ export default function AgentReceipt({
   ) as SettleLedgerEntry | undefined;
 
   return (
-    <div className="rounded-2xl border border-edge bg-surface-raised p-4">
-      <p className="font-display text-lg font-bold tracking-display">
+    <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
+      <p className="text-[1.0625rem] font-semibold">
         SPOTTER&apos;s receipt
       </p>
       <ol className="mt-3 space-y-3">
@@ -359,7 +359,7 @@ export default function AgentReceipt({
                     confidence={row.confidence}
                     selfReported={row.selfReported}
                   />
-                  <p className="mt-1 text-sm text-foreground/80">
+                  <p className="mt-1 text-sm text-muted">
                     {row.escalation ? "second opinion: " : ""}
                     {row.reason}
                   </p>
@@ -373,12 +373,12 @@ export default function AgentReceipt({
                   </span>{" "}
                   <span
                     className={
-                      row.decision === "pay" ? "text-accent-deep" : "text-warning"
+                      row.decision === "pay" ? "text-moonlight" : "text-dusk-ink"
                     }
                   >
                     {row.decision}
                   </span>
-                  <p className="mt-1 text-foreground/80">{row.note}</p>
+                  <p className="mt-1 text-muted">{row.note}</p>
                 </li>
               );
             case "record":
@@ -459,7 +459,7 @@ export default function AgentReceipt({
                     </span>
                   ) : null}
                   {row.note !== null ? (
-                    <p className="mt-1 text-foreground/80">{row.note}</p>
+                    <p className="mt-1 text-muted">{row.note}</p>
                   ) : null}
                   {row.nullifierStub !== null ? (
                     <p className="mt-1 text-xs text-muted">

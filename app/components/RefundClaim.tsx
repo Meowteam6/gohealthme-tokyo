@@ -35,37 +35,42 @@ export default function RefundClaim({
 
   if (status.kind === "done") {
     return (
-      <div role="status" className="mt-3 rounded-3xl border border-edge bg-surface p-4 text-sm">
-        <p className="font-bold text-foreground">
+      <div role="status" className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
+        <p className="num m-0 text-[0.9375rem] font-semibold text-foreground">
           <Money usd={formatUsdc(status.amount)} size="md" /> credited back to you.
         </p>
-        <p className="mt-1 text-muted">
-          It is waiting in your claimable balance. The Claim my USDC card pulls
-          it into your wallet.
+        <p className="m-0 mt-1 text-sm text-muted">
+          It is waiting in your claimable balance. The claim below pulls it into
+          your wallet.
         </p>
-        <p className="mt-2">
-          <ArcTxLink txHash={status.txHash} label="See the public receipt" />
-        </p>
+        <div className="mt-1">
+          <ArcTxLink txHash={status.txHash} label="See it on Basescan" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mt-3 rounded-3xl border border-edge bg-surface p-4 text-sm">
-      <p className="font-bold text-foreground">
-        This run was called off. Your{" "}
-        <Money usd={formatUsdc(entryFee)} size="sm" /> stake is yours to take
-        back.
+    <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
+      <p className="num m-0 text-[0.9375rem] font-semibold text-foreground">
+        This run was called off. Your <Money usd={formatUsdc(entryFee)} size="sm" /> stake is
+        yours to take back.
       </p>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button onClick={onClaim} disabled={busy}>
+      <div className="mt-3 grid gap-3">
+        <Button onClick={onClaim} disabled={busy} block>
           {busy ? "Crediting your stake back" : "Credit my stake back"}
         </Button>
         <GaslessBadge status={gasless} />
       </div>
       {status.kind === "error" ? (
         <div className="mt-3">
-          <ErrorNote title="Could not claim the refund" detail={status.message} raw={status.raw} onRetry={reset} />
+          <ErrorNote
+            title="Could not claim the refund"
+            detail={status.message}
+            raw={status.raw}
+            onRetry={reset}
+            retryLabel="Try the refund again"
+          />
         </div>
       ) : null}
     </div>
