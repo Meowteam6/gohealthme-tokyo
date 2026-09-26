@@ -94,15 +94,15 @@ export function challengeCreateBlock(
   if (verifier === "off") {
     return {
       kind: "paused",
-      title: "Dares are paused for now",
+      title: "Challenges are paused for now",
       detail:
-        "A dare is proven with an upload, and my document checker is paused on this build. I am not letting you put money on a goal I cannot check. Wearable runs still work, and nothing has been charged.",
+        "A challenge is proven with an upload, and my document checker is paused on this build. I am not letting you put money on a goal I cannot check. Wearable runs still work, and nothing has been charged.",
     };
   }
   if (payouts === "misconfigured") {
     return {
       kind: "paused",
-      title: "Dares are paused for now",
+      title: "Challenges are paused for now",
       detail:
         "Winners confirm with World ID before I pay, and that step is not set up here right now. I am not letting you fund a reward that could not pay out. Nothing has been charged.",
     };

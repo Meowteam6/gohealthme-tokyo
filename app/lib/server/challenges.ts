@@ -83,12 +83,12 @@ export function challengesContract(
  *  player cannot fix configuration, so the only honest things to say are that
  *  dares are off here and that nothing was charged. */
 export const CHALLENGES_UNAVAILABLE_MESSAGE =
-  "Dares are not live on this build yet. Nothing was charged.";
+  "Challenges are not live on this build yet. Nothing was charged.";
 
 /** The same refusal at the link write. That write can run AFTER a reward
  *  landed (a link-only retry), so it must never claim nothing was charged. */
 export const CHALLENGE_LINK_UNAVAILABLE_MESSAGE =
-  "Dare links are not available on this build right now.";
+  "Challenge links are not available on this build right now.";
 
 export type ChallengesHealth =
   | { ok: true; contract: string }

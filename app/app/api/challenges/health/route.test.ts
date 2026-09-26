@@ -5,7 +5,7 @@ let health: ChallengesHealth = { ok: true, contract: "0x" + "a".repeat(40) };
 
 vi.mock("@/lib/server/challenges", () => ({
   CHALLENGES_UNAVAILABLE_MESSAGE:
-    "Dares are not live on this build yet. Nothing was charged.",
+    "Challenges are not live on this build yet. Nothing was charged.",
   checkChallengesHealth: async () => health,
 }));
 
