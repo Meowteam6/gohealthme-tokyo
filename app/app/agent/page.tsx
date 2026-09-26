@@ -111,10 +111,10 @@ export default async function AgentPage() {
   return (
     <div className="space-y-8">
       <header className="space-y-2">
-        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="break-words font-display text-[1.75rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]">
           History
         </h1>
-        <p className="text-sm text-muted">
+        <p className="text-base text-muted">
           Every verdict SPOTTER reached on your runs, your World ID
           confirmations, and what it paid.
         </p>
@@ -122,18 +122,18 @@ export default async function AgentPage() {
 
       <AgentFeed />
 
-      <Card pop className="bg-dot-grid">
+      <Card>
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 flex-1 space-y-4">
-            <p className="font-display text-xs font-bold uppercase tracking-widest text-accent-deep">
-              SPOTTER, settlement agent
+            <p className="text-sm font-bold text-accent-deep">
+              SPOTTER, the settlement agent
             </p>
-            <h2 className="font-display text-2xl font-bold leading-tight sm:text-3xl">
+            <h2 className="break-words font-display text-[1.75rem] font-extrabold leading-display tracking-display">
               The otter runs the money.
             </h2>
             {settler.kind === "ok" ? (
               <div className="space-y-2">
-                <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
+                <p className="text-sm font-bold text-muted">
                   SPOTTER&apos;s wallet, the one that signs every settle
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
@@ -144,36 +144,36 @@ export default async function AgentPage() {
                     href={baseAddressUrl(settler.address)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex min-h-11 items-center text-sm text-accent-deep underline"
+                    className="inline-flex min-h-11 items-center text-sm font-bold text-accent-deep underline underline-offset-2"
                   >
                     View on Basescan
                   </a>
                 </div>
-                <p className="flex flex-wrap items-baseline gap-2 text-sm text-muted">
+                <p className="flex flex-wrap items-baseline gap-2 text-base text-muted">
                   Budget for buying verifications
                   <Money usd={toUsd2(settler.balanceUsd)} size="sm" />
                   <span>test USDC</span>
                 </p>
-                <p className="inline-flex items-center rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
+                <p className="inline-flex items-center rounded-full bg-secondary px-3 py-1 text-sm font-medium text-secondary-foreground">
                   Base Sepolia, test USDC, not real money
                 </p>
               </div>
             ) : settler.kind === "unreachable" ? (
               <p
                 role="status"
-                className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-foreground/85"
+                className="rounded-2xl border border-warning/40 bg-warning/10 p-3 text-base text-foreground"
               >
                 Could not reach SPOTTER&apos;s wallet right now, so its address
                 and budget are not shown. Refresh in a minute.
               </p>
             ) : (
-              <p className="text-sm leading-relaxed text-muted">
+              <p className="text-base leading-relaxed text-muted">
                 Automatic payouts are not switched on for this deployment yet.
                 Runs can still be joined; nobody gets paid until SPOTTER&apos;s
                 wallet is connected.
               </p>
             )}
-            <p className="text-sm leading-relaxed text-muted">
+            <p className="text-base leading-relaxed text-muted">
               When a run settles, SPOTTER releases each pool&apos;s USDC to the
               people who hit the goal. The reward is the pool&apos;s money, not
               this wallet&apos;s; SPOTTER covers the network fee.{" "}

@@ -19,7 +19,9 @@ import { COMING_LINE } from "@/lib/provider-capabilities";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import { isEconomicallyDeadConfig } from "@/lib/pool-lifecycle";
 import { resolveNewPoolId } from "@/lib/resolve-pool-id";
-import { ArcTxLink, ErrorNote } from "@/components/ui";
+import { ArcTxLink, Button, Chip, EmptyState, ErrorNote } from "@/components/ui";
+import { CommitmentRangeLine } from "@/components/CommitmentTerms";
+import Spotter from "@/components/spotter/Spotter";
 import GaslessBadge from "@/components/GaslessBadge";
 import SignInGate from "@/components/SignInGate";
 
@@ -32,6 +34,14 @@ const DURATION_OPTIONS: { label: string; days: number }[] = [
 ];
 
 const SECONDS_PER_DAY = 86_400;
+
+const FOCUS_RING =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2";
+const OPTION = `min-h-11 rounded-2xl border-2 p-3 text-left ${FOCUS_RING}`;
+const OPTION_ON = "border-foreground bg-surface text-foreground";
+const OPTION_OFF =
+  "border-edge bg-surface-raised text-foreground hover:border-foreground/40";
+const FIELD = `mt-1 w-full rounded-2xl border border-edge bg-surface-raised px-3 py-3 text-base ${FOCUS_RING}`;
 
 interface DocTemplate {
   key: string;
@@ -107,9 +117,16 @@ function CreatePoolInner() {
   const poolsAddress = getHealthPoolsAddress();
   if (poolsAddress === null) {
     return (
-      <ErrorNote
+      <EmptyState
+        pose="lounging"
+        line="No pond to put a run in. I'm on break."
         title="Runs are off on this build"
-        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
+        detail="Starting a run is not switched on for this build yet. Nothing is wrong on your side."
+        action={
+          <Link href="/pools" className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-5 py-3 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2">
+            Go to the lobby
+          </Link>
+        }
       />
     );
   }
@@ -139,6 +156,18 @@ function CreatePoolInner() {
       return false;
     }
   })();
+
+  // Parsed amounts for the commitment range line; null while the field does
+  // not parse, so the line simply hides instead of guessing.
+  const parsedOrNull = (raw: string): bigint | null => {
+    try {
+      return parseUsdc(raw.trim() === "" ? "0" : raw.trim());
+    } catch {
+      return null;
+    }
+  };
+  const entryFeeParsed = parsedOrNull(entryFee);
+  const fundingParsed = parsedOrNull(initialFunding) ?? 0n;
 
   // A self-staked commitment pool can be created with no sponsor seed, so the
   // primary button honestly says "Create pool" (no funding to approve) rather
@@ -272,47 +301,50 @@ function CreatePoolInner() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="break-words font-display text-[2rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]">
             Create a pool
           </h1>
-          <p className="mt-1 text-sm text-muted">
+          <p className="mt-2 max-w-xl text-base text-muted">
             Set a goal and a stake. Everyone who joins puts up the same USDC on
-            hitting their own goal - the ones who do split what the ones who
+            hitting their own goal, and the ones who do split what the ones who
             don&apos;t leave behind. Funding it as a sponsor instead? Seed a
             bounty below and pay achievers from it.
           </p>
-          <p className="mt-2 text-sm">
-            <Link href="/sponsor" className="font-semibold text-accent-deep underline">
+          <p className="mt-1 text-sm">
+            <Link
+              href="/sponsor"
+              className="inline-flex min-h-11 items-center font-bold text-accent-deep underline underline-offset-4"
+            >
               Put up a prize pot
             </Link>
           </p>
         </div>
-        {/* SPOTTER pointing at the board. eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/spotter/spotter-point.webp"
-          alt=""
-          aria-hidden="true"
-          className="hidden h-24 w-auto shrink-0 drop-shadow-sm sm:block"
-        />
+        <Spotter pose="point" size="xs" decorative className="sm:hidden" />
+        <div className="hidden shrink-0 sm:block">
+          <Spotter
+            pose="point"
+            size="sm"
+            line="Pick a goal a wearable can check. I only pay on proof."
+            linePlacement="side"
+            decorative
+          />
+        </div>
       </div>
 
-      <div className="space-y-4 rounded-2xl border border-edge bg-surface p-5">
+      <div className="space-y-5 rounded-3xl border border-edge bg-surface p-4 sm:p-6">
         <fieldset className="block text-sm font-medium">
-          <legend>How is the goal verified</legend>
+          <legend className="font-bold">How the goal is checked</legend>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => setFloor("wearable")}
-              className={`rounded-xl border p-3 text-left ${
-                floor === "wearable"
-                  ? "border-accent/50 bg-accent/10 text-accent-deep"
-                  : "border-edge bg-surface-raised text-muted hover:text-foreground"
-              }`}
+              aria-pressed={floor === "wearable"}
+              className={`${OPTION} ${floor === "wearable" ? OPTION_ON : OPTION_OFF}`}
             >
-              <span className="block font-semibold">Wearable data</span>
-              <span className="block text-xs font-normal">
+              <span className="block font-bold">Wearable data</span>
+              <span className="mt-1 block text-xs font-normal text-muted">
                 Verified from any connected wearable: sleep efficiency, hours of sleep or workouts.
               </span>
             </button>
@@ -321,14 +353,11 @@ function CreatePoolInner() {
               onClick={() => setFloor("document")}
               disabled={!docAvailable}
               aria-disabled={!docAvailable}
-              className={`rounded-xl border p-3 text-left disabled:cursor-not-allowed disabled:opacity-60 ${
-                floor === "document"
-                  ? "border-accent/50 bg-accent/10 text-accent-deep"
-                  : "border-edge bg-surface-raised text-muted hover:text-foreground"
-              }`}
+              aria-pressed={floor === "document"}
+              className={`${OPTION} disabled:cursor-not-allowed disabled:opacity-70 ${floor === "document" ? OPTION_ON : OPTION_OFF}`}
             >
-              <span className="block font-semibold">Document upload</span>
-              <span className="block text-xs font-normal">
+              <span className="block font-bold">Document upload</span>
+              <span className="mt-1 block text-xs font-normal text-muted">
                 {docAvailable
                   ? "Verified from an uploaded record like a flu shot or lab result."
                   : "Paused while we build the verifier - pick a wearable goal for now."}
@@ -337,14 +366,11 @@ function CreatePoolInner() {
             <button
               type="button"
               onClick={() => setFloor("self-reported")}
-              className={`rounded-xl border p-3 text-left ${
-                floor === "self-reported"
-                  ? "border-warning/50 bg-warning/10 text-warning"
-                  : "border-edge bg-surface-raised text-muted hover:text-foreground"
-              }`}
+              aria-pressed={floor === "self-reported"}
+              className={`${OPTION} ${floor === "self-reported" ? "border-warning bg-warning/10 text-foreground" : OPTION_OFF}`}
             >
-              <span className="block font-semibold">Self-reported</span>
-              <span className="block text-xs font-normal">
+              <span className="block font-bold">Self-reported</span>
+              <span className="mt-1 block text-xs font-normal text-muted">
                 A photo or screenshot. Low-trust, still in development. We cannot
                 confirm a photo is real, recent, or yours. Use only when you
                 accept unverified proof.
@@ -352,7 +378,7 @@ function CreatePoolInner() {
             </button>
           </div>
           {floor !== "self-reported" ? (
-            <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3">
+            <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-2xl border border-edge bg-surface-raised p-3">
               <input
                 type="checkbox"
                 checked={acceptSelfReported}
@@ -380,7 +406,7 @@ function CreatePoolInner() {
                   type="button"
                   onClick={() => applyTemplate(template)}
                   disabled={!docAvailable}
-                  className="rounded-xl border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-medium text-accent-deep hover:bg-accent/20"
+                  className={`inline-flex min-h-11 items-center rounded-full border-2 border-edge bg-surface px-4 py-2 text-sm font-bold text-foreground hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`}
                 >
                   {template.label}
                 </button>
@@ -400,7 +426,7 @@ function CreatePoolInner() {
             placeholder="sleep"
             value={initiative}
             onChange={(e) => setInitiative(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
+            className={FIELD}
           />
           <span className="mt-1 block text-xs text-muted">
             Short tag shown on the pool, for example sleep or workouts.
@@ -416,7 +442,7 @@ function CreatePoolInner() {
                   key={example}
                   type="button"
                   onClick={() => setGoalSpec(example)}
-                  className="rounded-full border border-edge bg-surface-raised px-3 py-1 text-xs font-normal text-muted hover:text-foreground"
+                  className={`inline-flex min-h-11 items-center rounded-full border border-edge bg-surface-raised px-3 py-1 text-left text-sm font-normal text-foreground hover:border-foreground/40 ${FOCUS_RING}`}
                 >
                   {example}
                 </button>
@@ -434,7 +460,7 @@ function CreatePoolInner() {
             value={goalSpec}
             onChange={(e) => setGoalSpec(e.target.value)}
             rows={3}
-            className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
+            className={FIELD}
           />
           {floor === "wearable" ? (
             <>
@@ -464,12 +490,20 @@ function CreatePoolInner() {
               placeholder="5.00"
               value={entryFee}
               onChange={(e) => setEntryFee(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
+              className={FIELD}
             />
             <span className="mt-1 block text-xs text-muted">
               What each participant stakes to join. It comes back to them when
               they hit the goal.
             </span>
+            {bountyModel === 2 && entryFeeParsed !== null && entryFeeParsed > 0n ? (
+              <span className="mt-1.5 block font-normal">
+                <CommitmentRangeLine
+                  entryFee={entryFeeParsed}
+                  sponsorPot={fundingParsed}
+                />
+              </span>
+            ) : null}
             {feeIsZero ? (
               <span className="mt-1 block text-xs font-normal text-warning">
                 Must be above zero - the contract does not allow free-to-join
@@ -486,7 +520,7 @@ function CreatePoolInner() {
               placeholder="100.00"
               value={initialFunding}
               onChange={(e) => setInitialFunding(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-base"
+              className={FIELD}
             />
             <span className="mt-1 block text-xs text-muted">
               USDC you seed the bounty with now. Pulled from your wallet.
@@ -498,18 +532,13 @@ function CreatePoolInner() {
           Duration
           <div className="mt-2 flex flex-wrap gap-2">
             {DURATION_OPTIONS.map((opt) => (
-              <button
+              <Chip
                 key={opt.days}
-                type="button"
+                selected={durationDays === opt.days}
                 onClick={() => setDurationDays(opt.days)}
-                className={`rounded-xl border px-4 py-2 text-sm font-medium ${
-                  durationDays === opt.days
-                    ? "border-accent/50 bg-accent/10 text-accent-deep"
-                    : "border-edge bg-surface-raised text-muted hover:text-foreground"
-                }`}
               >
                 {opt.label}
-              </button>
+              </Chip>
             ))}
           </div>
           <span className="mt-1 block text-xs text-muted">
@@ -518,9 +547,9 @@ function CreatePoolInner() {
         </div>
 
         <fieldset className="block text-sm font-medium">
-          <legend>Payout model</legend>
+          <legend className="font-bold">Payout model</legend>
           <div className="mt-2 space-y-2">
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3">
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-edge bg-surface-raised p-3 has-[:checked]:border-foreground has-[:checked]:bg-surface">
               <input
                 type="radio"
                 name="bountyModel"
@@ -529,7 +558,7 @@ function CreatePoolInner() {
                 className="mt-1"
               />
               <span>
-                <span className="block font-semibold">
+                <span className="block font-bold">
                   Fixed bounty per achiever
                 </span>
                 <span className="block text-xs font-normal text-muted">
@@ -538,7 +567,7 @@ function CreatePoolInner() {
                 </span>
               </span>
             </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3">
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-edge bg-surface-raised p-3 has-[:checked]:border-foreground has-[:checked]:bg-surface">
               <input
                 type="radio"
                 name="bountyModel"
@@ -547,14 +576,14 @@ function CreatePoolInner() {
                 className="mt-1"
               />
               <span>
-                <span className="block font-semibold">Split the pot pro-rata</span>
+                <span className="block font-bold">Split the pot pro-rata</span>
                 <span className="block text-xs font-normal text-muted">
                   The whole pot is shared across achievers in proportion to
                   their results.
                 </span>
               </span>
             </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3">
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-edge bg-surface-raised p-3 has-[:checked]:border-foreground has-[:checked]:bg-surface">
               <input
                 type="radio"
                 name="bountyModel"
@@ -563,7 +592,7 @@ function CreatePoolInner() {
                 className="mt-1"
               />
               <span>
-                <span className="block font-semibold">
+                <span className="block font-bold">
                   Self-staked commitment
                 </span>
                 <span className="block text-xs font-normal text-muted">
@@ -579,7 +608,7 @@ function CreatePoolInner() {
 
         <SignInGate note="Sign in to create this pool.">
           {(openSignIn) => (
-            <button
+            <Button
               type="button"
               disabled={!ready || busy || redirecting}
               onClick={() => {
@@ -589,17 +618,21 @@ function CreatePoolInner() {
                 }
                 void submit();
               }}
-              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full"
             >
               {primaryLabel}
-            </button>
+            </Button>
           )}
         </SignInGate>
 
         {authenticated ? <GaslessBadge status={gasless} /> : null}
 
         {status.kind === "approving" || status.kind === "depositing" ? (
-          <div className="rounded-xl border border-edge bg-surface-raised p-4 text-sm">
+          <div
+            aria-live="polite"
+            className="flex items-center gap-3 rounded-2xl border border-edge bg-surface-raised p-3 text-sm"
+          >
+            <Spotter state="loading" size="inline" decorative />
             <p className="font-medium">
               Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
               {status.kind === "approving"
@@ -610,9 +643,14 @@ function CreatePoolInner() {
         ) : null}
 
         {status.kind === "done" ? (
-          <div className="space-y-1 rounded-xl border border-accent/40 bg-accent/20 p-4">
-            <p className="text-sm font-semibold text-accent-deep">
-              Pool created on Base.
+          <div
+            aria-live="polite"
+            className="flex items-start gap-3 rounded-2xl border border-edge bg-surface-raised p-3"
+          >
+            <Spotter pose="thumbsup" size="inline" decorative />
+            <div className="min-w-0 space-y-1">
+            <p className="text-sm font-bold text-foreground">
+              Pool created on Base Sepolia. Opening it now.
             </p>
             {status.approveHash ? (
               <>
@@ -627,6 +665,7 @@ function CreatePoolInner() {
               txHash={status.depositHash}
               label="View createPool tx"
             />
+            </div>
           </div>
         ) : null}
 
@@ -654,9 +693,16 @@ function CreatePoolInner() {
 export default function CreatePool() {
   if (!DYNAMIC_CONFIGURED) {
     return (
-      <ErrorNote
+      <EmptyState
+        pose="lounging"
+        line="Nobody can sign in, so nobody can stake. I'm on break."
         title="Sign-in is off on this build"
-        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
+        detail="Starting a run needs sign-in, which is not switched on for this build yet. Nothing is wrong on your side."
+        action={
+          <Link href="/pools" className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-5 py-3 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2">
+            Go to the lobby
+          </Link>
+        }
       />
     );
   }

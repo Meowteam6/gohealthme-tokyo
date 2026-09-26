@@ -20,7 +20,7 @@ import { Button, TAP_TARGET } from "@/components/ui";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const inputClass =
-  "min-h-12 w-full rounded-lg border-2 border-foreground bg-surface px-3 py-3 text-base text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground disabled:opacity-60";
+  "min-h-12 w-full rounded-2xl border-2 border-edge bg-surface px-4 py-3 text-base text-foreground placeholder:text-muted focus:border-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground disabled:opacity-60";
 
 function SignInStepInner() {
   const { login } = useEmbeddedWallet();
@@ -78,7 +78,7 @@ function SignInStepInner() {
             void sendCode();
           }}
         >
-          <label htmlFor="game-email" className="block text-sm font-semibold">
+          <label htmlFor="game-email" className="block text-sm font-bold">
             Your email
           </label>
           <input
@@ -106,7 +106,7 @@ function SignInStepInner() {
             void verify();
           }}
         >
-          <label htmlFor="game-code" className="block text-sm font-semibold">
+          <label htmlFor="game-code" className="block text-sm font-bold">
             Code sent to {email.trim()}
           </label>
           <input
@@ -161,7 +161,7 @@ function SignInStepInner() {
         </p>
       ) : null}
       {error !== null ? (
-        <p role="alert" className="rounded-lg border-2 border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+        <p role="alert" className="rounded-2xl border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
           {error}
         </p>
       ) : null}
@@ -185,7 +185,7 @@ export default function SignInStep() {
   if (!DYNAMIC_CONFIGURED) {
     // No env names reach the player: say what it means for them.
     return (
-      <p className="rounded-lg border-2 border-edge bg-surface-raised p-4 text-sm text-foreground/80">
+      <p className="rounded-2xl border border-edge bg-surface-raised p-4 text-sm text-foreground/85">
         Sign-in is not switched on for this build, so nobody can play on it
         yet. The home page still explains how a run works.
       </p>

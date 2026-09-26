@@ -6,7 +6,7 @@
 //
 // It never opens by itself. An auto-opened panel sat on top of the landing
 // hero and the sign-in call to action for every first-time visitor; the
-// bubble's gold dot is the nudge, and the player opens it when they want it.
+// bubble's coral dot is the nudge, and the player opens it when they want it.
 //
 // The coach reads the SAME character state as the gate (useCharacter: sign
 // in, prove human, pick a name, pair a sensor) plus the onboarding skips, so
@@ -36,12 +36,16 @@ import {
   MAX_QUESTION_CHARS,
 } from "@/lib/server/help/knowledge";
 import SignInPanel from "@/components/SignInPanel";
+import Spotter from "@/components/spotter/Spotter";
 
 type Tab = "coach" | "ask" | "feedback";
 type AskMessage = { role: "you" | "spotter"; text: string };
 type Rating = "easy" | "confusing";
 
 const SESSION_KEY = "ghm-helper-session";
+
+const FOCUS_RING =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 
 /** A stable per-browser id for anonymous rate-limiting on Ask and Feedback. */
 function ensureSessionId(): string {
@@ -58,18 +62,6 @@ function ensureSessionId(): string {
 }
 
 // ------------------------------------------------------------------- glyphs
-
-function CompassGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path
-        d="M12 12 15.5 8.5 13 12.5 12 12ZM12 12 8.5 15.5 11 11.5 12 12Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
 
 function CheckIcon() {
   return (
@@ -116,8 +108,9 @@ function Checklist({ step, rows }: { step: CoachStep; rows: ChecklistRow[] }) {
         return (
           <li
             key={row.id}
-            className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${
-              current ? "bg-accent/20" : ""
+            aria-current={current ? "step" : undefined}
+            className={`flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm ${
+              current ? "bg-surface-raised" : ""
             }`}
           >
             <span className="shrink-0">
@@ -180,7 +173,7 @@ function CoachTab({
 
   return (
     <div aria-live="polite">
-      <p className="text-sm font-semibold text-accent-deep">{headline}</p>
+      <p className="text-base font-bold text-foreground">{headline}</p>
       <p className="mt-1 text-sm leading-relaxed text-muted">{body}</p>
 
       {blocked !== null ? (
@@ -188,7 +181,7 @@ function CoachTab({
           <button
             type="button"
             onClick={onRetry}
-            className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent-hover"
+            className="min-h-11 rounded-[18px] bg-accent px-4 py-2 text-sm font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             {step.error !== null ? "Try again" : "Check my spot"}
           </button>
@@ -206,7 +199,7 @@ function CoachTab({
             type="button"
             onClick={onPrimary}
             disabled={step.loading}
-            className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 rounded-[18px] bg-accent px-4 py-2 text-sm font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             {copy.primary}
           </button>
@@ -214,7 +207,7 @@ function CoachTab({
             <button
               type="button"
               onClick={onSecondary}
-              className="min-h-11 rounded-lg border border-edge px-4 py-2 text-sm font-medium text-muted hover:text-foreground"
+              className="min-h-11 rounded-[18px] border-2 border-foreground px-4 py-2 text-sm font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             >
               {copy.secondary}
             </button>
@@ -223,9 +216,7 @@ function CoachTab({
       )}
 
       {step.loading ? (
-        <p className="mt-2 animate-pulse text-xs text-muted motion-reduce:animate-none">
-          Checking where you are...
-        </p>
+        <p className="mt-2 text-sm text-muted">Checking where you are...</p>
       ) : null}
 
       <Checklist step={step} rows={rows} />
@@ -307,8 +298,8 @@ function AskTab({ address }: { address: Address | null }) {
               <span
                 className={`inline-block max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
                   m.role === "you"
-                    ? "bg-accent/10 text-foreground"
-                    : "bg-surface-raised text-muted"
+                    ? "bg-surface-raised text-foreground"
+                    : "border border-edge bg-background text-foreground"
                 }`}
               >
                 {m.text}
@@ -317,7 +308,7 @@ function AskTab({ address }: { address: Address | null }) {
           ))
         )}
         {asking ? (
-          <p className="animate-pulse text-sm text-muted">thinking...</p>
+          <p className="text-sm text-muted">SPOTTER is thinking...</p>
         ) : null}
       </div>
 
@@ -338,7 +329,8 @@ function AskTab({ address }: { address: Address | null }) {
           maxLength={MAX_QUESTION_CHARS}
           rows={2}
           placeholder="How do I get paid?"
-          className="w-full resize-none rounded-lg border border-edge bg-surface-raised px-3 py-2 text-sm text-foreground placeholder:text-muted/60 focus:border-accent/60 focus:outline-none"
+          aria-label="Your question"
+          className="w-full resize-none rounded-2xl border border-edge bg-surface-raised px-3 py-2 text-base text-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         />
         <div className="mt-2 flex items-center justify-between">
           <span className="text-xs text-muted">{left} of {ASK_PER_SESSION_CAP} left</span>
@@ -346,7 +338,7 @@ function AskTab({ address }: { address: Address | null }) {
             type="button"
             onClick={() => void submit()}
             disabled={asking || input.trim() === ""}
-            className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 rounded-[18px] bg-accent px-4 py-2 text-sm font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             Ask
           </button>
@@ -405,11 +397,14 @@ function FeedbackTab({
 
   if (done) {
     return (
-      <div className="rounded-xl border border-accent/40 bg-surface-raised p-4">
-        <p className="text-sm font-semibold text-accent-deep">Thanks - noted</p>
-        <p className="mt-1 text-sm text-muted">
-          Your note went straight to the founders. It helps more than you know.
-        </p>
+      <div aria-live="polite" className="flex items-start gap-3 rounded-2xl border border-edge bg-surface-raised p-4">
+        <Spotter pose="thumbsup" size="inline" decorative />
+        <div className="min-w-0">
+          <p className="text-base font-bold text-foreground">Noted</p>
+          <p className="mt-1 text-sm text-muted">
+            Your note went straight to the founders. It helps more than you know.
+          </p>
+        </div>
       </div>
     );
   }
@@ -425,10 +420,11 @@ function FeedbackTab({
             key={r}
             type="button"
             onClick={() => setRating(r)}
-            className={`min-h-11 flex-1 rounded-lg border px-3 py-2 text-sm font-medium capitalize ${
+            aria-pressed={rating === r}
+            className={`min-h-11 flex-1 rounded-full border-2 px-3 py-2 text-sm font-bold capitalize ${FOCUS_RING} ${
               rating === r
-                ? "border-accent/60 bg-accent/10 text-accent-deep"
-                : "border-edge bg-surface-raised text-muted hover:text-foreground"
+                ? "border-foreground bg-foreground text-background"
+                : "border-edge bg-surface text-foreground hover:border-foreground/40"
             }`}
           >
             {r}
@@ -436,16 +432,17 @@ function FeedbackTab({
         ))}
       </div>
 
-      <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-muted">
+      <label htmlFor="helper-feedback" className="mt-3 block text-sm font-bold text-foreground">
         What tripped you up?
       </label>
       <textarea
+        id="helper-feedback"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         maxLength={1000}
         rows={3}
         placeholder="Optional - anything that was unclear"
-        className="mt-1 w-full resize-none rounded-lg border border-edge bg-surface-raised px-3 py-2 text-sm text-foreground placeholder:text-muted/60 focus:border-accent/60 focus:outline-none"
+        className="mt-1 w-full resize-none rounded-2xl border border-edge bg-surface-raised px-3 py-2 text-base text-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       />
 
       {error !== null ? (
@@ -456,7 +453,7 @@ function FeedbackTab({
         type="button"
         onClick={() => void submit()}
         disabled={busy}
-        className="mt-3 min-h-11 w-full rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-3 w-full min-h-11 rounded-[18px] bg-accent px-4 py-2 text-sm font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
         {busy ? "Sending..." : "Send feedback"}
       </button>
@@ -550,11 +547,13 @@ export default function HelperWidget() {
         type="button"
         aria-label="Open the GoHealthMe helper"
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-foreground shadow-lg shadow-black/40 hover:bg-accent-hover"
+        className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 flex h-14 w-14 items-center justify-center overflow-visible rounded-full border-2 border-foreground bg-surface hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        <CompassGlyph />
+        <span className="block h-12 w-12 overflow-hidden rounded-full">
+          <Spotter pose="portrait" size="inline" decorative />
+        </span>
         {pending ? (
-          <span className="absolute right-1 top-1 h-3 w-3 rounded-full border-2 border-background bg-gold" />
+          <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-foreground bg-accent" />
         ) : null}
       </button>
     );
@@ -567,12 +566,14 @@ export default function HelperWidget() {
       onKeyDown={(e) => {
         if (e.key === "Escape") close();
       }}
-      className="fixed bottom-4 right-4 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-[360px] flex-col rounded-2xl border border-edge bg-surface shadow-xl shadow-black/50"
+      className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-[360px] flex-col rounded-3xl border-2 border-foreground bg-surface shadow-[0_18px_40px_rgba(15,42,46,0.22)]"
     >
       <div className="flex items-center justify-between border-b border-edge px-4 py-3">
-        <div className="flex items-center gap-2 text-accent-deep">
-          <CompassGlyph />
-          <span className="text-sm font-semibold text-foreground">
+        <div className="flex items-center gap-2">
+          <span className="block h-9 w-9 shrink-0 overflow-hidden rounded-full border border-edge">
+            <Spotter pose="portrait" size="row" decorative />
+          </span>
+          <span className="font-display text-lg font-bold text-foreground">
             Getting started
           </span>
         </div>
@@ -580,7 +581,7 @@ export default function HelperWidget() {
           type="button"
           aria-label="Close the helper"
           onClick={close}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-lg leading-none text-muted hover:text-foreground"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-2xl leading-none text-muted hover:bg-surface-raised hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           &times;
         </button>
@@ -593,10 +594,10 @@ export default function HelperWidget() {
             type="button"
             onClick={() => setTab(t.id)}
             aria-pressed={tab === t.id}
-            className={`min-h-11 rounded-full px-3 text-xs font-semibold ${
+            className={`min-h-11 rounded-full px-4 text-sm font-bold ${FOCUS_RING} ${
               tab === t.id
-                ? "bg-accent/10 text-accent-deep"
-                : "text-muted hover:text-foreground"
+                ? "bg-foreground text-background"
+                : "text-muted hover:bg-surface-raised hover:text-foreground"
             }`}
           >
             {t.label}

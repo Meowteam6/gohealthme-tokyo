@@ -11,6 +11,10 @@ import SpotterStatusLine from "@/components/game/SpotterStatusLine";
 import TestUsdcChip from "@/components/TestUsdcChip";
 import { CopyAddressButton } from "@/components/FundingHelp";
 import { NAV_ITEMS } from "@/lib/nav";
+import Spotter from "@/components/spotter/Spotter";
+
+const FOCUS =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -34,14 +38,14 @@ function NavLinks({
             href={item.href}
             onClick={onNavigate}
             aria-current={active ? "page" : undefined}
-            className={`rounded-lg ${
+            className={`${FOCUS} ${
               stacked
-                ? "flex min-h-11 items-center px-3"
-                : "whitespace-nowrap px-2.5 py-2 sm:px-3"
-            } ${
+                ? "flex min-h-12 items-center rounded-2xl px-4 text-base"
+                : "inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3.5"
+            } font-bold ${
               active
-                ? "bg-surface-raised text-foreground"
-                : "text-muted hover:bg-surface-raised hover:text-foreground"
+                ? "bg-foreground text-background"
+                : "text-foreground/75 hover:bg-surface-raised hover:text-foreground"
             }`}
           >
             {item.label}
@@ -58,7 +62,10 @@ function AuthControls() {
 
   if (!ready) {
     return (
-      <div className="h-11 w-24 animate-pulse rounded-lg bg-surface-raised" />
+      <div
+        aria-hidden="true"
+        className="h-11 w-24 animate-pulse rounded-[18px] bg-surface-raised motion-reduce:animate-none"
+      />
     );
   }
 
@@ -71,7 +78,7 @@ function AuthControls() {
     return (
       <Link
         href={`/character${next}`}
-        className="inline-flex min-h-11 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-foreground hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
+        className={`inline-flex min-h-11 items-center rounded-[18px] bg-accent px-4 text-sm font-bold text-foreground shadow-[0_3px_0_0_var(--accent-strong)] hover:bg-accent-hover active:translate-y-[3px] active:shadow-none motion-reduce:transition-none ${FOCUS}`}
       >
         Sign in
       </Link>
@@ -84,7 +91,7 @@ function AuthControls() {
       onClick={() => {
         void logout();
       }}
-      className="min-h-11 rounded-lg border border-edge px-3 py-2 text-sm font-medium text-muted hover:text-foreground"
+      className={`min-h-11 rounded-[18px] border-2 border-foreground/20 px-3.5 py-2 text-sm font-bold text-foreground hover:border-foreground ${FOCUS}`}
     >
       Sign out
     </button>
@@ -118,7 +125,7 @@ function WalletNote() {
     <div className="flex items-center gap-2 py-1">
       <Link
         href="/character"
-        className="min-w-0 truncate text-sm font-semibold text-foreground hover:text-accent-deep"
+        className={`min-w-0 truncate rounded text-sm font-bold text-foreground hover:text-accent-deep ${FOCUS}`}
       >
         <EnsName
           address={address}
@@ -163,7 +170,7 @@ function AuthOrPill() {
   // cosmetic-only recording flag (lib/config.ts) and hiding operator chrome is
   // exactly its charter. The join panel's fail-closed refusal is untouched.
   return (
-    <span className="rounded-lg border border-edge px-3 py-2 text-xs text-muted">
+    <span className="rounded-full border border-edge bg-surface px-3 py-2 text-xs font-bold text-muted">
       Sign-in is off on this build
     </span>
   );
@@ -183,17 +190,28 @@ export default function Header() {
   const setMenuOpen = (open: boolean) => setMenuFor(open ? pathname : null);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-edge bg-background/90 backdrop-blur">
+    <header
+      className="sticky top-0 z-40 border-b border-edge bg-background/90 backdrop-blur"
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && menuOpen) setMenuOpen(false);
+      }}
+    >
       <div className="mx-auto flex h-16 max-w-5xl items-center gap-2 px-4 sm:gap-3">
         <Link
           href="/"
-          className="shrink-0 font-display text-2xl font-black tracking-tight"
+          aria-label="GoHealthMe home"
+          className={`flex shrink-0 items-center gap-2 rounded-2xl pr-1 ${FOCUS}`}
         >
-          GoHealthMe
+          <Spotter pose="portrait" size="row" decorative className="sm:hidden md:inline-flex" />
+          <span className="font-display text-[1.375rem] font-extrabold tracking-display sm:text-2xl">
+            GoHealthMe
+          </span>
         </Link>
         {/* Desktop nav: inline, right-aligned, scrolls only if it must. */}
-        <nav className="hidden min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] sm:block [&::-webkit-scrollbar]:hidden">
-          <div className="flex w-max items-center gap-1 text-sm font-medium sm:ml-auto sm:gap-2">
+        <nav
+          aria-label="Main"
+          className="hidden min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] sm:block [&::-webkit-scrollbar]:hidden">
+          <div className="flex w-max items-center gap-1 py-1 text-sm sm:ml-auto">
             <NavLinks />
           </div>
         </nav>
@@ -206,7 +224,7 @@ export default function Header() {
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
             aria-controls="mobile-nav"
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted hover:bg-surface-raised hover:text-foreground sm:hidden"
+            className={`flex min-h-11 min-w-11 items-center justify-center rounded-full border-2 border-foreground/20 text-foreground hover:border-foreground sm:hidden ${FOCUS}`}
           >
             <svg
               width="20"
@@ -237,9 +255,10 @@ export default function Header() {
       {menuOpen ? (
         <nav
           id="mobile-nav"
+          aria-label="Main"
           className="border-t border-edge bg-background sm:hidden"
         >
-          <div className="mx-auto flex max-w-5xl flex-col gap-1 px-3 py-2 text-sm font-medium">
+          <div className="mx-auto flex max-w-5xl flex-col gap-1 px-3 py-3">
             <NavLinks stacked onNavigate={() => setMenuOpen(false)} />
           </div>
         </nav>

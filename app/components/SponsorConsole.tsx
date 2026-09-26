@@ -28,6 +28,7 @@ import CreatePool from "@/components/CreatePool";
 import SponsorPoolOutcome from "@/components/SponsorPoolOutcome";
 import SignInGate from "@/components/SignInGate";
 import SceneHeader from "@/components/SceneHeader";
+import Spotter from "@/components/spotter/Spotter";
 import { Icon, type IconName } from "@/components/SponsorIcons";
 import {
   Badge,
@@ -93,9 +94,11 @@ function OutcomesUnavailable({ onRetry }: { onRetry: () => void }) {
   return (
     <div
       role="status"
-      className="rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-foreground/85"
+      className="flex items-start gap-3 rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-foreground/85"
     >
-      <p className="font-semibold">Outcomes could not be read right now.</p>
+      <Spotter state="error" size="inline" decorative />
+      <div className="min-w-0">
+      <p className="font-bold">Outcomes could not be read right now.</p>
       <p className="mt-1 text-muted">
         Your pools and their balances are below. Joins, completions and payouts
         show again once the chain answers.
@@ -107,6 +110,7 @@ function OutcomesUnavailable({ onRetry }: { onRetry: () => void }) {
       >
         Try again
       </button>
+      </div>
     </div>
   );
 }
@@ -141,7 +145,7 @@ function StatTile({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-3xl border-2 border-edge bg-surface p-4 shadow-[var(--shadow-pop-edge)]">
+    <div className="flex min-w-0 flex-col gap-3 rounded-3xl border border-edge bg-surface p-4">
       <span
         className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${chip}`}
       >
@@ -149,7 +153,7 @@ function StatTile({
       </span>
       <div>
         <p className="text-xs font-medium text-muted">{label}</p>
-        <p className="mt-0.5 font-display text-lg font-extrabold tracking-tight sm:text-xl">
+        <p className="mt-0.5 break-words font-display text-lg font-extrabold leading-display tracking-display sm:text-xl">
           {children}
         </p>
       </div>
@@ -172,8 +176,8 @@ function PortfolioSummary({
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-          Your pools at a <span className="text-accent-deep">glance</span>
+        <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
+          Your pools at a glance
         </h2>
         <Badge tone="muted">
           {d.poolCount} {d.poolCount === 1 ? "pool" : "pools"}
@@ -265,20 +269,20 @@ const PRIVACY_POINTS: { icon: IconName; title: string; body: string }[] = [
 
 function PrivacyFeature() {
   return (
-    <section className="overflow-hidden rounded-3xl bg-accent-deep px-5 py-8 text-white sm:px-9 sm:py-10">
+    <section className="overflow-hidden rounded-3xl bg-board px-5 py-8 text-chalk sm:px-9 sm:py-10">
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
         <div>
-          <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
+          <span className="inline-flex items-center gap-2 rounded-full bg-chalk/10 px-3 py-1.5 text-sm font-bold">
             <Icon name="shield" className="h-4 w-4" />
             The promise, not the fine print
           </span>
-          <h2 className="mt-4 font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
+          <h2 className="mt-4 font-display text-[1.75rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]">
             Your money is public.
             <br />
             Their health data never is.
           </h2>
-          <p className="mt-3 max-w-md text-sm leading-relaxed text-white/80 sm:text-base">
-            You always see what you funded and what got paid, in aggregate —
+          <p className="mt-3 max-w-md text-base leading-relaxed text-chalk/85">
+            You always see what you funded and what got paid, in aggregate,
             never a participant&apos;s actual steps, sleep, or vitals. That line
             does not move for anyone.
           </p>
@@ -288,15 +292,15 @@ function PrivacyFeature() {
           {PRIVACY_POINTS.map((point) => (
             <div
               key={point.title}
-              className="rounded-2xl bg-white/[0.08] p-4 backdrop-blur-sm"
+              className="rounded-2xl border border-board-edge bg-chalk/[0.06] p-4"
             >
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-chalk/10">
                 <Icon name={point.icon} className="h-4 w-4" />
               </span>
-              <p className="mt-3 font-display text-sm font-bold">
+              <p className="mt-3 font-display text-base font-bold">
                 {point.title}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-white/75">
+              <p className="mt-1 text-sm leading-relaxed text-chalk/80">
                 {point.body}
               </p>
             </div>
@@ -361,19 +365,17 @@ export default function SponsorConsole() {
     <SceneHeader
       title="Sponsor console"
       subtitle="Put USDC on a health goal, top it up as it fills, and watch exactly what it buys. Every outcome below is aggregate only, and nobody ever sees a participant's health data."
-      eyebrow="Fund the goal"
-      pose="spotter-detective.webp"
+      pose="detective"
       poseAlt="SPOTTER the otter, inspecting the ledger through a magnifying glass"
       spotterLine="I hold the bag, not your business. I check each goal and hand out one word: paid, or not yet."
     >
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Badge tone="warning">Base Sepolia · testnet · play money</Badge>
+        <Badge tone="muted">Base Sepolia test money, beta</Badge>
         <Link
           href="/pools"
-          className="inline-flex items-center gap-1 text-sm font-semibold text-accent-deep underline decoration-accent/40 decoration-2 underline-offset-4 hover:decoration-accent"
+          className="inline-flex min-h-11 items-center text-sm font-bold text-accent-deep underline underline-offset-4"
         >
           Browse all pools
-          <Icon name="arrow" className="h-4 w-4" />
         </Link>
       </div>
     </SceneHeader>
@@ -382,7 +384,7 @@ export default function SponsorConsole() {
   // The big candy "create a pool" call to action. Collapsed it is a proud
   // invitation; expanded it hands off to the unchanged CreatePool form.
   const createPanel = showCreate ? (
-    <Card pop>
+    <Card>
       <CreatePool />
       <button
         type="button"
@@ -393,12 +395,11 @@ export default function SponsorConsole() {
       </button>
     </Card>
   ) : (
-    <Card
-      pop
-      className="flex flex-col items-start gap-4 bg-dot-grid sm:flex-row sm:items-center sm:justify-between"
-    >
-      <div>
-        <h2 className="font-display text-xl font-bold tracking-tight sm:text-2xl">
+    <Card className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-end gap-3">
+      <Spotter pose="point" size="xs" decorative />
+      <div className="min-w-0">
+        <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
           Fund a new goal
         </h2>
         <p className="mt-1 max-w-md text-sm leading-relaxed text-muted">
@@ -407,14 +408,13 @@ export default function SponsorConsole() {
           run settles.
         </p>
       </div>
+      </div>
       <Button
         variant="primary"
-        pop
         onClick={() => setShowCreate(true)}
-        className="shrink-0"
+        className="w-full shrink-0 sm:w-auto"
       >
         Create a pool
-        <Icon name="arrow" className="h-5 w-5" />
       </Button>
     </Card>
   );
@@ -436,12 +436,14 @@ export default function SponsorConsole() {
       <div className="space-y-8">
         {hero}
         <EmptyState
+          pose="wallet"
+          line="No wallet, no pot. Sign in and I'll hold it."
           title="Sign in to run a pool"
           detail="Creating and funding a bounty pulls USDC from your wallet, so the console opens once you sign in. Your pools and their aggregate outcomes live here."
           action={
             <SignInGate note="Sign in to run a pool.">
               {(openSignIn) => (
-                <Button variant="primary" pop onClick={openSignIn}>
+                <Button variant="primary" onClick={openSignIn}>
                   Sign in
                 </Button>
               )}
@@ -479,10 +481,18 @@ export default function SponsorConsole() {
           }}
         />
       ) : myPools.length === 0 ? (
-        <EmptyState
-          title="You have not funded a pool yet"
-          detail="Create your first bounty pool and it will show up here with its aggregate outcomes as people join and get verified."
-        />
+        showCreate ? null : (
+          <EmptyState
+            line="Nothing funded. I'm on break."
+            title="You have not funded a pool yet"
+            detail="Create your first bounty pool and it will show up here with its aggregate outcomes as people join and get verified."
+            action={
+              <Button variant="primary" onClick={() => setShowCreate(true)}>
+                Create a pool
+              </Button>
+            }
+          />
+        )
       ) : (
         <>
           <PortfolioSummary
@@ -493,8 +503,8 @@ export default function SponsorConsole() {
             }}
           />
           <section id="pools" className="space-y-5">
-            <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-              Your <span className="text-accent-deep">pools</span>
+            <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
+              Your pools
             </h2>
             <div className="grid gap-4 lg:grid-cols-2">
               {myPools.map((pool, i) => (

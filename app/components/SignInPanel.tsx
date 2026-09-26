@@ -106,7 +106,7 @@ function SignInPanelInner() {
 
   return (
     <div className="rounded-2xl border border-edge bg-surface p-5">
-      <h2 className="text-lg font-semibold">Get started</h2>
+      <h2 className="font-display text-xl font-bold leading-display tracking-display">Get started</h2>
 
       {step.kind === "otp" || step.kind === "verifying" ? (
         <div className="mt-4 space-y-3">
@@ -130,7 +130,7 @@ function SignInPanelInner() {
             }}
             placeholder="123456"
             disabled={busy}
-            className="min-h-11 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 font-mono tracking-widest text-foreground placeholder:text-muted focus:border-accent focus:outline-none disabled:opacity-60"
+            className="min-h-11 w-full rounded-2xl border-2 border-edge bg-surface px-4 py-3 font-mono tracking-widest text-foreground placeholder:text-muted focus:border-foreground focus:outline-none disabled:opacity-60"
           />
           <button
             type="button"
@@ -138,7 +138,7 @@ function SignInPanelInner() {
             onClick={() => {
               void verify();
             }}
-            className="min-h-11 w-full rounded-xl bg-accent px-5 py-3 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-12 w-full rounded-[18px] font-bold shadow-[var(--shadow-pop)] active:translate-y-1 active:shadow-none disabled:translate-y-0 disabled:shadow-none bg-accent px-5 py-3 text-base text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {step.kind === "verifying" ? "Verifying..." : "Verify and continue"}
           </button>
@@ -198,7 +198,7 @@ function SignInPanelInner() {
               setError(null);
               void connectBase();
             }}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-foreground/20 bg-surface px-4 py-3 text-base font-bold text-foreground shadow-[var(--shadow-pop-edge)] transition hover:-translate-y-0.5 hover:border-foreground/35 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[18px] border-2 border-foreground bg-transparent px-4 py-3 text-base font-bold text-foreground hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span
               aria-hidden="true"
@@ -213,7 +213,7 @@ function SignInPanelInner() {
 
           <div className="flex items-center gap-3 py-1">
             <span className="h-px flex-1 bg-edge" />
-            <span className="text-xs font-medium uppercase tracking-wide text-muted">
+            <span className="text-sm text-muted">
               or use email
             </span>
             <span className="h-px flex-1 bg-edge" />
@@ -233,7 +233,7 @@ function SignInPanelInner() {
             }}
             placeholder="you@email.com"
             disabled={busy}
-            className="min-h-11 w-full rounded-xl border border-edge bg-surface-raised px-3 py-3 text-foreground placeholder:text-muted focus:border-accent focus:outline-none disabled:opacity-60"
+            className="min-h-11 w-full rounded-2xl border-2 border-edge bg-surface px-4 py-3 text-foreground placeholder:text-muted focus:border-foreground focus:outline-none disabled:opacity-60"
           />
           <button
             type="button"
@@ -241,7 +241,7 @@ function SignInPanelInner() {
             onClick={() => {
               void sendCode();
             }}
-            className="min-h-11 w-full rounded-xl border border-edge bg-surface px-5 py-3 text-base font-semibold text-foreground hover:border-accent/50 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 w-full rounded-[18px] border-2 border-edge bg-surface px-5 py-3 text-base font-bold text-foreground hover:border-foreground/40 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? "Sending the code..." : "Email me a code"}
           </button>
@@ -254,7 +254,7 @@ function SignInPanelInner() {
       {error !== null ? (
         <p
           role="alert"
-          className="mt-3 rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm text-danger"
+          className="mt-3 rounded-2xl border border-danger/40 bg-danger/5 p-3 text-sm text-danger"
         >
           {error}
         </p>
@@ -265,7 +265,7 @@ function SignInPanelInner() {
           <button
             type="button"
             onClick={connectExternal}
-            className="min-h-11 w-full rounded-xl border border-edge px-5 py-3 text-sm font-semibold text-foreground hover:border-accent/50"
+            className="min-h-11 w-full rounded-[18px] border-2 border-edge px-5 py-3 text-sm font-bold text-foreground hover:border-foreground/40"
           >
             Connect your own wallet
           </button>
@@ -289,7 +289,7 @@ export default function SignInPanel() {
   if (!DYNAMIC_CONFIGURED) {
     return (
       <div className="rounded-2xl border border-edge bg-surface p-5">
-        <h2 className="text-lg font-semibold">Sign-in is off on this build</h2>
+        <h2 className="font-display text-xl font-bold leading-display tracking-display">Sign-in is off on this build</h2>
         <p className="mt-2 text-sm text-muted">
           Nobody can sign in or play on this build yet.
         </p>

@@ -132,20 +132,20 @@ export default function ShareChallenge({
           <button
             type="button"
             onClick={nativeShare}
-            className={`flex-1 rounded-xl bg-accent font-semibold text-foreground hover:bg-accent-hover ${TAP_TARGET}`}
+            className={`flex-1 rounded-[18px] bg-accent font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 motion-reduce:transition-none ${TAP_TARGET}`}
           >
             {shareLabel}
           </button>
         ) : null}
         <a
           href={smsHref(body)}
-          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent-deep hover:bg-accent/10 ${TAP_TARGET}`}
+          className={`flex-1 rounded-[18px] border-2 border-foreground text-center font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
         >
           Text
         </a>
         <a
           href={mailtoHref(emailSubject, body)}
-          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent-deep hover:bg-accent/10 ${TAP_TARGET}`}
+          className={`flex-1 rounded-[18px] border-2 border-foreground text-center font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
         >
           Email
         </a>
@@ -153,7 +153,7 @@ export default function ShareChallenge({
           <button
             type="button"
             onClick={runCopy}
-            className={`flex-1 rounded-xl border border-edge bg-surface-raised font-semibold text-muted hover:text-foreground ${TAP_TARGET}`}
+            className={`flex-1 rounded-[18px] border border-edge bg-surface-raised font-bold text-foreground hover:border-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
           >
             <span aria-live="polite">
               {copy === "copied"

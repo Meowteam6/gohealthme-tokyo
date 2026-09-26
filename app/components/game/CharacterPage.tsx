@@ -24,7 +24,7 @@ export default function CharacterPage({
       {next !== null ? (
         <Link
           href={next}
-          className="inline-flex min-h-11 items-center rounded-lg border-2 border-foreground bg-surface px-4 font-semibold hover:bg-foreground hover:text-background"
+          className="inline-flex min-h-11 items-center rounded-[18px] border-2 border-foreground bg-transparent px-4 font-bold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
         >
           Back to the run
         </Link>
