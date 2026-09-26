@@ -120,8 +120,8 @@ export function useRunNights({
   if (!wearable) {
     nights = (
       <p className={quiet}>
-        This run is proven with a document, not a wearable, so there is no
-        nightly tally. Hand SPOTTER the proof on the run page.
+        This challenge is proven with a document, not a wearable, so there is no
+        nightly tally. Hand SPOTTER the proof on the challenge page.
       </p>
     );
   } else if (progressQuery.isLoading) {
@@ -160,8 +160,8 @@ export function useRunNights({
   } else if (providerMetricUnavailable(state)) {
     nights = (
       <p className="m-0 text-[0.9375rem] font-semibold leading-[1.45] text-foreground">
-        Your wearable syncs, and it does not report what this run is scored on.
-        That is the hardware. Your result settles on what the run can read.
+        Your wearable syncs, and it does not report what this challenge is scored on.
+        That is the hardware. Your result settles on what the challenge can read.
       </p>
     );
   } else if (providerAwaitingFirstSync(state)) {
@@ -222,7 +222,7 @@ export default function RunBoard({
   const goal = displayGoalSpec(pool.goalSpec);
 
   return (
-    <Card as="article" aria-label={`Run: ${goal}`}>
+    <Card as="article" aria-label={`Challenge: ${goal}`}>
       {showTitle || showLink ? (
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3">
           {showTitle ? (
@@ -232,7 +232,7 @@ export default function RunBoard({
           ) : null}
           {showLink ? (
             <Link href={`/pools/${pool.id.toString()}`} className={TEXT_LINK}>
-              Open this run
+              Open this challenge
             </Link>
           ) : null}
         </div>
@@ -249,7 +249,7 @@ export default function RunBoard({
       <div className="mt-4 border-t border-edge pt-3.5">
         <StatRow>
           <Stat label={selfStaked ? "Your stake" : "Entry"} value={formatUsdc(pool.entryFee)} unit="USDC" tone="money" />
-          <Stat label="In the pot" value={formatUsdc(pool.balance)} unit="USDC" tone="money" />
+          <Stat label="Pot" value={formatUsdc(pool.balance)} unit="USDC" tone="money" />
           {ifYouHit !== null ? (
             <Stat
               label="If you hit"
@@ -288,7 +288,7 @@ export default function RunBoard({
         ) : (
           <>
             <p className="num m-0 mt-0.5 text-sm text-haze">
-              {playerList.length} in the run, {hitCount} already banked the goal.
+              {playerList.length} in the challenge, {hitCount} already banked the goal.
             </p>
             <ul className="m-0 mt-2 list-none p-0">
               {playerList.slice(0, 8).map((p) => {

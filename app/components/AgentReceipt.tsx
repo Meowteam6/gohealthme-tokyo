@@ -104,7 +104,7 @@ export function deferredSettleCopy(
         : null;
     return (
       line ??
-      "SPOTTER settles this automatically the moment the pool period ends"
+      "SPOTTER settles this automatically the moment the challenge ends"
     );
   }
   return note ?? "settlement pending";
@@ -159,7 +159,7 @@ export function errorPresentation(
       }
       if (message.includes("pool settled before this claim completed")) {
         return {
-          label: "the pool settled before this claim finished",
+          label: "the challenge settled before this claim finished",
           transient: false,
         };
       }
@@ -441,7 +441,7 @@ export default function AgentReceipt({
                     </span>
                   ) : row.status === "closed" && row.outcome !== null ? (
                     <span>
-                      {row.outcome === "cancelled" ? "run cancelled:" : "run settled:"}{" "}
+                      {row.outcome === "cancelled" ? "challenge cancelled:" : "challenge settled:"}{" "}
                       {missStakeLine(row.outcome, missStakeUsd, true)}
                     </span>
                   ) : (

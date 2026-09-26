@@ -465,7 +465,7 @@ export function passVerdictReason(
 ): string {
   return (
     `Your wearable shows ${qualifyingDays} qualifying days ` +
-    `(${spec.threshold}+ ${spec.unit}) inside this pool period, ` +
+    `(${spec.threshold}+ ${spec.unit}) inside this challenge, ` +
     `meeting the ${spec.goalDays}-day goal.`
   );
 }
@@ -484,7 +484,7 @@ export function missVerdictReason(decision: {
     ? `${qualifyingDays} of ${spec.goalDays} workouts`
     : `${qualifyingDays} of ${spec.goalDays} qualifying ${unit}s (${spec.threshold}+ ${spec.unit})`;
   return (
-    `Your wearable synced every ${unit} of the run (${span}, your time) and shows ` +
-    `${counted}. The run is over, so the miss is recorded.`
+    `Your wearable synced every ${unit} of the challenge (${span}, your time) and shows ` +
+    `${counted}. The challenge is over, so the miss is recorded.`
   );
 }

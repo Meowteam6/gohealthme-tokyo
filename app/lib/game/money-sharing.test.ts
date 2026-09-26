@@ -177,7 +177,7 @@ describe("acceptTermsOf: the miss chip and head count before the accept (gap 7)"
     expect(t.count).toBe("1 staked so far");
     expect(t.stakeLead).toBe("Everyone puts in the same stake:");
     expect(t.miss).toBe(
-      "Miss it: if your wearable shows it, your stake goes to the players who hit. If your wearable sends nothing for the run, your stake comes back.",
+      "Miss it: if your wearable shows it, your stake goes to the players who hit. If your wearable sends nothing for the challenge, your stake comes back.",
     );
   });
 

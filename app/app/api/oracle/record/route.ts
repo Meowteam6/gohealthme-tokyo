@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     if (!joined) {
       return jsonError(
         403,
-        `${address} has not joined pool ${String(poolId)} on-chain. Join the pool first.`,
+        `${address} has not joined challenge ${String(poolId)} on-chain. Join the challenge first.`,
       );
     }
 
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       return jsonError(
         409,
         `Not met on this read (${progress.streakDays} of ${goalDays} days). This route records passes only. ` +
-          "A miss is recorded by SPOTTER after the run ends, and only when the wearable covered the whole run.",
+          "A miss is recorded by SPOTTER after the challenge ends, and only when the wearable covered the whole challenge.",
       );
     }
     const multiplierBps = deriveMultiplierBps(progress.baselineWeekAvg);

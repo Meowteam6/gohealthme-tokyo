@@ -79,7 +79,7 @@ export function runFigureOf(clock: RunClock | null): RunFigure {
   if (clock === null) return { figure: "--", caption: "Reading the clock" };
   if (clock.ended) return { figure: "Ended", caption: "Time is up. The verdict is next." };
   if (clock.notStarted) {
-    return { figure: formatRunClock(clock), caption: "until the run closes. It has not started yet." };
+    return { figure: formatRunClock(clock), caption: "until the challenge closes. It has not started yet." };
   }
-  return { figure: formatRunClock(clock), caption: "left in the run" };
+  return { figure: formatRunClock(clock), caption: "left in the challenge" };
 }

@@ -76,7 +76,7 @@ describe("errorPresentation", () => {
       "pool settled before this claim completed; a one-shot settle cannot pay it retroactively",
     );
     expect(p.transient).toBe(false);
-    expect(p.label).toContain("pool settled before this claim finished");
+    expect(p.label).toContain("challenge settled before this claim finished");
   });
 
   it("does not call a post-settlement cap break a clean stop", () => {
@@ -164,7 +164,7 @@ describe("deferred settle copy", () => {
       "pool period ends at 12345; settling the moment it does",
     );
     expect(copy).toBe(
-      "SPOTTER settles this automatically the moment the pool period ends",
+      "SPOTTER settles this automatically the moment the challenge ends",
     );
   });
 

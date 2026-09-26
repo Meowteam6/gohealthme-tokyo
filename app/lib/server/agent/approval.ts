@@ -397,7 +397,7 @@ export async function completeApproval(args: {
         ...current,
         status: "declined",
         completedAt: iso(nowMs),
-        note: "you declined; nothing moved, and your stake comes back when the pool closes",
+        note: "you declined; nothing moved, and your stake comes back when the challenge closes",
       };
       await save(declined);
       await appendLedger(goalId, {
@@ -441,7 +441,7 @@ export async function completeApproval(args: {
       completedAt: iso(nowMs),
       nullifier: verified.nullifier,
       credential: verified.credential,
-      note: "you confirmed; SPOTTER is recording the result and will settle when the pool closes",
+      note: "you confirmed; SPOTTER is recording the result and will settle when the challenge closes",
     };
     await save(approved);
     await appendLedger(goalId, {
@@ -548,7 +548,7 @@ export async function approvalGate(args: {
     if (current.status === "pending") {
       const cancelled = await cancelApproval(
         args.goalId,
-        "the pool settled before you confirmed; nothing moved, and your stake comes back with the pool's refund",
+        "the challenge settled before you confirmed; nothing moved, and your stake comes back with the challenge's refund",
         nowMs,
       );
       // Approved in the same instant the settle landed: still unpayable.

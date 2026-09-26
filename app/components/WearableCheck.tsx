@@ -663,8 +663,8 @@ function WearableCheckInner({
               </p>
             ) : (
               <p className="mt-1 text-sm text-muted">
-                SPOTTER settles the payout after the run ends - no
-                human involved. Come back after the period closes and the payout
+                SPOTTER settles the payout after the challenge ends - no
+                human involved. Come back after it closes and the payout
                 appears here.
               </p>
             )}
@@ -680,7 +680,7 @@ function WearableCheckInner({
               <p className="mt-1 text-sm text-muted">
                 The data is the problem, not you, and a check costs you nothing.
                 Make sure your wearable is connected and has synced the period,
-                then run it back.
+                then check again.
               </p>
             </div>
             <Button
@@ -718,8 +718,8 @@ function WearableCheckInner({
               <p className="mt-1 text-sm text-muted">
                 The wearable data was read fine and the goal is not met so far.
                 {lastCheckMs !== null
-                  ? ` Days inside the run still count if your wearable syncs them by ${formatLocalTime(lastCheckMs)}. After that, SPOTTER records a miss on its own when your wearable covered the whole run and shows it; if it did not sync the whole run, nothing is recorded and your stake comes back. A hit only counts once you open the run and confirm it${confirmByMs !== null ? `, by ${formatLocalTime(confirmByMs)} at the latest` : " before it settles"}.`
-                  : " Days inside the run still count if they sync before the run settles, so check again after your next sync."}
+                  ? ` Days inside the challenge still count if your wearable syncs them by ${formatLocalTime(lastCheckMs)}. After that, SPOTTER records a miss on its own when your wearable covered the whole challenge and shows it; if it did not sync the whole challenge, nothing is recorded and your stake comes back. A hit only counts once you open the challenge and confirm it${confirmByMs !== null ? `, by ${formatLocalTime(confirmByMs)} at the latest` : " before it settles"}.`
+                  : " Days inside the challenge still count if they sync before the challenge settles, so check again after your next sync."}
               </p>
             </div>
             <Button
@@ -749,7 +749,7 @@ function WearableCheckInner({
               SPOTTER hit its spending cap and stopped
             </p>
             <p className="mt-1 text-sm text-muted">
-              Every claim runs under a hard per-claim budget. This one reached
+              Every claim has a hard per-claim budget. This one reached
               it before a verdict landed, so no more money moves.
             </p>
           </div>
@@ -759,12 +759,12 @@ function WearableCheckInner({
           <div className="space-y-3">
             <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border-strong)]">
               <p className="text-base font-semibold text-foreground">
-                Join the pool first
+                Join the challenge first
               </p>
               <p className="mt-1 text-sm text-muted">
-                This wallet is not a participant in the pool on-chain, so
-                nothing can be recorded for it. Join the pool, then run the
-                check again.
+                This wallet is not a player in this challenge on-chain, so
+                nothing can be recorded for it. Join the challenge, then check
+                again.
               </p>
             </div>
             <Button
@@ -835,13 +835,13 @@ function WearableCheckInner({
       <p className="rounded-control bg-fill-quiet p-3 shadow-[inset_0_0_0_1px_var(--border)] text-xs text-muted">
         Where your wearable data goes: SPOTTER reads your synced summary on its
         server to check the goal. That is the wearable path - not the sealed
-        enclave the document path runs in. Your raw health data stays
+        enclave the document path uses. Your raw health data stays
         server-side, is never written on-chain, and is never shared. Only the
         verdict - pass or fail, with its confidence - is recorded on-chain.
       </p>
 
       {!authenticated || address === null ? (
-        <SignInGate note="Sign in to run the check.">
+        <SignInGate note="Sign in to have SPOTTER check.">
           {(openSignIn) => (
             <Button
               type="button"
@@ -849,7 +849,7 @@ function WearableCheckInner({
               onClick={openSignIn}
               className="w-full"
             >
-              Sign in to run the check
+              Sign in to have SPOTTER check
             </Button>
           )}
         </SignInGate>
@@ -921,9 +921,9 @@ function WearableCheckInner({
               Your device does not measure this goal
             </p>
             <p className="mt-1 text-sm text-muted">
-              It is syncing fine, it just does not report the number this pool
+              It is syncing fine, it just does not report the number this challenge
               is scored on. That is the hardware, not a delay, so SPOTTER is
-              not going to run a check that cannot come back with anything.
+              not going to try a check that cannot come back with anything.
             </p>
             <p className="mt-2 text-sm text-muted">
               Connect a device that tracks it from your dashboard.
@@ -1066,7 +1066,7 @@ function WearableCheckInner({
             <AgentReceipt ledger={status.ledger} evidenceKind="wearable" />
           ) : null}
           <ErrorNote
-            title="Could not run the check"
+            title="Could not start the check"
             detail={status.message}
             onRetry={() => setStatus({ kind: "idle" })}
           />

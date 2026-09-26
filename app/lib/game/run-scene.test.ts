@@ -49,7 +49,7 @@ describe("pebbleOf", () => {
 
 describe("runFigureOf", () => {
   it("shows time left while the run is on", () => {
-    expect(runFigureOf(runClock(0n, 86_400n, 3_600))).toEqual({ figure: "23h 0m", caption: "left in the run" });
+    expect(runFigureOf(runClock(0n, 86_400n, 3_600))).toEqual({ figure: "23h 0m", caption: "left in the challenge" });
   });
   it("says the verdict is next once the clock runs out", () => {
     expect(runFigureOf(runClock(0n, 100n, 200)).figure).toBe("Ended");

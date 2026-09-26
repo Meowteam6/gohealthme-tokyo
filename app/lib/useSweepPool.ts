@@ -63,7 +63,7 @@ export function fundsSweptAmount(
 }
 
 const NOT_CONFIGURED =
-  "Runs are not switched on for this build yet, so there is nothing to take back here.";
+  "Challenges are not switched on for this build yet, so there is nothing to take back here.";
 
 export function useSweepPool(): UseSweepPoolResult {
   const { getArcWalletClient } = useEmbeddedWallet();

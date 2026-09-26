@@ -13,7 +13,7 @@ const noop = () => () => {};
 export default function ChallengeFriend({
   path,
   text,
-  label = "Challenge a friend into this run",
+  label = "Bring a friend into this challenge",
   variant = "primary",
   block = true,
   tabIndex,

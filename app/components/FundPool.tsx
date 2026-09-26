@@ -38,7 +38,7 @@ function FundPoolInner({
   if (poolsAddress === null) {
     return (
       <ErrorNote
-        title="Runs are off on this build"
+        title="Challenges are off on this build"
         detail="This part is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
@@ -111,7 +111,7 @@ function FundPoolInner({
         <p className={FIELD_HINT}>Base Sepolia test USDC. Pulled from your wallet.</p>
       </div>
 
-      <SignInGate note="Sign in to add to this run's pot.">
+      <SignInGate note="Sign in to add to this challenge's pot.">
         {(openSignIn) => (
           <Button
             variant="secondary"
@@ -176,7 +176,7 @@ function FundPoolInner({
 
 export default function FundPool({
   poolId,
-  heading = "Add to this run's pot",
+  heading = "Add to this challenge's pot",
   description = "Add test USDC to the pot so more of the players who hit can be paid.",
   ctaLabel = "Approve and add to the pot",
   chipIn,
