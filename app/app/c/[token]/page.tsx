@@ -11,6 +11,7 @@ import {
 } from "@/components/challenges/ChallengeLanding";
 import { PAGE_COLUMN } from "@/components/night/kit";
 import {
+  fetchCommitmentFeeBps,
   fetchParticipants,
   fetchPool,
   formatUsdc,
@@ -112,12 +113,12 @@ export default async function ChallengeLandingPage({
 
   // Best-effort reads for the money line. A miss leaves that figure unknown
   // (PrizeLine then says less), never wrong.
-  const [participantCount, funding] = await Promise.all([
-    fetchParticipants(poolIdBig)
-      .then((list) => list.length)
-      .catch(() => null),
+  const [participants, funding, feeBps] = await Promise.all([
+    fetchParticipants(poolIdBig).catch(() => null),
     fetchPoolFunding(poolIdBig).catch((): PoolFunding | null => null),
+    fetchCommitmentFeeBps().catch(() => null),
   ]);
+  const participantCount = participants !== null ? participants.length : null;
   const pot = darePot({
     balance: pool.balance,
     entryFee: pool.entryFee,
@@ -165,6 +166,13 @@ export default async function ChallengeLandingPage({
           players: participantCount,
           sponsorPot: pot.prize,
           recordsMisses: missRulePool(pool).ok,
+          // A challenger who staked in their own run is asking friends to
+          // match it (stake on yourself), not offering a reward.
+          creatorStaked:
+            participants !== null
+              ? participants.some((a) => a.toLowerCase() === pool.creator.toLowerCase())
+              : null,
+          feeBps,
         }
       : null;
 
@@ -205,7 +213,11 @@ export default async function ChallengeLandingPage({
           />
         }
         highlightAction={
-          <ChallengeAccept poolId={challenge.poolId} returnTo={`/c/${token}`} />
+          <ChallengeAccept
+            poolId={challenge.poolId}
+            returnTo={`/c/${token}`}
+            termsAbove={terms !== null}
+          />
         }
       />
 

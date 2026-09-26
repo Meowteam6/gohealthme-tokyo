@@ -20,6 +20,7 @@ import {
   TEXT_LINK,
 } from "@/components/ui";
 import ApprovalNote from "@/components/game/ApprovalNote";
+import { MissUnderStake, MoneyChips, MoneyTermsList } from "@/components/game/MoneyTerms";
 import { usePlayers, useRunNights } from "@/components/game/RunBoard";
 import VerdictStage, {
   proofSurfaceNeeded,
@@ -96,6 +97,8 @@ import { darePot } from "@/lib/challenges";
 import { recordsMissesOf, sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
 import { missRulePool, missRuleReading } from "@/lib/miss-rule";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
+import { missDetailOf } from "@/lib/game/money-flow";
+import { useRunMoney } from "@/lib/game/useRunMoney";
 import { classifyWearableGoal, metricLabel } from "@/lib/wearable-goal";
 import { fetchResolvedName, resolveOnce } from "@/lib/ens/client-cache";
 import type { SpotterScreenState } from "@/lib/spotter-poses";
@@ -518,6 +521,15 @@ export default function PoolDetail({ id }: { id: string }) {
     staleTime: 60_000,
   });
   const commitmentFee = useCommitmentFee(poolQuery.data?.pool.bountyModel === 2);
+  // The run's money flow (docs/MONEY-FLOWS.md): the kind and miss chips in the
+  // header, the flow's terms on the stake card, the miss chip under the hold.
+  const runMoney = useRunMoney({
+    pool: poolQuery.data?.pool ?? null,
+    players: participantsQuery.data?.length ?? null,
+    includeJoiner: !joined,
+    viewer: address,
+    feeBps: commitmentFee.bps,
+  });
 
   if (poolId === null) {
     return (
@@ -743,7 +755,17 @@ export default function PoolDetail({ id }: { id: string }) {
   // stake so a player knows the count a miss is judged on.
   const missRule = selfStaked ? missRulePool(pool) : null;
   const missReading = missRule !== null && missRule.ok ? missRuleReading(missRule.spec) : null;
-  const solo = terms !== null && commitmentTerms !== null ? soloLineOf(commitmentTerms) : null;
+  // The flow's terms carry the range themselves; the solo note is the
+  // fallback for when they cannot be built.
+  const flowTerms = runMoney?.copy ?? null;
+  const solo =
+    flowTerms === null && terms !== null && commitmentTerms !== null ? soloLineOf(commitmentTerms) : null;
+  const moneyChips =
+    runMoney !== null && live ? <MoneyChips kind={runMoney.kind.chip} miss={runMoney.miss} /> : null;
+  const underStake =
+    runMoney !== null && runMoney.miss !== null && flowTerms !== null ? (
+      <MissUnderStake miss={runMoney.miss} detail={missDetailOf(flowTerms)} />
+    ) : null;
   const friendMath = commitmentTerms !== null ? friendMathOf(commitmentTerms, joined) : null;
 
   const tag =
@@ -777,6 +799,7 @@ export default function PoolDetail({ id }: { id: string }) {
       figure={headline.figure}
       rest={headline.figure !== null ? headline.rest : goalTitle}
       ends={ends}
+      chips={moneyChips}
       spotter={heroSpotterOf({ screen, joined, phase, sleepRun, achievers: settleAchievers })}
     />
   );
@@ -817,7 +840,11 @@ export default function PoolDetail({ id }: { id: string }) {
   const termsBlock = selfStaked ? (
     terms !== null ? (
       <>
-        <StakeTerms terms={terms} />
+        {flowTerms !== null ? (
+          <MoneyTermsList copy={flowTerms} id="stake-terms" className="mt-3.5 border-t border-edge pt-3.5" />
+        ) : (
+          <StakeTerms terms={terms} />
+        )}
         {missReading !== null ? (
           <p className="m-0 mt-2 text-[0.8125rem] leading-[1.45] text-haze">{missReading}</p>
         ) : null}
@@ -831,10 +858,12 @@ export default function PoolDetail({ id }: { id: string }) {
     ) : (
       <StakeTermsPlain>
         {recordsMisses
-          ? "Hit it and your stake comes back with a share of the missed stakes and the pot. Miss it and your stake goes to the players who hit. If nobody hits, every stake comes back."
+          ? "Hit it and your stake comes back with a share of the missed stakes and the pot. Miss it and, if anyone else hits, your stake goes to them. If nobody hits, every stake comes back."
           : "Hit it and your stake comes back with a share of any sponsor pot. This run cannot record a miss, so a miss comes back at settle too. If nobody hits, every stake comes back."}
       </StakeTermsPlain>
     )
+  ) : flowTerms !== null ? (
+    <MoneyTermsList copy={flowTerms} id="stake-terms" className="mt-3.5 border-t border-edge pt-3.5" />
   ) : (
     <StakeTermsPlain>
       {isDocGoal
@@ -1083,6 +1112,7 @@ export default function PoolDetail({ id }: { id: string }) {
             <ButtonLink href={fix.kind === "link" ? fix.href : "/character"} block>
               Sign in to stake {stake} USDC
             </ButtonLink>
+            {underStake}
           </StakeAction>
           <StakeVault />
         </>
@@ -1112,6 +1142,7 @@ export default function PoolDetail({ id }: { id: string }) {
           alreadyJoined={joined}
           view={{
             preamble,
+            underStake,
             goalTitle: headline.figure !== null ? `${headline.figure} ${headline.rest}` : goalTitle,
             joined: {
               stake,

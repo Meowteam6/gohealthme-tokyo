@@ -33,6 +33,8 @@ export interface RunHeroProps {
   rest: string;
   /** "Ends <b>Sun 08:30</b>, in 16h 40m". */
   ends: ReactNode;
+  /** The money chips beside the tag (what kind of run, what a miss does). */
+  chips?: ReactNode;
   /** SPOTTER's staged state, or null to leave him off this viewport. */
   spotter: SpotterScreenState | null;
   /** The pose's alt text when it carries meaning; decorative otherwise. */
@@ -45,6 +47,7 @@ export default function RunHero({
   figure,
   rest,
   ends,
+  chips,
   spotter,
   spotterAlt,
   headingId = "run-goal",
@@ -63,7 +66,14 @@ export default function RunHero({
       aria-labelledby={headingId}
       className="relative pt-1 [grid-area:hero] min-[900px]:min-h-[250px] min-[960px]:min-h-[312px] min-[960px]:pt-3"
     >
-      <Tag tone={tag.tone}>{tag.label}</Tag>
+      {chips !== undefined && chips !== null ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Tag tone={tag.tone}>{tag.label}</Tag>
+          {chips}
+        </div>
+      ) : (
+        <Tag tone={tag.tone}>{tag.label}</Tag>
+      )}
       <h1 id={headingId} className={`m-0 mt-2.5 ${room}`}>
         {figure !== null ? (
           <>
