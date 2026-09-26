@@ -14,9 +14,14 @@
 //
 // Request JSON:  { address, label }
 // Response JSON: { name, tx, alreadyOwned } on success.
+//
+// GET /api/ens/claim?address=0x... - { namesLeft: number | null }: how many
+// new names this wallet's human can still pick (null means no cap applies).
+// Read-only, so the form can show the limit before anyone types or signs.
 
 import type { Address } from "viem";
 import { claimEnsName, liveClaimDeps } from "@/lib/server/ens/claim";
+import { namesLeft } from "@/lib/server/ens/human-gate";
 import { claimHandle } from "@/lib/server/social-profile";
 import { supabaseWriteConfigured } from "@/lib/server/supabase";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
@@ -30,6 +35,19 @@ import {
 // Two Sepolia transactions are awaited (register, then the address record).
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  const cid = newCorrelationId("ens-claim-left");
+  try {
+    const address = new URL(request.url).searchParams.get("address") ?? "";
+    if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+      return jsonError(400, "address must be a 0x address string");
+    }
+    return Response.json({ namesLeft: await namesLeft(address) });
+  } catch (err) {
+    return jsonError(500, safeError(err, cid));
+  }
+}
 
 export async function POST(request: Request) {
   const cid = newCorrelationId("ens-claim");

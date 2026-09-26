@@ -52,6 +52,10 @@ export const DEFAULT_PARENT_NAME = "gohealthme.eth";
 export const AGENT_LABEL = "spotter";
 export const POOL_LABEL_PREFIX = "pool-";
 
+/** Shown when a human has used every gohealthme.eth name pick. */
+export const NAME_CAP_REACHED =
+  "You have used all your name picks. Keep this one, or link a .eth you already own.";
+
 export const ENS_LABEL_MIN = 3;
 export const ENS_LABEL_MAX = 20;
 /**

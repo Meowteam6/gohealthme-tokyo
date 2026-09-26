@@ -79,7 +79,7 @@ export async function claimEnsName(
   const label = check.label;
 
   // A name costs our Sepolia gas, so it needs a human before anything else.
-  const human = await checkNameHuman(input.address, deps.human);
+  const human = await checkNameHuman(input.address, deps.human, label);
   if (!human.ok) return human;
 
   if (!deps.ownerConfigured()) {
@@ -184,7 +184,7 @@ export async function mintHandleNameBestEffort(
   if (!/^0x[0-9a-fA-F]{40}$/.test(address)) return;
   if (!deps.ownerConfigured()) return;
   try {
-    const human = await checkNameHuman(address, deps.human);
+    const human = await checkNameHuman(address, deps.human, check.label);
     if (!human.ok) {
       console.info(`[ens/claim] handle "${handle}" kept, no subname: ${human.reason}`);
       return;

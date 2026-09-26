@@ -26,6 +26,7 @@ import {
 } from "@/lib/client-auth";
 import {
   ENS_LABEL_MAX,
+  NAME_CAP_REACHED,
   checkEnsLabel,
   ensAppUrl,
   sepoliaTxUrl,
@@ -73,6 +74,24 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
   const [mode, setMode] = useState<Mode>("claim");
   const [ownName, setOwnName] = useState("");
   const checkSeq = useRef(0);
+  // New gohealthme.eth names this human can still pick; null = no cap, or
+  // not known yet (the server still refuses, this only warns early).
+  const [picksLeft, setPicksLeft] = useState<number | null>(null);
+  const [picksSeq, setPicksSeq] = useState(0);
+
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/ens/claim?address=${encodeURIComponent(address)}`)
+      .then((response) => response.json())
+      .then((body: { namesLeft?: number | null }) => {
+        if (live) setPicksLeft(typeof body.namesLeft === "number" ? body.namesLeft : null);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [address, picksSeq]);
+  const outOfPicks = picksLeft === 0;
 
   // Live availability: the pure rule answers during render and stops the
   // request for anything that could never be minted; the registry answers the
@@ -143,6 +162,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
         if (body.name === name) {
           rememberName(address, name);
           setStatus({ kind: "done", name, tx });
+          setPicksSeq((n) => n + 1);
           onClaimed(name);
           return;
         }
@@ -306,12 +326,18 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
               setEditing(true);
               setStatus({ kind: "idle" });
               setLabel("");
+              if (outOfPicks) setMode("link");
             }}
             className="rounded-xl border border-edge px-4 py-2 font-medium text-muted hover:text-foreground"
           >
-            Pick another
+            {outOfPicks
+              ? "Use a name I already own"
+              : picksLeft !== null
+                ? `Pick another (${picksLeft} left)`
+                : "Pick another"}
           </button>
         </div>
+        {outOfPicks ? <p className="text-xs text-muted">{NAME_CAP_REACHED}</p> : null}
       </div>
     );
   }
@@ -321,7 +347,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
     status.kind === "minting" ||
     status.kind === "linking" ||
     status.kind === "confirming";
-  const canSubmit = availability.kind === "available" && !busy && ready;
+  const canSubmit = availability.kind === "available" && !busy && ready && !outOfPicks;
   const ownNameReady = ownName.trim().includes(".") && !busy && ready;
 
   const modeSwitch = (
@@ -445,7 +471,9 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
       </label>
 
       <p className="min-h-5 text-sm" aria-live="polite">
-        {availability.kind === "checking" ? (
+        {outOfPicks ? (
+          <span className="text-muted">{NAME_CAP_REACHED}</span>
+        ) : availability.kind === "checking" ? (
           <span className="text-muted">Checking the registry...</span>
         ) : availability.kind === "available" ? (
           <span className="text-accent-deep">{availability.name} is available.</span>
