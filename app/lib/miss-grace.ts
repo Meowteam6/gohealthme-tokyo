@@ -62,3 +62,20 @@ export function missGraceSeconds(): number {
 export function missDeadlineMs(periodEndSec: bigint | number): number {
   return (Number(periodEndSec) + missGraceSeconds()) * 1000;
 }
+
+/**
+ * How long, past periodEnd + grace, settlement of a miss-eligible pool waits
+ * for the sweep's miss phase and for players whose wearable shows a hit to
+ * confirm it. A stuck miss phase must never strand the pool: at worst the
+ * unjudged are refunded.
+ */
+export const MISS_PHASE_MAX_S = 2 * 3600;
+
+/**
+ * The latest moment a hit on a run that can record a miss can still be
+ * confirmed, in epoch ms. The run settles by then whatever happens, and a hit
+ * that is not recorded at settle gets its stake back without a share.
+ */
+export function missConfirmByMs(periodEndSec: bigint | number): number {
+  return (Number(periodEndSec) + missGraceSeconds() + MISS_PHASE_MAX_S) * 1000;
+}

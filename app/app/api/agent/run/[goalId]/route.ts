@@ -88,6 +88,7 @@ import { adjudicateMissUnlocked } from "@/lib/server/agent/miss-record";
 import {
   providerById,
   providerConfigured,
+  pinnedProviderId,
   storedProviderId,
 } from "@/lib/server/wearable";
 // --- end miss rule ---
@@ -136,7 +137,7 @@ function liveDeps(
         {
           spotter,
           legacyRecordResult: recordResult,
-          read: { storedProviderId, providerConfigured, providerById },
+          read: { pinnedProviderId, storedProviderId, providerConfigured, providerById },
         },
         input,
       ),

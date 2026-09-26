@@ -9,7 +9,7 @@
 //
 // Response JSON:
 //   { status: "none" | "pending" | "approved" | "declined" | "expired" |
-//             "cancelled", mode, requestId?, expiresAt?, provider?, mocked?,
+//             "cancelled", mode, hit?, requestId?, expiresAt?, provider?, mocked?,
 //     attempt? }
 //
 // mode is "off" | "mock" | "world" | "misconfigured". "misconfigured" means
@@ -19,7 +19,10 @@
 // "payouts paused" lock before any stake, instead of reading the old 503 as
 // "the step is off". The reason goes to the server log, never the body.
 
+import type { Hex } from "viem";
+import { unconfirmedHitOf } from "@/lib/agent-receipt";
 import { readApproval } from "@/lib/server/agent/approval";
+import { readLedger } from "@/lib/server/agent/ledger";
 import { approvalModeStatus } from "@/lib/server/agent/approval-mode-status";
 import { jsonError, newCorrelationId, safeError } from "@/lib/server/http";
 
@@ -34,12 +37,18 @@ export async function GET(request: Request) {
     }
 
     const mode = approvalModeStatus(cid);
+    // A hit SPOTTER read (the pass path, or the sweep after the run ended)
+    // with nothing recorded yet: the dashboard asks the player to open the
+    // run and confirm it, and never calls the refund "no proof". A yes/no
+    // machine state, the same fact the public feed already shows.
+    const hit = unconfirmedHitOf(await readLedger(goalId as Hex)) ? { hit: true } : {};
 
     const record = await readApproval(goalId);
-    if (record === null) return Response.json({ status: "none", mode });
+    if (record === null) return Response.json({ status: "none", mode, ...hit });
     return Response.json({
       status: record.status,
       mode,
+      ...hit,
       requestId: record.requestId,
       expiresAt: record.expiresAt,
       provider: record.provider,

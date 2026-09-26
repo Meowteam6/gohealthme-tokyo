@@ -54,6 +54,7 @@ import {
   evaluateMiss,
   missRulePool,
   missVerdictReason,
+  passVerdictReason,
   type MissDecision,
   type MissPool,
   type MissReadDeps,
@@ -63,6 +64,7 @@ import { readMissPool, writeMissPool } from "@/lib/server/agent/miss-store";
 import { goalIdFor } from "@/lib/server/screening/gate";
 import { errorMessage } from "@/lib/server/http";
 import { missGraceSeconds } from "@/lib/miss-grace";
+import type { ProviderId } from "@/lib/server/wearable/types";
 
 /** Players judged per sweep. Each can be three provider reads. */
 export const MISS_EVALS_PER_SWEEP = 6;
@@ -100,7 +102,7 @@ export function usdcToUsd2(amount: bigint): string {
   return `${cents / 100n}.${(cents % 100n).toString().padStart(2, "0")}`;
 }
 
-function missPoolOf(state: PoolState): MissPool | null {
+function missPoolOf(state: PoolState, poolId: bigint): MissPool | null {
   if (
     state.bountyModel === undefined ||
     state.goalSpec === undefined ||
@@ -109,6 +111,7 @@ function missPoolOf(state: PoolState): MissPool | null {
     return null;
   }
   return {
+    id: poolId,
     bountyModel: state.bountyModel,
     goalSpec: state.goalSpec,
     settled: state.settled,
@@ -166,23 +169,22 @@ async function writeMissOnChain(
  * the read and a no-pay decision; the sweep path writes whichever of those
  * are missing, then the miss's own verdict and decision, then the record.
  */
-async function writeMissRows(
+/** The plan and the read's spend row, whichever are missing: every claim the
+ *  sweep writes for starts the way a claim the player opened does. */
+async function ensurePlanAndSpend(
   deps: MissRecordDeps,
   input: {
     goalId: Hex;
     poolId: bigint;
     address: Address;
-    state: PoolState & { periodStart: bigint };
-    decision: Extract<MissDecision, { miss: true }> | null;
-    resultTx: Hex | undefined;
+    ref: string;
+    providerId: ProviderId | null;
+    note: string;
   },
 ): Promise<LedgerEntry[]> {
-  const { goalId } = input;
+  const { goalId, ref } = input;
   let ledger = await readLedger(goalId);
-  const ref = `wearable-${input.state.periodStart.toString()}`;
-  const provider =
-    input.decision === null ? null : deps.read.providerById(input.decision.providerId);
-
+  const provider = input.providerId === null ? null : deps.read.providerById(input.providerId);
   if (!ledger.some((e) => e.kind === "plan")) {
     ledger = await appendLedger(goalId, {
       kind: "plan",
@@ -209,11 +211,70 @@ async function writeMissRows(
       amountUsd: provider.readEstUsd,
       ref,
       settlement: "prepaid",
-      note: "read once after the run ended, to check the whole run for a miss",
+      note: input.note,
     });
   }
+  return ledger;
+}
+
+/**
+ * A hit the sweep read for a player who has not confirmed it: the same
+ * verdict row the pass path writes when the player opens the run, so their
+ * run page and dashboard say "your wearable shows the goal met, confirm it"
+ * instead of "not met" or "no proof". Written once; the run loop treats a
+ * verdict newer than its last decision as fresh evidence and re-decides.
+ */
+async function writeMetRows(
+  deps: MissRecordDeps,
+  input: { goalId: Hex; poolId: bigint; address: Address; periodStart: bigint },
+  met: NonNullable<Extract<MissDecision, { miss: false }>["met"]>,
+): Promise<LedgerEntry[]> {
+  const ref = `wearable-${input.periodStart.toString()}`;
+  let ledger = await ensurePlanAndSpend(deps, {
+    ...input,
+    ref,
+    providerId: met.providerId,
+    note: "read once after the run ended; your wearable shows the goal met",
+  });
+  let latest: Extract<LedgerEntry, { kind: "verdict" }> | undefined;
+  for (const entry of ledger) {
+    if (entry.kind === "verdict" && entry.ref === ref) latest = entry;
+  }
+  if (latest?.verified === true) return ledger;
+  ledger = await appendLedger(input.goalId, {
+    kind: "verdict",
+    verified: true,
+    confidence: "high",
+    reason: passVerdictReason(met.spec, met.qualifyingDays),
+    ref,
+    selfReported: false,
+  });
+  return ledger;
+}
+
+async function writeMissRows(
+  deps: MissRecordDeps,
+  input: {
+    goalId: Hex;
+    poolId: bigint;
+    address: Address;
+    state: PoolState & { periodStart: bigint };
+    decision: Extract<MissDecision, { miss: true }> | null;
+    resultTx: Hex | undefined;
+  },
+): Promise<LedgerEntry[]> {
+  const { goalId } = input;
+  const ref = `wearable-${input.state.periodStart.toString()}`;
+  await ensurePlanAndSpend(deps, {
+    goalId,
+    poolId: input.poolId,
+    address: input.address,
+    ref,
+    providerId: input.decision === null ? null : input.decision.providerId,
+    note: "read once after the run ended, to check the whole run for a miss",
+  });
   if (input.decision !== null) {
-    ledger = await appendLedger(goalId, {
+    await appendLedger(goalId, {
       kind: "verdict",
       verified: false,
       confidence: "high",
@@ -221,7 +282,7 @@ async function writeMissRows(
       ref,
       selfReported: false,
     });
-    ledger = await appendLedger(goalId, {
+    await appendLedger(goalId, {
       kind: "reason",
       decision: "no-pay",
       note: MISS_DECISION_NOTE,
@@ -247,7 +308,15 @@ async function writeMissRows(
  */
 export async function adjudicateMissUnlocked(
   deps: MissRecordDeps,
-  input: { goalId: Hex; poolId: bigint; address: Address },
+  input: {
+    goalId: Hex;
+    poolId: bigint;
+    address: Address;
+    /** The sweep's call: when the read shows the goal met, write it to the
+     *  player's ledger so they see the hit and the deadline to confirm it.
+     *  The run loop never sets it (it writes its own read). */
+    writeMetRow?: boolean;
+  },
 ): Promise<MissAdjudication> {
   let ledger = await readLedger(input.goalId);
   const reader = deps.spotter.reader;
@@ -268,7 +337,7 @@ export async function adjudicateMissUnlocked(
     console.error(`[miss] chain read failed for ${input.goalId}: ${errorMessage(err)}`);
     return { status: "skipped", basis: "chain-read-error", final: false, ledger };
   }
-  const pool = missPoolOf(state);
+  const pool = missPoolOf(state, input.poolId);
   if (pool === null || state.periodStart === undefined) {
     return { status: "skipped", basis: "chain-read-error", final: false, ledger };
   }
@@ -301,6 +370,18 @@ export async function adjudicateMissUnlocked(
     graceSec: deps.graceSec ?? missGraceSeconds(),
   });
   if (!decision.miss) {
+    if (input.writeMetRow === true && decision.met !== undefined) {
+      try {
+        ledger = await writeMetRows(
+          deps,
+          { ...input, periodStart: state.periodStart },
+          decision.met,
+        );
+      } catch (err) {
+        // The row is a courtesy; the wait for the player does not depend on it.
+        console.error(`[miss] could not write the hit row for ${input.goalId}: ${errorMessage(err)}`);
+      }
+    }
     return { status: "skipped", basis: decision.basis, final: decision.final, ledger };
   }
 
@@ -342,7 +423,7 @@ export async function adjudicateMissUnlocked(
  *  (a polling browser) owns the claim right now. */
 export async function adjudicateMiss(
   deps: MissRecordDeps,
-  input: { goalId: Hex; poolId: bigint; address: Address },
+  input: { goalId: Hex; poolId: bigint; address: Address; writeMetRow?: boolean },
 ): Promise<MissAdjudication | { status: "busy" }> {
   const outcome = await withLock(runLockName(input.goalId), RUN_LOCK_TTL_MS, () =>
     adjudicateMissUnlocked(deps, input),
@@ -431,6 +512,38 @@ export async function closeMissClaims(
   return { closed: errors.length === 0, count, errors };
 }
 
+/**
+ * Close every recorded miss in a pool its creator cancelled. HealthPoolsV3's
+ * cancelPool() has no time guard: it works any time before settle, and after
+ * it every joiner, a recorded miss included, takes their stake back through
+ * claimRefund(). So the miss's closing row says the stake is refundable, and
+ * nothing tells that player their stake went to the players who hit.
+ */
+async function closeCancelledMisses(
+  deps: { spotter: SpotterDeps; poolsAddress: Address },
+  poolId: bigint,
+  periodStart: bigint,
+): Promise<number> {
+  const reader = deps.spotter.reader;
+  if (reader.participants === undefined) return 0;
+  let count = 0;
+  for (const player of await reader.participants(poolId)) {
+    const goalId = goalIdFor(deps.poolsAddress, poolId, player, periodStart);
+    const ledger = await readLedger(goalId);
+    const record = recordOf(ledger);
+    if (record === undefined || record.verdict !== false) continue;
+    if (ledger.some((e) => e.kind === "settle" && e.status === "closed")) continue;
+    await appendLedger(goalId, {
+      kind: "settle",
+      status: "closed",
+      outcome: "cancelled",
+      note: "the creator cancelled the run before it settled, so every stake, this one included, can be claimed back",
+    });
+    count += 1;
+  }
+  return count;
+}
+
 export interface MissPhaseReport {
   missesRecorded: number;
   missesClosed: number;
@@ -477,12 +590,17 @@ export async function runMissPhase(
       const record = await readMissPool(poolId);
       if (record.closed) continue;
       const state = await reader.getPoolState(poolId);
-      const pool = missPoolOf(state);
+      const pool = missPoolOf(state, poolId);
       if (pool === null || state.periodStart === undefined) {
         report.missErrors.push(`pool ${poolId}: pool fields unreadable; retrying next pass`);
         continue;
       }
-      if (pool.cancelled || !missRulePool(pool).ok) {
+      if (pool.cancelled) {
+        report.missesClosed += await closeCancelledMisses(deps, poolId, pool.periodStart);
+        await writeMissPool(poolId, { ...record, closed: true });
+        continue;
+      }
+      if (!missRulePool(pool).ok) {
         await writeMissPool(poolId, { ...record, closed: true });
         continue;
       }
@@ -503,6 +621,24 @@ export async function runMissPhase(
       for (const player of players) {
         const key = player.toLowerCase();
         if (record.evaluated[key] !== undefined) continue;
+        if (record.waiting[key] !== undefined) {
+          // A hit SPOTTER is waiting on. Only the chain can end the wait (the
+          // player confirmed and the pass landed); the wearable is not read
+          // again. Until then the pool holds, up to its hold deadline.
+          try {
+            const result = await reader.participantResult(poolId, player);
+            if (result.resultRecorded) {
+              record.evaluated[key] = "already-recorded";
+              delete record.waiting[key];
+              await writeMissPool(poolId, { ...record, done: false });
+              continue;
+            }
+          } catch (err) {
+            report.missErrors.push(`pool ${poolId}: ${player}: ${errorMessage(err)}`);
+          }
+          complete = false;
+          continue;
+        }
         if (
           opts.outOfTime() ||
           evaluations >= MISS_EVALS_PER_SWEEP ||
@@ -514,19 +650,31 @@ export async function runMissPhase(
         }
         evaluations += 1;
         const goalId = goalIdFor(deps.poolsAddress, poolId, player, pool.periodStart);
-        const outcome = await adjudicateMiss(deps, { goalId, poolId, address: player });
+        const outcome = await adjudicateMiss(deps, {
+          goalId,
+          poolId,
+          address: player,
+          writeMetRow: true,
+        });
         if (outcome.status === "recorded") {
           record.evaluated[key] = "miss";
           report.missesRecorded += 1;
           // Saved per player, so a sweep killed mid-pool keeps its progress.
           await writeMissPool(poolId, { ...record, done: false });
         } else if (outcome.status === "skipped" && outcome.final) {
-          record.evaluated[key] = outcome.basis;
           report.missSkips.push({
             poolId: poolId.toString(),
             address: player,
             basis: outcome.basis,
           });
+          if (outcome.basis === "met" || outcome.basis === "pass-in-progress") {
+            // A hitter: settling now would refund them with no share. Wait
+            // for their pass (or the hold deadline) instead.
+            record.waiting[key] = outcome.basis;
+            complete = false;
+          } else {
+            record.evaluated[key] = outcome.basis;
+          }
           await writeMissPool(poolId, { ...record, done: false });
         } else {
           complete = false;

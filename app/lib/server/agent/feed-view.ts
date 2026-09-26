@@ -32,7 +32,7 @@ export interface PublicFeedSettle {
   periodEndIso: string | null;
   /** Closed rows only (a recorded miss after settle): where the stake went.
    *  A money fact from the settle transaction's events, never prose. */
-  outcome?: "forfeited" | "refunded";
+  outcome?: "forfeited" | "refunded" | "cancelled";
 }
 
 /** The payout screening verdict (Intercepta): machine facts only. The trait
@@ -211,7 +211,9 @@ export function toPublicFeedClaim(
         };
         if (
           entry.status === "closed" &&
-          (entry.outcome === "forfeited" || entry.outcome === "refunded")
+          (entry.outcome === "forfeited" ||
+            entry.outcome === "refunded" ||
+            entry.outcome === "cancelled")
         ) {
           settle.outcome = entry.outcome;
         }

@@ -358,6 +358,25 @@ describe("runApprovalLine", () => {
     expect(runApprovalLine("unknown", open)?.text).toContain("could not check");
   });
 
+  it("F10: asks a player whose wearable shows the hit to open the run and confirm it, by when", () => {
+    const line = runApprovalLine("none", open, { confirmByMs: 1_790_494_200_000 });
+    expect(line?.openRun).toBe(true);
+    expect(line?.text).toMatch(/shows the goal met/);
+    expect(line?.text).toMatch(/confirm it with World ID/);
+    expect(line?.text).toContain(
+      new Date(1_790_494_200_000).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    );
+    // A pending ask already says it; the hit adds nothing there.
+    expect(runApprovalLine("pending", open, { confirmByMs: null })?.text).toContain(
+      "waiting on your OK",
+    );
+  });
+
   it("says nothing once recorded, settled or cancelled, or when nobody asked", () => {
     expect(runApprovalLine("pending", { ...open, resultRecorded: true })).toBeNull();
     expect(runApprovalLine("pending", { ...open, settled: true })).toBeNull();
@@ -466,7 +485,7 @@ describe("verdictCopy", () => {
         minute: "2-digit",
       }),
     );
-    expect(withDeadline?.body).toMatch(/records what your wearable shows/);
+    expect(withDeadline?.body).toMatch(/records a miss on its own/);
     // Without a deadline (a run that can never record a miss) it stays general.
     expect(verdictCopy({ kind: "not-yet" })?.body).toContain("before it settles");
   });
@@ -490,5 +509,68 @@ describe("verdictCopy", () => {
     const won = verdictCopy({ kind: "won", paidUsd: "1.00", txHash: null, selfReported: false });
     expect(won?.body).not.toMatch(/in your wallet now/);
     expect(won?.body).toContain("one tap pulls it into your wallet");
+  });
+});
+
+// F10 (fix/record-misses review): SPOTTER records a miss on its own, but a
+// hit only counts once the player opens the run and confirms it. The sweep
+// writes the hit it read to the ledger; every screen must then say "confirm
+// it", never "not met" or "no proof".
+describe("F10: a hit the sweep read but the player has not confirmed", () => {
+  const sweepHit = verdict(true, { reason: "Your wearable shows 1 qualifying days" });
+
+  it("a verified read newer than an old no-pay is not a no-pay any more", () => {
+    const ledger = [spend, verdict(false), reason("no-pay"), sweepHit];
+    expect(runStatusFromLedger(ledger)).toBe("verifying");
+    expect(screenFor(ledger).kind).not.toBe("not-yet");
+  });
+
+  it("after settle, says the hit was not confirmed, never that the goal was not met", () => {
+    for (const ledger of [
+      [spend, sweepHit],
+      [spend, verdict(false), reason("no-pay"), sweepHit],
+    ]) {
+      const screen = screenFor(ledger, { poolSettled: true });
+      expect(screen).toEqual({ kind: "hit-unconfirmed" });
+      const copy = verdictCopy(screen);
+      expect(`${copy?.headline} ${copy?.body}`).not.toMatch(/not met|no proof/i);
+      expect(copy?.body).toMatch(/confirm/i);
+    }
+  });
+
+  it("the not-yet screen says a hit must be confirmed, and by when", () => {
+    const ledger = [spend, verdict(false), reason("no-pay")];
+    const screen = screenFor(ledger, {
+      missDeadlineMs: 1_790_487_000_000,
+      missConfirmByMs: 1_790_494_200_000,
+    });
+    expect(screen).toEqual({
+      kind: "not-yet",
+      lastCheckMs: 1_790_487_000_000,
+      confirmByMs: 1_790_494_200_000,
+    });
+    const body = verdictCopy(screen)?.body ?? "";
+    expect(body).toMatch(/open the run and confirm/i);
+    expect(body).toContain(
+      new Date(1_790_494_200_000).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    );
+    expect(body).not.toMatch(/SPOTTER records what your wearable shows\./);
+  });
+
+  it("the confirm screen names the deadline on a run that can record a miss", () => {
+    const ledger = [
+      spend,
+      verdict(true),
+      reason("pay"),
+      { kind: "approval", at: AT, status: "requested", requestId: "r1" } as LedgerEntry,
+    ];
+    const screen = screenFor(ledger, { missConfirmByMs: 1_790_494_200_000 });
+    expect(screen).toEqual({ kind: "confirm-human", confirmByMs: 1_790_494_200_000 });
+    expect(verdictCopy(screen)?.body).toMatch(/before/);
   });
 });

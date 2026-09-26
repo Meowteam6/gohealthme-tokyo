@@ -854,3 +854,94 @@ describe("getMissEvidence", () => {
     ).rejects.toThrow(/cannot measure steps/);
   });
 });
+
+// Review findings on fix/record-misses: partial nights (F2) and the pass and
+// miss paths keying WHOOP workouts to different days (F4).
+describe("getMissEvidence: partial nights and local workout days", () => {
+  function byPath(routes: Record<string, unknown[]>) {
+    return vi.fn((input: RequestInfo | URL) => {
+      const path = new URL(String(input)).pathname;
+      const records =
+        Object.entries(routes).find(([suffix]) => path.endsWith(suffix))?.[1] ?? [];
+      return Promise.resolve(json({ records, next_token: null }));
+    });
+  }
+  /** A scored main sleep of `hours` observed asleep, and `noDataMs` lost. */
+  function night(end: string, hours: number, noDataMs: number) {
+    return sleepRecord(end, 80, {
+      timezone_offset: "+09:00",
+      score: {
+        sleep_performance_percentage: 80,
+        sleep_efficiency_percentage: 90,
+        stage_summary: {
+          total_in_bed_time_milli: hours * 3_600_000 + noDataMs,
+          total_awake_time_milli: 0,
+          total_no_data_time_milli: noDataMs,
+          total_light_sleep_time_milli: hours * 3_600_000,
+          total_slow_wave_sleep_time_milli: 0,
+          total_rem_sleep_time_milli: 0,
+        },
+      },
+    });
+  }
+
+  it("F2: a night with no-data time on the strap is partial, not a short night", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      byPath({
+        "/activity/sleep": [
+          night("2026-09-25T21:50:00.000Z", 7.5, 0),
+          // The strap loosened for 3h: 4.5h observed, 3h of no data.
+          night("2026-09-26T22:10:00.000Z", 4.5, 3 * 3_600_000),
+        ],
+      }),
+    );
+    const evidence = await whoopProvider.getMissEvidence!(address, "sleep_hours", "2026-09-24");
+    expect(evidence.partialDays).toEqual(["2026-09-27"]);
+    expect(evidence.values["2026-09-27"]).toBe(4.5);
+  });
+
+  it("F2: two main sleeps ending the same local day are summed for hours", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      byPath({
+        "/activity/sleep": [
+          { ...night("2026-09-26T18:00:00.000Z", 4, 0), id: "a" },
+          { ...night("2026-09-26T23:00:00.000Z", 4, 0), id: "b" },
+        ],
+      }),
+    );
+    const evidence = await whoopProvider.getMissEvidence!(address, "sleep_hours", "2026-09-24");
+    expect(evidence.values["2026-09-27"]).toBe(8);
+    expect(evidence.partialDays ?? []).toEqual([]);
+  });
+
+  it("F4: the pass path keys workouts to the same local day as the miss path", async () => {
+    const address = nextAddress();
+    await linked(address);
+    // Tokyo, 'Hit the gym 2 times', run Sat 00:00 to Mon 00:00 JST. The
+    // sessions end Sat 08:00 JST (Fri 23:00 UTC) and Sat 19:00 JST.
+    const workouts = [
+      { id: "w1", end: "2026-09-25T23:00:00.000Z", score_state: "SCORED", timezone_offset: "+09:00" },
+      { id: "w2", end: "2026-09-26T10:00:00.000Z", score_state: "SCORED", timezone_offset: "+09:00" },
+    ];
+    vi.stubGlobal("fetch", byPath({ "/activity/workout": workouts }));
+    const progress = await whoopProvider.getMetricProgress(
+      address,
+      "workouts",
+      1,
+      "2026-09-25",
+      "2026-09-26",
+    );
+    const evidence = await whoopProvider.getMissEvidence!(address, "workouts", "2026-09-24");
+    // Both sessions are Saturday in Tokyo on both paths; keyed by UTC end
+    // date the pass path saw a Friday session too and counted two days.
+    expect(evidence.values).toEqual({ "2026-09-26": 2 });
+    expect(progress.qualifyingDays).toBe(1);
+    expect(progress.daysWithData).toBe(1);
+  });
+});

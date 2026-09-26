@@ -90,6 +90,7 @@ import { recordResult } from "@/lib/server/oracle";
 import {
   providerById,
   providerConfigured,
+  pinnedProviderId,
   storedProviderId,
 } from "@/lib/server/wearable";
 // --- end miss rule ---
@@ -473,7 +474,7 @@ async function runSweep(): Promise<SweepCounts> {
       {
         spotter: { circle, reader: deps.spotter.reader },
         legacyRecordResult: recordResult,
-        read: { storedProviderId, providerConfigured, providerById },
+        read: { pinnedProviderId, storedProviderId, providerConfigured, providerById },
         poolsAddress: requireHealthPoolsAddress() as Address,
       },
       { outOfTime: () => Date.now() - startedAt >= MISS_PHASE_BUDGET_MS },

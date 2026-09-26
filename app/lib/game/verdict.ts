@@ -15,9 +15,11 @@ import {
   currentAttesterIdOf,
   currentReasonEntry,
   failureModeOf,
+  unconfirmedHitOf,
   type LedgerEntry,
   type RunStatus,
 } from "@/lib/agent-receipt";
+import type { MissOutcome } from "@/lib/agent-history";
 /** What the approval card reported in this session. It is fresher than the
  *  ledger read it came from, and only until the ledger moves on. */
 export interface LocalApproval {
@@ -34,8 +36,11 @@ export type VerdictScreen =
   | { kind: "none" }
   /** SPOTTER is reading the data. */
   | { kind: "checking" }
-  /** SPOTTER decided to pay and is waiting on the player's World ID OK. */
-  | { kind: "confirm-human" }
+  /** SPOTTER decided to pay and is waiting on the player's World ID OK.
+   *  confirmByMs: on a run that can record a miss, the latest moment the run
+   *  can settle (lib/miss-grace.ts missConfirmByMs); a hit not confirmed by
+   *  then gets its stake back without a share. */
+  | { kind: "confirm-human"; confirmByMs?: number }
   /** The player confirmed; SPOTTER is recording the result. */
   | { kind: "confirmed" }
   /** The goal was met but the human confirmation did not happen. `settled`
@@ -53,15 +58,20 @@ export type VerdictScreen =
    *  lastCheckMs: on a run that can record a miss, the moment SPOTTER takes
    *  its last look (periodEnd + MISS_GRACE_HOURS); nights synced after it no
    *  longer count. Absent on runs that can never record a miss. */
-  | { kind: "not-yet"; lastCheckMs?: number }
+  | { kind: "not-yet"; lastCheckMs?: number; confirmByMs?: number }
   /** The run is over, the wearable covered it, the goal was not met, and the
    *  miss is on chain. pending until the pool settles; then forfeited (the
-   *  stake went to the players who hit) or refunded (nobody hit). */
+   *  stake went to the players who hit), refunded (nobody hit) or cancelled
+   *  (the creator cancelled before settle; the stake can be claimed back). */
   | {
       kind: "missed";
-      outcome: "pending" | "forfeited" | "refunded";
+      outcome: MissOutcome;
       stakeUsd: string | null;
     }
+  /** The pool settled with a hit SPOTTER read but the player never
+   *  confirmed: no result was recorded, so settle() credited the stake back
+   *  (B-2) without a share. Never "not met", never "no proof". */
+  | { kind: "hit-unconfirmed" }
   /** Read fine, goal not met, and the run is over. `stakeBack` is true when no
    *  miss was recorded on chain, so settle() credited the stake back (B-2). */
   | { kind: "lost"; stakeBack: boolean }
@@ -88,6 +98,9 @@ export interface VerdictInput {
   /** On a run that can record a miss: periodEnd + MISS_GRACE_HOURS, in epoch
    *  ms (lib/miss-grace.ts). Null or absent on every other run. */
   missDeadlineMs?: number | null;
+  /** On a run that can record a miss: the latest moment it settles, by which
+   *  a hit must be confirmed (lib/miss-grace.ts missConfirmByMs). */
+  missConfirmByMs?: number | null;
 }
 
 /** The miss screen a ledger encodes, or null when it holds no recorded miss.
@@ -170,7 +183,9 @@ export function verdictScreenOf(input: VerdictInput): VerdictScreen {
       if (local === "declined" || local === "expired" || local === "cancelled") {
         return { kind: "approval-failed", outcome: local, settled: false };
       }
-      return { kind: "confirm-human" };
+      return typeof input.missConfirmByMs === "number"
+        ? { kind: "confirm-human", confirmByMs: input.missConfirmByMs }
+        : { kind: "confirm-human" };
     case "approval-declined":
       return { kind: "approval-failed", outcome: "declined", settled: false };
     case "approval-expired":
@@ -183,9 +198,14 @@ export function verdictScreenOf(input: VerdictInput): VerdictScreen {
       const mode = ledger !== null ? failureModeOf(ledger) : null;
       if (mode === "attester-offline") return { kind: "stopped", reason: "service" };
       if (mode === "evidence") return { kind: "bad-read" };
-      return typeof input.missDeadlineMs === "number"
-        ? { kind: "not-yet", lastCheckMs: input.missDeadlineMs }
-        : { kind: "not-yet" };
+      if (typeof input.missDeadlineMs !== "number") return { kind: "not-yet" };
+      return typeof input.missConfirmByMs === "number"
+        ? {
+            kind: "not-yet",
+            lastCheckMs: input.missDeadlineMs,
+            confirmByMs: input.missConfirmByMs,
+          }
+        : { kind: "not-yet", lastCheckMs: input.missDeadlineMs };
     }
     case "cap-exceeded":
       return { kind: "stopped", reason: "budget" };
@@ -231,7 +251,11 @@ function settledScreenOf(
       return { kind: "lost", stakeBack };
     }
     default:
-      return { kind: "settled-final" };
+      // The last read showed the goal met and nothing was recorded: the hit
+      // was never confirmed. Say that, not "settled" with no reason.
+      return unconfirmedHitOf(ledger) && !approvedOnLedger(ledger)
+        ? { kind: "hit-unconfirmed" }
+        : { kind: "settled-final" };
   }
 }
 
@@ -243,6 +267,7 @@ export function verdictShowsClaim(screen: VerdictScreen): boolean {
     case "cancelled":
     case "settled-final":
     case "lost":
+    case "hit-unconfirmed":
       return true;
     case "missed":
       // Only a refunded miss has anything to claim.
@@ -292,8 +317,24 @@ export interface RunApprovalLine {
 export function runApprovalLine(
   status: RunApprovalStatus,
   run: { settled: boolean; cancelled: boolean; resultRecorded: boolean },
+  /** Set when SPOTTER read a hit on this run that is not confirmed yet (the
+   *  status route's hit flag). confirmByMs is the latest the run settles on
+   *  a run that can record a miss, null when it has no such deadline. */
+  hit?: { confirmByMs: number | null },
 ): RunApprovalLine | null {
   if (run.settled || run.cancelled || run.resultRecorded) return null;
+  if (hit !== undefined && (status === "none" || status === "unknown")) {
+    // SPOTTER records a miss on its own; a hit only counts once the player
+    // opens the run and confirms it, so a hit nobody confirmed must say so.
+    return {
+      text:
+        hit.confirmByMs !== null
+          ? `Your wearable shows the goal met. Open the run and confirm it with World ID before ${formatMoment(hit.confirmByMs)}, or your stake comes back without a share.`
+          : "Your wearable shows the goal met. Open the run and confirm it with World ID before it settles, or your stake comes back without a share.",
+      tone: "warning",
+      openRun: true,
+    };
+  }
   switch (status) {
     case "pending":
       return {
@@ -365,7 +406,10 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
     case "confirm-human":
       return {
         headline: "Confirm it is you",
-        body: "The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. No confirmation, no payout.",
+        body:
+          screen.confirmByMs !== undefined
+            ? `The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. Confirm before ${formatMoment(screen.confirmByMs)}: the run settles by then, and a hit that is not confirmed gets its stake back without a share.`
+            : "The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. No confirmation, no payout.",
         pose: "watching",
       };
     case "confirmed":
@@ -415,7 +459,7 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
         headline: "Not there yet",
         body:
           screen.lastCheckMs !== undefined
-            ? `Your data read fine and the goal is not met so far. Nights inside the run still count if your wearable syncs them by ${formatMoment(screen.lastCheckMs)}. After that, SPOTTER records what your wearable shows. If it did not sync the whole run, nothing is recorded and your stake comes back.`
+            ? `Your data read fine and the goal is not met so far. Nights inside the run still count if your wearable syncs them by ${formatMoment(screen.lastCheckMs)}. After that, SPOTTER records a miss on its own when your wearable covered the whole run and shows it; if it did not sync the whole run, nothing is recorded and your stake comes back. A hit is different: it only counts once you open the run and confirm it${screen.confirmByMs !== undefined ? `, by ${formatMoment(screen.confirmByMs)} at the latest` : " before it settles"}.`
             : "Your data read fine and the goal is not met so far. Nights inside the run still count if they sync before it settles.",
         pose: "flex",
       };
@@ -428,10 +472,18 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
             ? `Your wearable covered the whole run and shows the goal was not met. ${stake} went to the players who hit.`
             : screen.outcome === "refunded"
               ? "Your wearable shows the goal was not met, but nobody hit, so every stake came back, yours included. Claim it below."
-              : `Your wearable covered the whole run and shows the goal was not met, so the miss is recorded on chain. ${stake} goes to the players who hit. If nobody hit, every stake comes back, yours included.`,
+              : screen.outcome === "cancelled"
+                ? "Your wearable shows the goal was not met, but the creator cancelled the run before it settled, so every stake can be claimed back, yours included."
+                : `Your wearable covered the whole run and shows the goal was not met, so the miss is recorded on chain. ${stake} goes to the players who hit. If nobody hit, every stake comes back, yours included, and so does a run the creator cancels before it settles.`,
         pose: "standing",
       };
     }
+    case "hit-unconfirmed":
+      return {
+        headline: "Hit, not confirmed",
+        body: "Your wearable showed the goal met, but the hit was not confirmed with World ID before the run settled, so nothing was recorded. The settle credited your stake back to you without a share; claim it below.",
+        pose: "facepalm",
+      };
     case "lost":
       // HealthPoolsV3 B-2: a participant with no recorded result is refunded
       // at settle. SPOTTER records a miss only when the wearable covered the

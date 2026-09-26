@@ -84,13 +84,14 @@ function provider(values: Record<string, number> = { "1970-01-01": 5 }) {
 
 function deps(
   c: ReturnType<typeof chain>,
-  opts: { now?: bigint; stored?: (who: string) => string | null; prov?: ReturnType<typeof provider> } = {},
+  opts: { now?: bigint; stored?: (who: string) => string | null; prov?: object } = {},
 ) {
   const prov = opts.prov ?? provider();
   return {
     spotter: { circle: {} as SpotterExecutor, reader: c.reader },
     legacyRecordResult: c.legacyRecordResult,
     read: {
+      pinnedProviderId: vi.fn(async (who: string) => (opts.stored ? opts.stored(who) : "junction")),
       storedProviderId: vi.fn(async (who: string) => (opts.stored ? opts.stored(who) : "junction")),
       providerConfigured: vi.fn(() => true),
       providerById: vi.fn(() => prov),
@@ -317,5 +318,112 @@ describe("usdcToUsd2", () => {
       expect(m.usdcToUsd2(2_509_999n)).toBe("2.50");
       expect(m.usdcToUsd2(500_000n)).toBe("0.50");
     });
+  });
+});
+
+// Review findings on fix/record-misses: a player whose wearable shows the hit
+// holds the pool until they confirm or the hold ends (F6), the read is written
+// where they can see it (F10), and a cancel after a recorded miss closes the
+// miss as refundable (F7).
+
+/** A provider whose read differs per player. */
+function providerFor(byPlayer: Record<string, Record<string, number>>) {
+  const base = provider();
+  return {
+    ...base,
+    getMissEvidence: vi.fn(async (who: string) => {
+      const values = byPlayer[who.toLowerCase()] ?? {};
+      return { values, heartbeatDays: Object.keys(values), tzOffsetSec: 0 };
+    }),
+  };
+}
+
+describe("F6/F10: a hit the sweep reads holds the pool until it is confirmed", () => {
+  const HIT = { "1970-01-01": 8 };
+  const MISSED = { "1970-01-01": 5 };
+
+  it("a 'met' player without a pass keeps the pool from settling until holdUntil", async () => {
+    const m = await load();
+    const c = chain({
+      [A]: { joined: true, resultRecorded: false, verdict: false },
+      [B]: { joined: true, resultRecorded: false, verdict: false },
+    });
+    const prov = providerFor({ [A.toLowerCase()]: HIT, [B.toLowerCase()]: MISSED });
+
+    const first = await m.runMissPhase(deps(c, { prov }), notOut);
+    expect(first.missesRecorded).toBe(1);
+    expect(first.missSkips).toEqual([{ poolId: "1", address: A, basis: "met" }]);
+    // B's miss is on chain, but A hit and has not confirmed: not done.
+    expect(await m.missPhaseDone(1n)).toBe(false);
+
+    // Later ticks inside the hold still wait, and never re-read A's wearable.
+    await m.runMissPhase(deps(c, { prov, now: AFTER_GRACE + 3600n }), notOut);
+    expect(await m.missPhaseDone(1n)).toBe(false);
+    expect(
+      prov.getMissEvidence.mock.calls.filter(([who]) => who.toLowerCase() === A.toLowerCase()),
+    ).toHaveLength(1);
+
+    // A confirms and the pass lands: the next tick sees it and the pool may settle.
+    c.results.set(A.toLowerCase(), { joined: true, resultRecorded: true, verdict: true });
+    await m.runMissPhase(deps(c, { prov, now: AFTER_GRACE + 3700n }), notOut);
+    expect(await m.missPhaseDone(1n)).toBe(true);
+  });
+
+  it("a player mid-approval (SPOTTER decided to pay) holds the pool too", async () => {
+    const m = await load();
+    const c = chain({ [A]: { joined: true, resultRecorded: false, verdict: false } });
+    await m.appendLedger(m.goalOf(A), {
+      kind: "reason",
+      decision: "pay",
+      note: "paying.",
+      ref: "wearable-100",
+    });
+
+    const report = await m.runMissPhase(deps(c), notOut);
+
+    expect(report.missSkips).toEqual([{ poolId: "1", address: A, basis: "pass-in-progress" }]);
+    expect(await m.missPhaseDone(1n)).toBe(false);
+  });
+
+  it("writes the hit where the player sees it, once", async () => {
+    const m = await load();
+    const c = chain({ [A]: { joined: true, resultRecorded: false, verdict: false } });
+    const prov = providerFor({ [A.toLowerCase()]: HIT });
+
+    await m.runMissPhase(deps(c, { prov }), notOut);
+    await m.runMissPhase(deps(c, { prov, now: AFTER_GRACE + 60n }), notOut);
+
+    const ledger = await m.readLedger(m.goalOf(A));
+    expect(ledger.map((e) => e.kind)).toEqual(["plan", "spend", "verdict"]);
+    expect(ledger[2]).toMatchObject({
+      kind: "verdict",
+      verified: true,
+      confidence: "high",
+      ref: "wearable-100",
+    });
+    expect(c.legacyRecordResult).not.toHaveBeenCalled();
+  });
+});
+
+describe("F7: a creator cancel after a recorded miss", () => {
+  it("closes the miss as refundable, not as a stake that went to the hitters", async () => {
+    const m = await load();
+    const c = chain({ [A]: { joined: true, resultRecorded: false, verdict: false } });
+    await m.runMissPhase(deps(c), notOut);
+    (c.reader.getPoolState as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...POOL,
+      cancelled: true,
+    });
+
+    const report = await m.runMissPhase(deps(c), notOut);
+
+    const ledger = await m.readLedger(m.goalOf(A));
+    expect(ledger[ledger.length - 1]).toMatchObject({
+      kind: "settle",
+      status: "closed",
+      outcome: "cancelled",
+    });
+    expect(report.missesClosed).toBe(1);
+    expect((await m.readMissPool(1n)).closed).toBe(true);
   });
 });

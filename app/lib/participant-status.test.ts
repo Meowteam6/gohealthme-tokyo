@@ -42,6 +42,13 @@ describe("resultLabel", () => {
     });
   });
 
+  it("F10: never says 'no proof' when SPOTTER read the hit and it was not confirmed", () => {
+    expect(resultLabel({ settled: true }, p({}), null, true)).toEqual({
+      text: "Refunded - hit not confirmed before settle",
+      tone: "muted",
+    });
+  });
+
   it("never says 'no proof' when the proof passed and only the World ID OK was missing", () => {
     for (const approval of ["declined", "expired", "cancelled"] as const) {
       expect(resultLabel({ settled: true }, p({}), approval)).toEqual({

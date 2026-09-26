@@ -120,8 +120,10 @@ export type LedgerEntry = Stamped &
     | {
         kind: "settle";
         /** "closed" ends a recorded miss: the pool settled and this player
-         *  was paid nothing (forfeited) or refunded because nobody hit. Never
-         *  "settled", which every surface reads as paid. */
+         *  was paid nothing (forfeited) or refunded because nobody hit, or the
+         *  creator cancelled the pool before settle and the stake can be
+         *  claimed back (cancelled). Never "settled", which every surface
+         *  reads as paid. */
         status: "deferred" | "settled" | "already-settled" | "closed";
         txHash?: string;
         paidUsd?: string;
@@ -130,7 +132,7 @@ export type LedgerEntry = Stamped &
         periodEndIso?: string;
         /** Closed rows only: what settle() did with this player's stake,
          *  asserted on the settle transaction's own events. */
-        outcome?: "forfeited" | "refunded";
+        outcome?: "forfeited" | "refunded" | "cancelled";
         note?: string;
       }
     | {

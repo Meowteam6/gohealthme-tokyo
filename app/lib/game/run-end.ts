@@ -96,7 +96,7 @@ export function runEndCopy(input: RunEndInput): RunEndCopy {
   if (tally.achievers === 0) {
     const stakesStayed = tally.missed > 0 && input.bountyModel !== 2;
     return {
-      headline: "Settled. Nobody hit it",
+      headline: "Settled. No hit was recorded",
       body: stakesStayed
         ? `No prize went out. ${plural(tally.refunded, "player with no recorded result was", "players with no recorded result were")} credited their stake back; ${plural(tally.missed, "recorded miss", "recorded misses")} stayed in the pool.`
         : "No prize went out. Every player's stake was credited back to them at settle.",

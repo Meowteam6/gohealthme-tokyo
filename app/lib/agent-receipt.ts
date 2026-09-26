@@ -69,7 +69,7 @@ export type ReceiptRow =
       paidUsd: string | null;
       note: string | null;
       /** Closed rows only: what settle() did with a recorded miss's stake. */
-      outcome: "forfeited" | "refunded" | null;
+      outcome: "forfeited" | "refunded" | "cancelled" | null;
     }
   | { kind: "error"; stage: string; message: string }
   | {
@@ -482,8 +482,41 @@ export function runStatusFromLedger(ledger: LedgerEntry[]): RunStatus | null {
   }
   // --- end world-agents ---
   const reason = currentReasonEntry(ledger, currentAttesterIdOf(ledger));
-  if (reason !== undefined && reason.decision === "no-pay") return "no-pay";
+  if (reason !== undefined && reason.decision === "no-pay") {
+    // A verified read written AFTER that no-pay (the sweep read the hit once
+    // the run ended) is fresh evidence: the run loop re-decides on it, so the
+    // claim is not a no-pay any more. Mirrors run.ts (decisionIsStale).
+    const newest = lastVerdictIndex(ledger);
+    if (newest > ledger.lastIndexOf(reason) && verdictAt(ledger, newest)?.verified === true) {
+      return "verifying";
+    }
+    return "no-pay";
+  }
   return "verifying";
+}
+
+function lastVerdictIndex(ledger: LedgerEntry[]): number {
+  for (let i = ledger.length - 1; i >= 0; i--) {
+    if (ledger[i].kind === "verdict") return i;
+  }
+  return -1;
+}
+
+function verdictAt(ledger: LedgerEntry[], index: number): VerdictEntry | undefined {
+  const entry = ledger[index];
+  return entry !== undefined && entry.kind === "verdict" ? entry : undefined;
+}
+
+/**
+ * True when the newest wearable read on this ledger shows the goal met and
+ * nothing is recorded yet: a hit that is waiting on the player to open the
+ * run and confirm it. Every surface that would otherwise say "not met" or "no
+ * proof" asks this first.
+ */
+export function unconfirmedHitOf(ledger: LedgerEntry[] | null): boolean {
+  if (ledger === null || ledger.some((e) => e.kind === "record")) return false;
+  const newest = verdictAt(ledger, lastVerdictIndex(ledger));
+  return newest?.verified === true && newest.selfReported !== true;
 }
 
 // -------------------------------------------------- deferred settle timing

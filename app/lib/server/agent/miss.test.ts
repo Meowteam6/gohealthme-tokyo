@@ -9,15 +9,16 @@ import {
   missRulePool,
   missSettleWindow,
   MISS_PHASE_MAX_S,
+  runProgress,
   type MissPool,
   type MissReadDeps,
+  type MissSpec,
 } from "@/lib/server/agent/miss";
 import type { LedgerEntry } from "@/lib/server/agent/ledger";
 import type {
   MissEvidence,
   WearableProvider,
 } from "@/lib/server/wearable/types";
-import { classifyWearableGoal } from "@/lib/wearable-goal";
 
 // The miss rule. SPOTTER records verdict=false only when the run is over, the
 // sync grace has passed, the wearable covered every day of the run on the
@@ -34,6 +35,7 @@ const JST = 9 * 3600;
 // 11:39 to Sunday 08:30, so the run's night is Saturday into Sunday, keyed to
 // Sunday 2026-09-27 (a night belongs to the local day it ended).
 const POOL5: MissPool = {
+  id: 5n,
   bountyModel: 2,
   goalSpec: "Sleep 7 hours for 1 night",
   settled: false,
@@ -43,11 +45,14 @@ const POOL5: MissPool = {
 };
 const AFTER_GRACE = POOL5.periodEnd + BigInt(GRACE);
 
-const sleepSpec = () => {
-  const spec = classifyWearableGoal(POOL5.goalSpec);
-  if (spec.metric === null) throw new Error("fixture goal must classify");
-  return { ...spec, metric: spec.metric };
-};
+/** The spec the miss rule runs for a goal (fixture goals must qualify). */
+function specOf(goalSpec: string): MissSpec {
+  const rule = missRulePool({ ...POOL5, goalSpec }, 1n);
+  if (!rule.ok) throw new Error(`fixture goal must qualify: ${goalSpec} (${rule.basis})`);
+  return rule.spec;
+}
+
+const sleepSpec = () => specOf(POOL5.goalSpec);
 
 function evidence(partial: Partial<MissEvidence>): MissEvidence {
   return { values: {}, heartbeatDays: [], tzOffsetSec: JST, ...partial };
@@ -215,10 +220,8 @@ describe("missPreconditions", () => {
 
 describe("judgeMissEvidence: sleep", () => {
   const judge = (ev: MissEvidence, pool: MissPool = POOL5) => {
-    const spec = classifyWearableGoal(pool.goalSpec);
-    if (spec.metric === null) throw new Error("fixture goal must classify");
     return judgeMissEvidence({
-      spec: { ...spec, metric: spec.metric },
+      spec: specOf(pool.goalSpec),
       periodStart: pool.periodStart,
       periodEnd: pool.periodEnd,
       evidence: ev,
@@ -299,19 +302,19 @@ describe("judgeMissEvidence: sleep", () => {
 describe("judgeMissEvidence: workouts", () => {
   const WORKOUT_POOL: MissPool = { ...POOL5, goalSpec: "Work out for 1 day" };
   const judge = (ev: MissEvidence) => {
-    const spec = classifyWearableGoal(WORKOUT_POOL.goalSpec);
-    if (spec.metric === null) throw new Error("fixture goal must classify");
     return judgeMissEvidence({
-      spec: { ...spec, metric: spec.metric },
+      spec: specOf(WORKOUT_POOL.goalSpec),
       periodStart: WORKOUT_POOL.periodStart,
       periodEnd: WORKOUT_POOL.periodEnd,
       evidence: ev,
     });
   };
 
-  it("records a miss when the device synced every day of the run and logged no session", () => {
+  it("records a miss when the device synced every day of the run, and after it, and logged no session", () => {
     expect(
-      judge(evidence({ heartbeatDays: ["2026-09-25", "2026-09-26", "2026-09-27"] })),
+      judge(
+        evidence({ heartbeatDays: ["2026-09-25", "2026-09-26", "2026-09-27", "2026-09-28"] }),
+      ),
     ).toEqual({ miss: true, window: ["2026-09-26", "2026-09-27"], qualifyingDays: 0 });
   });
 
@@ -368,6 +371,7 @@ function fakeProvider(overrides: Partial<WearableProvider> = {}): WearableProvid
 
 function readDeps(provider: WearableProvider, overrides: Partial<MissReadDeps> = {}): MissReadDeps {
   return {
+    pinnedProviderId: vi.fn().mockResolvedValue("junction"),
     storedProviderId: vi.fn().mockResolvedValue("junction"),
     providerConfigured: vi.fn().mockReturnValue(true),
     providerById: vi.fn().mockReturnValue(provider),
@@ -401,12 +405,15 @@ describe("evaluateMiss", () => {
     const deps = readDeps(fakeProvider());
     const decision = await evaluateMiss(deps, { ...EVAL_INPUT, nowSec: AFTER_GRACE - 1n });
     expect(decision).toEqual({ miss: false, basis: "grace", final: false });
-    expect(deps.storedProviderId).not.toHaveBeenCalled();
+    expect(deps.pinnedProviderId).not.toHaveBeenCalled();
   });
 
   it("a wallet that never chose a provider makes zero provider calls", async () => {
     const provider = fakeProvider();
-    const deps = readDeps(provider, { storedProviderId: vi.fn().mockResolvedValue(null) });
+    const deps = readDeps(provider, {
+      pinnedProviderId: vi.fn().mockResolvedValue(null),
+      storedProviderId: vi.fn().mockResolvedValue(null),
+    });
     const decision = await evaluateMiss(deps, EVAL_INPUT);
     expect(decision).toEqual({ miss: false, basis: "no-stored-provider", final: true });
     expect(deps.providerById).not.toHaveBeenCalled();
@@ -432,13 +439,10 @@ describe("evaluateMiss", () => {
     expect(provider.getMissEvidence).not.toHaveBeenCalled();
   });
 
-  it("a disconnected wearable records nothing", async () => {
+  it("reads the pinned provider even after it reports disconnected: the run's data is still there", async () => {
     const provider = fakeProvider({ isConnected: vi.fn().mockResolvedValue(false) });
-    expect(await evaluateMiss(readDeps(provider), EVAL_INPUT)).toEqual({
-      miss: false,
-      basis: "not-connected",
-      final: true,
-    });
+    expect(await evaluateMiss(readDeps(provider), EVAL_INPUT)).toMatchObject({ miss: true });
+    expect(provider.getMissEvidence).toHaveBeenCalled();
   });
 
   it("a provider with no local calendar (Apple) records nothing", async () => {
@@ -461,11 +465,17 @@ describe("evaluateMiss", () => {
     });
   });
 
-  it("a connection check that throws records nothing and never throws", async () => {
-    const provider = fakeProvider({
+  it("a current provider whose connection check throws records nothing and never throws", async () => {
+    const pinned = fakeProvider();
+    const current = fakeProvider({
+      id: "whoop",
       isConnected: vi.fn().mockRejectedValue(new Error("WHOOP down")),
     });
-    expect(await evaluateMiss(readDeps(provider), EVAL_INPUT)).toEqual({
+    const deps = readDeps(pinned, {
+      storedProviderId: vi.fn().mockResolvedValue("whoop"),
+      providerById: vi.fn((id: string) => (id === "whoop" ? current : pinned)),
+    });
+    expect(await evaluateMiss(deps, EVAL_INPUT)).toEqual({
       miss: false,
       basis: "read-error",
       final: true,
@@ -474,7 +484,7 @@ describe("evaluateMiss", () => {
 
   it("a store failure reading the provider choice records nothing and never throws", async () => {
     const deps = readDeps(fakeProvider(), {
-      storedProviderId: vi.fn().mockRejectedValue(new Error("redis down")),
+      pinnedProviderId: vi.fn().mockRejectedValue(new Error("redis down")),
     });
     expect(await evaluateMiss(deps, EVAL_INPUT)).toEqual({
       miss: false,
@@ -489,7 +499,7 @@ describe("evaluateMiss", () => {
         .fn()
         .mockResolvedValue(evidence({ values: { "2026-09-26": 5, "2026-09-27": 8 } })),
     });
-    expect(await evaluateMiss(readDeps(provider), EVAL_INPUT)).toEqual({
+    expect(await evaluateMiss(readDeps(provider), EVAL_INPUT)).toMatchObject({
       miss: false,
       basis: "met",
       final: true,
@@ -499,5 +509,232 @@ describe("evaluateMiss", () => {
   it("uses the sleep spec the pool's goal classifies to", () => {
     expect(sleepSpec().metric).toBe("sleep_hours");
     expect(sleepSpec().goalDays).toBe(1);
+  });
+});
+
+// ------------------------------------------------ review findings (fix/record-misses)
+
+describe("F1: a goal that counts sessions is judged on sessions", () => {
+  const GYM: MissPool = { ...POOL5, goalSpec: "Hit the gym 2 times" };
+
+  it("two sessions on one local day meet 'Hit the gym 2 times'", () => {
+    expect(
+      judgeMissEvidence({
+        spec: specOf(GYM.goalSpec),
+        periodStart: GYM.periodStart,
+        periodEnd: GYM.periodEnd,
+        evidence: evidence({
+          values: { "2026-09-26": 2 },
+          heartbeatDays: ["2026-09-26", "2026-09-27", "2026-09-28"],
+        }),
+      }),
+    ).toEqual({ miss: false, basis: "met" });
+  });
+
+  it("one session in the whole run is still a miss", () => {
+    expect(
+      judgeMissEvidence({
+        spec: specOf(GYM.goalSpec),
+        periodStart: GYM.periodStart,
+        periodEnd: GYM.periodEnd,
+        evidence: evidence({
+          values: { "2026-09-26": 1 },
+          heartbeatDays: ["2026-09-25", "2026-09-26", "2026-09-27", "2026-09-28"],
+        }),
+      }),
+    ).toMatchObject({ miss: true, qualifyingDays: 1 });
+  });
+
+  it("a misread goal never reaches the judge: the pool cannot record a miss", async () => {
+    const provider = fakeProvider();
+    const decision = await evaluateMiss(readDeps(provider), {
+      ...EVAL_INPUT,
+      pool: { ...POOL5, goalSpec: "Sleep score 75+ on 5 of 7 nights" },
+    });
+    expect(decision).toEqual({ miss: false, basis: "goal-ambiguous", final: true });
+    expect(provider.getMissEvidence).not.toHaveBeenCalled();
+  });
+});
+
+describe("F2: a partial night is never a covered night", () => {
+  it("a night the strap lost contact for (partial) blocks the miss", () => {
+    expect(
+      judgeMissEvidence({
+        spec: sleepSpec(),
+        periodStart: POOL5.periodStart,
+        periodEnd: POOL5.periodEnd,
+        evidence: evidence({
+          values: { "2026-09-26": 5, "2026-09-27": 4.5 },
+          partialDays: ["2026-09-27"],
+        }),
+      }),
+    ).toEqual({ miss: false, basis: "coverage-gap" });
+  });
+});
+
+describe("F3: workout coverage needs the workout source, synced after the window", () => {
+  const ONE_WORKOUT: MissPool = {
+    ...POOL5,
+    goalSpec: "Complete at least 1 workout for 1 day",
+    // Live pool 2: Sat 05:40 JST to Sun 08:00 JST.
+    periodStart: 1_790_368_848n,
+    periodEnd: 1_790_463_600n,
+  };
+  const judge = (ev: MissEvidence) =>
+    judgeMissEvidence({
+      spec: specOf(ONE_WORKOUT.goalSpec),
+      periodStart: ONE_WORKOUT.periodStart,
+      periodEnd: ONE_WORKOUT.periodEnd,
+      evidence: ev,
+    });
+
+  it("heartbeats on every day but nothing after the last one records nothing", () => {
+    expect(judge(evidence({ heartbeatDays: ["2026-09-26", "2026-09-27"] }))).toEqual({
+      miss: false,
+      basis: "no-sync-after-window",
+    });
+  });
+
+  it("a source the provider flags as unusable records nothing", () => {
+    expect(
+      judge(
+        evidence({
+          heartbeatDays: ["2026-09-26", "2026-09-27", "2026-09-28"],
+          sourceProblem: "strava is error",
+        }),
+      ),
+    ).toEqual({ miss: false, basis: "source-unhealthy" });
+  });
+
+  it("with a sync dated after the window and no session, the miss stands", () => {
+    expect(
+      judge(evidence({ heartbeatDays: ["2026-09-25", "2026-09-26", "2026-09-27", "2026-09-28"] })),
+    ).toMatchObject({ miss: true });
+  });
+});
+
+describe("F4/F8: SPOTTER never forfeits a player its own pass rule would pay", () => {
+  it("reads the pass on the wearer's local window, so pool 5 counts Saturday night", async () => {
+    const provider = fakeProvider({
+      getMissEvidence: vi
+        .fn()
+        .mockResolvedValue(evidence({ values: { "2026-09-26": 6, "2026-09-27": 8 } })),
+    });
+    const { progress, window } = await runProgress(
+      provider,
+      USER,
+      { metric: "sleep_hours", threshold: 7 },
+      POOL5.periodStart,
+      POOL5.periodEnd,
+      new Date(Number(AFTER_GRACE) * 1000),
+    );
+    expect(window).toEqual(["2026-09-26", "2026-09-27"]);
+    expect(progress.qualifyingDays).toBe(1);
+    expect(provider.getMetricProgress).not.toHaveBeenCalled();
+  });
+
+  it("a Friday-only sleeper and a Saturday-only sleeper read the same way on pool 5", async () => {
+    const read = async (values: Record<string, number>) =>
+      (
+        await runProgress(
+          fakeProvider({ getMissEvidence: vi.fn().mockResolvedValue(evidence({ values })) }),
+          USER,
+          { metric: "sleep_hours", threshold: 7 },
+          POOL5.periodStart,
+          POOL5.periodEnd,
+          new Date(Number(AFTER_GRACE) * 1000),
+        )
+      ).progress.qualifyingDays;
+    const friday = await read({ "2026-09-26": 8, "2026-09-27": 5 });
+    const saturday = await read({ "2026-09-26": 6, "2026-09-27": 8 });
+    expect(friday).toBe(saturday);
+  });
+
+  it("a current provider (switched after the pin) that shows the goal met skips the miss", async () => {
+    const pinned = fakeProvider();
+    const current = fakeProvider({
+      id: "whoop",
+      getMissEvidence: vi
+        .fn()
+        .mockResolvedValue(evidence({ values: { "2026-09-26": 8, "2026-09-27": 8 } })),
+    });
+    const deps = readDeps(pinned, {
+      storedProviderId: vi.fn().mockResolvedValue("whoop"),
+      providerById: vi.fn((id: string) => (id === "whoop" ? current : pinned)),
+    });
+    expect(await evaluateMiss(deps, EVAL_INPUT)).toMatchObject({
+      miss: false,
+      basis: "met",
+      final: true,
+      met: { providerId: "whoop", qualifyingDays: 2 },
+    });
+  });
+
+  it("a provider with no local calendar (Apple) keeps the UTC window on the pass path", async () => {
+    const provider = fakeProvider({
+      getMissEvidence: undefined,
+      getMetricProgress: vi
+        .fn()
+        .mockResolvedValue({ qualifyingDays: 1, daysWithData: 1, daysWithSource: 1 }),
+    });
+    const { progress } = await runProgress(
+      provider,
+      USER,
+      { metric: "sleep_hours", threshold: 7 },
+      POOL5.periodStart,
+      POOL5.periodEnd,
+    );
+    expect(progress.qualifyingDays).toBe(1);
+    expect(provider.getMetricProgress).toHaveBeenCalledWith(
+      USER,
+      "sleep_hours",
+      7,
+      "2026-09-26",
+      "2026-09-26",
+    );
+  });
+});
+
+describe("F5/F6: a hit on the pinned provider after a switch", () => {
+  it("is no miss, but not a hit to wait for when the current provider would not pay", async () => {
+    const pinned = fakeProvider({
+      getMissEvidence: vi
+        .fn()
+        .mockResolvedValue(evidence({ values: { "2026-09-26": 8, "2026-09-27": 8 } })),
+    });
+    const current = fakeProvider({
+      id: "whoop",
+      getMissEvidence: vi.fn().mockResolvedValue(evidence({ values: { "2026-09-27": 5 } })),
+    });
+    const deps = readDeps(pinned, {
+      storedProviderId: vi.fn().mockResolvedValue("whoop"),
+      providerById: vi.fn((id: string) => (id === "whoop" ? current : pinned)),
+    });
+    expect(await evaluateMiss(deps, EVAL_INPUT)).toEqual({
+      miss: false,
+      basis: "met-on-pinned-only",
+      final: true,
+    });
+  });
+});
+
+describe("F5: the evidence source is pinned per run", () => {
+  it("a provider switch after the run with full coverage still records the miss", async () => {
+    const junction = fakeProvider();
+    const whoop = fakeProvider({
+      id: "whoop",
+      isConnected: vi.fn().mockResolvedValue(false),
+      getMissEvidence: vi.fn().mockResolvedValue(evidence({})),
+    });
+    const deps = readDeps(junction, {
+      // The wallet tapped Connect WHOOP after the run and abandoned consent.
+      pinnedProviderId: vi.fn().mockResolvedValue("junction"),
+      storedProviderId: vi.fn().mockResolvedValue("whoop"),
+      providerById: vi.fn((id: string) => (id === "whoop" ? whoop : junction)),
+    });
+    const decision = await evaluateMiss(deps, EVAL_INPUT);
+    expect(decision).toMatchObject({ miss: true, providerId: "junction" });
+    expect(deps.pinnedProviderId).toHaveBeenCalledWith(USER, POOL5.periodStart);
+    expect(whoop.getMissEvidence).not.toHaveBeenCalled();
   });
 });

@@ -7,7 +7,13 @@
 //
 //   evaluated  every participant the miss phase has judged after the grace,
 //              with the basis ("miss", or why nothing was recorded)
-//   done       every participant is judged: the pool may settle now
+//   waiting    participants whose wearable shows the hit ("met") or whom
+//              SPOTTER already decided to pay ("pass-in-progress") but whose
+//              pass is not on chain yet. The pool waits for them (up to its
+//              hold deadline): settling now would refund a hitter with no
+//              share. Each tick only re-reads their result on chain.
+//   done       every participant is judged and nobody is waited on: the
+//              pool may settle now
 //   closed     the pool settled (or was cancelled, or can never record a
 //              miss) and every recorded miss has its closing ledger row;
 //              the sweep never looks at this pool again
@@ -19,6 +25,7 @@ import { readJson, writeJson } from "@/lib/server/store";
 
 export interface MissPoolRecord {
   evaluated: Record<string, string>;
+  waiting: Record<string, string>;
   done: boolean;
   closed: boolean;
 }
@@ -36,6 +43,10 @@ export async function readMissPool(poolId: bigint): Promise<MissPoolRecord> {
     evaluated:
       stored?.evaluated !== undefined && typeof stored.evaluated === "object"
         ? { ...stored.evaluated }
+        : {},
+    waiting:
+      stored?.waiting !== undefined && typeof stored.waiting === "object"
+        ? { ...stored.waiting }
         : {},
     done: stored?.done === true,
     closed: stored?.closed === true,

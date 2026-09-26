@@ -27,6 +27,9 @@ export function resultLabel(
    *  for. A settled refund after a pay decision is not "no proof": the proof
    *  passed and only the human confirmation was missing. */
   approval?: "approved" | "declined" | "expired" | "cancelled" | null,
+  /** SPOTTER read a hit on this run that was never confirmed (the approval
+   *  status route's hit flag). A settled refund then is not "no proof". */
+  hitUnconfirmed?: boolean,
 ): StatusLabel {
   // A cancelled pool owes every joiner their stake back; claimRefund() credits
   // it and flips `refunded`. Nothing about verification applies any more.
@@ -40,6 +43,9 @@ export function resultLabel(
       return approval === "approved"
         ? { text: "Refunded - result not recorded before settle", tone: "warning" }
         : { text: "Refunded - payout not confirmed", tone: "muted" };
+    }
+    if (pool.settled && hitUnconfirmed === true) {
+      return { text: "Refunded - hit not confirmed before settle", tone: "muted" };
     }
     return pool.settled
       ? { text: "Refunded - no proof was submitted", tone: "muted" }

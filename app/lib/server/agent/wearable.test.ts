@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import type { Address } from "viem";
 
 // The wearable evidence source classifies the goal into a metric, reads THAT
@@ -339,5 +339,57 @@ describe("wearableEvidenceSource", () => {
     // Neither pays, and neither blames the user.
     expect(cannotMeasure.verdict?.verified).toBe(false);
     expect(cannotMeasure.status).toBe("failed");
+  });
+});
+
+// F8 (fix/record-misses review): the pass path read UTC days while the miss
+// rule reads the wearer's local calendar, so on live pool 5 (Sat 11:39 to Sun
+// 08:30 JST) the pass only ever saw Friday night. Now both read the same
+// local window W from the same evidence.
+describe("F8: the pass path reads the wearer's local window", () => {
+  // Read after the run ended (Sun 2026-09-27 14:30 JST), so Sunday counts.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-27T05:30:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  const POOL5 = { address: USER, periodStart: 1_790_390_383n, periodEnd: 1_790_465_400n };
+  const tokyo = (values: Record<string, number>) =>
+    stubProvider({
+      getMissEvidence: vi.fn().mockResolvedValue({
+        values,
+        heartbeatDays: Object.keys(values),
+        sourceDays: Object.keys(values),
+        tzOffsetSec: 9 * 3600,
+      }),
+    });
+
+  it("pays a Saturday-night sleeper on pool 5 in Tokyo", async () => {
+    isConnected.mockResolvedValue(true);
+    providerFor.mockResolvedValue(tokyo({ "2026-09-26": 6, "2026-09-27": 8 }));
+    const result = await wearableEvidenceSource(POOL5)(
+      "wearable-1790390383",
+      "Sleep at least 7 hours for 1 night",
+    );
+    expect(result.verdict?.verified).toBe(true);
+    expect(getMetricProgress).not.toHaveBeenCalled();
+  });
+
+  it("never pays a Friday-only sleeper while refunding a Saturday-only sleeper", async () => {
+    isConnected.mockResolvedValue(true);
+    const verified = async (values: Record<string, number>) => {
+      providerFor.mockResolvedValue(tokyo(values));
+      const result = await wearableEvidenceSource(POOL5)(
+        "wearable-1790390383",
+        "Sleep at least 7 hours for 1 night",
+      );
+      return result.verdict?.verified === true;
+    };
+    const fridayOnly = await verified({ "2026-09-26": 8, "2026-09-27": 5 });
+    const saturdayOnly = await verified({ "2026-09-26": 6, "2026-09-27": 8 });
+    expect(fridayOnly && !saturdayOnly).toBe(false);
+    expect(saturdayOnly).toBe(true);
   });
 });

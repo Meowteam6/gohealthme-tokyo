@@ -34,7 +34,7 @@ import {
 } from "@/lib/wearable-connect";
 import WhoopReturnNote from "@/components/WhoopReturnNote";
 import { classifyWearableGoal } from "@/lib/wearable-goal";
-import { missDeadlineMs } from "@/lib/miss-grace";
+import { missConfirmByMs, missDeadlineMs } from "@/lib/miss-grace";
 import { missRulePool } from "@/lib/miss-rule";
 import { missedScreenOf, verdictCopy } from "@/lib/game/verdict";
 import {
@@ -589,6 +589,11 @@ function WearableCheckInner({
       poolQuery.data !== undefined && missRulePool(poolQuery.data).ok
         ? missDeadlineMs(poolQuery.data.periodEnd)
         : null;
+    // The latest a hit can be confirmed on such a run: it settles by then.
+    const confirmByMs =
+      poolQuery.data !== undefined && missRulePool(poolQuery.data).ok
+        ? missConfirmByMs(poolQuery.data.periodEnd)
+        : null;
     const missed = status.runStatus === "missed" ? missedScreenOf(status.ledger) : null;
     const missedCopy = missed !== null ? verdictCopy(missed) : null;
     // The contract records a late pass until the pool settles, so a miss is final only then.
@@ -710,7 +715,7 @@ function WearableCheckInner({
               <p className="mt-1 text-sm text-foreground/80">
                 The wearable data was read fine and the goal is not met so far.
                 {lastCheckMs !== null
-                  ? ` Days inside the run still count if your wearable syncs them by ${formatLocalTime(lastCheckMs)}. After that, SPOTTER records what your wearable shows; if it did not sync the whole run, nothing is recorded and your stake comes back.`
+                  ? ` Days inside the run still count if your wearable syncs them by ${formatLocalTime(lastCheckMs)}. After that, SPOTTER records a miss on its own when your wearable covered the whole run and shows it; if it did not sync the whole run, nothing is recorded and your stake comes back. A hit only counts once you open the run and confirm it${confirmByMs !== null ? `, by ${formatLocalTime(confirmByMs)} at the latest` : " before it settles"}.`
                   : " Days inside the pool period still count if they sync before the pool settles, so check again after your next sync."}
               </p>
             </div>

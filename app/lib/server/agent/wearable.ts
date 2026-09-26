@@ -45,6 +45,7 @@ export {
 } from "@/lib/wearable-goal";
 import { classifyWearableGoal } from "@/lib/wearable-goal";
 import type { PollResult } from "@/lib/server/judge";
+import { passVerdictReason, runProgress } from "@/lib/server/agent/miss";
 import type { ServiceQuote } from "@/lib/server/agent/x402";
 
 /**
@@ -73,10 +74,6 @@ export interface WearableWindow {
   periodStart: bigint;
   /** Pool periodEnd, epoch seconds. */
   periodEnd: bigint;
-}
-
-function isoDay(epochSeconds: bigint): string {
-  return new Date(Number(epochSeconds) * 1000).toISOString().slice(0, 10);
 }
 
 /**
@@ -140,12 +137,17 @@ export function wearableEvidenceSource(
         };
       }
 
-      const progress = await provider.getMetricProgress(
+      // The same read, on the same window, that the miss rule judges
+      // (lib/server/agent/miss.ts runProgress): the wearer's local calendar
+      // days from periodStart to periodEnd when the provider can place its
+      // data there, UTC days otherwise. A night belongs to the local day it
+      // ended, so reading UTC days put a Tokyo run on the wrong night.
+      const { progress } = await runProgress(
+        provider,
         window.address,
-        spec.metric,
-        spec.threshold,
-        isoDay(window.periodStart),
-        isoDay(window.periodEnd),
+        { metric: spec.metric, threshold: spec.threshold },
+        window.periodStart,
+        window.periodEnd,
       );
 
       // Connected but nothing has arrived for this period yet:
@@ -190,10 +192,7 @@ export function wearableEvidenceSource(
           verdict: {
             verified: true,
             confidence: "high",
-            reason:
-              `Your wearable shows ${progress.qualifyingDays} qualifying days ` +
-              `(${spec.threshold}+ ${spec.unit}) inside this pool period, ` +
-              `meeting the ${spec.goalDays}-day goal.`,
+            reason: passVerdictReason(spec, progress.qualifyingDays),
           },
         };
       }

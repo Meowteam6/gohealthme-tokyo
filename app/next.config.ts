@@ -35,6 +35,10 @@ const nextConfig: NextConfig = {
   // parses and clamps it; blank means the default.
   env: {
     MISS_GRACE_HOURS: process.env.MISS_GRACE_HOURS ?? "",
+    // The first pool id the miss rule applies to (lib/miss-rule.ts). Unset,
+    // no pool records a miss and every run page says a miss is refunded;
+    // pools joined under the old refund copy stay below it.
+    MISS_RULE_FROM_POOL_ID: process.env.MISS_RULE_FROM_POOL_ID ?? "",
   },
   // The dev-tools indicator is for developers, not for footage: the e2e demo
   // profile records the dev server, and the floating "N" badge would sit in

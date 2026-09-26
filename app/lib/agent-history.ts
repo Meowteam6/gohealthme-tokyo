@@ -22,14 +22,20 @@ export function historyItems<T>(
   return view === "mine" ? (feed.mine ?? []) : feed.claims;
 }
 
+/** Where a recorded miss's stake ended up, from its closing ledger row. */
+export type MissOutcome = "pending" | "forfeited" | "refunded" | "cancelled";
+
 /**
  * What a recorded miss did with the stake, in plain words: goes (before the
- * pool settles), went (settle paid the players who hit), or came back
- * (nobody hit). `own` picks "Your" on the player's own history and "The" on
- * everyone's. Never "lost", never a bet.
+ * pool settles, with the two ways it comes back), went (settle paid the
+ * players who hit), came back (nobody hit), or can be claimed back (the
+ * creator cancelled the run before it settled; HealthPoolsV3 cancelPool has
+ * no time guard, so a recorded miss is refundable until settle). `own` picks
+ * "Your" on the player's own history and "The" on everyone's. Never
+ * "lost", never a bet.
  */
 export function missStakeLine(
-  outcome: "pending" | "forfeited" | "refunded",
+  outcome: MissOutcome,
   stakeUsd: string | null,
   own: boolean,
 ): string {
@@ -41,8 +47,10 @@ export function missStakeLine(
       return `Missed. ${Stake} went to the players who hit.`;
     case "refunded":
       return `Missed, but nobody hit, so ${stake} came back.`;
+    case "cancelled":
+      return `Missed, but the creator cancelled the run, so ${stake} can be claimed back.`;
     default:
-      return `Missed. ${Stake} goes to the players who hit.`;
+      return `Missed. At settle ${stake} goes to the players who hit; it comes back if nobody hits or the run is cancelled.`;
   }
 }
 
@@ -51,7 +59,7 @@ export function missLineOf(
   claim: {
     missed?: true;
     stakeUsd?: string;
-    settle: { status: string; outcome?: "forfeited" | "refunded" } | null;
+    settle: { status: string; outcome?: Exclude<MissOutcome, "pending"> } | null;
   },
   own: boolean,
 ): string | null {

@@ -25,7 +25,9 @@ describe("history view", () => {
 });
 
 describe("the History line for a recorded miss", () => {
-  const miss = (settle: { status: string; outcome?: "forfeited" | "refunded" } | null) => ({
+  const miss = (
+    settle: { status: string; outcome?: "forfeited" | "refunded" | "cancelled" } | null,
+  ) => ({
     missed: true as const,
     stakeUsd: "1.00",
     settle,
@@ -33,7 +35,7 @@ describe("the History line for a recorded miss", () => {
 
   it("says plainly where the stake goes, in the player's own history", () => {
     expect(missLineOf(miss(null), true)).toBe(
-      "Missed. Your 1.00 stake goes to the players who hit.",
+      "Missed. At settle your 1.00 stake goes to the players who hit; it comes back if nobody hits or the run is cancelled.",
     );
     expect(missLineOf(miss({ status: "closed", outcome: "forfeited" }), true)).toBe(
       "Missed. Your 1.00 stake went to the players who hit.",
@@ -45,7 +47,13 @@ describe("the History line for a recorded miss", () => {
 
   it("speaks in the third person on everyone's feed", () => {
     expect(missLineOf(miss(null), false)).toBe(
-      "Missed. The 1.00 stake goes to the players who hit.",
+      "Missed. At settle the 1.00 stake goes to the players who hit; it comes back if nobody hits or the run is cancelled.",
+    );
+  });
+
+  it("F7: a run the creator cancelled after the miss says the stake can be claimed back", () => {
+    expect(missLineOf(miss({ status: "closed", outcome: "cancelled" }), true)).toBe(
+      "Missed, but the creator cancelled the run, so your 1.00 stake can be claimed back.",
     );
   });
 

@@ -286,6 +286,10 @@ interface SleepRecord {
   sleep_efficiency?: number | null;
   /** The wearer's UTC offset in seconds (Junction documents it on sleep). */
   timezone_offset?: number | null;
+  /** long_sleep | short_sleep | acknowledged_nap | unknown (non-exhaustive). */
+  type?: string | null;
+  /** The device brand this summary came from ({ provider: "oura" }). */
+  source?: { provider?: string | null } | null;
 }
 
 interface SleepResponse {
@@ -530,6 +534,7 @@ interface ActivityFields {
   distance?: number | null;
   distance_meters?: number | null;
   timezone_offset?: number | null;
+  source?: { provider?: string | null } | null;
 }
 interface ActivitySummaryResponse {
   activity?: ActivityFields[];
@@ -542,6 +547,7 @@ interface WorkoutRecord {
   distance?: number | null;
   distance_meters?: number | null;
   timezone_offset?: number | null;
+  source?: { provider?: string | null } | null;
 }
 interface WorkoutResponse {
   workouts?: WorkoutRecord[];
@@ -682,18 +688,40 @@ export async function getMetricProgress(
 
 // ------------------------------------------------------- miss-rule evidence
 
+/** Junction's sleep types (non-exhaustive enum): >=3h main sleep, <3h sleep,
+ *  a nap the wearer acknowledged, and a recording still in progress. */
+const MAIN_SLEEP = "long_sleep";
+
+/** The source (device brand) a summary record came from, or null. */
+function sourceOf(rec: { source?: { provider?: string | null } | null }): string | null {
+  const provider = rec.source?.provider;
+  return typeof provider === "string" && provider.length > 0 ? provider.toLowerCase() : null;
+}
+
 /**
- * Per-local-day evidence for the miss rule (lib/server/agent/miss.ts), from
- * `fromISO` to today. Junction's calendar_date is the wearer's own calendar
- * day (for sleep, "generally the sleep end date"), so nothing is re-keyed.
+ * Per-local-day evidence for the miss rule (lib/server/agent/miss.ts) and the
+ * pass path (runProgress), from `fromISO` to today. Junction's calendar_date
+ * is the wearer's own calendar day (for sleep, "generally the sleep end
+ * date"), so nothing is re-keyed.
  *
- * Every record of any kind is a heartbeat: sleep (scored or not), a daily
- * activity summary, a workout. Values: the best sleep value per night for a
- * sleep metric, or the session count per day for workouts. The offset is the
- * newest record's timezone_offset (seconds), sleep first; none means null.
+ * Sleep. Values: the best value of any sleep that day, as the pass path always
+ * read it; for hours, the sum of that day's main sleeps when it is larger, so
+ * a night split in two counts whole. A day is PARTIAL (never covered for a
+ * miss) unless it holds a main sleep (type long_sleep) and nothing else that
+ * could be part of the night: a nap-only day, a short sleep beside the main
+ * one, a recording still in progress, or a record with no type at all.
  *
- * Throws on any upstream failure, like every read here; the miss rule turns a
- * throw into "record nothing".
+ * Workouts. Values: sessions per day. The heartbeat is the SOURCE THAT
+ * RECORDS WORKOUTS, not any record: an Oura ring's nightly sleep proves
+ * nothing about whether Strava synced. That source is the one every workout
+ * in the read came from, or the only linked source when there is no workout
+ * yet; more than one, or none that can be told, is a sourceProblem, and so is
+ * any linked source in an unusable state. A record with no source counts only
+ * when exactly one source is linked.
+ *
+ * The offset is the newest record's timezone_offset (seconds), sleep first;
+ * none means null. Throws on any upstream failure, like every read here; the
+ * miss rule turns a throw into "record nothing".
  */
 export async function getMissEvidence(
   address: string,
@@ -713,46 +741,115 @@ export async function getMissEvidence(
   const range = `start_date=${fromISO}&end_date=${isoDate(new Date())}`;
   const sleepResp = await jx<SleepResponse>(`/v2/summary/sleep/${userId}?${range}`);
   const sleeps = sleepResp.sleep ?? sleepResp.data ?? [];
-  let activity: ActivityFields[] = [];
-  let workouts: WorkoutRecord[] = [];
-  if (!sleepMetric) {
-    const [actResp, workResp] = await Promise.all([
-      jx<ActivitySummaryResponse>(`/v2/summary/activity/${userId}?${range}`),
-      jx<WorkoutResponse>(`/v2/summary/workouts/${userId}?${range}`),
-    ]);
-    activity = actResp.activity ?? actResp.data ?? [];
-    workouts = workResp.workouts ?? workResp.data ?? [];
-  }
 
-  const heartbeat = new Set<string>();
-  const beat = (day: string | null): void => {
-    if (day !== null) heartbeat.add(day);
-  };
-  sleeps.forEach((rec) => beat(dayKey(rec)));
-  activity.forEach((rec) => beat(activityDay(rec)));
-  workouts.forEach((rec) => beat(workoutDay(rec)));
-
-  const values: Record<string, number> = {};
-  if (sleepMetric) {
-    for (const rec of sleeps) {
-      const day = dayKey(rec);
-      const value = sleepMetricValue(rec, metric);
-      if (day === null || value === null || !Number.isFinite(value)) continue;
-      if (values[day] === undefined || value > values[day]) values[day] = value;
-    }
-  } else {
-    for (const rec of workouts) {
-      const day = workoutDay(rec);
-      if (day !== null) values[day] = (values[day] ?? 0) + 1;
-    }
-  }
-
-  const tzOffsetSec =
+  const tzFrom = (
+    activity: ActivityFields[],
+    workouts: WorkoutRecord[],
+  ): number | null =>
     newestOffset(sleeps, dayKey) ??
     newestOffset(activity, activityDay) ??
     newestOffset(workouts, workoutDay);
 
-  return { values, heartbeatDays: [...heartbeat], tzOffsetSec };
+  if (sleepMetric) {
+    const values: Record<string, number> = {};
+    const mainSum: Record<string, number> = {};
+    const sourceDays = new Set<string>();
+    const hasMain = new Set<string>();
+    const hasOther = new Set<string>();
+    for (const rec of sleeps) {
+      const day = dayKey(rec);
+      if (day === null) continue;
+      sourceDays.add(day);
+      if (rec.type === MAIN_SLEEP) hasMain.add(day);
+      else hasOther.add(day);
+      const value = sleepMetricValue(rec, metric);
+      if (value === null || !Number.isFinite(value)) continue;
+      if (values[day] === undefined || value > values[day]) values[day] = value;
+      if (metric === "sleep_hours" && rec.type === MAIN_SLEEP) {
+        mainSum[day] = (mainSum[day] ?? 0) + value;
+      }
+    }
+    for (const [day, sum] of Object.entries(mainSum)) {
+      if (sum > (values[day] ?? 0)) values[day] = sum;
+    }
+    const partialDays = [...sourceDays].filter(
+      (day) => !hasMain.has(day) || hasOther.has(day),
+    );
+    return {
+      values,
+      heartbeatDays: [...sourceDays],
+      sourceDays: [...sourceDays],
+      partialDays,
+      tzOffsetSec: tzFrom([], []),
+    };
+  }
+
+  const [actResp, workResp, linked] = await Promise.all([
+    jx<ActivitySummaryResponse>(`/v2/summary/activity/${userId}?${range}`),
+    jx<WorkoutResponse>(`/v2/summary/workouts/${userId}?${range}`),
+    jx<ProvidersResponse>(`/v2/user/providers/${userId}`),
+  ]);
+  const activity = actResp.activity ?? actResp.data ?? [];
+  const workouts = workResp.workouts ?? workResp.data ?? [];
+  const providers = Array.isArray(linked.providers) ? linked.providers : [];
+
+  const values: Record<string, number> = {};
+  for (const rec of workouts) {
+    const day = workoutDay(rec);
+    if (day !== null) values[day] = (values[day] ?? 0) + 1;
+  }
+
+  let sourceProblem: string | null = null;
+  const unusable = providers.filter((p) =>
+    UNUSABLE_PROVIDER_STATUS.has((p.status ?? "").toLowerCase()),
+  );
+  if (unusable.length > 0) {
+    sourceProblem = `linked source ${unusable
+      .map((p) => `${p.slug ?? "unknown"} is ${p.status}`)
+      .join(", ")}`;
+  }
+  const linkedSlugs = providers
+    .filter((p) => !UNUSABLE_PROVIDER_STATUS.has((p.status ?? "").toLowerCase()))
+    .map((p) => (p.slug ?? "").toLowerCase())
+    .filter((slug) => slug.length > 0);
+  const onlyLinked = linkedSlugs.length === 1 ? linkedSlugs[0] : null;
+  const workoutSources = new Set(
+    workouts
+      .map((rec) => sourceOf(rec) ?? onlyLinked)
+      .filter((source): source is string => source !== null),
+  );
+  let workoutSource: string | null = null;
+  if (workoutSources.size === 1) {
+    workoutSource = [...workoutSources][0];
+  } else if (workouts.length === 0 && onlyLinked !== null) {
+    workoutSource = onlyLinked;
+  }
+  if (workoutSource === null) {
+    sourceProblem ??=
+      workoutSources.size > 1
+        ? `workouts come from more than one source (${[...workoutSources].join(", ")})`
+        : "cannot tell which linked source records workouts";
+  }
+
+  const heartbeat = new Set<string>();
+  const beat = (
+    day: string | null,
+    rec: { source?: { provider?: string | null } | null },
+  ): void => {
+    if (day === null || workoutSource === null) return;
+    if ((sourceOf(rec) ?? onlyLinked) === workoutSource) heartbeat.add(day);
+  };
+  sleeps.forEach((rec) => beat(dayKey(rec), rec));
+  activity.forEach((rec) => beat(activityDay(rec), rec));
+  workouts.forEach((rec) => beat(workoutDay(rec), rec));
+
+  return {
+    values,
+    heartbeatDays: [...heartbeat],
+    sourceDays: [...heartbeat],
+    sourceProblem,
+    tzOffsetSec: tzFrom(activity, workouts),
+  };
 }
 
 /** The timezone_offset of the newest record that carries one, or null. */

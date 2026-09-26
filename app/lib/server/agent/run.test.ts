@@ -735,6 +735,47 @@ describe("runAgentForGoal", () => {
     expect(reasons.map((r) => r.decision)).toEqual(["no-pay", "pay"]);
   });
 
+  it("F10: re-decides when the sweep wrote the hit after the last decision, even with the same words", async () => {
+    // The sweep reads a hit the player has not opened and writes the pass
+    // path's own verdict row. When the player opens the run, the poll returns
+    // that same verdict; the old no-pay must not stand in front of it.
+    const { runAgentForGoal } = await loadRun();
+    const ledgerMod = await import("@/lib/server/agent/ledger");
+    const input = {
+      ...INPUT,
+      attesterId: "wearable-111",
+      evidenceKind: "wearable" as const,
+    };
+    const notMet = {
+      verified: false,
+      confidence: "high",
+      reason: "Junction reports 3 of 7 qualifying days.",
+    };
+    const met = {
+      verified: true,
+      confidence: "high",
+      reason: "Junction reports 7 qualifying days.",
+    };
+    const poll = vi.fn().mockResolvedValue({ status: "completed", verdict: notMet });
+    const deps = makeDeps({ poll });
+    (deps.spotter as { nowSeconds: () => bigint }).nowSeconds = () => 500n;
+    expect((await runAgentForGoal(deps, input)).status).toBe("no-pay");
+
+    await ledgerMod.appendLedger(GOAL, {
+      kind: "verdict",
+      ...met,
+      confidence: "high",
+      ref: "wearable-111",
+      selfReported: false,
+    });
+    poll.mockResolvedValue({ status: "completed", verdict: met });
+
+    const second = await runAgentForGoal(deps, input);
+    expect(second.status).toBe("recorded");
+    const reasons = second.ledger.filter((e) => e.kind === "reason");
+    expect(reasons.map((r) => r.decision)).toEqual(["no-pay", "pay"]);
+  });
+
   it("reconciles an already-settled pool against AchieverPaid instead of declaring it unpayable", async () => {
     // Multi-achiever pools settle everyone in ONE transaction: the second
     // claim swept finds the pool already settled and must recover its own
@@ -1312,6 +1353,7 @@ describe("runAgentForGoal: recording a miss", () => {
       spotter,
       legacyRecordResult: setup.legacyRecordResult,
       read: {
+        pinnedProviderId: vi.fn().mockResolvedValue("junction"),
         storedProviderId: vi.fn().mockResolvedValue("junction"),
         providerConfigured: vi.fn().mockReturnValue(true),
         providerById: vi.fn().mockReturnValue(setup.provider),

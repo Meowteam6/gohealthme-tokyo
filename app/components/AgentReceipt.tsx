@@ -400,8 +400,7 @@ export default function AgentReceipt({
                   </span>
                   {!row.verdict ? (
                     <p className="mt-1 text-foreground/80">
-                      {missStakeLine("pending", row.stakeUsd, true)} If nobody
-                      hit, every stake comes back, yours included.
+                      {missStakeLine("pending", row.stakeUsd, true)}
                     </p>
                   ) : null}
                   {row.resultTx !== null ? (
@@ -442,7 +441,7 @@ export default function AgentReceipt({
                     </span>
                   ) : row.status === "closed" && row.outcome !== null ? (
                     <span>
-                      run settled:{" "}
+                      {row.outcome === "cancelled" ? "run cancelled:" : "run settled:"}{" "}
                       {missStakeLine(row.outcome, missStakeUsd, true)}
                     </span>
                   ) : (

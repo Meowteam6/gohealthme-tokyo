@@ -1108,10 +1108,19 @@ async function runClaimUnlocked(
   // wearable poll that failed transiently after the payout was earned) would
   // print a no-pay the chain can no longer honor.
   const alreadyRecorded = entryOf(ledger, "record") !== undefined;
+  // A decision older than the newest verdict for this job is stale too, even
+  // when this poll's verdict matches that verdict word for word: the sweep's
+  // miss phase writes the hit it read (the pass path's own verdict row) for a
+  // player who has not opened the run, and their old no-pay must not stand
+  // in front of it (lib/server/agent/miss-record.ts writeMetRows).
+  const priorReason = reasonOf(ledger, input.attesterId);
+  const newestVerdict = verdictWithRef(ledger, input.attesterId);
+  const decisionIsStale =
+    priorReason !== undefined &&
+    newestVerdict !== undefined &&
+    ledger.lastIndexOf(newestVerdict) > ledger.lastIndexOf(priorReason);
   let reason =
-    verdictChanged && !alreadyRecorded
-      ? undefined
-      : reasonOf(ledger, input.attesterId);
+    (verdictChanged || decisionIsStale) && !alreadyRecorded ? undefined : priorReason;
   if (reason === undefined) {
     const plan = entryOf(ledger, "plan");
     const decided = await deps.reason({

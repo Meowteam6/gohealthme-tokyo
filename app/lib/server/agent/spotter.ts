@@ -327,6 +327,7 @@ async function settleReadiness(
       ? null
       : missSettleWindow(
           {
+            id: poolId,
             bountyModel: state.bountyModel,
             goalSpec: state.goalSpec,
             periodEnd: state.periodEnd,

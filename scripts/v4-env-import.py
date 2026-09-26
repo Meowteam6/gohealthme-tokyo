@@ -44,17 +44,21 @@ SHAPES = {
     "GAS_DRIP_DAILY_BUDGET_WEI": r"^\d+$",
     "GAS_DRIP_TREASURY_FLOOR_WEI": r"^\d+$",
     "MISS_GRACE_HOURS": r"^\d+(\.\d+)?$",
+    "MISS_RULE_FROM_POOL_ID": r"^[1-9]\d*$",
 }
 
 # Optional settings with defaults in code: gas drip limits in wei
-# (app/lib/server/gas-drip.ts) and MISS_GRACE_HOURS, the sync grace before
-# SPOTTER may record a miss (app/lib/miss-grace.ts, default 6, clamped 1..18).
+# (app/lib/server/gas-drip.ts), MISS_GRACE_HOURS, the sync grace before
+# SPOTTER may record a miss (app/lib/miss-grace.ts, default 6, clamped 1..18),
+# and MISS_RULE_FROM_POOL_ID, the first pool id the miss rule applies to
+# (app/lib/miss-rule.ts; unset means no pool records a miss).
 OPTIONAL_WEI = (
     "GAS_DRIP_WEI",
     "GAS_DRIP_MIN_WEI",
     "GAS_DRIP_DAILY_BUDGET_WEI",
     "GAS_DRIP_TREASURY_FLOOR_WEI",
     "MISS_GRACE_HOURS",
+    "MISS_RULE_FROM_POOL_ID",
 )
 
 

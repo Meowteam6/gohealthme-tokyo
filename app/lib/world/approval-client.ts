@@ -45,6 +45,8 @@ export interface ApprovalStatusResponse {
   status: "none" | "pending" | ApprovalOutcome;
   requestId?: string;
   expiresAt?: string;
+  /** SPOTTER read a hit on this claim that is not recorded yet. */
+  hit?: true;
 }
 
 /** The event-mode proof: bound to the action and the payout signal the
@@ -130,6 +132,7 @@ export function parseStatus(value: unknown): ApprovalStatusResponse | null {
     status: v.status as ApprovalStatusResponse["status"],
     ...(typeof v.requestId === "string" ? { requestId: v.requestId } : {}),
     ...(typeof v.expiresAt === "string" ? { expiresAt: v.expiresAt } : {}),
+    ...(v.hit === true ? { hit: true } : {}),
   };
 }
 
