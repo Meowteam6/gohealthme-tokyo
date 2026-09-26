@@ -1,17 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import Link from "next/link";
-import {
-  Atkinson_Hyperlegible_Next,
-  Bricolage_Grotesque,
-  Geist_Mono,
-  Patrick_Hand,
-} from "next/font/google";
+import { Figtree, Fraunces, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 import Header from "@/components/Header";
 import HelperWidget from "@/components/HelperWidget";
 import { Analytics } from "@vercel/analytics/next";
 import AccessGate from "@/components/AccessGate";
+import SiteFooter from "@/components/SiteFooter";
+import { NIGHT_PALETTE } from "@/lib/night-palette";
 import {
   DEFAULT_DESCRIPTION,
   DEFAULT_TITLE,
@@ -20,28 +16,22 @@ import {
   TITLE_TEMPLATE,
 } from "@/lib/site";
 
-// Type system (docs/DESIGN.md): Bricolage Grotesque for titles and the big
-// stake, payout and night figures (variable, with the optical-size axis so it
-// tightens at 64px); Atkinson Hyperlegible Next for all running copy and every
-// control; Patrick Hand only inside SPOTTER's speech bubbles; Geist Mono only
-// for addresses and tx hashes.
-const bricolage = Bricolage_Grotesque({
-  variable: "--font-bricolage",
+// Type system (docs/DESIGN.md, Night Shift): Fraunces sets words (headlines,
+// section titles, the wordmark, verdict lines), with its SOFT, WONK and
+// optical-size axes so it softens at display sizes. Figtree sets every control,
+// all running copy and every number. Geist Mono is for tx hashes and addresses
+// only. Words in the serif, numbers in the sans.
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
-  axes: ["opsz"],
+  axes: ["SOFT", "WONK", "opsz"],
   display: "swap",
 });
 
-const atkinson = Atkinson_Hyperlegible_Next({
-  variable: "--font-atkinson",
+const figtree = Figtree({
+  variable: "--font-figtree",
   subsets: ["latin"],
-  display: "swap",
-});
-
-const patrickHand = Patrick_Hand({
-  variable: "--font-patrick",
-  subsets: ["latin"],
-  weight: "400",
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -109,6 +99,9 @@ const structuredData = JSON.stringify({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
+  themeColor: NIGHT_PALETTE.background,
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -119,7 +112,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${bricolage.variable} ${atkinson.variable} ${patrickHand.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${figtree.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <script
@@ -128,36 +121,10 @@ export default function RootLayout({
         />
         <Providers>
           <Header />
-          <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-24 pt-8 sm:pb-8">
+          <main className="mx-auto w-full max-w-[75rem] flex-1 px-gutter pb-24 pt-5 sm:pb-12 min-[900px]:pt-8">
             <AccessGate>{children}</AccessGate>
           </main>
-          <footer className="border-t border-edge bg-surface-raised/60 px-4 pb-24 pt-6 text-sm text-muted sm:pb-6">
-            <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-2">
-                <p className="inline-flex items-center gap-2 rounded-full border border-edge bg-surface px-3 py-1 text-[0.8125rem] font-bold text-foreground">
-                  Base Sepolia test money, beta
-                </p>
-                <p className="max-w-xl">
-                  Built at ETHGlobal Tokyo 2026 and settled by SPOTTER. Your
-                  health data never touches the chain.
-                </p>
-              </div>
-              <nav aria-label="Legal" className="flex items-center gap-5">
-                <Link
-                  href="/privacy"
-                  className="inline-flex min-h-11 items-center font-bold text-accent-deep underline-offset-4 hover:underline"
-                >
-                  Privacy
-                </Link>
-                <Link
-                  href="/terms"
-                  className="inline-flex min-h-11 items-center font-bold text-accent-deep underline-offset-4 hover:underline"
-                >
-                  Terms
-                </Link>
-              </nav>
-            </div>
-          </footer>
+          <SiteFooter />
           <HelperWidget />
         </Providers>
         {/* Vercel Web Analytics: anonymous page-view counts so the pilot has a
