@@ -135,7 +135,7 @@ export default function RunBoard({
         {showLink ? (
           <Link
             href={`/pools/${pool.id.toString()}`}
-            className={`-mr-4 font-semibold text-accent underline underline-offset-2 ${TAP_TARGET}`}
+            className={`-mr-4 font-semibold text-accent-deep underline underline-offset-2 ${TAP_TARGET}`}
           >
             Open this run
           </Link>
@@ -188,7 +188,7 @@ export default function RunBoard({
               onClick={() => {
                 void requestAuth({ refresh: true }).then(() => progressQuery.refetch());
               }}
-              className={`rounded-lg bg-accent font-semibold text-white hover:bg-accent-strong ${TAP_TARGET}`}
+              className={`rounded-lg bg-accent font-semibold text-foreground hover:bg-accent-hover ${TAP_TARGET}`}
             >
               Show my nights
             </button>
@@ -236,7 +236,7 @@ export default function RunBoard({
                 <li
                   key={p.address}
                   className={`inline-flex min-h-9 items-center gap-2 rounded-md border-2 px-2 text-sm ${
-                    p.hit ? "border-accent text-accent" : "border-edge"
+                    p.hit ? "border-accent text-accent-deep" : "border-edge"
                   } ${p.address.toLowerCase() === address.toLowerCase() ? "font-semibold" : ""}`}
                 >
                   <span

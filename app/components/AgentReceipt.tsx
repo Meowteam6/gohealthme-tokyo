@@ -216,7 +216,7 @@ function SpendRow({ row }: { row: SpendReceiptRow }) {
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 break-words text-sm font-medium">
           {row.paidUsd !== null ? (
-            <span aria-hidden className="mr-2 text-accent">
+            <span aria-hidden className="mr-2 text-accent-deep">
               [x]
             </span>
           ) : (
@@ -373,7 +373,7 @@ export default function AgentReceipt({
                   </span>{" "}
                   <span
                     className={
-                      row.decision === "pay" ? "text-accent" : "text-warning"
+                      row.decision === "pay" ? "text-accent-deep" : "text-warning"
                     }
                   >
                     {row.decision}

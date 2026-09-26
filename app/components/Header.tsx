@@ -71,7 +71,7 @@ function AuthControls() {
     return (
       <Link
         href={`/character${next}`}
-        className="inline-flex min-h-11 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+        className="inline-flex min-h-11 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-foreground hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
       >
         Sign in
       </Link>
@@ -118,7 +118,7 @@ function WalletNote() {
     <div className="flex items-center gap-2 py-1">
       <Link
         href="/character"
-        className="min-w-0 truncate text-sm font-semibold text-foreground hover:text-accent"
+        className="min-w-0 truncate text-sm font-semibold text-foreground hover:text-accent-deep"
       >
         <EnsName
           address={address}

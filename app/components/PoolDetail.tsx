@@ -94,7 +94,7 @@ function BrowsePoolsLink({ label = "Browse live pools" }: { label?: string }) {
   return (
     <Link
       href="/pools"
-      className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-foreground shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-hover active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       {label}
     </Link>
@@ -660,7 +660,7 @@ export default function PoolDetail({ id }: { id: string }) {
             const tone = selected
               ? m === "self-reported"
                 ? "border-warning/50 bg-warning/10 text-warning"
-                : "border-accent/50 bg-accent/10 text-accent-strong"
+                : "border-accent/50 bg-accent/10 text-accent-deep"
               : "border-edge bg-surface-raised text-muted hover:text-foreground";
             const label =
               m === "wearable"
@@ -674,7 +674,7 @@ export default function PoolDetail({ id }: { id: string }) {
                 type="button"
                 aria-pressed={selected}
                 onClick={() => choosePath(m)}
-                className={`rounded-full border-2 font-display font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${TAP_TARGET} ${tone}`}
+                className={`rounded-full border-2 font-display font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${TAP_TARGET} ${tone}`}
               >
                 {label}
               </button>

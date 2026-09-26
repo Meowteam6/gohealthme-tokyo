@@ -59,7 +59,7 @@ export default function PayoutMoment({
       Self-reported
     </span>
   ) : (
-    <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/12 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-strong">
+    <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/12 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-deep">
       Verified
     </span>
   );
@@ -169,7 +169,7 @@ export default function PayoutMoment({
                   Self-reported · we took your word for it
                 </span>
               ) : (
-                <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/12 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent-strong">
+                <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/12 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent-deep">
                   Verified · only the verdict touched the chain
                 </span>
               )}
@@ -202,7 +202,7 @@ export default function PayoutMoment({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-accent-strong px-6 py-2 text-sm font-semibold text-background hover:bg-accent"
+              className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-accent px-6 py-2 text-sm font-semibold text-foreground hover:bg-accent-hover"
             >
               Done
             </button>

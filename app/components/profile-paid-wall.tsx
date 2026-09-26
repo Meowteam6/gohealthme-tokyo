@@ -162,7 +162,7 @@ function Money({
 
 function PrivacyLine({ className = "" }: { className?: string }) {
   return (
-    <p className={`flex items-center gap-1.5 text-xs text-accent ${className}`}>
+    <p className={`flex items-center gap-1.5 text-xs text-accent-deep ${className}`}>
       <ShieldLockIcon className="h-3.5 w-3.5 shrink-0" />
       <span className="text-pretty">{PRIVACY_COPY}</span>
     </p>
@@ -200,7 +200,7 @@ function relativeTime(iso: string): string {
 // Icon container tones per trust tier. Self-reported and unknown wins carry NO
 // check badge — a self-reported photo cannot be presented as verified.
 const WIN_ICON_TONE: Record<"accent" | "warning" | "muted", string> = {
-  accent: "bg-accent/10 text-accent-strong",
+  accent: "bg-accent/10 text-accent-deep",
   warning: "bg-warning/10 text-warning",
   muted: "bg-surface-raised text-muted",
 };
@@ -242,7 +242,7 @@ function WinRow({ win, index }: { win: Win; index: number }) {
             href={arcTxUrl(win.txHash)}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-accent underline underline-offset-2 hover:text-accent-strong"
+            className="inline-flex items-center gap-1 text-accent-deep underline underline-offset-2 hover:text-accent-deep"
           >
             Basescan
             <ExternalLinkIcon className="h-3 w-3" />
@@ -317,7 +317,7 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
               <span className="text-xs uppercase tracking-wider text-muted">
                 Win streak
               </span>
-              <span className="flex items-center gap-1.5 text-2xl font-semibold text-accent">
+              <span className="flex items-center gap-1.5 text-2xl font-semibold text-accent-deep">
                 <FlameIcon className="h-5 w-5" />
                 {profile.winStreak}
               </span>
@@ -326,7 +326,7 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
           {/* The tier split. Only wins proven verified carry the check;
               self-reported wins are counted separately and never folded in. */}
           {profile.verifiedWins > 0 ? (
-            <p className="mt-3 flex items-center gap-1.5 text-xs text-accent-strong">
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-accent-deep">
               <CheckBadgeIcon className="h-3.5 w-3.5 shrink-0" />
               <span>
                 {profile.verifiedWins} verified by a wearable or a record

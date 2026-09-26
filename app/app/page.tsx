@@ -108,7 +108,7 @@ export default function Home() {
         <ol className="divide-y-2 divide-foreground/10 border-y-2 border-foreground">
           {RUN.map((step, i) => (
             <li key={step.title} className="grid gap-2 py-5 sm:grid-cols-[5rem_1fr_2fr] sm:items-baseline sm:gap-6">
-              <span className="font-display text-5xl font-black leading-none text-accent tabular-nums">
+              <span className="font-display text-5xl font-black leading-none text-accent-deep tabular-nums">
                 {i + 1}
               </span>
               <h3 className="font-display text-3xl font-extrabold leading-tight">{step.title}</h3>

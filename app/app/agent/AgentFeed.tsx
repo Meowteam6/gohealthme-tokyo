@@ -73,7 +73,7 @@ const SCREEN_LINE: Record<
 };
 
 const TONE_CLASS = {
-  accent: "text-accent",
+  accent: "text-accent-deep",
   warning: "text-warning",
   muted: "text-muted",
 } as const;
@@ -133,7 +133,7 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
             </span>
             <span
               className={
-                claim.decision === "pay" ? "text-accent" : "text-warning"
+                claim.decision === "pay" ? "text-accent-deep" : "text-warning"
               }
             >
               {claim.decision === "pay" ? "pay" : "no pay"}
@@ -143,7 +143,7 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
                 href={baseTxUrl(resultTx)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-accent underline"
+                className="text-xs text-accent-deep underline"
               >
                 verdict tx
               </a>
@@ -160,7 +160,7 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
         settle.status === "settled" &&
         settle.paidUsd !== null ? (
           <p className="flex items-baseline justify-between gap-3">
-            <span className="text-accent">
+            <span className="text-accent-deep">
               paid <Money usd={toUsd2(settle.paidUsd)} sign="+" size="sm" />
             </span>
             {settle.txHash !== null ? (
@@ -168,7 +168,7 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
                 href={baseTxUrl(settle.txHash)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-accent underline"
+                className="text-xs text-accent-deep underline"
               >
                 payout tx
               </a>
@@ -245,7 +245,7 @@ export default function AgentFeed() {
                 type="button"
                 aria-pressed={view === v}
                 onClick={() => setPicked(v)}
-                className={`min-h-11 rounded-full px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                className={`min-h-11 rounded-full px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${
                   view === v ? "bg-foreground text-background" : "text-muted hover:text-foreground"
                 }`}
               >
@@ -259,7 +259,7 @@ export default function AgentFeed() {
         <p className="text-sm text-muted">
           <Link
             href={`/character?next=${encodeURIComponent(pathname)}`}
-            className="font-semibold text-accent underline"
+            className="font-semibold text-accent-deep underline"
           >
             Sign in
           </Link>{" "}
@@ -289,7 +289,7 @@ export default function AgentFeed() {
           action={
             <Link
               href="/pools"
-              className="inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+              className="inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-foreground hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
             >
               See the open runs
             </Link>
@@ -304,7 +304,7 @@ export default function AgentFeed() {
             action={
               <Link
                 href="/pools"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-foreground shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-hover active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none"
               >
                 See the open runs
               </Link>

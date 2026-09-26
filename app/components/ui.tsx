@@ -143,7 +143,7 @@ export function Badge({
   tone?: "accent" | "muted" | "warning";
 }) {
   const tones: Record<string, string> = {
-    accent: "bg-accent/12 text-accent-strong border-accent/30",
+    accent: "bg-accent/12 text-accent-deep border-accent/30",
     muted: "bg-surface-raised text-foreground/75 border-edge",
     warning: "bg-warning/10 text-warning border-warning/30",
   };
@@ -253,7 +253,7 @@ export function Verdict({
       <span
         className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
           verified
-            ? "border-accent/30 bg-accent/12 text-accent-strong"
+            ? "border-accent/30 bg-accent/12 text-accent-deep"
             : "border-danger/40 bg-danger/10 text-danger"
         }`}
       >
@@ -278,7 +278,7 @@ export function Stamp({
   tone?: "accent" | "danger" | "gold";
 }) {
   const tones: Record<string, string> = {
-    accent: "border-accent text-accent",
+    accent: "border-accent text-accent-deep",
     danger: "border-danger text-danger",
     gold: "border-gold text-gold-deep",
   };
@@ -325,13 +325,13 @@ export function Button({
   pop?: boolean;
 }) {
   const base =
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 py-2.5 font-display text-sm font-bold transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60";
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 py-2.5 font-display text-sm font-bold transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60";
   const variants: Record<string, string> = {
-    primary: "bg-accent text-white hover:bg-accent-strong",
+    primary: "bg-accent text-foreground hover:bg-accent-hover",
     secondary:
       "border-2 border-edge bg-secondary text-secondary-foreground hover:border-accent/50",
-    coral: "bg-coral-strong text-white hover:bg-coral",
-    ghost: "text-accent-strong hover:bg-secondary",
+    coral: "bg-coral-strong text-foreground hover:bg-accent-hover",
+    ghost: "text-accent-deep hover:bg-secondary",
   };
   const popClass =
     pop && variant !== "ghost"
@@ -366,9 +366,9 @@ export function Chip({
     <button
       type="button"
       aria-pressed={selected}
-      className={`inline-flex min-h-11 items-center justify-center rounded-full border-2 px-5 py-2.5 font-display text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+      className={`inline-flex min-h-11 items-center justify-center rounded-full border-2 px-5 py-2.5 font-display text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
         selected
-          ? "border-accent bg-accent text-white"
+          ? "border-accent bg-accent text-foreground"
           : "border-edge bg-secondary text-secondary-foreground hover:border-accent/50"
       } ${className}`}
       {...props}

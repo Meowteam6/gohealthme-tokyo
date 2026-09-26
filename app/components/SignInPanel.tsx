@@ -138,7 +138,7 @@ function SignInPanelInner() {
             onClick={() => {
               void verify();
             }}
-            className="min-h-11 w-full rounded-xl bg-accent-strong px-5 py-3 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 w-full rounded-xl bg-accent px-5 py-3 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {step.kind === "verifying" ? "Verifying..." : "Verify and continue"}
           </button>
@@ -149,7 +149,7 @@ function SignInPanelInner() {
               onClick={() => {
                 void resend();
               }}
-              className="text-accent underline underline-offset-2 disabled:opacity-60"
+              className="text-accent-deep underline underline-offset-2 disabled:opacity-60"
             >
               Resend code
             </button>
@@ -168,7 +168,7 @@ function SignInPanelInner() {
             </button>
           </div>
           {resent ? (
-            <p className="text-xs text-accent" aria-live="polite">
+            <p className="text-xs text-accent-deep" aria-live="polite">
               A new code is on its way.
             </p>
           ) : null}

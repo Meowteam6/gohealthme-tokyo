@@ -132,20 +132,20 @@ export default function ShareChallenge({
           <button
             type="button"
             onClick={nativeShare}
-            className={`flex-1 rounded-xl bg-accent-strong font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
+            className={`flex-1 rounded-xl bg-accent font-semibold text-foreground hover:bg-accent-hover ${TAP_TARGET}`}
           >
             {shareLabel}
           </button>
         ) : null}
         <a
           href={smsHref(body)}
-          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent hover:bg-accent/10 ${TAP_TARGET}`}
+          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent-deep hover:bg-accent/10 ${TAP_TARGET}`}
         >
           Text
         </a>
         <a
           href={mailtoHref(emailSubject, body)}
-          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent hover:bg-accent/10 ${TAP_TARGET}`}
+          className={`flex-1 rounded-xl border border-accent/50 bg-surface-raised text-center font-semibold text-accent-deep hover:bg-accent/10 ${TAP_TARGET}`}
         >
           Email
         </a>

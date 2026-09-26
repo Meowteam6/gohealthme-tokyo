@@ -38,7 +38,7 @@ export default function GoalIntent() {
           on the goal, not collecting somebody else's money. */}
       <button
         type="submit"
-        className="rounded-xl bg-accent-strong px-8 py-4 text-base font-semibold text-background hover:bg-accent"
+        className="rounded-xl bg-accent px-8 py-4 text-base font-semibold text-foreground hover:bg-accent-hover"
       >
         Stake on it
       </button>

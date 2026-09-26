@@ -101,7 +101,7 @@ function PayoutRow({ payout, index }: { payout: NamedPayout; index: number }) {
             href={arcTxUrl(payout.txHash)}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-accent underline underline-offset-2 hover:text-accent-strong"
+            className="text-accent-deep underline underline-offset-2 hover:text-accent-deep"
           >
             Basescan
           </a>
@@ -130,7 +130,7 @@ export default function NamedPayoutFeed() {
         <h2 className="text-sm font-medium uppercase tracking-wider text-muted">
           Payout feed
         </h2>
-        <p className="flex items-center gap-1.5 text-xs text-accent">
+        <p className="flex items-center gap-1.5 text-xs text-accent-deep">
           <ShieldLockIcon className="h-3.5 w-3.5 shrink-0" />
           <span>{PRIVACY_COPY}</span>
         </p>
@@ -152,7 +152,7 @@ export default function NamedPayoutFeed() {
             onClick={() => {
               void query.refetch();
             }}
-            className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-4"
+            className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent-deep underline underline-offset-4"
           >
             Try again
           </button>

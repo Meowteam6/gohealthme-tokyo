@@ -359,7 +359,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
           role="status"
           className="mt-4 rounded-xl border border-accent/40 bg-accent/10 p-4"
         >
-          <p className="text-base font-semibold text-accent-strong">
+          <p className="text-base font-semibold text-accent-deep">
             Verified: one human.
           </p>
           <p className="mt-1 text-sm text-foreground/80">

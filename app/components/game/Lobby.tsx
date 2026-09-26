@@ -107,7 +107,7 @@ export default function Lobby({
           </p>
           <Link
             href={`/character?next=${encodeURIComponent(returnTo)}`}
-            className={`shrink-0 rounded-lg bg-accent font-semibold text-white hover:bg-accent-strong ${TAP_TARGET}`}
+            className={`shrink-0 rounded-lg bg-accent font-semibold text-foreground hover:bg-accent-hover ${TAP_TARGET}`}
           >
             Sign in
           </Link>
@@ -160,7 +160,7 @@ export default function Lobby({
             rows={lobby.mine}
             returnTo={returnTo}
             note={
-              <Link href="/dashboard" className="text-sm font-semibold text-accent underline underline-offset-2">
+              <Link href="/dashboard" className="text-sm font-semibold text-accent-deep underline underline-offset-2">
                 Open the scoreboard
               </Link>
             }

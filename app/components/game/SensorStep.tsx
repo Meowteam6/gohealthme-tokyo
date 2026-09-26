@@ -273,7 +273,7 @@ function SensorStepBody({
               <p className="font-semibold">
                 {option.label}
                 {option.connected ? (
-                  <span className="ml-2 text-xs font-bold text-accent">Paired</span>
+                  <span className="ml-2 text-xs font-bold text-accent-deep">Paired</span>
                 ) : null}
               </p>
               <p className="mt-1 text-sm text-muted">{BLURB[option.id]}</p>

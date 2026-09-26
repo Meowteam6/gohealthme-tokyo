@@ -134,7 +134,7 @@ function ClaimHandleInner() {
         <div className="flex flex-wrap gap-3">
           <Link
             href={`/u/${status.handle}`}
-            className="rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
+            className="rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-foreground hover:bg-accent-hover"
           >
             View your page
           </Link>
@@ -204,7 +204,7 @@ function ClaimHandleInner() {
               }
               void submit();
             }}
-            className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving
               ? "Signing and saving..."

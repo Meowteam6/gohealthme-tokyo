@@ -98,7 +98,7 @@ export default function BlinkTopUp({
             href={baseSepoliaTxUrl(status.txHash)}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-1 inline-block break-all text-sm text-accent underline"
+            className="mt-1 inline-block break-all text-sm text-accent-deep underline"
           >
             View deposit on BaseScan
           </a>
@@ -121,7 +121,7 @@ export default function BlinkTopUp({
         onClick={() => {
           void startTopUp();
         }}
-        className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
       >
         {status.kind === "opening"
           ? "Opening Blink..."

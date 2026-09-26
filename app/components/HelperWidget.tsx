@@ -180,7 +180,7 @@ function CoachTab({
 
   return (
     <div aria-live="polite">
-      <p className="text-sm font-semibold text-accent">{headline}</p>
+      <p className="text-sm font-semibold text-accent-deep">{headline}</p>
       <p className="mt-1 text-sm leading-relaxed text-muted">{body}</p>
 
       {blocked !== null ? (
@@ -188,7 +188,7 @@ function CoachTab({
           <button
             type="button"
             onClick={onRetry}
-            className="min-h-11 rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent"
+            className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent-hover"
           >
             {step.error !== null ? "Try again" : "Check my spot"}
           </button>
@@ -206,7 +206,7 @@ function CoachTab({
             type="button"
             onClick={onPrimary}
             disabled={step.loading}
-            className="min-h-11 rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {copy.primary}
           </button>
@@ -346,7 +346,7 @@ function AskTab({ address }: { address: Address | null }) {
             type="button"
             onClick={() => void submit()}
             disabled={asking || input.trim() === ""}
-            className="min-h-11 rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             Ask
           </button>
@@ -406,7 +406,7 @@ function FeedbackTab({
   if (done) {
     return (
       <div className="rounded-xl border border-accent/40 bg-surface-raised p-4">
-        <p className="text-sm font-semibold text-accent">Thanks - noted</p>
+        <p className="text-sm font-semibold text-accent-deep">Thanks - noted</p>
         <p className="mt-1 text-sm text-muted">
           Your note went straight to the founders. It helps more than you know.
         </p>
@@ -427,7 +427,7 @@ function FeedbackTab({
             onClick={() => setRating(r)}
             className={`min-h-11 flex-1 rounded-lg border px-3 py-2 text-sm font-medium capitalize ${
               rating === r
-                ? "border-accent/60 bg-accent/10 text-accent-strong"
+                ? "border-accent/60 bg-accent/10 text-accent-deep"
                 : "border-edge bg-surface-raised text-muted hover:text-foreground"
             }`}
           >
@@ -456,7 +456,7 @@ function FeedbackTab({
         type="button"
         onClick={() => void submit()}
         disabled={busy}
-        className="mt-3 min-h-11 w-full rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-3 min-h-11 w-full rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
       >
         {busy ? "Sending..." : "Send feedback"}
       </button>
@@ -550,7 +550,7 @@ export default function HelperWidget() {
         type="button"
         aria-label="Open the GoHealthMe helper"
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-accent-strong text-background shadow-lg shadow-black/40 hover:bg-accent"
+        className="fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-foreground shadow-lg shadow-black/40 hover:bg-accent-hover"
       >
         <CompassGlyph />
         {pending ? (
@@ -570,7 +570,7 @@ export default function HelperWidget() {
       className="fixed bottom-4 right-4 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-[360px] flex-col rounded-2xl border border-edge bg-surface shadow-xl shadow-black/50"
     >
       <div className="flex items-center justify-between border-b border-edge px-4 py-3">
-        <div className="flex items-center gap-2 text-accent">
+        <div className="flex items-center gap-2 text-accent-deep">
           <CompassGlyph />
           <span className="text-sm font-semibold text-foreground">
             Getting started
@@ -595,7 +595,7 @@ export default function HelperWidget() {
             aria-pressed={tab === t.id}
             className={`min-h-11 rounded-full px-3 text-xs font-semibold ${
               tab === t.id
-                ? "bg-accent/10 text-accent-strong"
+                ? "bg-accent/10 text-accent-deep"
                 : "text-muted hover:text-foreground"
             }`}
           >

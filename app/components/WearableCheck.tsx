@@ -556,7 +556,7 @@ function WearableCheckInner({
                 type="button"
                 disabled={!ready}
                 onClick={openSignIn}
-                className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Sign in to see this claim
               </button>
@@ -566,7 +566,7 @@ function WearableCheckInner({
           <button
             type="button"
             onClick={unlockClaim}
-            className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent"
+            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
           >
             Sign and show my claim
           </button>
@@ -614,7 +614,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={unlockClaim}
-              className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
+              className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
             >
               Sign and show the rows
             </button>
@@ -668,7 +668,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
             >
               Check again
             </button>
@@ -697,7 +697,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
             >
               Check again
             </button>
@@ -740,7 +740,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
             >
               Try again
             </button>
@@ -752,7 +752,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent/10"
+              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
             >
               Have SPOTTER try again
             </button>
@@ -815,7 +815,7 @@ function WearableCheckInner({
               type="button"
               disabled={!ready}
               onClick={openSignIn}
-              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               Sign in to run the check
             </button>
@@ -845,7 +845,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={onSwitchToDocument}
-              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent"
+              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
             >
               Prove it with a document instead
             </button>
@@ -872,7 +872,7 @@ function WearableCheckInner({
           <button
             type="button"
             onClick={unlockProvider}
-            className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent"
+            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
           >
             Sign and check my wearable
           </button>
@@ -900,7 +900,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={onSwitchToDocument}
-              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent"
+              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
             >
               Prove it with a document instead
             </button>
@@ -933,7 +933,7 @@ function WearableCheckInner({
             <button
               type="button"
               onClick={onSwitchToDocument}
-              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent"
+              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
             >
               Prove it with a document instead
             </button>
@@ -970,7 +970,7 @@ function WearableCheckInner({
                 );
               });
             }}
-            className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent"
+            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
           >
             Connect a wearable
           </button>
@@ -980,7 +980,7 @@ function WearableCheckInner({
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setConnectFallbackUrl(null)}
-              className="block w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3.5 text-center text-base font-semibold text-accent hover:bg-accent/10"
+              className="block w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3.5 text-center text-base font-semibold text-accent-deep hover:bg-accent/10"
             >
               Your browser blocked the popup - tap here to connect
             </a>
@@ -1011,7 +1011,7 @@ function WearableCheckInner({
           onClick={() => {
             void run();
           }}
-          className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           Have SPOTTER check my wearable
         </button>

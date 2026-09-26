@@ -51,7 +51,7 @@ function RunPath({ step }: { step: ClaimStep }) {
           aria-current={i === active ? "step" : undefined}
           className={
             i < active
-              ? "text-accent"
+              ? "text-accent-deep"
               : i === active
                 ? "font-bold text-foreground underline decoration-2 underline-offset-4"
                 : "text-muted"

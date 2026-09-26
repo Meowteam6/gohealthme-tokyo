@@ -51,7 +51,7 @@ function StatusText({
   skipped: boolean;
 }) {
   if (state.status === "done") {
-    return <span className="truncate font-semibold text-accent">{state.summary}</span>;
+    return <span className="truncate font-semibold text-accent-deep">{state.summary}</span>;
   }
   if (skipped) return <span className="text-muted">Skipped</span>;
   switch (state.status) {
@@ -302,7 +302,7 @@ export default function CharacterCreation({
                 aria-hidden="true"
                 className={`flex size-9 shrink-0 items-center justify-center rounded-md border-2 font-display text-lg font-extrabold ${
                   state.status === "done"
-                    ? "border-accent bg-accent text-white"
+                    ? "border-accent bg-accent text-foreground"
                     : "border-foreground"
                 }`}
               >
@@ -324,7 +324,7 @@ export default function CharacterCreation({
                 <button
                   type="button"
                   onClick={() => setPicked(id)}
-                  className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+                  className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground"
                 >
                   {header}
                 </button>

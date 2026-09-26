@@ -111,7 +111,7 @@ export default function GoalMatch({ query }: { query: string }) {
   return (
     <div className="space-y-6">
       <div className="min-w-0">
-        <p className="text-sm font-semibold uppercase tracking-widest text-accent">
+        <p className="text-sm font-semibold uppercase tracking-widest text-accent-deep">
           {query === "" ? "Open runs" : "Money on this goal"}
         </p>
         <h1 className="mt-2 break-words text-3xl font-bold tracking-tight">
@@ -141,7 +141,7 @@ export default function GoalMatch({ query }: { query: string }) {
               <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link
                   href="/pools/create"
-                  className="inline-flex min-h-11 items-center rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
+                  className="inline-flex min-h-11 items-center rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-foreground hover:bg-accent-hover"
                 >
                   Create the pool
                 </Link>

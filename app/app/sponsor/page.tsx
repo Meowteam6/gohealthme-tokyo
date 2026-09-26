@@ -34,7 +34,7 @@ export default function SponsorPage() {
           action={
             <Link
               href="/pools"
-              className="inline-block rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
+              className="inline-block rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-foreground hover:bg-accent-hover"
             >
               Browse pools instead
             </Link>

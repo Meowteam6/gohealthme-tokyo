@@ -19,7 +19,7 @@ function StateTag({ row }: { row: LobbyRow }) {
   const slot = row.slot;
   const tone =
     slot.kind === "playable"
-      ? "bg-accent text-white"
+      ? "bg-accent text-foreground"
       : slot.kind === "in-run"
         ? "bg-foreground text-background"
         : slot.kind === "locked"
@@ -55,7 +55,7 @@ function SlipHead({ href, children }: { href: string | null; children: ReactNode
   return (
     <Link
       href={href}
-      className="block rounded-xl px-4 py-4 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:px-5"
+      className="block rounded-xl px-4 py-4 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground sm:px-5"
     >
       {children}
     </Link>
@@ -95,7 +95,7 @@ export default function RunSlip({
     >
       <SlipHead href={action === undefined ? href : null}>
         {row.highlighted ? (
-          <p className="mb-2 text-sm font-semibold text-accent">You were dared into this run</p>
+          <p className="mb-2 text-sm font-semibold text-accent-deep">You were dared into this run</p>
         ) : null}
         <div className="flex items-start justify-between gap-3">
           <h3 className="min-w-0 font-display text-2xl font-extrabold leading-tight text-balance">

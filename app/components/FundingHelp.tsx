@@ -83,7 +83,7 @@ export function CopyAddressButton({
         className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-edge bg-surface-raised px-3 py-3 text-left font-mono text-xs text-foreground/80 hover:border-accent/50 hover:text-foreground"
       >
         <span className="break-all">{address}</span>
-        <span className="shrink-0 font-sans text-xs font-semibold uppercase tracking-wide text-accent">
+        <span className="shrink-0 font-sans text-xs font-semibold uppercase tracking-wide text-accent-deep">
           {copy.kind === "copied" ? "Copied" : "Tap to copy"}
         </span>
       </button>
@@ -211,7 +211,7 @@ export default function FundingHelp({
             onClick={() => {
               void runFunding();
             }}
-            className="mt-4 min-h-11 w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-4 min-h-11 w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {primaryLabel}
           </button>
@@ -221,7 +221,7 @@ export default function FundingHelp({
           </p>
           {outcome !== null && outcome.kind === "funded" ? (
             <p
-              className="mt-2 text-sm font-semibold text-accent"
+              className="mt-2 text-sm font-semibold text-accent-deep"
               aria-live="polite"
             >
               Practice money added. Continuing...
@@ -274,14 +274,14 @@ export default function FundingHelp({
             href={FAUCET_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-base font-semibold text-accent hover:bg-accent/10"
+            className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-base font-semibold text-accent-deep hover:bg-accent/10"
           >
             Open the Circle faucet
           </a>
 
           <p className="mt-3 text-sm text-foreground/80">
             Or top up in-app from the balance card on{" "}
-            <Link href="/dashboard" className="text-accent underline">
+            <Link href="/dashboard" className="text-accent-deep underline">
               your dashboard
             </Link>
             .

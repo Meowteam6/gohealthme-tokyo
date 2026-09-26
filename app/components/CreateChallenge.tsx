@@ -135,9 +135,9 @@ const CHALLENGE_BOUNTY_MODEL = 2;
 // than hand-rolling a one-off style: emerald pop for the go-do-it action, a
 // tan-filled secondary for the quieter "start another".
 const CANDY_LINK_PRIMARY =
-  "inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-3 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-3 font-display text-sm font-bold text-foreground shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-hover active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const CANDY_LINK_SECONDARY =
-  "inline-flex min-h-11 items-center justify-center rounded-full border-2 border-edge bg-secondary px-5 py-2.5 font-display text-sm font-bold text-secondary-foreground transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "inline-flex min-h-11 items-center justify-center rounded-full border-2 border-edge bg-secondary px-5 py-2.5 font-display text-sm font-bold text-secondary-foreground transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 /** Which of the two honest variants the creator is building. */
 type Variant = "self" | "dare";
@@ -324,7 +324,7 @@ function SpotterBubble({ mood }: { mood: SpotterMood }) {
         <p className="text-sm leading-snug text-foreground sm:text-[15px]">
           {mood.line}
         </p>
-        <span className="mt-1 block text-[11px] font-bold uppercase tracking-wide text-accent-strong">
+        <span className="mt-1 block text-[11px] font-bold uppercase tracking-wide text-accent-deep">
           SPOTTER
         </span>
       </div>
@@ -387,7 +387,7 @@ function AmountChips({
             placeholder="Your call"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="min-h-11 max-w-[160px] rounded-xl border-2 border-edge bg-surface-raised px-3 py-2 font-display text-lg font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="min-h-11 max-w-[160px] rounded-xl border-2 border-edge bg-surface-raised px-3 py-2 font-display text-lg font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
           />
           <span className="text-sm text-muted">USDC</span>
         </div>
@@ -409,7 +409,7 @@ function SuggestionRow({
   const hover =
     tone === "coral"
       ? "hover:border-[color:var(--coral-strong)] hover:text-[color:var(--coral-strong)]"
-      : "hover:border-accent/50 hover:text-accent-strong";
+      : "hover:border-accent/50 hover:text-accent-deep";
   return (
     <div className="flex flex-wrap gap-2">
       {items.map((item) => (
@@ -448,7 +448,7 @@ function TypePicker({
         role="radio"
         aria-checked={isSelf}
         onClick={() => onChange("self")}
-        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
           isSelf
             ? "border-accent bg-accent/10 shadow-[var(--shadow-pop)]"
             : "border-edge bg-surface shadow-[var(--shadow-pop-edge)] hover:border-accent/40"
@@ -456,7 +456,7 @@ function TypePicker({
       >
         <span
           className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-            isSelf ? "bg-accent text-white" : "bg-secondary text-accent-strong"
+            isSelf ? "bg-accent text-foreground" : "bg-secondary text-accent-deep"
           }`}
         >
           <IconCoins className="h-5 w-5" />
@@ -467,7 +467,7 @@ function TypePicker({
           everyone who flaked forfeited.
         </span>
         {isSelf ? (
-          <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+          <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-foreground">
             Hero move
           </span>
         ) : null}
@@ -478,7 +478,7 @@ function TypePicker({
         role="radio"
         aria-checked={!isSelf}
         onClick={() => onChange("dare")}
-        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
           !isSelf
             ? "border-[color:var(--coral-strong)] bg-secondary shadow-[var(--shadow-pop-coral)]"
             : "border-edge bg-surface shadow-[var(--shadow-pop-edge)] hover:border-[color:var(--coral-strong)]/40"
@@ -487,7 +487,7 @@ function TypePicker({
         <span
           className={`flex h-10 w-10 items-center justify-center rounded-xl ${
             !isSelf
-              ? "bg-coral-strong text-white"
+              ? "bg-coral-strong text-foreground"
               : "bg-secondary text-[color:var(--coral-strong)]"
           }`}
         >
@@ -546,7 +546,7 @@ function PreviewCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1">
             {isSelf ? (
-              <IconCoins className="h-3.5 w-3.5 text-accent-strong" />
+              <IconCoins className="h-3.5 w-3.5 text-accent-deep" />
             ) : (
               <IconSwords className="h-3.5 w-3.5 text-[color:var(--coral-strong)]" />
             )}
@@ -668,7 +668,7 @@ function CopyLink({ url }: { url: string }) {
         <span className="break-all">{url}</span>
         <span
           aria-live="polite"
-          className="shrink-0 font-sans text-xs font-semibold uppercase tracking-wide text-accent"
+          className="shrink-0 font-sans text-xs font-semibold uppercase tracking-wide text-accent-deep"
         >
           {state === "copied"
             ? "Copied"
@@ -1084,7 +1084,7 @@ function CreateChallengeInner() {
     return (
       <div className="mx-auto max-w-xl space-y-5">
         <Card pop className="space-y-2 border-accent/40">
-          <p className="font-display text-lg font-bold text-accent-strong">
+          <p className="font-display text-lg font-bold text-accent-deep">
             Your commitment is live. One tap to lock it in.
           </p>
           <p className="text-sm text-foreground/80">
@@ -1125,7 +1125,7 @@ function CreateChallengeInner() {
     return (
       <div className="mx-auto max-w-xl space-y-5">
         <Card pop className="space-y-2 border-accent/40">
-          <p className="font-display text-lg font-bold text-accent-strong">
+          <p className="font-display text-lg font-bold text-accent-deep">
             Dare sent. The reward is on the line.
           </p>
           {address !== null ? (
@@ -1261,7 +1261,7 @@ function CreateChallengeInner() {
           headline, and SPOTTER's intro line. */}
       <header className="mb-10 flex flex-col items-center text-center">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-edge bg-surface px-3 py-1.5 shadow-sm">
-          <IconPaw className="h-3.5 w-3.5 text-accent-strong" />
+          <IconPaw className="h-3.5 w-3.5 text-accent-deep" />
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">
             GoHealthMe · testnet play money
           </span>
@@ -1279,7 +1279,7 @@ function CreateChallengeInner() {
         <h1 className="font-display text-4xl font-extrabold leading-[1.05] text-balance sm:text-5xl">
           Send a challenge.
           <br />
-          <span className="text-accent">Put money where your mouth is.</span>
+          <span className="text-accent-deep">Put money where your mouth is.</span>
         </h1>
         <p className="mt-3 max-w-md text-pretty text-base leading-relaxed text-muted">
           {SPOTTER_INTRO}
@@ -1313,7 +1313,7 @@ function CreateChallengeInner() {
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
               rows={2}
-              className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
             />
             <SuggestionRow items={NAME_SUGGESTIONS} onPick={setGoal} />
             <p className="text-xs text-muted">
@@ -1412,7 +1412,7 @@ function CreateChallengeInner() {
                         value={target}
                         maxLength={TARGET_HANDLE_MAX}
                         onChange={(e) => setTarget(e.target.value)}
-                        className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-2.5 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-2.5 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
                       />
                     </div>
                     <p className="text-xs text-muted">
@@ -1444,7 +1444,7 @@ function CreateChallengeInner() {
                   maxLength={MESSAGE_MAX}
                   onChange={(e) => setMessage(e.target.value)}
                   rows={2}
-                  className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
                 />
                 <SuggestionRow
                   items={TRASH_TALK_SUGGESTIONS}
@@ -1499,7 +1499,7 @@ function CreateChallengeInner() {
         {/* preview + submit column */}
         <div className="space-y-4 lg:sticky lg:top-6">
           <div className="flex items-center gap-1.5 px-1">
-            <IconSparkle className="h-3.5 w-3.5 text-accent-strong" />
+            <IconSparkle className="h-3.5 w-3.5 text-accent-deep" />
             <span className="text-xs font-semibold uppercase tracking-wide text-muted">
               What they&apos;ll see
             </span>
@@ -1585,7 +1585,7 @@ function CreateChallengeInner() {
               <button
                 type="button"
                 onClick={() => selectVariant("self")}
-                className="font-semibold text-accent-strong underline underline-offset-2"
+                className="font-semibold text-accent-deep underline underline-offset-2"
               >
                 Stake on yourself instead
               </button>
@@ -1646,7 +1646,7 @@ function CreateChallengeInner() {
               {fundedPoolId !== null ? (
                 <Link
                   href={`/pools/${fundedPoolId}`}
-                  className="inline-block text-sm font-semibold text-accent-strong underline underline-offset-2"
+                  className="inline-block text-sm font-semibold text-accent-deep underline underline-offset-2"
                 >
                   See your pool
                 </Link>

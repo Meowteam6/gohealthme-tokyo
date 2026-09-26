@@ -76,7 +76,7 @@ function BackupSection() {
           onClick={() => {
             void runExport("phrase");
           }}
-          className="min-h-11 rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+          className="min-h-11 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           {busy === "phrase"
             ? "Opening..."
@@ -123,7 +123,7 @@ function NameValue({ view }: { view: CharacterView }) {
       <button
         type="button"
         onClick={view.refresh}
-        className="inline-flex min-h-11 items-center text-accent underline underline-offset-2"
+        className="inline-flex min-h-11 items-center text-accent-deep underline underline-offset-2"
       >
         Could not read your name - retry
       </button>
@@ -135,7 +135,7 @@ function NameValue({ view }: { view: CharacterView }) {
       return (
         <Link
           href={`/u/${name.slice(1)}`}
-          className="font-semibold text-foreground hover:text-accent"
+          className="font-semibold text-foreground hover:text-accent-deep"
         >
           {name}
         </Link>
@@ -147,7 +147,7 @@ function NameValue({ view }: { view: CharacterView }) {
     return (
       <Link
         href="/character?step=human"
-        className="inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-2"
+        className="inline-flex min-h-11 items-center font-medium text-accent-deep underline underline-offset-2"
       >
         {step.note}
       </Link>
@@ -156,7 +156,7 @@ function NameValue({ view }: { view: CharacterView }) {
   return (
     <Link
       href="/character"
-      className="inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-2"
+      className="inline-flex min-h-11 items-center font-medium text-accent-deep underline underline-offset-2"
     >
       Pick a name
     </Link>
@@ -215,7 +215,7 @@ function DeviceSection({
         </p>
         <Link
           href="/character"
-          className="mt-3 inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-2"
+          className="mt-3 inline-flex min-h-11 items-center font-medium text-accent-deep underline underline-offset-2"
         >
           Pair a wearable
         </Link>
@@ -308,7 +308,7 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
                 onClick={() => {
                   void balanceQuery.refetch();
                 }}
-                className="text-accent underline underline-offset-2"
+                className="text-accent-deep underline underline-offset-2"
               >
                 Could not read - retry
               </button>
@@ -323,7 +323,7 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
               href={arcAddressUrl(address)}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-accent underline underline-offset-2"
+              className="text-accent-deep underline underline-offset-2"
             >
               See the public receipt
             </a>
@@ -350,7 +350,7 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
           href="https://faucet.circle.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-accent underline underline-offset-2"
+          className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-accent-deep underline underline-offset-2"
         >
           Open Circle faucet
           <span aria-hidden="true">-&gt;</span>
@@ -379,7 +379,7 @@ function WalletDetail({ address }: { address: `0x${string}` }) {
             onClick={() => {
               void logout();
             }}
-            className="mt-4 min-h-11 w-full rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
+            className="mt-4 min-h-11 w-full rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-foreground hover:bg-accent-hover"
           >
             Switch to my email wallet
           </button>

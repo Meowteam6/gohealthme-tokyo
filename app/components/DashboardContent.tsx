@@ -160,7 +160,7 @@ function ApprovalRunNote({
       {line.openRun ? (
         <Link
           href={`/pools/${poolId.toString()}`}
-          className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-2 hover:text-accent-strong"
+          className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent-deep underline underline-offset-2 hover:text-accent-deep"
         >
           Open this run
         </Link>
@@ -296,7 +296,7 @@ function ConnectButton({
             href={fallbackUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={`inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
+            className={`inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-foreground shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-hover active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
           >
             Open the wearable connect page
           </a>
@@ -458,7 +458,7 @@ function StreakCard({
           </p>
           <Link
             href="/pools"
-            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border-2 border-edge bg-secondary px-5 py-2.5 font-display text-sm font-bold text-secondary-foreground transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border-2 border-edge bg-secondary px-5 py-2.5 font-display text-sm font-bold text-secondary-foreground transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Find a goal you can still prove
           </Link>
@@ -537,7 +537,7 @@ function StreakCard({
               <SpotterSays surface="dashboard-empty" state="empty" />
             )}
           </div>
-          <p className="font-display text-4xl font-bold text-accent">
+          <p className="font-display text-4xl font-bold text-accent-deep">
             {progress?.streakDays ?? 0}
             <span className="font-display text-lg font-semibold text-foreground">
               {progress?.targetDays !== null && progress?.targetDays !== undefined
@@ -915,7 +915,7 @@ export default function DashboardContent() {
           action={
             <Link
               href="/pools"
-              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-6 font-semibold text-white hover:bg-accent-strong"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-6 font-semibold text-foreground hover:bg-accent-hover"
             >
               Go to the lobby
             </Link>
@@ -975,7 +975,7 @@ export default function DashboardContent() {
                     >
                       <Link
                         href={`/pools/${pool.id.toString()}`}
-                        className="block hover:text-accent"
+                        className="block hover:text-accent-deep"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h3 className="font-display text-2xl font-extrabold leading-tight">

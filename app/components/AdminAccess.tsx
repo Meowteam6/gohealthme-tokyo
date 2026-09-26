@@ -157,7 +157,7 @@ export default function AdminAccess() {
         <button
           type="button"
           onClick={login}
-          className={`mt-5 rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-strong hover:bg-accent/15 ${TAP_TARGET}`}
+          className={`mt-5 rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-deep hover:bg-accent/15 ${TAP_TARGET}`}
         >
           Sign in
         </button>
@@ -242,7 +242,7 @@ export default function AdminAccess() {
                   type="button"
                   disabled={deciding === r.address || r.status === "approved"}
                   onClick={() => void decide(r.address, "approve")}
-                  className={`rounded-lg border border-accent/40 bg-accent/10 font-semibold text-accent-strong hover:bg-accent/15 disabled:opacity-50 ${TAP_TARGET}`}
+                  className={`rounded-lg border border-accent/40 bg-accent/10 font-semibold text-accent-deep hover:bg-accent/15 disabled:opacity-50 ${TAP_TARGET}`}
                 >
                   {r.status === "approved" ? "Approved" : "Approve"}
                 </button>

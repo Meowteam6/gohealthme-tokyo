@@ -103,7 +103,7 @@ function OutcomesUnavailable({ onRetry }: { onRetry: () => void }) {
       <button
         type="button"
         onClick={onRetry}
-        className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent-strong underline underline-offset-4"
+        className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent-deep underline underline-offset-4"
       >
         Try again
       </button>
@@ -173,7 +173,7 @@ function PortfolioSummary({
     <section className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-          Your pools at a <span className="text-accent">glance</span>
+          Your pools at a <span className="text-accent-deep">glance</span>
         </h2>
         <Badge tone="muted">
           {d.poolCount} {d.poolCount === 1 ? "pool" : "pools"}
@@ -185,7 +185,7 @@ function PortfolioSummary({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <StatTile
               icon="vault"
-              chip="bg-accent/12 text-accent-strong"
+              chip="bg-accent/12 text-accent-deep"
               label="In your pools"
             >
               <Money usd={formatUsdc(d.totalBalanceUsdc)} />
@@ -197,7 +197,7 @@ function PortfolioSummary({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile
           icon="vault"
-          chip="bg-accent/12 text-accent-strong"
+          chip="bg-accent/12 text-accent-deep"
           label="In your pools"
         >
           <Money usd={formatUsdc(d.totalBalanceUsdc)} />
@@ -207,14 +207,14 @@ function PortfolioSummary({
             what it is until lib/sponsor-data reads the seed and the funder. */}
         <StatTile
           icon="coins"
-          chip="bg-accent/12 text-accent-strong"
+          chip="bg-accent/12 text-accent-deep"
           label="Top-ups, any funder"
         >
           <Money usd={formatUsdc(d.totalToppedUpUsdc)} />
         </StatTile>
         <StatTile
           icon="payout"
-          chip="bg-accent/12 text-accent-strong"
+          chip="bg-accent/12 text-accent-deep"
           label="Paid to achievers"
         >
           <MoneyValue
@@ -370,7 +370,7 @@ export default function SponsorConsole() {
         <Badge tone="warning">Base Sepolia · testnet · play money</Badge>
         <Link
           href="/pools"
-          className="inline-flex items-center gap-1 text-sm font-semibold text-accent-strong underline decoration-accent/40 decoration-2 underline-offset-4 hover:decoration-accent"
+          className="inline-flex items-center gap-1 text-sm font-semibold text-accent-deep underline decoration-accent/40 decoration-2 underline-offset-4 hover:decoration-accent"
         >
           Browse all pools
           <Icon name="arrow" className="h-4 w-4" />
@@ -387,7 +387,7 @@ export default function SponsorConsole() {
       <button
         type="button"
         onClick={() => setShowCreate(false)}
-        className="mt-4 min-h-11 text-sm font-medium text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="mt-4 min-h-11 text-sm font-medium text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         Hide the form
       </button>
@@ -494,7 +494,7 @@ export default function SponsorConsole() {
           />
           <section id="pools" className="space-y-5">
             <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-              Your <span className="text-accent">pools</span>
+              Your <span className="text-accent-deep">pools</span>
             </h2>
             <div className="grid gap-4 lg:grid-cols-2">
               {myPools.map((pool, i) => (

@@ -200,7 +200,7 @@ export default function JoinMoment({
               ref={goButtonRef}
               type="button"
               onClick={() => setOpen(false)}
-              className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-accent-strong px-6 py-2 text-sm font-semibold text-background hover:bg-accent"
+              className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-accent px-6 py-2 text-sm font-semibold text-foreground hover:bg-accent-hover"
             >
               Let&apos;s go
             </button>

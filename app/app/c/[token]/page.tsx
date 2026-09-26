@@ -61,7 +61,7 @@ function InvalidLink() {
       </p>
       <Link
         href="/pools"
-        className={`mt-6 rounded-lg bg-accent font-semibold text-white hover:bg-accent-strong ${TAP_TARGET}`}
+        className={`mt-6 rounded-lg bg-accent font-semibold text-foreground hover:bg-accent-hover ${TAP_TARGET}`}
       >
         Go to the lobby
       </Link>
@@ -224,7 +224,7 @@ export default async function ChallengeLandingPage({
     return (
       <div className="mx-auto max-w-3xl space-y-8">
         <header className="space-y-4">
-          <p className="text-sm font-semibold text-accent">Back the dare</p>
+          <p className="text-sm font-semibold text-accent-deep">Back the dare</p>
           <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl">
             {challengerName} dared {target}
           </h1>
@@ -259,7 +259,7 @@ export default async function ChallengeLandingPage({
           Are you the one who got dared?{" "}
           <Link
             href={`/c/${token}`}
-            className="font-semibold text-accent-strong underline underline-offset-2"
+            className="font-semibold text-accent-deep underline underline-offset-2"
           >
             Open the dare to accept it
           </Link>
@@ -273,7 +273,7 @@ export default async function ChallengeLandingPage({
   // lobby's, so the dare link and the board can never disagree.
   const intro = (
     <header className="space-y-4">
-      <p className="text-sm font-semibold text-accent">You have been dared</p>
+      <p className="text-sm font-semibold text-accent-deep">You have been dared</p>
       <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl">
         {headline}
       </h1>

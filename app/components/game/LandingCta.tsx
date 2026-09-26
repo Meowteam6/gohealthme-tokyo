@@ -9,7 +9,7 @@ import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
 
 const PRIMARY =
-  "inline-flex min-h-14 items-center justify-center rounded-lg bg-accent px-7 font-display text-2xl font-extrabold text-white shadow-[var(--shadow-pop)] hover:bg-accent-strong active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2";
+  "inline-flex min-h-14 items-center justify-center rounded-lg bg-accent px-7 font-display text-2xl font-extrabold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2";
 
 export default function LandingCta() {
   const { ready, authenticated } = useEmbeddedWallet();
@@ -21,7 +21,7 @@ export default function LandingCta() {
       </Link>
       <Link
         href="/pools"
-        className="inline-flex min-h-11 items-center font-semibold text-foreground underline underline-offset-4 hover:text-accent"
+        className="inline-flex min-h-11 items-center font-semibold text-foreground underline underline-offset-4 hover:text-accent-deep"
       >
         See the open runs first
       </Link>

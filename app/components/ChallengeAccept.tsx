@@ -122,7 +122,7 @@ export default function ChallengeAccept({
         <button
           type="button"
           onClick={() => void poolQuery.refetch()}
-          className={`-ml-4 font-semibold text-accent underline underline-offset-2 ${TAP_TARGET}`}
+          className={`-ml-4 font-semibold text-accent-deep underline underline-offset-2 ${TAP_TARGET}`}
         >
           Read it again
         </button>
@@ -138,7 +138,7 @@ export default function ChallengeAccept({
         <button
           type="button"
           onClick={() => void participantQuery.refetch()}
-          className={`-ml-4 font-semibold text-accent underline underline-offset-2 ${TAP_TARGET}`}
+          className={`-ml-4 font-semibold text-accent-deep underline underline-offset-2 ${TAP_TARGET}`}
         >
           Check again
         </button>

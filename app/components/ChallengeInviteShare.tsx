@@ -82,7 +82,7 @@ export default function ChallengeInviteShare({
         type="button"
         onClick={() => void reveal()}
         disabled={state.kind === "loading"}
-        className={`inline-flex items-center justify-center rounded-xl bg-accent-strong font-semibold text-background hover:bg-accent disabled:opacity-60 ${TAP_TARGET}`}
+        className={`inline-flex items-center justify-center rounded-xl bg-accent font-semibold text-foreground hover:bg-accent-hover disabled:opacity-60 ${TAP_TARGET}`}
       >
         {state.kind === "loading"
           ? "Getting your link..."

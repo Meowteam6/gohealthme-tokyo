@@ -15,7 +15,7 @@ import type { CharacterView } from "@/lib/game/useCharacter";
 function HumanStamp({ verified, mode }: { verified: boolean; mode: "world" | "allowlist" }) {
   if (verified) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border-2 border-accent px-2 py-0.5 text-xs font-bold text-accent">
+      <span className="inline-flex items-center gap-1 rounded-md border-2 border-accent px-2 py-0.5 text-xs font-bold text-accent-deep">
         <svg aria-hidden="true" viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
           <path d="M5 12.5l4.5 4.5L19 7.5" />
         </svg>
@@ -47,7 +47,7 @@ function SensorLine({ view }: { view: CharacterView }) {
       return (
         <p className="text-sm">
           <span className="text-muted">No wearable paired. </span>
-          <Link href="/character?step=sensor" className="font-semibold text-accent underline underline-offset-2">
+          <Link href="/character?step=sensor" className="font-semibold text-accent-deep underline underline-offset-2">
             Pair one
           </Link>
         </p>
@@ -72,7 +72,7 @@ function SensorLine({ view }: { view: CharacterView }) {
             onClick={() => {
               void view.checkSensor().then((ok) => setDeclined(!ok));
             }}
-            className="min-h-11 font-semibold text-accent underline underline-offset-2 disabled:opacity-60"
+            className="min-h-11 font-semibold text-accent-deep underline underline-offset-2 disabled:opacity-60"
           >
             {view.checkingSensor ? "Waiting for your signature" : "Check my wearable (free, no transaction)"}
           </button>
@@ -153,7 +153,7 @@ export default function CharacterCard({
         ) : null}
       </dl>
       <div className="border-t border-edge px-5 py-3">
-        <Link href="/pools" className={`-ml-4 font-semibold text-accent ${TAP_TARGET}`}>
+        <Link href="/pools" className={`-ml-4 font-semibold text-accent-deep ${TAP_TARGET}`}>
           Go to the lobby
         </Link>
       </div>

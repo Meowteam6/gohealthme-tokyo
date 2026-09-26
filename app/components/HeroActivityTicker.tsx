@@ -105,7 +105,7 @@ export default function HeroActivityTicker() {
             onClick={() => {
               void refetch();
             }}
-            className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-accent underline underline-offset-4"
+            className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-accent-deep underline underline-offset-4"
           >
             Try again
           </button>

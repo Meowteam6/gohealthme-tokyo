@@ -489,7 +489,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
                   ? reload()
                   : ask())
             }
-            className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+            className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent-deep"
           >
             {state.needsSignature ? "Sign and try again" : "Try again"}
           </button>
@@ -541,7 +541,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
           <button
             type="button"
             onClick={() => void ask()}
-            className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent hover:bg-accent-deep"
+            className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent-deep"
           >
             Ask SPOTTER again
           </button>
@@ -597,7 +597,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
               type="button"
               disabled={verifying}
               onClick={() => setWidgetOpen(true)}
-              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               {verifying ? "checking your proof..." : "Confirm with World App"}
             </button>
@@ -616,7 +616,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
             type="button"
             disabled={verifying}
             onClick={() => void approveMock()}
-            className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {verifying ? "checking your proof..." : "Confirm (mocked World ID)"}
           </button>

@@ -58,7 +58,7 @@ function NotAHandle({ handle }: { handle: string }) {
       </p>
       <Link
         href="/feed"
-        className="inline-flex min-h-11 items-center rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
+        className="inline-flex min-h-11 items-center rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-foreground hover:bg-accent-hover"
       >
         See who got paid
       </Link>
@@ -78,7 +78,7 @@ function LookupFailed({ handle, reference }: { handle: string; reference: string
         </p>
         <Link
           href={`/u/${handle}`}
-          className="rounded-xl bg-accent-strong px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
+          className="rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-foreground hover:bg-accent-hover"
         >
           Try again
         </Link>

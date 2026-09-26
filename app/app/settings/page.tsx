@@ -45,7 +45,7 @@ export default function SettingsPage() {
             action={
               <Link
                 href="/"
-                className="inline-flex min-h-11 items-center rounded-lg bg-accent px-6 text-sm font-semibold text-white hover:bg-accent-strong"
+                className="inline-flex min-h-11 items-center rounded-lg bg-accent px-6 text-sm font-semibold text-foreground hover:bg-accent-hover"
               >
                 Go to the home page
               </Link>

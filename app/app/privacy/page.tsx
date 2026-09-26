@@ -214,7 +214,7 @@ export default function PrivacyPage() {
           </p>
           <p>
             You can disconnect a device at any time from{" "}
-            <Link href="/settings" className="text-accent underline">
+            <Link href="/settings" className="text-accent-deep underline">
               your Settings page, under Your wearable
             </Link>
             . For WHOOP that revokes our access at WHOOP and deletes the stored
@@ -304,7 +304,7 @@ export default function PrivacyPage() {
             deletion of your off-chain data, email{" "}
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="text-accent underline"
+              className="text-accent-deep underline"
             >
               {CONTACT_EMAIL}
             </a>{" "}
@@ -317,7 +317,7 @@ export default function PrivacyPage() {
             This is a pre-launch testnet notice, not legal advice, and will be
             replaced by a lawyer-reviewed policy before any real-money launch.
             See also our{" "}
-            <Link href="/terms" className="text-accent underline">
+            <Link href="/terms" className="text-accent-deep underline">
               Terms
             </Link>
             .

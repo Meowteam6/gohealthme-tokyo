@@ -360,7 +360,7 @@ function InvitedChallengeCard({
       </div>
       <Link
         href={acceptUrl}
-        className={`mt-4 w-full rounded-full bg-accent font-display font-bold text-white hover:bg-accent-strong ${TAP_TARGET}`}
+        className={`mt-4 w-full rounded-full bg-accent font-display font-bold text-foreground hover:bg-accent-hover ${TAP_TARGET}`}
       >
         Accept the dare
       </Link>
@@ -402,7 +402,7 @@ function InChallengeCard({
         href={`/pools/${id}`}
         className={`mt-4 w-full rounded-full font-display font-bold ${TAP_TARGET} ${
           needsProof
-            ? "bg-accent text-white hover:bg-accent-strong"
+            ? "bg-accent text-foreground hover:bg-accent-hover"
             : "border-2 border-edge text-foreground hover:border-accent/50"
         }`}
       >
@@ -730,7 +730,7 @@ export default function ChallengesPage() {
           action={
             <Link
               href="/pools"
-              className="inline-block rounded-xl bg-accent-strong px-6 py-3 text-sm font-semibold text-background hover:bg-accent"
+              className="inline-block rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-foreground hover:bg-accent-hover"
             >
               Browse pools instead
             </Link>

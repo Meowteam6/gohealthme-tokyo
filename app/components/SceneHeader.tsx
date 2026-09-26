@@ -42,7 +42,7 @@ export default function SceneHeader({
       <div className="relative z-10 flex min-h-[14rem] items-end justify-between gap-4 px-6 pt-8 sm:min-h-[16rem] sm:px-9">
         <div className="max-w-md pb-8">
           {eyebrow !== undefined ? (
-            <p className="text-xs font-semibold uppercase tracking-widest text-accent-strong">
+            <p className="text-xs font-semibold uppercase tracking-widest text-accent-deep">
               {eyebrow}
             </p>
           ) : null}

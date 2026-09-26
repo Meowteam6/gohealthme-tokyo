@@ -193,7 +193,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
   return (
     <section className="rounded-2xl border border-edge bg-surface p-5">
       <h2 className="text-lg font-semibold">GoHealthMe balance</h2>
-      <p className="mt-3 text-3xl font-bold text-accent">
+      <p className="mt-3 text-3xl font-bold text-accent-deep">
         {formatUsdc(balance)}
         <span className="ml-1 text-lg font-semibold text-foreground">USDC</span>
       </p>
@@ -208,7 +208,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
         onClick={() => {
           void claimFaucet();
         }}
-        className="mt-4 w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-4 w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
       >
         {claiming
           ? "Claiming from the faucet..."
@@ -241,7 +241,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
         onClick={() => {
           void moveToArc();
         }}
-        className="mt-3 w-full rounded-xl bg-accent-strong px-5 py-3 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-3 w-full rounded-xl bg-accent px-5 py-3 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
       >
         {moving
           ? "Moving to Base wallet..."
@@ -261,7 +261,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
             href={arcTxUrl(move.txHash)}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-1 inline-block break-all text-sm text-accent underline"
+            className="mt-1 inline-block break-all text-sm text-accent-deep underline"
           >
             See the public receipt
           </a>

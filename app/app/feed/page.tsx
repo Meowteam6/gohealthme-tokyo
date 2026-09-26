@@ -38,7 +38,7 @@ export default function FeedPage() {
       <p className="text-center text-sm text-muted">
         <Link
           href="/character"
-          className="inline-flex min-h-11 items-center text-accent underline-offset-4 hover:underline"
+          className="inline-flex min-h-11 items-center text-accent-deep underline-offset-4 hover:underline"
         >
           Pick a name
         </Link>{" "}

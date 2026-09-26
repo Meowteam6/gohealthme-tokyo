@@ -423,7 +423,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
                 }
                 void submitLink();
               }}
-              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               {status.kind === "signing"
                 ? "Waiting for your signature..."
@@ -494,7 +494,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
               }
               void submit();
             }}
-            className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {status.kind === "signing"
               ? "Waiting for your signature..."

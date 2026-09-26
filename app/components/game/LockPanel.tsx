@@ -46,7 +46,7 @@ export default function LockPanel({
       {fix.kind === "link" ? (
         <Link
           href={fix.href}
-          className={`mt-3 rounded-lg border-2 border-foreground bg-surface font-semibold text-foreground hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${TAP_TARGET}`}
+          className={`mt-3 rounded-lg border-2 border-foreground bg-surface font-semibold text-foreground hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
         >
           {fix.label}
         </Link>
@@ -55,7 +55,7 @@ export default function LockPanel({
           <button
             type="button"
             onClick={onRetry}
-            className={`mt-3 rounded-lg border-2 border-foreground bg-surface font-semibold text-foreground hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${TAP_TARGET}`}
+            className={`mt-3 rounded-lg border-2 border-foreground bg-surface font-semibold text-foreground hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
           >
             {fix.label}
           </button>
@@ -75,7 +75,7 @@ export default function LockPanel({
                 .catch(() => setDeclined(true))
                 .finally(() => setChecking(false));
             }}
-            className={`rounded-lg bg-accent font-semibold text-white hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${TAP_TARGET}`}
+            className={`rounded-lg bg-accent font-semibold text-foreground hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${TAP_TARGET}`}
           >
             {checking ? "Waiting for your signature" : fix.label}
           </button>

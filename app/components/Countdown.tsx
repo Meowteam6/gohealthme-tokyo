@@ -44,7 +44,7 @@ export default function Countdown({
   }
   const ended = now >= Number(periodEnd);
   return (
-    <span className={ended ? "text-muted" : "text-accent"}>
+    <span className={ended ? "text-muted" : "text-accent-deep"}>
       {describe(periodStart, periodEnd, now)}
     </span>
   );

@@ -125,7 +125,7 @@ export default async function AgentPage() {
       <Card pop className="bg-dot-grid">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 flex-1 space-y-4">
-            <p className="font-display text-xs font-bold uppercase tracking-widest text-accent-strong">
+            <p className="font-display text-xs font-bold uppercase tracking-widest text-accent-deep">
               SPOTTER, settlement agent
             </p>
             <h2 className="font-display text-2xl font-bold leading-tight sm:text-3xl">
@@ -144,7 +144,7 @@ export default async function AgentPage() {
                     href={baseAddressUrl(settler.address)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex min-h-11 items-center text-sm text-accent underline"
+                    className="inline-flex min-h-11 items-center text-sm text-accent-deep underline"
                   >
                     View on Basescan
                   </a>

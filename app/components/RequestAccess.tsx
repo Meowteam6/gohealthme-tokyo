@@ -306,7 +306,7 @@ export default function RequestAccess({
         <button
           type="submit"
           disabled={submitting}
-          className={`rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-strong hover:bg-accent/15 disabled:opacity-60 ${TAP_TARGET}`}
+          className={`rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-deep hover:bg-accent/15 disabled:opacity-60 ${TAP_TARGET}`}
         >
           {submitting ? "Sending…" : "Request access"}
         </button>

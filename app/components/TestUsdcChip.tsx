@@ -124,12 +124,12 @@ export default function TestUsdcChip() {
           void run();
         }}
         title="Add practice money to your account. Not real money — never charged."
-        className="inline-flex min-h-11 items-center rounded-lg border border-accent/50 px-2 text-[11px] font-semibold text-accent hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 sm:text-xs"
+        className="inline-flex min-h-11 items-center rounded-lg border border-accent/50 px-2 text-[11px] font-semibold text-accent-deep hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 sm:text-xs"
       >
         {label}
       </button>
       {state.kind === "done" ? (
-        <span className="text-[11px] text-accent sm:text-xs" aria-live="polite">
+        <span className="text-[11px] text-accent-deep sm:text-xs" aria-live="polite">
           Added
         </span>
       ) : null}

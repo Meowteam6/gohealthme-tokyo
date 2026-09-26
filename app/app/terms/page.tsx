@@ -137,7 +137,7 @@ export default function TermsPage() {
           <p>
             How we handle your data, and what becomes public and permanent
             on-chain, is described in our{" "}
-            <Link href="/privacy" className="text-accent underline">
+            <Link href="/privacy" className="text-accent-deep underline">
               Privacy Policy
             </Link>
             . Please read it before you create a pool or a challenge.
@@ -150,7 +150,7 @@ export default function TermsPage() {
             This beta is operated by Meowteam6. Questions go to{" "}
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="text-accent underline"
+              className="text-accent-deep underline"
             >
               {CONTACT_EMAIL}
             </a>{" "}

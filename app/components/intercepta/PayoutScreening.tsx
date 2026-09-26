@@ -36,7 +36,7 @@ const COPY: Record<ScreeningStatus, string> = {
 
 const TONE: Record<ScreeningStatus, string> = {
   pending: "text-muted",
-  clear: "text-accent",
+  clear: "text-accent-deep",
   blocked: "text-danger",
   unavailable: "text-warning",
   unconfigured: "text-muted",

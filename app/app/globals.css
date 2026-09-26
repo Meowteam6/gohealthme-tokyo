@@ -1,43 +1,54 @@
 @import "tailwindcss";
 
-/* V4 scoreboard theme (docs/DESIGN.md). Concrete paper, navy ink, one accent
-   (varsity cobalt), bulb gold for money only. Semantic names are unchanged so
-   every existing component re-themes from the values alone. */
+/* SPOTTER's Riverbank (docs/DESIGN.md). Meadow cream, river ink, one coral
+   action colour with ink text on it, gold for money only, teal for SPOTTER
+   only. Semantic names are unchanged so every existing component re-themes
+   from the values alone.
+
+   Contrast (WCAG AA, 4.5:1 body text), checked 2026-09-26:
+   ink on coral 5.4, ink on --accent-hover 6.3, muted on cream 5.9 / on raised
+   5.3, accent-deep (links) on cream 5.2 / on raised 4.6, gold-deep on raised
+   4.9, danger on raised 4.9, dusk-ink on cream 5.6. Coral itself is 2.5 on
+   cream, so coral is a fill, never a text colour. */
 :root {
   color-scheme: light;
-  --background: #eceef1;       /* concrete paper, cool - never cream */
-  --surface: #ffffff;          /* slips and rows */
-  --surface-raised: #f5f6f8;   /* wells inside a slip */
-  --border: #d3d8df;           /* hairline between slips */
-  --foreground: #0d1b2a;       /* navy ink; also the scoreboard panel */
-  --muted: #4f5d6f;            /* secondary text, AA on paper and surface */
-  --accent: #2346d8;           /* THE accent: varsity cobalt */
-  --accent-strong: #1834b0;    /* hover, emphasis text */
-  --accent-deep: #0e1f6b;      /* text on accent tints */
-  /* Coral is retired as a second accent. Aliased so old call sites render in
-     the one accent instead of breaking. */
-  --coral: #2346d8;
-  --coral-strong: #1834b0;
-  --danger: #c8283a;
-  /* Caution. A locked lobby row, an outage. Never money, never a verdict. */
-  --warning: #9a4a00;
-  /* Money only: bulb yellow for stake and prize on the scoreboard, deep gold
-     for money text on paper. Never a verdict, never decoration. */
-  --gold: #ffc93c;
-  --gold-strong: #f2b321;
-  --gold-deep: #8a5e00;
+  --background: #f6efdf;       /* meadow cream, his belly. Warm, never grey */
+  --surface: #fffbf2;          /* cards and rows on the cream */
+  --surface-raised: #ede2ca;   /* pressed, locked or secondary rows */
+  --border: #e2d6bb;           /* hairlines */
+  --foreground: #0f2a2e;       /* river ink: text and night panels */
+  --muted: #4e5e5f;            /* secondary text, AA on cream and surface */
+  --accent: #f2764f;           /* coral nose. Primary actions only, ink text */
+  --accent-hover: #f58a67;     /* lighter on hover so ink text stays AA */
+  --accent-strong: #d95e38;    /* the pressable bottom shadow, never text */
+  --accent-deep: #1e6f6a;      /* deep pond: links and text on tints */
+  /* Coral was the old second accent; now it simply is the accent. */
+  --coral: #f2764f;
+  --coral-strong: #f2764f;
+  --danger: #b82234;           /* real errors only; DESIGN.md #C8283A darkened
+                                  to pass AA on surface-raised */
+  --warning: #9a4a00;          /* locks and outages, never a loss */
+  --dusk: #6b7a8f;             /* a lost run: the wash */
+  --dusk-ink: #526076;         /* a lost run: text (plain dusk is 3.8 on cream) */
+  /* Money only: stakes, pots, payouts, the coin, banked pebbles. */
+  --gold: #f5b82e;
+  --gold-strong: #e5a51a;
+  --gold-deep: #7f5a00;        /* DESIGN.md #8A6200 darkened to pass AA on
+                                  surface-raised (locked lobby rows) */
+  --otter: #3faf8e;            /* SPOTTER alone. Nothing else is teal */
   /* Chips and quiet wells. */
-  --secondary: #e3e7ec;
-  --secondary-foreground: #0d1b2a;
-  /* The scoreboard panel and its chalk figures. */
-  --board: #0d1b2a;
-  --board-edge: #243650;
-  --chalk: #f4f6f9;
-  /* A printed-slip offset instead of candy depth. */
-  --shadow-pop: 0 3px 0 0 var(--foreground);
-  --shadow-pop-coral: 0 3px 0 0 var(--foreground);
-  --shadow-pop-edge: 0 2px 0 0 var(--border);
-  --radius-card: 0.75rem;
+  --secondary: #ede2ca;
+  --secondary-foreground: #0f2a2e;
+  /* Night panel (a sleep run after dark) and its cream figures. */
+  --board: #0f2a2e;
+  --board-edge: #24464b;
+  --chalk: #f6efdf;
+  /* Primary buttons are a pressable toy: a 4px solid bottom shadow in the
+     deeper coral that compresses on press. Cards carry no offset shadow. */
+  --shadow-pop: 0 4px 0 0 var(--accent-strong);
+  --shadow-pop-coral: 0 4px 0 0 var(--accent-strong);
+  --shadow-pop-edge: 0 0 0 0 transparent;
+  --radius-card: 1.25rem;
 }
 
 @theme inline {
@@ -48,13 +59,17 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-strong: var(--accent-strong);
   --color-accent-deep: var(--accent-deep);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
+  --color-dusk: var(--dusk);
+  --color-dusk-ink: var(--dusk-ink);
   --color-gold: var(--gold);
   --color-gold-strong: var(--gold-strong);
   --color-gold-deep: var(--gold-deep);
+  --color-otter: var(--otter);
   --color-coral: var(--coral);
   --color-coral-strong: var(--coral-strong);
   --color-secondary: var(--secondary);
@@ -62,14 +77,18 @@
   --color-board: var(--board);
   --color-board-edge: var(--board-edge);
   --color-chalk: var(--chalk);
-  --font-sans: var(--font-barlow);
+  --font-sans: var(--font-atkinson);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-shoulders);
-  /* Slips and tickets, not bubbles: every rounded-xl/2xl/3xl in the app
-     tightens from here. Pills stay pills. */
-  --radius-xl: 0.5rem;
-  --radius-2xl: 0.625rem;
-  --radius-3xl: 0.75rem;
+  --font-display: var(--font-bricolage);
+  /* SPOTTER speaks in Patrick Hand, inside his bubbles only. */
+  --font-hand: var(--font-patrick);
+  /* Display type: tight and stacked (tracking-display, leading-display). */
+  --tracking-display: -0.025em;
+  --leading-display: 0.95;
+  /* Plush, not slips: 16 to 20px on cards and rows. Pills stay pills. */
+  --radius-xl: 1rem;
+  --radius-2xl: 1.125rem;
+  --radius-3xl: 1.25rem;
 }
 
 @layer utilities {
@@ -82,8 +101,9 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-barlow), system-ui, sans-serif;
+  font-family: var(--font-atkinson), system-ui, sans-serif;
 }
+
 
 /* Horizontal-overflow guard. SPOTTER's run-across easter egg is position:fixed
    and animates to translateX(124vw), which pushes past the right viewport edge

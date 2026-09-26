@@ -20,7 +20,7 @@ import { Button, TAP_TARGET } from "@/components/ui";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const inputClass =
-  "min-h-12 w-full rounded-lg border-2 border-foreground bg-surface px-3 py-3 text-base text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60";
+  "min-h-12 w-full rounded-lg border-2 border-foreground bg-surface px-3 py-3 text-base text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground disabled:opacity-60";
 
 function SignInStepInner() {
   const { login } = useEmbeddedWallet();
@@ -135,7 +135,7 @@ function SignInStepInner() {
                   .catch(() => setError("The code did not resend. Try again in a moment."))
                   .finally(() => setBusy(false));
               }}
-              className={`-ml-4 text-accent underline underline-offset-2 ${TAP_TARGET}`}
+              className={`-ml-4 text-accent-deep underline underline-offset-2 ${TAP_TARGET}`}
             >
               Send a new code
             </button>
@@ -156,7 +156,7 @@ function SignInStepInner() {
         </form>
       )}
       {note !== null ? (
-        <p className="text-sm text-accent" aria-live="polite">
+        <p className="text-sm text-accent-deep" aria-live="polite">
           {note}
         </p>
       ) : null}
