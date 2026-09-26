@@ -303,6 +303,10 @@ function PrivacyFeature() {
   );
 }
 
+/** The console column: wide enough for the five-stat row, narrow enough that
+ *  a form never runs the width of the screen. */
+const CONSOLE_COLUMN = "mx-auto w-full max-w-[56rem]";
+
 export default function SponsorConsole() {
   const { ready, authenticated, address } = useEmbeddedWallet();
   const [showCreate, setShowCreate] = useState(false);
@@ -400,7 +404,7 @@ export default function SponsorConsole() {
 
   if (!ready) {
     return (
-      <div className="[&>*+*]:mt-8">
+      <div className={`${CONSOLE_COLUMN} [&>*+*]:mt-8`}>
         {frame(
           "detective",
           <Card aria-busy="true">
@@ -416,7 +420,7 @@ export default function SponsorConsole() {
 
   if (!authenticated || address === null) {
     return (
-      <div className="[&>*+*]:mt-8">
+      <div className={`${CONSOLE_COLUMN} [&>*+*]:mt-8`}>
         {frame(
           "wave",
           <div className="[&>*+*]:mt-3">
@@ -433,7 +437,7 @@ export default function SponsorConsole() {
   }
 
   return (
-    <div className="[&>*+*]:mt-10">
+    <div className={`${CONSOLE_COLUMN} [&>*+*]:mt-10`}>
       {frame("detective", createPanel)}
 
       <PrivacyFeature />
