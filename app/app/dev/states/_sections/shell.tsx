@@ -4,14 +4,16 @@ import { GallerySection, StateFrame, type SectionProps } from "../_kit";
 import { HeaderView } from "@/components/Header";
 import SiteFooter from "@/components/SiteFooter";
 import { SpotterOutageBand } from "@/components/game/SpotterStatusLine";
-import { Button, buttonClasses } from "@/components/ui";
+import { Button, Skeleton, buttonClasses } from "@/components/ui";
+import { SignInLoadingCard } from "@/components/night/SlowSignInNotice";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { markExternalConnectIntent } from "@/lib/wallet-connect-intent";
 
 // Shell states for the dev gallery: the header signed out and signed in (the
-// approved nav: Lobby, My runs, History, Challenges, Settings), its menu open,
-// the outage band under the bar, the footer, and Dynamic's own sign-in modal.
+// approved nav: Lobby, My runs, History, Challenges, Settings), its account
+// popover and menu open, the outage band under the bar, the slow sign-in card,
+// the footer, and Dynamic's own sign-in modal.
 // HeaderView is the real header from props, so no wallet is needed; the modal
 // is Dynamic's real one, opened the same way "I already have a wallet" opens
 // it, themed by the .dynamic-shadow-dom variables in globals.css.
@@ -91,6 +93,16 @@ export default function ShellStates({ meta }: SectionProps) {
       </StateFrame>
       <StateFrame name="header-outage" note="SPOTTER's wallet is empty: the one band that may sit under the bar">
         <SignedIn outage />
+      </StateFrame>
+      <StateFrame
+        name="signin-slow"
+        note="the wallet SDK has not answered past 8s: the loading card holds the notice instead of its skeleton, one card, never two"
+      >
+        <div className="max-w-[40rem]">
+          <SignInLoadingCard label="Loading your runs" afterMs={0}>
+            <Skeleton className="h-6 w-1/2" />
+          </SignInLoadingCard>
+        </div>
       </StateFrame>
       <StateFrame name="footer" note="the deepest field: beta and test money in small print">
         <SiteFooter />

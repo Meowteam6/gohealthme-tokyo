@@ -20,7 +20,7 @@
 // every read for the session. A refused prompt shows the reason and a way to
 // try again, never an empty card that reads as "you have no wearable".
 
-import SlowSignInNotice from "@/components/night/SlowSignInNotice";
+import { SignInLoadingCard } from "@/components/night/SlowSignInNotice";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -856,8 +856,9 @@ export default function DashboardContent() {
   if (!ready) {
     return (
       <MyRunsFrame pose="detective">
-        <LoadingCard label="Loading your runs" />
-        <SlowSignInNotice waiting className="mt-4" />
+        <SignInLoadingCard label="Loading your runs">
+          <LoadingLines />
+        </SignInLoadingCard>
       </MyRunsFrame>
     );
   }
@@ -1083,15 +1084,24 @@ export function MyRunsFrame({
   );
 }
 
+/** The loading card's three lines, on their own for SignInLoadingCard. */
+function LoadingLines() {
+  return (
+    <>
+      <Skeleton className="h-6 w-1/2" />
+      <Skeleton className="mt-3 h-4 w-full" />
+      <Skeleton className="mt-2 h-4 w-3/4" />
+    </>
+  );
+}
+
 export function LoadingCard({ label }: { label: string }) {
   return (
     <Card aria-busy="true">
       <p className="sr-only" role="status">
         {label}
       </p>
-      <Skeleton className="h-6 w-1/2" />
-      <Skeleton className="mt-3 h-4 w-full" />
-      <Skeleton className="mt-2 h-4 w-3/4" />
+      <LoadingLines />
     </Card>
   );
 }
