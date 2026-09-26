@@ -62,7 +62,7 @@ export function distinctPlayers(events: readonly ActivityItem[]): number {
 }
 
 const LINE: Record<ActivityType, (name: string) => string> = {
-  joined: (n) => `${n} joined a run`,
+  joined: (n) => `${n} joined a challenge`,
   funded: (n) => `${n} added to a pot`,
   paid: (n) => `${n} got paid out`,
 };

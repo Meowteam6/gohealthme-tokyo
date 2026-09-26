@@ -52,7 +52,7 @@ function LoadingCard() {
   return (
     <Shell busy>
       <p className="sr-only" role="status">
-        Reading tonight&apos;s runs
+        Reading tonight&apos;s challenges
       </p>
       <div className="flex items-center justify-between gap-3">
         <Skeleton className="h-[26px] w-28 rounded-tag" />
@@ -91,18 +91,18 @@ export default function FeaturedRunCard({
           <h2 className="m-0 mt-2.5 text-[1.25rem] font-semibold leading-tight tracking-[-0.01em] min-[900px]:text-[1.375rem]">
             {status === "not-configured"
               ? POOLS_NOT_CONFIGURED_COPY
-              : "I could not read the runs from Base Sepolia just now."}
+              : "I could not read the challenges from Base Sepolia just now."}
           </h2>
           <p className="m-0 mt-2 text-sm leading-[1.45] text-muted">
             {status === "not-configured"
-              ? "Nothing on this page can take a stake until runs are open."
+              ? "Nothing on this page can take a stake until challenges are open."
               : "Nothing changed on your side, and nothing was staked."}
           </p>
         </div>
         {status === "error" && onRetry !== undefined ? (
           <div className="mt-3.5 flex flex-col gap-1">
             <Button variant="secondary" block onClick={onRetry}>
-              Read the runs again
+              Read the challenges again
             </Button>
           </div>
         ) : null}
@@ -118,14 +118,14 @@ export default function FeaturedRunCard({
           Nothing open
         </Tag>
         <h2 className="m-0 mt-2.5 text-[1.25rem] font-semibold leading-tight tracking-[-0.01em] min-[900px]:text-[1.375rem]">
-          No run is open right now
+          No challenge is open right now
         </h2>
         <p className="m-0 mt-2 text-sm leading-[1.45] text-muted">
           Start one, set the stake and the goal, and I will read the wearables.
         </p>
         <div className="mt-3.5">
-          <Link href="/pools/create" className={buttonClasses({ block: true })}>
-            Start a run
+          <Link href="/challenge/new" className={buttonClasses({ block: true })}>
+            Start a challenge
           </Link>
         </div>
         <Fine className="mt-2 text-center">Test USDC during beta.</Fine>
@@ -166,7 +166,7 @@ export default function FeaturedRunCard({
         ) : note !== null ? (
           note.map((s, i) => (s.strong === true ? <b key={i}>{s.text}</b> : <span key={i}>{s.text}</span>))
         ) : (
-          "I could not count the players just now, so the run page has the exact figures."
+          "I could not count the players just now, so the challenge page has the exact figures."
         )
       }
       action={

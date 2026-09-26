@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     const cid = newCorrelationId("goals-match");
     if (err instanceof ContractNotConfiguredError) {
       console.error(`[${cid}] ${err.message}`);
-      return jsonError(503, "Runs are not open on this build yet.");
+      return jsonError(503, "Challenges are not open on this build yet.");
     }
     return jsonError(500, safeError(err, cid));
   }

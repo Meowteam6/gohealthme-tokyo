@@ -168,10 +168,10 @@ export function PayoutFeedEmpty() {
     <div className="rounded-control bg-fill-quiet px-4 py-6 text-center shadow-[inset_0_0_0_1px_var(--border)]">
       <p className="type-heading text-[1.5rem]">Nobody paid yet</p>
       <p className="mx-auto mt-2 max-w-md text-[0.9375rem] text-muted">
-        Runs pay when they settle, and the next one lands here.
+        Challenges pay when they settle, and the next one lands here.
       </p>
       <Link href="/pools" className={`mt-5 ${buttonClasses({ size: "sm" })}`}>
-        Find a run
+        Find a challenge
       </Link>
     </div>
   );

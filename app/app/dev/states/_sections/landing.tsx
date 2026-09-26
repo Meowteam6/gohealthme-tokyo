@@ -185,7 +185,7 @@ export default function LandingStates({ meta }: SectionProps) {
       <StateFrame name="landing-error" note="the chain read failed: nothing staked, read again" phone>
         <Stage data={{ status: "error", runs: [], featured: null, feeBps: null, retry: () => {} }} />
       </StateFrame>
-      <StateFrame name="landing-no-open-runs" note="nothing live: start a run" phone>
+      <StateFrame name="landing-no-open-runs" note="nothing live: start a challenge" phone>
         <Stage data={ready([])} />
       </StateFrame>
       <StateFrame name="landing-fee-unread" note="the fee did not read: no figure past the stake" phone>

@@ -185,7 +185,7 @@ export async function GET() {
     if (err instanceof NoPoolsContractError) {
       // "Quiet right now" would be a lie: nothing is being read at all.
       console.error(`[${cid}] no HealthPools contract configured for this build`);
-      return jsonError(503, "Runs are not open on this build yet.");
+      return jsonError(503, "Challenges are not open on this build yet.");
     }
     if (cache !== null) return Response.json({ events: cache.events });
     return jsonError(500, safeError(err, cid));

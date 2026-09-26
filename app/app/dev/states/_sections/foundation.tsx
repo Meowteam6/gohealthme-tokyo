@@ -95,7 +95,7 @@ function HeroStage() {
           note={
             <>
               Nobody&apos;s in yet. Hit it alone and <b>{alone}</b> comes back: your {stake} plus
-              the {pot} pot.
+              the {pot} already in the pot.
             </>
           }
           action={<Button block>Put 1 USDC on myself</Button>}
@@ -190,7 +190,7 @@ export default function FoundationStates({ meta }: SectionProps) {
           <Button block>Put 1 USDC on myself</Button>
           <div className="flex flex-wrap items-center gap-3">
             <Button>Go again tonight</Button>
-            <Button variant="secondary">Challenge a friend</Button>
+            <Button variant="secondary">Start a challenge</Button>
             <Button variant="tertiary">Tap to confirm instead</Button>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -206,7 +206,7 @@ export default function FoundationStates({ meta }: SectionProps) {
             </ButtonLink>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <ChevronLink href="/pools">See all 3 open runs</ChevronLink>
+            <ChevronLink href="/pools">See all 3 open challenges</ChevronLink>
             <a href="#buttons" className={TEXT_LINK}>
               See the stake on Basescan
             </a>
@@ -308,7 +308,7 @@ export default function FoundationStates({ meta }: SectionProps) {
           <Outcome
             state="outcome-hit"
             title="Your stake comes back, plus a share."
-            body="An equal share of the missed stakes and the sponsor pot goes to everyone who hits."
+            body="An equal share of the missed stakes and the extra in the pot goes to everyone who hits."
             label="Tonight, if you hit alone"
             value={alone}
             tone="money"
@@ -385,10 +385,10 @@ export default function FoundationStates({ meta }: SectionProps) {
           </div>
           <div className="min-[900px]:col-span-2">
             <EmptyState
-              title="No runs open right now"
-              detail="New runs open every evening. Start one for a friend and it shows up here."
+              title="No challenges open right now"
+              detail="New challenges open every evening. Start one with a friend and it shows up here."
               line="Quiet night. Nothing to read yet."
-              action={<Button variant="secondary">Challenge a friend</Button>}
+              action={<Button variant="secondary">Start a challenge</Button>}
             />
           </div>
         </div>
