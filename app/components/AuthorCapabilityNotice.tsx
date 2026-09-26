@@ -72,12 +72,17 @@ export default function AuthorCapabilityNotice({
     (option) => option.id === capabilityQuery.data?.selected,
   );
 
+  // A challenge's creator stakes on the goal too (the one challenge flow), so
+  // for them this is their own dead end, said before anything is created.
+  // A sponsor ("run", the sponsor create form) may fund a goal they cannot
+  // play; the player-facing word is challenge either way.
   return (
     <Notice tone="limit" role="status" className="mt-2">
       This goal is measured in {metricLabel(unsupported)}, and{" "}
-      {provider?.label ?? "your wearable"} does not report it. You can still
-      create this {noun}, and other players&apos; wearables may measure it, but
-      you could not join it yourself without pairing a different wearable.
+      {provider?.label ?? "your wearable"} does not report it.{" "}
+      {noun === "challenge"
+        ? "You stake on this goal too, so pick one your wearable measures, or pair a different wearable before you lock in."
+        : "You can still create this challenge, and other players' wearables may measure it, but you could not join it yourself without pairing a different wearable."}
     </Notice>
   );
 }

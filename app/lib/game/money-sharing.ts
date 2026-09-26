@@ -1,24 +1,26 @@
 // Who a challenge link is for, and what money added to a pot does, in words
 // (docs/MONEY-FLOWS.md F2, F3 and F5). Pure, so every sentence is tested.
 //
-// A challenge run (initiative "challenge", bountyModel 2) is one of two flows
-// on the same on-chain object, told apart money first and then by the
-// creator's own stake (challengeRunKindOf, the one rule every surface uses):
-//   - "reward": the creator put up a seed at create. A friend accepts with a
-//     lock-in. It stays a reward challenge even if the challenger also joined.
-//   - "self": no seed, and the creator staked on their own goal. Friends
-//     either match the stake (the accept link) or back them (?as=backer).
-//   - "unstaked": no seed and no stake yet, a stake-on-yourself run whose
-//     creator has not locked in. No link is offered to the creator until they
-//     do; the chips already read as their own stake, never as a challenge.
+// A challenge (initiative "challenge", bountyModel 2) is equal stakes on the
+// same goal: the creator stakes S, friends match S, and anyone can add extra
+// to the pot (lib/challenge-flow.ts). challengeRunKindOf is the one rule every
+// surface uses to tell which flow a challenge is, the creator's own stake
+// first:
+//   - "self": the creator staked. Friends either match the stake (the accept
+//     link) or back them (?as=backer). Extra in the pot, the creator's own at
+//     create or backers' later, never changes that.
+//   - "reward": an older challenge whose creator put money in at create and
+//     never staked. A friend accepts with a lock-in. No new challenge is made
+//     this way (the create form has one flow); these still render and pay.
+//   - "unstaked": the creator has not locked in yet and nothing else says it
+//     is an older reward challenge. No link is offered to the creator until
+//     they do; the chips already read as their own stake.
 //
 // Money chipped in (fundPool) is recorded against nobody (HealthPoolsV3
 // C:336-342), so the warning says where it goes per bounty model and that it
 // never comes back to the person who added it. Voice: stake, pot, challenge,
 // back; never bet, wager or odds.
 
-import { missConsequence } from "@/lib/commitment-copy";
-import { COMMITMENT_FACTS } from "@/lib/game/commitment-copy";
 
 export type ChallengeRunKind = "self" | "reward" | "unstaked";
 
@@ -29,27 +31,24 @@ export function creatorStakedIn(creator: string, participants: readonly string[]
 }
 
 /**
- * Which flow a challenge run is, money first. `reward` is the creator's own
- * seed at create (R): the pot net of every stake and of backers' top-ups
- * where those read (lib/challenges darePot seed, GET /api/pools/[id]/funding),
- * or the pot net of stakes alone where they did not; null when nothing could
- * be read (settled, cancelled, a read missed). A seed above zero is a reward
- * challenge even when the challenger also joined their own run. With no
- * seed, the creator's own stake makes it a stake on yourself, and a creator
- * who has not locked in yet is "unstaked", the same flow before its first
- * stake. `named` is whether the challenge row names a target or carries a
- * message: only the reward flow writes either (the stake-on-yourself link is
- * minted bare, api/challenges/invite-token), so it still tells a finished
- * reward challenge apart once the pot is gone.
+ * Which flow a challenge is. The creator's own stake decides first: a
+ * creator who staked is a match-the-stake challenge, whatever extra is in the
+ * pot. With no creator stake, money in the pot at create (`reward`, the pot
+ * net of every stake and of backers' top-ups where those read, the pot net of
+ * stakes alone where they did not) is an older reward challenge. `named` is
+ * whether the challenge row names a target or carries a message: it keeps a
+ * finished older reward challenge a reward once the pot no longer reads
+ * (settled, cancelled, a read missed), and says nothing while the pot reads,
+ * since the create form names a friend too.
  */
 export function challengeRunKindOf(input: {
   creatorStaked: boolean;
   reward: bigint | null;
   named?: boolean;
 }): ChallengeRunKind {
-  if (input.reward !== null && input.reward > 0n) return "reward";
   if (input.creatorStaked) return "self";
-  if (input.named === true) return "reward";
+  if (input.reward !== null && input.reward > 0n) return "reward";
+  if (input.reward === null && input.named === true) return "reward";
   return "unstaked";
 }
 
@@ -132,7 +131,7 @@ export function inviteShareOf(kind: ChallengeRunKind): InviteShare {
       {
         kind: "back",
         label: "Back me",
-        detail: "They add to the pot on your run. It never stakes them in.",
+        detail: "They add to the pot on your challenge. It never stakes them in.",
         backer: true,
         title: "Back me on GoHealthMe",
         message: "I put test USDC on myself on GoHealthMe. Back me by adding to the pot:",
@@ -156,9 +155,10 @@ export function shareCardOf(input: { kind: ChallengeRunKind | null; live: boolea
 // ------------------------------------------------------------ /c/[token]
 
 /**
- * The tag and headline a friend lands on. For a reward challenge with a seed
- * the page leads with the money instead ("{name} put 5.00 USDC on you"); this
- * title is its fallback.
+ * The tag and headline a friend lands on. A match-the-stake challenge leads
+ * with the stake to match ("Match @andre's 10.00 USDC stake"); an older reward
+ * challenge with a seed leads with the money instead ("{name} put 5.00 USDC
+ * on you"), and this title is its fallback.
  */
 export function challengeLandingHeadOf(input: {
   kind: ChallengeRunKind;
@@ -167,6 +167,8 @@ export function challengeLandingHeadOf(input: {
   name: string;
   /** "@handle" or "their friend", for a reward challenge's backer page. */
   target: string;
+  /** The stake to match, formatted ("10.00"), when it read. */
+  stake?: string | null;
 }): { tag: string; title: string } {
   const { kind, view, name, target } = input;
   if (view === "backer") {
@@ -174,9 +176,12 @@ export function challengeLandingHeadOf(input: {
       ? { tag: "Back the challenge", title: `${name} challenged ${target}` }
       : { tag: "Backing", title: `Back ${name}` };
   }
-  if (kind === "self") return { tag: "Match the stake", title: `${name} wants you to match their stake` };
   if (kind === "reward") return { tag: "You have been challenged", title: `${name} challenged you` };
-  return { tag: "You are invited", title: `${name} invited you to their run` };
+  const stake = input.stake ?? null;
+  return {
+    tag: "Match the stake",
+    title: stake !== null ? `Match ${name}'s ${stake} USDC stake` : `Match ${name}'s stake`,
+  };
 }
 
 /** The rally card: the backer link, sent on from the accept or backer page. */
@@ -197,73 +202,12 @@ export function rallyCopyOf(
   }
   return {
     heading: `Rally backers for ${name}`,
-    detail: `This link opens as a backer page: friends can add to the pot on ${name}'s run, and it never stakes them in.`,
+    detail: `This link opens as a backer page: friends can add to the pot on ${name}'s challenge, and it never stakes them in.`,
     title: `Back ${name} on GoHealthMe`,
-    message: `Back ${name} on GoHealthMe. Add test USDC to the pot on their run:`,
+    message: `Back ${name} on GoHealthMe. Add test USDC to the pot on their challenge:`,
     emailSubject: `Back ${name}`,
     shareLabel: "Rally backers",
   };
-}
-
-/**
- * The terms a friend reads before accepting: the stake lead, the hit, miss
- * and nobody-hits lines, the miss chip and the head count. A stake-on-yourself
- * run words hit and miss as commitmentFacts does; a reward challenge words
- * them for a lock-in. `players` is the stakers in the run now, not counting
- * the joiner; the miss line counts them in, because it describes the joiner's
- * own stake.
- */
-export function acceptTermsOf(input: {
-  kind: ChallengeRunKind;
-  recordable: boolean;
-  players: number;
-  challengerName: string;
-}): { stakeLead: string; hit: string; miss: string; nobody: string; chip: string; count: string } {
-  const { kind, recordable, players, challengerName } = input;
-  // The chip warns at any count; the miss line keeps the solo case (the
-  // joiner alone: a miss means nobody hit, so it comes back).
-  const chip = missConsequence({ recordable });
-  const consequence = { chip, toHitters: recordable && players + 1 >= 2 };
-  if (kind === "reward") {
-    return {
-      stakeLead: "Your lock-in to accept:",
-      hit: recordable
-        ? "Hit it: your lock-in back plus an equal share of the pot and of any missed lock-ins."
-        : "Hit it: your lock-in back plus an equal share of the pot.",
-      miss: !recordable
-        ? "Miss it: your lock-in comes back. This run cannot record a miss."
-        : consequence.toHitters
-          ? "Miss it: your lock-in goes to whoever hits. If nobody hits, it comes back."
-          : "Miss it: your lock-in comes back while you are the only one in. If someone else accepts this link and hits, it goes to them.",
-      nobody: `Nobody hits: every lock-in comes back, and ${challengerName} takes back the pot.`,
-      chip: consequence.chip,
-      count: players === 0 ? "Nobody has accepted this link yet" : `${players} accepted this link`,
-    };
-  }
-  return {
-    stakeLead: "Everyone puts in the same stake:",
-    hit: recordable ? COMMITMENT_FACTS.hit : COMMITMENT_FACTS.hitNoMiss,
-    miss: !recordable
-      ? COMMITMENT_FACTS.missNoMiss
-      : consequence.toHitters
-        ? COMMITMENT_FACTS.miss
-        : "Miss it: your stake comes back while you are the only one in. If someone else stakes and hits, it goes to them.",
-    nobody: COMMITMENT_FACTS.nobody,
-    chip: consequence.chip,
-    count: players === 0 ? "Nobody has staked yet" : `${players} staked so far`,
-  };
-}
-
-/**
- * The create form's hint under a reward challenge's lock-in (gap 5): with one
- * accepter nothing can be forfeited, so a miss gives the lock-in back. Where
- * the goal can record a miss, a second accepter who hits changes that, and the
- * hint says so (gap 7).
- */
-export function lockInHint(recordable: boolean): string {
-  return recordable
-    ? "The small amount they put up to accept. Their lock-in comes back if they miss, unless someone else accepts the link and hits. You never keep it."
-    : "The small amount they put up to accept. Their lock-in comes back if they miss, and when they hit. You never keep it.";
 }
 
 // ------------------------------------------------------------ chip in
@@ -346,14 +290,14 @@ export function chipInIntroOf(
 ): { lead: string; cta: string } {
   if (kind === "reward") {
     return {
-      lead: "Anyone with this link can add to the reward. It grows what whoever hits collects when the run settles.",
+      lead: "Anyone with this link can add to the reward. It grows what whoever hits collects when the challenge settles.",
       cta: "Add to the reward",
     };
   }
   return {
     lead: creator.you
-      ? "Anyone with your links can add to this run's pot. It is paid out when the run settles."
-      : `Anyone with this link can add to the pot on ${creator.name}'s run. It is paid out when the run settles.`,
+      ? "Anyone with your links can add to the pot on your challenge. It is split among whoever hits when the challenge settles."
+      : `Anyone with this link can add to the pot on ${creator.name}'s challenge. It is split among whoever hits when the challenge settles.`,
     cta: "Add to the pot",
   };
 }

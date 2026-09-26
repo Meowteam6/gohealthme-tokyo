@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { challengeBackerUrl, challengeShareUrl, isBackerView } from "@/lib/challenges";
 import {
-  acceptTermsOf,
   challengeLandingHeadOf,
   challengeRunKindOf,
   chipInIntroOf,
   chipInWarningOf,
   creatorStakedIn,
   inviteShareOf,
-  lockInHint,
   rallyCopyOf,
   shareCardOf,
   type ChallengeRunKind,
@@ -35,23 +33,31 @@ describe("challengeRunKindOf: money first, then the creator's own stake", () => 
     expect(creatorStakedIn(creator, [])).toBe(false);
   });
 
-  it("is a reward challenge when the creator put up a seed, even if they also joined", () => {
-    expect(challengeRunKindOf({ creatorStaked: false, reward: 5n * USDC })).toBe("reward");
-    expect(challengeRunKindOf({ creatorStaked: true, reward: 5n * USDC })).toBe("reward");
-  });
-
-  it("is a stake on yourself once the creator staked with no seed, whether or not the pot read", () => {
+  it("is a match-the-stake challenge once the creator staked, extra in the pot or not", () => {
+    // The one challenge flow (2026-09-27): the creator stakes S and may add
+    // extra E at create. The creator's own stake decides; extra never makes
+    // it a reward challenge.
+    expect(challengeRunKindOf({ creatorStaked: true, reward: 5n * USDC })).toBe("self");
     expect(challengeRunKindOf({ creatorStaked: true, reward: 0n })).toBe("self");
     expect(challengeRunKindOf({ creatorStaked: true, reward: null })).toBe("self");
+    expect(challengeRunKindOf({ creatorStaked: true, reward: null, named: true })).toBe("self");
+  });
+
+  it("is an older reward challenge when money is in and the creator never staked", () => {
+    expect(challengeRunKindOf({ creatorStaked: false, reward: 5n * USDC })).toBe("reward");
+    expect(challengeRunKindOf({ creatorStaked: false, reward: 5n * USDC, named: true })).toBe("reward");
   });
 
   it("keeps a finished reward challenge a reward once the pot reads null, from the named row", () => {
     expect(challengeRunKindOf({ creatorStaked: false, reward: null, named: true })).toBe("reward");
   });
 
-  it("is unstaked when the creator neither staked nor put up a reward", () => {
+  it("is unstaked when the creator neither staked nor put money in", () => {
     expect(challengeRunKindOf({ creatorStaked: false, reward: 0n })).toBe("unstaked");
     expect(challengeRunKindOf({ creatorStaked: false, reward: null })).toBe("unstaked");
+    // A friend named at create, before the creator locks in: the pot read
+    // zero, so the name alone never makes it a reward challenge.
+    expect(challengeRunKindOf({ creatorStaked: false, reward: 0n, named: true })).toBe("unstaked");
   });
 });
 
@@ -67,7 +73,7 @@ describe("inviteShareOf: two links on a stake-on-yourself run, one on a reward c
     const [match, back] = share.links;
     expect(match.message).toContain("Match my stake");
     expect(back.message).toContain("Back me");
-    expect(back.detail).toContain("never stakes them in");
+    expect(back.detail).toBe("They add to the pot on your challenge. It never stakes them in.");
   });
 
   it("builds each link kind to the URL the landing reads", () => {
@@ -122,8 +128,16 @@ describe("challengeLandingHeadOf: each link kind has its own headline", () => {
   const head = (kind: ChallengeRunKind, view: "accept" | "backer", target = "their friend") =>
     challengeLandingHeadOf({ kind, view, name: MIKA, target });
 
-  it("Match my stake lands on the match headline", () => {
-    expect(head("self", "accept").title).toBe(`${MIKA} wants you to match their stake`);
+  it("Match my stake lands on Match {name}'s stake, with the amount when it read", () => {
+    expect(challengeLandingHeadOf({ kind: "self", view: "accept", name: "@andre", target: "", stake: "10.00" })).toEqual({
+      tag: "Match the stake",
+      title: "Match @andre's 10.00 USDC stake",
+    });
+    expect(head("self", "accept").title).toBe(`Match ${MIKA}'s stake`);
+    // Before the creator locks in it is still their challenge to match.
+    expect(challengeLandingHeadOf({ kind: "unstaked", view: "accept", name: "@andre", target: "", stake: "10.00" }).title).toBe(
+      "Match @andre's 10.00 USDC stake",
+    );
   });
 
   it("Back me lands on Back {name}, never 'challenged their friend'", () => {
@@ -140,63 +154,6 @@ describe("challengeLandingHeadOf: each link kind has its own headline", () => {
   it("rallies backers for the person on a stake-on-yourself run", () => {
     expect(rallyCopyOf("self", MIKA).heading).toBe(`Rally backers for ${MIKA}`);
     expect(rallyCopyOf("reward", MIKA).heading).toBe("Rally your friends");
-  });
-});
-
-describe("acceptTermsOf: the miss chip and head count before the accept (gap 7)", () => {
-  it("a reward challenge nobody accepted yet: the chip warns, the line says a lone miss comes back", () => {
-    const t = acceptTermsOf({ kind: "reward", recordable: true, players: 0, challengerName: MIKA });
-    // Anyone holding the link can accept after you, so the chip warns at any
-    // count; the miss line carries the solo case.
-    expect(t.chip).toBe("Miss: goes to who hits");
-    expect(t.count).toBe("Nobody has accepted this link yet");
-    expect(t.miss).toContain("your lock-in comes back");
-    expect(t.miss).toContain("If someone else accepts this link and hits, it goes to them.");
-    expect(t.nobody).toBe(`Nobody hits: every lock-in comes back, and ${MIKA} takes back the pot.`);
-  });
-
-  it("a forwarded reward link with others in: a miss goes to who hits", () => {
-    const t = acceptTermsOf({ kind: "reward", recordable: true, players: 2, challengerName: MIKA });
-    expect(t.chip).toBe("Miss: goes to who hits");
-    expect(t.count).toBe("2 accepted this link");
-    expect(t.miss).toBe("Miss it: your lock-in goes to whoever hits. If nobody hits, it comes back.");
-  });
-
-  it("a run that cannot record a miss always says stake back, however many are in", () => {
-    for (const players of [0, 1, 5]) {
-      const t = acceptTermsOf({ kind: "reward", recordable: false, players, challengerName: MIKA });
-      expect(t.chip).toBe("Miss: stake back");
-      expect(t.miss).toBe("Miss it: your lock-in comes back. This run cannot record a miss.");
-      expect(t.hit).not.toMatch(/missed/);
-    }
-  });
-
-  it("matching a staked creator makes two: a recorded miss goes to who hits", () => {
-    const t = acceptTermsOf({ kind: "self", recordable: true, players: 1, challengerName: MIKA });
-    expect(t.chip).toBe("Miss: goes to who hits");
-    expect(t.count).toBe("1 staked so far");
-    expect(t.stakeLead).toBe("Everyone puts in the same stake:");
-    expect(t.miss).toBe(
-      "Miss it: if your wearable shows it, your stake goes to the players who hit. If your wearable sends nothing for the run, your stake comes back.",
-    );
-  });
-
-  it("matching on a run that cannot record a miss keeps the stake-back wording", () => {
-    const t = acceptTermsOf({ kind: "self", recordable: false, players: 1, challengerName: MIKA });
-    expect(t.chip).toBe("Miss: stake back");
-    expect(t.miss).toMatch(/cannot record a miss/);
-  });
-});
-
-describe("lockInHint: the reward challenge's lock-in comes back on a miss (gap 5)", () => {
-  it("replaces 'real money keeps the goal honest' with what the contract does", () => {
-    for (const recordable of [true, false]) {
-      const hint = lockInHint(recordable);
-      expect(hint).toContain("Their lock-in comes back if they miss");
-      expect(hint).not.toMatch(/honest/);
-      expect(hint).toContain("You never keep it.");
-    }
-    expect(lockInHint(true)).toContain("unless someone else accepts the link and hits");
   });
 });
 
@@ -258,7 +215,7 @@ describe("chipInWarningOf: one warning, worded per bounty model (F5, gaps 1 and 
   it("the chip-in card's lead and button follow the flow", () => {
     expect(chipInIntroOf("reward", other).cta).toBe("Add to the reward");
     expect(chipInIntroOf("self", other)).toEqual({
-      lead: `Anyone with this link can add to the pot on ${MIKA}'s run. It is paid out when the run settles.`,
+      lead: `Anyone with this link can add to the pot on ${MIKA}'s challenge. It is split among whoever hits when the challenge settles.`,
       cta: "Add to the pot",
     });
     expect(chipInIntroOf("self", { name: MIKA, you: true }).lead).toMatch(/^Anyone with your links/);
@@ -275,16 +232,15 @@ describe("voice", () => {
         challengeLandingHeadOf({ kind: k, view: "backer", name: MIKA, target: "@andre" }),
         rallyCopyOf(k, MIKA),
         chipInIntroOf(k, { name: MIKA, you: false }),
-        acceptTermsOf({ kind: k, recordable: true, players: 1, challengerName: MIKA }),
-        acceptTermsOf({ kind: k, recordable: false, players: 0, challengerName: MIKA }),
+        chipInIntroOf(k, { name: MIKA, you: true }),
       ]),
       [0, 1, 2].flatMap((m) => [
         chipInWarningOf({ bountyModel: m, creator: { name: MIKA, you: false }, selfStake: true, stakers: 1 }),
         chipInWarningOf({ bountyModel: m, creator: { name: MIKA, you: true }, selfStake: true, stakers: 1 }),
       ]),
-      lockInHint(true),
-      lockInHint(false),
     ]);
     expect(text).not.toMatch(FORBIDDEN);
+    // One vocabulary: a player joins a challenge, never a run, pool or dare.
+    expect(text).not.toMatch(/\b(run|runs|pool|pools|dare|dares)\b/i);
   });
 });

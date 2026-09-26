@@ -2,10 +2,12 @@
 // every money surface shows, and each flow's terms, worded as section 3 words
 // them. Pure, so every sentence is pinned by a test with exact numbers.
 //
-//   F1 Group run            model 2, public, everyone stakes the same
-//   F2 Stake on yourself    a challenge the creator staked in; friends match it
-//   F3 Challenge a friend   a challenge with a reward; the friend stakes a lock-in
-//   F4 Sponsored run        model 0 or 1, a sponsor puts up the pot
+//   F1 Group challenge      model 2, public, everyone stakes the same
+//   F2 Match the stake      the one challenge flow: the creator stakes S,
+//                           friends match S, anyone adds extra to the pot
+//   F3 Reward challenge     an older challenge whose creator put money in and
+//                           never staked; the friend stakes a lock-in
+//   F4 Sponsored challenge  model 0 or 1, a sponsor puts up the money
 //   F5 Chip in              adding to someone else's pot (the backer page)
 //
 // Every figure comes from lib/commitment.ts (commitmentOutcome and
@@ -67,26 +69,26 @@ export function flowKindOf(
   if (ctx.backer === true) return { flow: "F5", name: "Chip in", chip: "Backing" };
   const creator = ctx.viewerIsCreator === true ? "you" : ctx.creatorName;
   if (pool.bountyModel !== COMMITMENT_MODEL) {
-    return { flow: "F4", name: "Sponsored run", chip: `Sponsored by ${creator}` };
+    return { flow: "F4", name: "Sponsored challenge", chip: `Sponsored by ${creator}` };
   }
   if (pool.initiative !== CHALLENGE_INITIATIVE) {
-    return { flow: "F1", name: "Group run", chip: "Group run" };
+    return { flow: "F1", name: "Group challenge", chip: "Group challenge" };
   }
   const kind =
     ctx.kind ??
     challengeRunKindOf({ creatorStaked: ctx.creatorStaked === true, reward: ctx.seed ?? null });
   if (kind === "reward") {
-    return { flow: "F3", name: "Challenge a friend", chip: `Challenge from ${creator}` };
+    return { flow: "F3", name: "Challenge with a reward", chip: `Challenge from ${creator}` };
   }
-  // A stake on yourself, locked in or about to be: the creator is the first
-  // staker, friends match.
+  // The creator's own stake on their own goal, locked in or about to be:
+  // friends match it.
   const others = Math.max(0, (ctx.players ?? 0) - 1);
   if (ctx.viewerIsCreator === true) {
-    return { flow: "F2", name: "Stake on yourself", chip: others === 0 ? "On yourself" : `You + ${others}` };
+    return { flow: "F2", name: "Match the stake", chip: others === 0 ? "On yourself" : `You + ${others}` };
   }
   return {
     flow: "F2",
-    name: "Stake on yourself",
+    name: "Match the stake",
     chip: others === 0 ? `Match ${ctx.creatorName}` : `${ctx.creatorName} + ${others}`,
   };
 }
@@ -99,7 +101,18 @@ export function stakersAfter(players: number, includeJoiner: boolean): number {
 
 // ------------------------------------------------------------------ terms
 
-export type MoneyTermKey = "stake" | "hit" | "miss" | "nobody" | "confirm" | "match" | "accepted";
+/** "split" is one hitting while another misses, "both" is everyone hitting:
+ *  the two rows of the equal-stakes table (F2). */
+export type MoneyTermKey =
+  | "stake"
+  | "hit"
+  | "split"
+  | "both"
+  | "miss"
+  | "nobody"
+  | "confirm"
+  | "match"
+  | "accepted";
 
 export interface MoneyTerm {
   key: MoneyTermKey;
@@ -118,7 +131,8 @@ export interface MoneyInput {
   entryFee: bigint;
   /** Stakers in the run now, not counting the reader. */
   players: number;
-  /** R + B: everything in the pot beyond the stakes (sponsorPotOf). */
+  /** R + B: everything in the pot beyond the stakes (sponsorPotOf), the
+   *  extra a hit shares. */
   pot: bigint;
   /** commitmentFeeBps; null when it did not read (no range is promised). */
   feeBps: number | null;
@@ -139,7 +153,7 @@ const plural = (n: number, one: string, many: string): string => (n === 1 ? one 
 function sharedHitTerm(input: MoneyInput, stake: string): string {
   if (input.feeBps === null) {
     if (input.recordable) return `Hit: ${stake} back + a share.`;
-    return input.pot > 0n ? `Hit: ${stake} back + a share of the pot.` : `Hit: your ${stake} comes back.`;
+    return input.pot > 0n ? `Hit: ${stake} back + a share of the extra.` : `Hit: your ${stake} comes back.`;
   }
   const range = commitmentRange({
     entryFee: input.entryFee,
@@ -158,17 +172,17 @@ function sharedHitTerm(input: MoneyInput, stake: string): string {
 }
 
 function confirmTerm(input: MoneyInput, stake: string): MoneyTerm {
-  const by = input.confirmBy !== null ? `by ${input.confirmBy}` : "before the run settles";
+  const by = input.confirmBy !== null ? `by ${input.confirmBy}` : "before the challenge settles";
   return { key: "confirm", text: `Confirm your hit ${by}, or you only get ${stake} back. Test money, beta.` };
 }
 
-/** F1 Group run, and F2 once friends have matched: everyone stakes the same. */
+/** F1 Group challenge: a public commitment pool, everyone stakes the same. */
 export function groupRunCopy(input: MoneyInput): MoneyCopy {
   const stake = usd(input.entryFee);
   const pot = input.pot > 0n ? usd(input.pot) : null;
   const line = input.recordable
-    ? `Everyone stakes ${stake} USDC. Hit it and you split the stakes of whoever misses${pot !== null ? `, plus the ${pot} sponsor pot` : ""}.`
-    : `Everyone stakes ${stake} USDC. Hit it and your ${stake} comes back${pot !== null ? `, plus a share of the ${pot} sponsor pot` : ""}.`;
+    ? `Everyone stakes ${stake} USDC. Hit it and you split the stakes of whoever misses${pot !== null ? `, plus ${pot} extra` : ""}.`
+    : `Everyone stakes ${stake} USDC. Hit it and your ${stake} comes back${pot !== null ? `, plus a share of the ${pot} extra` : ""}.`;
   return {
     flow: "F1",
     line,
@@ -184,7 +198,7 @@ export function groupRunCopy(input: MoneyInput): MoneyCopy {
       {
         key: "miss",
         text: !input.recordable
-          ? `Miss: your ${stake} comes back. This run cannot record a miss.`
+          ? `Miss: your ${stake} comes back. This challenge cannot record a miss.`
           : stakersAfter(input.players, input.includeJoiner) < 2
             ? // Alone, a miss comes back. The chip already warns that anyone
               // can join and change that; the term says both before the
@@ -199,51 +213,167 @@ export function groupRunCopy(input: MoneyInput): MoneyCopy {
 }
 
 /**
- * F2 Stake on yourself. One staker (the creator, or the creator about to lock
- * in): a miss comes back, because nobody else can hit. Matched (two or more
- * once the reader is in): the group run's terms, with the names line.
+ * F2 Match the stake: the core game. Everyone stakes the same S on the same
+ * goal. One hits and one misses: the hitter gets their S back plus the missed
+ * S. Both hit: both get S back. Nobody hits: every stake comes back. Extra in
+ * the pot (the creator's own at create, backers' later) is split evenly among
+ * whoever hits, and goes to the creator if nobody does (the contract's
+ * sweep). A miss counts only on a challenge the miss rule covers, and only
+ * when the wearable shows it; otherwise it comes back.
+ *
+ * Worded as a table for two (the creator and one friend, the challenge as it
+ * is sent), as a group once three or more are in, and alone while nobody has
+ * matched. Every figure is commitmentOutcome / commitmentRange.
  */
 export function selfStakeCopy(
-  input: MoneyInput & { creatorName: string; viewerIsCreator: boolean },
+  input: MoneyInput & {
+    creatorName: string;
+    viewerIsCreator: boolean;
+    /** The creator's own stake is in (or about to be, on the create form).
+     *  False while a friend reads a challenge the creator has not locked in. */
+    creatorIn?: boolean;
+  },
 ): MoneyCopy {
   const stake = usd(input.entryFee);
+  const extra = input.pot;
+  const extraUsd = usd(extra);
   const stakers = stakersAfter(input.players, input.includeJoiner);
+  const creatorIn = input.creatorIn !== false;
+  const creator = input.creatorName;
+  // Nobody hits: the contract's sweep hands what is left to the creator.
+  const extraTo = input.viewerIsCreator ? "you" : creator;
+  const nobodyExtra = extra > 0n ? `, and the ${extraUsd} extra goes to ${extraTo}` : "";
+
   if (stakers <= 1) {
+    if (input.viewerIsCreator) {
+      return {
+        flow: "F2",
+        line: `Your ${stake} USDC on your own goal. Get a friend to match it.`,
+        terms: [
+          { key: "stake", text: "You are the only one staked." },
+          {
+            key: "hit",
+            text: extra > 0n ? `Hit: ${stake} back + ${extraUsd} extra.` : `Hit: ${stake} back, plus anything backers add.`,
+          },
+          {
+            key: "miss",
+            text: `Miss: ${stake} comes back while you are the only one in${
+              extra > 0n ? `, and the ${extraUsd} extra goes back to you` : ""
+            }.`,
+          },
+          {
+            key: "match",
+            text: input.recordable
+              ? "Once a friend matches you, whoever hits gets their stake back plus the stake of whoever misses."
+              : "Friends can match your stake. This challenge cannot record a miss, so a miss comes back either way.",
+          },
+        ],
+      };
+    }
+    // A friend reading before anyone else is in: the creator has not locked
+    // in yet (or the count is behind).
     return {
       flow: "F2",
-      line: `Your ${stake} USDC on your own goal. Get friends to match it.`,
+      line: creatorIn
+        ? `Match ${creator}'s ${stake} USDC stake.`
+        : `Match ${creator}'s ${stake} USDC stake. ${creator} has not locked in yet.`,
       terms: [
-        { key: "stake", text: "You are the only one staked." },
         {
-          key: "hit",
-          text:
-            input.pot > 0n
-              ? `Hit: ${stake} back + ${usd(input.pot)} from backers.`
-              : `Hit: ${stake} back, plus anything backers chip in.`,
+          key: "stake",
+          text: input.players === 0 ? `Same stake: ${stake}. Nobody is in yet.` : `Same stake: ${stake}, ${input.players} in so far.`,
         },
-        { key: "miss", text: `Miss: ${stake} comes back.` },
+        { key: "hit", text: extra > 0n ? `Hit: ${stake} back + ${extraUsd} extra.` : `Hit: your ${stake} comes back.` },
+        { key: "miss", text: `Miss: ${stake} comes back while you are the only one in.` },
         {
           key: "match",
-          text: input.recordable
-            ? "Once a friend matches you, whoever misses pays whoever hits."
-            : "Friends can match your stake. This run cannot record a miss, so a miss comes back either way.",
+          text: !input.recordable
+            ? "This challenge cannot record a miss, so a miss comes back either way."
+            : creatorIn
+              ? "Once a second player is in, whoever hits gets their stake back plus the stake of whoever misses."
+              : `Once ${creator} locks in, whoever hits gets their stake back plus the stake of whoever misses.`,
         },
       ],
     };
   }
-  const friends = stakers - 1;
-  const who = input.viewerIsCreator ? "You" : input.creatorName;
-  const group = groupRunCopy(input);
+
+  const feeBps = input.feeBps;
+  // Everyone hits: nothing is forfeited, so no fee; each gets S plus an
+  // equal share of the extra.
+  const allHit = commitmentOutcome({
+    entryFee: input.entryFee,
+    players: stakers,
+    achievers: stakers,
+    sponsorPot: extra,
+    feeBps: 0,
+  });
+  const each = allHit.kind === "paid" ? allHit.perAchiever : input.entryFee;
+  const share = each - input.entryFee;
+  const everyone = stakers === 2 ? "Both hit" : "Everyone hits";
+  const bothText =
+    extra === 0n
+      ? `${everyone}: you each get your ${stake} back.`
+      : feeBps === null
+        ? `${everyone}: you each get your ${stake} back + ${stakers === 2 ? "half" : "an equal share of"} the ${extraUsd} extra.`
+        : `${everyone}: you each get your ${stake} back + ${usd(share)} of the extra, ${usd(each)} each.`;
+  const missText = input.recordable
+    ? stakers === 2
+      ? "Miss: it counts only when your wearable shows it. No data from your wearable is not a miss, so that stake comes back."
+      : `Miss: if your wearable shows it and anyone hits, your ${stake} goes to them; if nobody hits, it comes back. No data from your wearable is not a miss.`
+    : `Miss: your ${stake} comes back. This challenge cannot record a miss.`;
+
+  if (stakers === 2) {
+    let splitText: string;
+    if (input.recordable) {
+      const cut = feeBps !== null && feeBps > 0 ? " less GoHealthMe's cut" : "";
+      const parts = `their ${stake} back + the other ${stake}${cut}${extra > 0n ? ` + ${extraUsd} extra` : ""}`;
+      const oneHit =
+        feeBps !== null
+          ? commitmentOutcome({ entryFee: input.entryFee, players: 2, achievers: 1, sponsorPot: extra, feeBps })
+          : null;
+      const total = oneHit !== null && oneHit.kind === "paid" ? `, ${usd(oneHit.perAchiever)} in all` : "";
+      splitText = `One hits, one misses: whoever hits gets ${parts}${total}.`;
+    } else {
+      // The miss is never recorded, so settle refunds it (HealthPoolsV3 B-2)
+      // and the hitter alone shares the extra.
+      splitText = `One hits, one misses: the miss comes back, since this challenge cannot record one; whoever hits gets their ${stake} back${
+        extra > 0n ? ` + ${extraUsd} extra, ${usd(input.entryFee + extra)} in all` : ""
+      }.`;
+    }
+    return {
+      flow: "F2",
+      line: input.recordable
+        ? `You both stake ${stake} USDC. Whoever hits gets their ${stake} back plus the stake of whoever misses. Both hit: you both get ${stake} back. Extra in the pot is split among whoever hits.`
+        : `You both stake ${stake} USDC. Hit it and your ${stake} comes back, plus a share of any extra. This challenge cannot record a miss, so a miss comes back too.`,
+      terms: [
+        { key: "stake", text: `Same stake: ${stake} each.` },
+        { key: "split", text: splitText },
+        { key: "both", text: bothText },
+        { key: "nobody", text: `Nobody hits: both stakes come back${nobodyExtra}.` },
+        { key: "miss", text: missText },
+        confirmTerm(input, stake),
+      ],
+    };
+  }
+
   return {
     flow: "F2",
-    line: `${who} + ${friends} ${plural(friends, "friend", "friends")}, ${stake} USDC each.`,
-    terms: group.terms,
+    line: input.recordable
+      ? `Everyone stakes ${stake} USDC. Whoever hits gets their ${stake} back plus an equal share of the stakes of whoever misses. Everyone hits: everyone gets ${stake} back. Extra in the pot is split among whoever hits.`
+      : `Everyone stakes ${stake} USDC. Hit it and your ${stake} comes back, plus a share of any extra. This challenge cannot record a miss, so a miss comes back too.`,
+    terms: [
+      { key: "stake", text: `Same stake: ${stake}, ${input.players} in so far.` },
+      { key: "hit", text: sharedHitTerm(input, stake) },
+      { key: "both", text: bothText },
+      { key: "nobody", text: `Nobody hits: every stake comes back${nobodyExtra}.` },
+      { key: "miss", text: missText },
+      confirmTerm(input, stake),
+    ],
   };
 }
 
 /**
- * F3 Challenge a friend. The challenger puts up the reward R and does not
- * stake; whoever accepts stakes the lock-in L. With one accepter a miss has
+ * F3 An older challenge with a reward. The challenger put up the reward R and
+ * did not stake (no new challenge is made this way); whoever accepts stakes the lock-in L. With one accepter a miss has
  * nobody to go to, so L comes back; anyone holding the link can accept, and
  * with two or more, on a run that can record a miss, whoever misses pays
  * whoever hits.
@@ -274,7 +404,7 @@ export function challengeCopy(
   const opening =
     input.reward !== null
       ? `${challenger} put up ${usd(input.reward)} USDC.`
-      : `The pot holds ${usd(input.pot)} USDC.`;
+      : `${usd(input.pot)} USDC extra is in the pot.`;
   let getLine: string;
   if (accepters <= 1) {
     // One accepter who hits takes the whole pot: L + R + B.
@@ -298,7 +428,7 @@ export function challengeCopy(
     });
     getLine = `hit it and get up to ${usd(range.ifOnlyYou)}.`;
   } else {
-    getLine = "hit it and get a share of the pot.";
+    getLine = "hit it and get a share of the extra.";
   }
 
   const hit =
@@ -322,7 +452,7 @@ export function challengeCopy(
         : `Miss: ${lockIn} comes back${andTakeBack}.`;
   const rule = input.recordable
     ? "if more than one, whoever misses pays whoever hits."
-    : "this run cannot record a miss, so a miss comes back however many accept.";
+    : "this challenge cannot record a miss, so a miss comes back however many accept.";
   const accepted =
     input.players === 0
       ? `Nobody has accepted this link yet; ${rule}`
@@ -365,7 +495,7 @@ export function sponsoredCopy(input: {
   const opening =
     input.reward !== null
       ? `${sponsor} put up ${usd(input.reward)} USDC.`
-      : `The pot holds ${usd(input.pot)} USDC.`;
+      : `${usd(input.pot)} USDC extra from the sponsor and backers.`;
   return {
     flow: "F4",
     line: `${opening} Stake ${stake} to enter.`,
@@ -418,9 +548,20 @@ export function runMoneyOf(input: {
     case "F1":
       copy = groupRunCopy(n);
       break;
-    case "F2":
-      copy = selfStakeCopy({ ...n, creatorName: input.flow.creatorName, viewerIsCreator: you });
+    case "F2": {
+      // Is the creator's own stake in? A surface that decided the flow says
+      // so by its kind ("unstaked" is before the creator locks in).
+      const kindNow =
+        input.flow.kind ??
+        challengeRunKindOf({ creatorStaked: input.flow.creatorStaked === true, reward: input.flow.seed ?? null });
+      copy = selfStakeCopy({
+        ...n,
+        creatorName: input.flow.creatorName,
+        viewerIsCreator: you,
+        creatorIn: kindNow !== "unstaked",
+      });
       break;
+    }
     case "F3":
       copy = challengeCopy({
         ...n,
@@ -429,7 +570,7 @@ export function runMoneyOf(input: {
         targetName: input.targetName ?? null,
         targetIsYou: input.targetIsYou === true,
         reward: input.reward ?? null,
-        endsOn: input.endsOn ?? "the run ends",
+        endsOn: input.endsOn ?? "the challenge ends",
       });
       break;
     case "F4":
@@ -468,4 +609,96 @@ export function momentLabel(ms: number, timeZone?: string): string {
     hourCycle: "h23",
     timeZone,
   }).format(new Date(ms));
+}
+
+// ------------------------------------------------------------------ the pot
+
+/**
+ * The Pot, one number, with its parts in words: every stake plus the extra
+ * ("Pot 22.00: 10.00 each from you and @nikki, plus 2.00 extra from you.").
+ * The Pot is all the money in the challenge (pool.balance while live), so a
+ * part is never called "the pot". `stakers` is the stakers' names when they
+ * are known (one or two), or a count.
+ */
+export function potLineOf(input: {
+  stake: bigint;
+  stakers: readonly string[] | number;
+  extra: bigint;
+  /** Who put the extra in, when one person did. */
+  extraFrom?: string | null;
+  /** When the figure holds, after the number: "once you match". */
+  when?: string;
+}): string {
+  const names = typeof input.stakers === "number" ? null : input.stakers;
+  const count = names !== null ? names.length : (input.stakers as number);
+  const pot = input.stake * BigInt(count) + input.extra;
+  const stake = usd(input.stake);
+  let parts: string;
+  if (count === 0) parts = "nobody has staked yet";
+  else if (names !== null && count === 1) parts = `${stake} from ${names[0]}`;
+  else if (names !== null && count === 2) parts = `${stake} each from ${names[0]} and ${names[1]}`;
+  else if (count === 1) parts = `${stake} from 1 player`;
+  else parts = `${stake} each from ${count} players`;
+  const from = input.extraFrom ?? null;
+  const extra = input.extra > 0n ? `, plus ${usd(input.extra)} extra${from !== null ? ` from ${from}` : ""}` : "";
+  return `Pot ${usd(pot)}${input.when !== undefined ? ` ${input.when}` : ""}: ${parts}${extra}.`;
+}
+
+/**
+ * What the friend will see, from the create form: the challenge as it reads
+ * once the creator has locked in their stake S and the friend is about to
+ * match it, with the extra E the creator is adding. Signed in, it is worded
+ * for the friend ("Match @andre's 10.00 USDC stake"); signed out there is no
+ * name yet, so it reads as the creator's own challenge.
+ */
+export function challengePreviewOf(input: {
+  stake: bigint;
+  extra: bigint;
+  /** missRuleWouldApply for the goal typed so far. */
+  recordable: boolean;
+  /** The creator's "@handle" when signed in; null words it for the creator. */
+  creatorName: string | null;
+  /** The friend's "@handle" when one is typed. */
+  friendName: string | null;
+}): { money: RunMoney; pot: bigint; potLine: string; headline: string } {
+  const asFriend = input.creatorName !== null;
+  const creator = input.creatorName ?? "you";
+  const friend = input.friendName ?? "your friend";
+  const money = runMoneyOf({
+    pool: { bountyModel: COMMITMENT_MODEL, initiative: CHALLENGE_INITIATIVE },
+    flow: {
+      players: 1,
+      creatorStaked: true,
+      kind: "self",
+      creatorName: creator,
+      viewerIsCreator: !asFriend,
+    },
+    numbers: {
+      entryFee: input.stake,
+      players: 1,
+      pot: input.extra,
+      // V4 takes no cut (commitmentFeeBps 0); the live page reads the fee.
+      feeBps: 0,
+      recordable: input.recordable,
+      includeJoiner: true,
+      confirmBy: null,
+    },
+  });
+  const stake = usd(input.stake);
+  return {
+    money,
+    pot: input.stake * 2n + input.extra,
+    headline: asFriend
+      ? `Match ${creator}'s ${stake} USDC stake`
+      : `You stake ${stake} USDC. ${input.friendName ?? "Your friend"} matches it.`,
+    potLine: asFriend
+      ? potLineOf({ stake: input.stake, stakers: ["you", creator], extra: input.extra, extraFrom: creator, when: "once you match" })
+      : potLineOf({
+          stake: input.stake,
+          stakers: ["you", friend],
+          extra: input.extra,
+          extraFrom: "you",
+          when: `once ${friend} matches`,
+        }),
+  };
 }

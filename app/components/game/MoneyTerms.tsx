@@ -45,7 +45,7 @@ export function KindTag({ kind }: { kind: string | null }) {
   if (kind !== null) return <span className={KIND_CHIP}>{kind}</span>;
   return (
     <span aria-busy="true" className="inline-flex">
-      <span className="sr-only">Reading what kind of run this is</span>
+      <span className="sr-only">Reading what kind of challenge this is</span>
       <Skeleton className="h-[26px] w-[104px] rounded-tag" />
     </span>
   );
@@ -84,7 +84,7 @@ export function MoneyChips({
           <span className={KIND_CHIP}>{kind}</span>
         ) : (
           <>
-            <span className="sr-only">Reading what kind of run this is</span>
+            <span className="sr-only">Reading what kind of challenge this is</span>
             <Skeleton className="h-[26px] w-[104px] rounded-tag" />
           </>
         )}
@@ -107,15 +107,24 @@ export function MoneyChips({
 // times ("16:30") never match: they carry no decimal point.
 const FIGURE = /(\d[\d,]*\.\d{2})/;
 
-/** Figures bold in the foreground. With `payout` (a hit term, whose first
- *  figure is always the stake), a later figure that is not the stake is what
- *  the hit pays, and only that goes gold: "1.00 back + a share, 3.00 right
- *  now". "Can be under 1.00" stays foreground. */
-function withMoney(text: string, payout = false): ReactNode[] {
+/** Figures bold in the foreground. With `payout` "hit" (a hit term, whose
+ *  first figure is always the stake), a later figure that is not the stake is
+ *  what the hit pays, and only that goes gold: "1.00 back + a share, 3.00
+ *  right now". "Can be under 1.00" stays foreground. With "total" (a row of
+ *  the equal-stakes table, "... + the other 10.00, 20.00 in all"), only the
+ *  last figure is paid out, and only when the row names parts before it. */
+function withMoney(text: string, payout: "hit" | "total" | null = null): ReactNode[] {
   let stake: string | null = null;
-  return text.split(FIGURE).map((part, i) => {
+  const parts = text.split(FIGURE);
+  const figures = Math.floor(parts.length / 2);
+  return parts.map((part, i) => {
     if (i % 2 === 0) return part;
-    const paid = payout && stake !== null && part !== stake;
+    const paid =
+      payout === "hit"
+        ? stake !== null && part !== stake
+        : payout === "total"
+          ? figures > 1 && i === parts.length - 2
+          : false;
     if (stake === null) stake = part;
     return (
       <b key={i} className={`font-semibold ${paid ? "text-gold" : "text-foreground"}`}>
@@ -128,6 +137,8 @@ function withMoney(text: string, payout = false): ReactNode[] {
 const GLYPH: Record<MoneyTermKey, GlyphName> = {
   stake: "wallet",
   hit: "hit",
+  split: "hit",
+  both: "hit",
   miss: "miss",
   nobody: "back",
   confirm: "shield",
@@ -135,10 +146,11 @@ const GLYPH: Record<MoneyTermKey, GlyphName> = {
   accepted: "info",
 };
 
-/** "Hit: 1.00 back ..." -> "Hit:" bold, the rest plain. Only a short lead. */
+/** "Hit: 1.00 back ..." -> "Hit:" bold, the rest plain. Only a short lead,
+ *  up to "One hits, one misses:". */
 function splitLead(text: string): { lead: string; rest: string } {
   const cut = text.indexOf(": ");
-  if (cut < 0 || cut > 14) return { lead: "", rest: text };
+  if (cut < 0 || cut > 20) return { lead: "", rest: text };
   return { lead: text.slice(0, cut + 1), rest: text.slice(cut + 2) };
 }
 
@@ -177,12 +189,26 @@ export function MoneyTermsList({
               className="num grid grid-cols-[20px_1fr] gap-2.5 text-[0.9375rem] leading-[1.45] text-muted"
             >
               <span className="flex h-[1.45em] items-center justify-center text-muted" aria-hidden="true">
-                <Glyph name={GLYPH[term.key]} size={term.key === "hit" || term.key === "miss" || term.key === "nobody" ? 20 : 16} />
+                <Glyph
+                  name={GLYPH[term.key]}
+                  size={
+                    term.key === "hit" ||
+                    term.key === "split" ||
+                    term.key === "both" ||
+                    term.key === "miss" ||
+                    term.key === "nobody"
+                      ? 20
+                      : 16
+                  }
+                />
               </span>
               <span>
                 {lead !== "" ? <b className="font-semibold text-foreground">{lead}</b> : null}
                 {lead !== "" ? " " : null}
-                {withMoney(rest, term.key === "hit")}
+                {withMoney(
+                  rest,
+                  term.key === "hit" ? "hit" : term.key === "split" || term.key === "both" ? "total" : null,
+                )}
               </span>
             </li>
           );
