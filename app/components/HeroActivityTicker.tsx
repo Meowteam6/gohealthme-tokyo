@@ -1,19 +1,19 @@
 "use client";
 
-// Live activity ticker for the landing hero's right column. Reads the whole
-// system's REAL on-chain activity from /api/activity - people joining pools,
-// sponsors putting up rewards, and SPOTTER paying out winners - newest first,
-// polled so it stays alive. Never invented rows: an empty testnet shows an
-// honest "be the first" state and fills in as real activity lands.
+// What just happened on chain: people joining runs, sponsors funding them,
+// SPOTTER paying out, newest first, from /api/activity. Never invented rows.
+//
+// It stays off the page until at least five different players show up in the
+// feed (docs/DESIGN.md): a ticker of two names on a quiet testnet reads as a
+// ghost town, and the landing's run card already says "Nobody's in yet" when
+// that is the truth. A failed read also renders nothing; this is garnish, and
+// the run card owns the page's honest error state.
 //
 // PRIVACY: the API returns only actor handle (or truncated address), event
-// type, amount (rewards/payouts), and time. No goalSpec, no health category,
-// and private friend-challenges are filtered out server-side - so nothing here
-// can leak what anyone's goal actually is.
+// type, amount (rewards and payouts) and time. No goalSpec, no health
+// category, and private challenges are filtered out server-side.
 
 import { useQuery } from "@tanstack/react-query";
-import Spotter from "@/components/spotter/Spotter";
-import { Skeleton } from "@/components/ui";
 
 type ActivityType = "joined" | "funded" | "paid";
 
@@ -25,6 +25,9 @@ interface ActivityItem {
   at: string;
   id: string;
 }
+
+/** The feed shows once this many different players appear in it. */
+export const TICKER_MIN_PLAYERS = 5;
 
 function displayName(handle: string | null, address: string | null): string {
   if (handle) return handle.startsWith("@") ? handle : `@${handle}`;
@@ -48,19 +51,24 @@ function amount(usd: string | null): string {
   return Number.isFinite(n) ? n.toFixed(2) : usd;
 }
 
-// Each event type gets a status dot and a one-line verb. Gold is money
-// actually landing; the rest are night tokens.
-const META: Record<
-  ActivityType,
-  { dot: string; line: (name: string) => string }
-> = {
-  joined: { dot: "bg-foreground", line: (n) => `${n} entered a run` },
-  funded: { dot: "bg-gold", line: (n) => `${n} put up a reward` },
-  paid: { dot: "bg-gold", line: (n) => `SPOTTER paid ${n}` },
+/** Distinct players in the feed, by address, else by handle. */
+export function distinctPlayers(events: readonly ActivityItem[]): number {
+  const seen = new Set<string>();
+  for (const e of events) {
+    const key = (e.address ?? e.handle ?? "").toLowerCase();
+    if (key !== "") seen.add(key);
+  }
+  return seen.size;
+}
+
+const LINE: Record<ActivityType, (name: string) => string> = {
+  joined: (n) => `${n} joined a run`,
+  funded: (n) => `${n} added to a pot`,
+  paid: (n) => `SPOTTER paid ${n}`,
 };
 
 export default function HeroActivityTicker() {
-  const { data, isPending, isError, refetch } = useQuery({
+  const { data } = useQuery({
     queryKey: ["hero-activity"],
     queryFn: async () => {
       const res = await fetch("/api/activity");
@@ -72,90 +80,37 @@ export default function HeroActivityTicker() {
     retry: false,
   });
 
-  const events = (data?.events ?? []).slice(0, 5);
+  const all = data?.events ?? [];
+  if (distinctPlayers(all) < TICKER_MIN_PLAYERS) return null;
+  const events = all.slice(0, 5);
 
   return (
-    <div className="rounded-3xl border border-edge bg-surface p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-foreground" aria-hidden="true" />
-        <p className="text-sm font-semibold text-muted">What just happened on chain</p>
-      </div>
-
-      {/* Loading and a failed read each get their own state: an RPC outage
-          must never read as a quiet, empty testnet. "Quiet" is only for a
-          confirmed empty answer. */}
-      {isPending ? (
-        <div className="space-y-2" aria-busy="true">
-          <p className="sr-only" aria-live="polite">
-            Reading the chain
-          </p>
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </div>
-      ) : isError && events.length === 0 ? (
-        <div className="rounded-[18px] border-2 border-dashed border-warning/40 px-4 py-5" role="status">
-          <p className="text-sm font-bold text-foreground">
-            Could not read the chain right now.
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            This is a read problem, not an empty chain. It tries again on its own.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              void refetch();
-            }}
-            className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-accent-deep underline underline-offset-4"
-          >
-            Try again
-          </button>
-        </div>
-      ) : events.length === 0 ? (
-        <div className="flex items-center gap-3 rounded-[18px] border-2 border-dashed border-edge px-4 py-5">
-          <Spotter state="empty" size="xs" decorative className="shrink-0" />
-          <div className="min-w-0">
-          <p className="text-sm font-bold text-foreground">Quiet right now.</p>
-          <p className="mt-1 text-sm text-muted">
-            Be the first. Enter a run or dare a friend and it shows up here
-            once it lands on chain.
-          </p>
-          </div>
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {events.map((e) => {
-            const name = displayName(e.handle, e.address);
-            const meta = META[e.type];
-            const amt = amount(e.amountUsd);
-            return (
-              <li
-                key={e.id}
-                className="flex items-center gap-3 rounded-[16px] border border-edge bg-background px-3 py-2.5"
-              >
-                <span
-                  className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`}
-                  aria-hidden="true"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-foreground">
-                    {meta.line(name)}
-                  </p>
-                  <p className="text-xs text-muted">{relativeTime(e.at)}</p>
-                </div>
-                {amt !== "" ? (
-                  <span className="shrink-0 font-display text-base font-extrabold tabular-nums text-gold-deep">
-                    +{amt} USDC
-                  </span>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <p className="mt-3 text-center text-xs text-muted">
-        Real on-chain activity, testnet USDC.
-      </p>
-    </div>
+    <section aria-labelledby="happening-h" className="mt-8">
+      <h3 id="happening-h" className="m-0 text-[0.9375rem] font-semibold">
+        Happening on chain
+      </h3>
+      <ul className="m-0 mt-2.5 grid list-none gap-2 p-0 min-[900px]:grid-cols-2">
+        {events.map((e) => {
+          const amt = amount(e.amountUsd);
+          return (
+            <li
+              key={e.id}
+              className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-2.5 shadow-[inset_0_0_0_1px_var(--border)]"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="m-0 truncate text-sm text-foreground">{LINE[e.type](displayName(e.handle, e.address))}</p>
+                <p className="m-0 text-xs text-haze">{relativeTime(e.at)}</p>
+              </div>
+              {amt !== "" ? (
+                <span className="num flex-none text-[0.9375rem] font-semibold text-gold">
+                  +{amt} <span className="text-xs font-medium text-haze">USDC</span>
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="m-0 mt-2 text-[0.8125rem] text-haze">Real on-chain activity, test USDC.</p>
+    </section>
   );
 }

@@ -1,100 +1,17 @@
 import type { ReactNode } from "react";
-import Spotter from "@/components/spotter/Spotter";
-import SpotterCaption from "@/components/spotter/SpotterCaption";
-import { Card, Money } from "@/components/ui";
-import { commitmentOutcome, commitmentRange } from "@/lib/commitment";
+import { Money } from "@/components/ui";
+import { commitmentRange } from "@/lib/commitment";
 import { formatUsdc } from "@/lib/contract";
-import type { SpotterPose } from "@/lib/spotter-poses";
 
 // The commitment model, said the same way on every screen that asks for a
 // stake (HealthPoolsV3 bountyModel 2). Every number comes from lib/commitment,
 // never from arithmetic here. It always leads with the player's own stake
 // back: the outcome depends on their own wearable-verified effort, never on
 // chance, and there is no prize language. Server-safe.
-
-const USDC = 1_000_000n;
-
-/** The worked example on the landing: a 1 USDC stake, four players, two hit. */
-const EXAMPLE = { entryFee: USDC, players: 4, sponsorPot: 0n } as const;
-
-interface Beat {
-  pose: SpotterPose;
-  title: string;
-  line: string;
-  body: ReactNode;
-}
-
-function exampleBeats(): Beat[] {
-  const hit = commitmentOutcome({ ...EXAMPLE, achievers: 2 });
-  const none = commitmentOutcome({ ...EXAMPLE, achievers: 0 });
-  const stake = formatUsdc(EXAMPLE.entryFee);
-  const paid = hit.kind === "paid" ? hit : null;
-  const refund = none.kind === "refund-all" ? none.refundEach : EXAMPLE.entryFee;
-  return [
-    {
-      pose: "thumbsup",
-      title: "You hit it",
-      line: "Told you. Your stake comes back, and then some.",
-      body:
-        paid !== null ? (
-          <>
-            Your stake back plus an equal share of the missed stakes and any
-            sponsor pot. Four players stake <Money usd={stake} size="sm" /> and
-            two hit: each gets <Money usd={formatUsdc(paid.perAchiever)} size="sm" />,
-            which is <Money usd={formatUsdc(paid.stakeBack)} size="sm" /> back
-            plus <Money usd={formatUsdc(paid.fromOthers)} size="sm" />.
-          </>
-        ) : (
-          "Your stake back plus an equal share of the missed stakes and any sponsor pot."
-        ),
-    },
-    {
-      pose: "facepalm",
-      title: "You miss it",
-      line: "We both saw that night.",
-      body: "Your stake goes to the players who hit. Nothing else is taken from you.",
-    },
-    {
-      pose: "meditate",
-      title: "Nobody hits",
-      line: "Rough week for everyone. Nobody loses a cent.",
-      body: (
-        <>
-          Everyone gets their stake back, <Money usd={formatUsdc(refund)} size="sm" /> each
-          in this example.
-        </>
-      ),
-    },
-  ];
-}
-
-/** The landing's three beats, one SPOTTER pose each. */
-export function CommitmentBeats() {
-  const beats = exampleBeats();
-  return (
-    <div className="space-y-5">
-      <p className="m-0 max-w-2xl text-[1.0625rem] text-muted">
-        Everyone in a run puts in the same stake. Your result depends only on
-        your own effort, verified by your wearable. It is Base Sepolia test
-        money while the app is in beta.
-      </p>
-      <ul className="m-0 grid gap-3 p-0 md:grid-cols-3">
-        {beats.map((beat) => (
-          <li key={beat.title} className="list-none">
-            <Card className="flex h-full flex-col gap-3">
-              <div className="flex items-end gap-3">
-                <Spotter pose={beat.pose} size="xs" decorative />
-                <SpotterCaption line={beat.line} />
-              </div>
-              <h3 className="m-0 text-[1.1875rem] font-semibold leading-snug">{beat.title}</h3>
-              <p className="m-0 text-[0.9375rem] leading-normal text-muted">{beat.body}</p>
-            </Card>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+//
+// No SPOTTER here: these lists sit on screens that already have their one
+// pose (docs/DESIGN.md, one pose per viewport). The landing's version is
+// components/landing/HowItPays.tsx, fed the same lib/commitment figures.
 
 /**
  * One line under a stake field: what a player who hits gets back, from
@@ -115,7 +32,7 @@ export function CommitmentRangeLine({
   const range = commitmentRange({ entryFee, players, sponsorPot, includeJoiner: true });
   const same = range.ifOnlyYou === range.ifEveryone;
   return (
-    <span className="block text-sm text-muted">
+    <span className="block text-sm leading-[1.45] text-muted">
       Hit it and you get your <Money usd={formatUsdc(entryFee)} size="sm" /> stake
       back
       {same ? (
@@ -133,8 +50,8 @@ export function CommitmentRangeLine({
 }
 
 /**
- * The terms before someone accepts a stake (the challenge page): the same
- * four facts, plain, with SPOTTER's one line on top.
+ * The terms before someone accepts a stake (the run page, the challenge
+ * page): the facts, plain, each outcome named first so the list scans.
  */
 export function CommitmentTermsList({
   entryFee,
@@ -147,27 +64,43 @@ export function CommitmentTermsList({
 }) {
   const range = commitmentRange({ entryFee, players, sponsorPot, includeJoiner: true });
   const stake = formatUsdc(entryFee);
+  const rows: readonly { term: string; body: ReactNode }[] = [
+    {
+      term: "Everyone",
+      body: (
+        <>
+          puts in the same stake, <Money usd={stake} size="sm" />. Your result
+          depends only on your own effort, verified by your wearable.
+        </>
+      ),
+    },
+    {
+      term: "You hit",
+      body: (
+        <>
+          your stake back plus an equal share of the missed stakes and any
+          sponsor pot, up to <Money usd={formatUsdc(range.ifOnlyYou)} size="sm" /> right
+          now.
+        </>
+      ),
+    },
+    {
+      term: "You miss",
+      body: "your stake goes to the players who hit. If your wearable sends nothing for the run, that is not a miss, and your stake comes back.",
+    },
+    { term: "Nobody hits", body: "everyone gets their stake back." },
+  ];
   return (
-    <div className="space-y-3">
-      <Spotter
-        pose="payday"
-        size="xs"
-        line="Your stake, your effort. Nobody else's night counts for you."
-        linePlacement="side"
-      />
-      <ul className="space-y-2 text-base">
-        <li>
-          Everyone puts in the same stake: <Money usd={stake} size="sm" />.
-        </li>
-        <li>Your result depends only on your own effort, verified by your wearable.</li>
-        <li>
-          Hit it: your stake back plus an equal share of the missed stakes and
-          any sponsor pot, up to <Money usd={formatUsdc(range.ifOnlyYou)} size="sm" />{" "}
-          right now. Miss it: your stake goes to the players who hit.
-        </li>
-        <li>Nobody hits: everyone gets their stake back.</li>
-        <li className="text-sm text-muted">Base Sepolia test money, beta.</li>
-      </ul>
+    <div>
+      <dl className="m-0 grid gap-2.5">
+        {rows.map((row) => (
+          <div key={row.term} className="text-[0.9375rem] leading-normal text-muted">
+            <dt className="inline font-semibold text-foreground">{row.term}: </dt>
+            <dd className="m-0 inline">{row.body}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="m-0 mt-3 text-[0.8125rem] text-haze">Base Sepolia test USDC, beta.</p>
     </div>
   );
 }
