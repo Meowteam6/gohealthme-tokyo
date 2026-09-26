@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, Vm} from "forge-std/Test.sol";
 import {HealthPoolsV3} from "../src/HealthPoolsV3.sol";
 
 /// @dev 6-decimal USDC mock. Optionally blacklists an address so transfers TO it
@@ -826,5 +826,132 @@ contract HealthPoolsV3Test is Test {
                 }
             }
         }
+    }
+
+    // ------------------------------------------ SPOTTER's miss rule (V4, 2026-09-26)
+    //
+    // The sequence the app now runs on a commitment pool, against the live V4
+    // configuration (oracle-only: healthVerdict = address(0)): the pass is
+    // recorded, the run ends, SPOTTER waits MISS_GRACE_HOURS (6h) for late
+    // syncs, records verdict=false for a player whose wearable covered the run
+    // and showed a miss, records NOTHING for a player with no data, then
+    // settles inside the 24h settler-only window. Asserted on USDC deltas.
+
+    uint256 internal constant MISS_GRACE = 6 hours;
+
+    /// @dev A fresh oracle-only pool contract, the V4 live shape.
+    function _oracleOnlyCommitment() internal returns (HealthPoolsV3 v4, uint256 poolId) {
+        v4 = new HealthPoolsV3(address(usdc), oracle, settler, address(0));
+        address[4] memory funded = [creator, alice, bob, carol];
+        for (uint256 i; i < funded.length; ++i) {
+            vm.prank(funded[i]);
+            usdc.approve(address(v4), type(uint256).max);
+        }
+        vm.prank(creator);
+        poolId = v4.createPool("Commit", "Sleep 7 hours for 1 night", FEE, uint64(block.timestamp), periodEnd, 2, 0);
+    }
+
+    function test_SpotterMiss_forfeitedStakeReachesTheAchiever_unrecordedIsRefunded() public {
+        (HealthPoolsV3 v4, uint256 poolId) = _oracleOnlyCommitment();
+        vm.prank(alice);
+        v4.joinPool(poolId); // hits
+        vm.prank(bob);
+        v4.joinPool(poolId); // wearable covered the run, goal not met
+        vm.prank(carol);
+        v4.joinPool(poolId); // wearable never synced: SPOTTER records nothing
+
+        vm.warp(periodEnd + 1);
+        uint16 oneX = uint16(v4.BPS()); // read before the prank, which the next call consumes
+        vm.prank(oracle);
+        v4.recordResult(poolId, alice, true, oneX);
+
+        // After the grace, before settle: the miss lands and says so on chain.
+        vm.warp(uint256(periodEnd) + MISS_GRACE);
+        vm.expectEmit(true, true, false, true, address(v4));
+        emit HealthPoolsV3.ResultRecorded(poolId, bob, false, 0);
+        vm.prank(oracle);
+        v4.recordResult(poolId, bob, false, 0);
+
+        // Still inside the settler-only window: nobody else can settle.
+        vm.warp(uint256(periodEnd) + MISS_GRACE + 1);
+        vm.expectRevert(bytes("NOT_SETTLER"));
+        vm.prank(carol);
+        v4.settle(poolId);
+
+        vm.recordLogs();
+        vm.prank(settler);
+        v4.settle(poolId);
+        _assertNoRefundFor(v4, poolId, bob);
+
+        // A result after settle is refused with plain SETTLED (the miss path
+        // treats it as terminal).
+        vm.expectRevert(bytes("SETTLED"));
+        vm.prank(oracle);
+        v4.recordResult(poolId, carol, false, 0);
+
+        // USDC deltas on withdraw: the achiever takes her stake plus the
+        // forfeited one; the no-data player gets exactly her stake back; the
+        // recorded miss gets nothing.
+        uint256 aliceBefore = usdc.balanceOf(alice);
+        vm.prank(alice);
+        v4.withdraw();
+        assertEq(usdc.balanceOf(alice) - aliceBefore, 2 * FEE, "achiever: own stake + the forfeited stake");
+
+        uint256 carolBefore = usdc.balanceOf(carol);
+        vm.prank(carol);
+        v4.withdraw();
+        assertEq(usdc.balanceOf(carol) - carolBefore, FEE, "no data, no miss: stake refunded (B-2)");
+
+        assertEq(v4.owed(bob), 0, "recorded miss: stake went to the player who hit");
+        vm.expectRevert(bytes("NOTHING_OWED"));
+        vm.prank(bob);
+        v4.withdraw();
+        assertEq(v4.getPool(poolId).balance, 0, "pot fully distributed");
+    }
+
+    function test_SpotterMiss_nobodyHit_everyRecordedMissIsRefunded() public {
+        (HealthPoolsV3 v4, uint256 poolId) = _oracleOnlyCommitment();
+        vm.prank(alice);
+        v4.joinPool(poolId);
+        vm.prank(bob);
+        v4.joinPool(poolId);
+
+        vm.warp(uint256(periodEnd) + MISS_GRACE);
+        vm.startPrank(oracle);
+        v4.recordResult(poolId, alice, false, 0);
+        v4.recordResult(poolId, bob, false, 0);
+        vm.stopPrank();
+
+        vm.warp(uint256(periodEnd) + MISS_GRACE + 1);
+        vm.prank(settler);
+        v4.settle(poolId);
+
+        for (uint256 i; i < 2; ++i) {
+            address who = i == 0 ? alice : bob;
+            uint256 before = usdc.balanceOf(who);
+            vm.prank(who);
+            v4.withdraw();
+            assertEq(usdc.balanceOf(who) - before, FEE, "nobody hit: every recorded miss is refunded");
+        }
+    }
+
+    function _assertNoRefundFor(HealthPoolsV3 v4, uint256 poolId, address who) internal view {
+        bytes32 refundSig = keccak256("RefundCredited(uint256,address,uint256)");
+        bytes32 paidSig = keccak256("AchieverPaid(uint256,address,uint256)");
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bool paidSomeone;
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].emitter != address(v4) || logs[i].topics.length < 3) continue;
+            if (uint256(logs[i].topics[1]) != poolId) continue;
+            address subject = address(uint160(uint256(logs[i].topics[2])));
+            if (logs[i].topics[0] == refundSig) {
+                assertTrue(subject != who, "a recorded miss is never refunded when someone hit");
+            }
+            if (logs[i].topics[0] == paidSig) {
+                assertTrue(subject != who, "a recorded miss is never paid");
+                paidSomeone = true;
+            }
+        }
+        assertTrue(paidSomeone, "the same settle paid the achiever (AchieverPaid)");
     }
 }
