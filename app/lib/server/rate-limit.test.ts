@@ -3,8 +3,16 @@
 // instance); what is tested is everything that would silently mis-tier a
 // money route, mis-read a client IP, or let the in-process fallback count
 // wrong — the failures that would make the limiter look present and be absent.
-import { describe, it, expect } from "vitest";
+import { beforeAll, describe, it, expect } from "vitest";
+import {
+  SignJWT,
+  createLocalJWKSet,
+  exportJWK,
+  generateKeyPair,
+  type CryptoKey,
+} from "jose";
 import { privateKeyToAccount } from "viem/accounts";
+import type { DynamicJwtOptions } from "@/lib/server/dynamic-jwt";
 import {
   MemoryRateLimiter,
   TIER_POLICIES,
@@ -206,6 +214,69 @@ describe("verifiedAddressBucket", () => {
     expect(
       await verifiedAddressBucket(new Request("https://x/api/agent/feed"), NOW),
     ).toBeNull();
+  });
+
+  describe("with a Dynamic session token", () => {
+    const ENV_ID = "0f2d7c1e-5a4b-4c3d-9e8f-123456789abc";
+    let dynamicKey: CryptoKey;
+    let options: DynamicJwtOptions;
+
+    beforeAll(async () => {
+      const pair = await generateKeyPair("RS256", { extractable: true });
+      dynamicKey = pair.privateKey;
+      const jwk = await exportJWK(pair.publicKey);
+      options = {
+        environmentId: ENV_ID,
+        jwks: createLocalJWKSet({ keys: [{ ...jwk, kid: "k", alg: "RS256" }] }),
+      };
+    });
+
+    async function bearerFor(wallet: string): Promise<string> {
+      const token = await new SignJWT({
+        environment_id: ENV_ID,
+        scope: "user:basic",
+        verified_credentials: [{ format: "blockchain", address: wallet }],
+      })
+        .setProtectedHeader({ alg: "RS256", kid: "k" })
+        .setExpirationTime(Math.floor(NOW / 1000) + 600)
+        .sign(dynamicKey);
+      return `Bearer ${token}`;
+    }
+
+    it("charges the wallet a valid token proves, like a signed request", async () => {
+      // A player on the token path must stay on the per-address money bucket;
+      // falling back to IP only would quietly loosen the money tier.
+      const request = new Request("https://x/api/balance/withdraw", {
+        headers: {
+          authorization: await bearerFor(VICTIM.address),
+          "x-gohealthme-address": VICTIM.address,
+        },
+      });
+      expect(await verifiedAddressBucket(request, NOW, options)).toBe(
+        VICTIM.address.toLowerCase(),
+      );
+    });
+
+    it("refuses to charge a wallet the token does not list", async () => {
+      const request = new Request("https://x/api/balance/withdraw", {
+        headers: {
+          authorization: await bearerFor(
+            privateKeyToAccount(
+              "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
+            ).address,
+          ),
+          "x-gohealthme-address": VICTIM.address,
+        },
+      });
+      expect(await verifiedAddressBucket(request, NOW, options)).toBeNull();
+    });
+
+    it("leaves a bearer that names no wallet (a cron secret) on the IP bucket", async () => {
+      const request = new Request("https://x/api/agent/sweep", {
+        headers: { authorization: "Bearer cron-secret" },
+      });
+      expect(await verifiedAddressBucket(request, NOW, options)).toBeNull();
+    });
   });
 });
 

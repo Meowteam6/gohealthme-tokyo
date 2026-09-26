@@ -27,9 +27,31 @@
 // renderings are pinned to each other by a test that imports both, so drift
 // fails the suite rather than the login.
 
+//
+// THE SESSION TOKEN COMES FIRST. A player Dynamic has already authenticated
+// holds a session token (a JWT) that lists every wallet they proved to it, and
+// lib/server/dynamic-jwt.ts accepts that token instead of a signature. So
+// before any prompt, getWalletAuth asks Dynamic for the token, decodes it
+// WITHOUT trusting it (the server is what verifies), and, when it lists the
+// connected wallet, sends `Authorization: Bearer <token>` plus the address
+// header. No wallet prompt at all. A wallet with no token, as a connect-only
+// external wallet may be, signs exactly as before. A token the server refuses
+// is remembered and not sent again, so the 401 retry signs once instead of
+// looping on the same token.
+
+import { decodeJwt } from "jose";
+
 export const WALLET_AUTH_ADDRESS_HEADER = "x-gohealthme-address";
 export const WALLET_AUTH_TIMESTAMP_HEADER = "x-gohealthme-timestamp";
 export const WALLET_AUTH_SIGNATURE_HEADER = "x-gohealthme-signature";
+export const WALLET_AUTH_AUTHORIZATION_HEADER = "authorization";
+
+/** Scope Dynamic grants once sign-in is complete (mirrors the server check). */
+const SESSION_REQUIRED_SCOPE = "user:basic";
+
+/** A token this close to expiry is not sent: it could expire in flight and
+ *  turn a working read into a 401 plus a prompt. */
+export const SESSION_TOKEN_EXPIRY_MARGIN_MS = 60 * 1000;
 
 /** How long a signed credential is reused. The server allows ten minutes;
  *  the two-minute margin covers client clock drift and a slow request. */
@@ -79,9 +101,69 @@ export function credentialUsableAt(
   return ageMs >= 0 && ageMs < CLIENT_WALLET_AUTH_TTL_MS;
 }
 
+/**
+ * Whether a Dynamic session token is worth sending for `address`: it lists the
+ * wallet as a blockchain credential, its sign-in is complete (user:basic), and
+ * it is not about to expire. Decoded, not verified: this only decides whether
+ * to try the token, and a wrong answer costs one 401 and a signature, never
+ * access. The server re-checks all of it against Dynamic's keys.
+ */
+export function sessionTokenCoversAddress(
+  token: string,
+  address: string,
+  nowMs: number,
+): boolean {
+  let payload: ReturnType<typeof decodeJwt>;
+  try {
+    payload = decodeJwt(token);
+  } catch {
+    return false;
+  }
+  if (typeof payload.exp !== "number") return false;
+  if (payload.exp * 1000 - nowMs <= SESSION_TOKEN_EXPIRY_MARGIN_MS) return false;
+  if (
+    typeof payload.scope !== "string" ||
+    !payload.scope.split(/\s+/).includes(SESSION_REQUIRED_SCOPE)
+  ) {
+    return false;
+  }
+  const credentials = payload.verified_credentials;
+  if (!Array.isArray(credentials)) return false;
+  const wanted = address.toLowerCase();
+  return credentials.some((credential: unknown) => {
+    if (typeof credential !== "object" || credential === null) return false;
+    const { format, address: listed } = credential as {
+      format?: unknown;
+      address?: unknown;
+    };
+    return (
+      format === "blockchain" &&
+      typeof listed === "string" &&
+      listed.toLowerCase() === wanted
+    );
+  });
+}
+
+/** The two headers the server reads on the session-token path. */
+export function sessionAuthHeaders(
+  token: string,
+  address: string,
+): Record<string, string> {
+  return {
+    [WALLET_AUTH_AUTHORIZATION_HEADER]: `Bearer ${token}`,
+    [WALLET_AUTH_ADDRESS_HEADER]: address,
+  };
+}
+
 export type ClientAuth =
-  /** Signed and fresh; `headers` goes straight onto a fetch. */
-  | { kind: "ok"; credential: WalletAuthCredential; headers: Record<string, string> }
+  /** Proven and fresh; `headers` goes straight onto a fetch. `credential` is
+   *  the signature when one was used, and null when the headers carry the
+   *  Dynamic session token instead. */
+  | {
+      kind: "ok";
+      credential: WalletAuthCredential | null;
+      headers: Record<string, string>;
+    }
   /** No wallet connected, so there is nobody to prove control of. */
   | { kind: "no-wallet" }
   /** Nothing cached and the caller asked not to prompt. Browse surfaces read
@@ -137,6 +219,9 @@ export function isUserRejection(err: unknown): boolean {
 
 export type SignMessageFn = (message: string) => Promise<string>;
 
+/** Reads Dynamic's session token (getAuthToken); undefined when signed out. */
+export type SessionTokenFn = () => string | null | undefined;
+
 // ------------------------------------------------------------------ the cache
 //
 // Keyed by lower-cased address so a wallet switch cannot serve the previous
@@ -147,11 +232,45 @@ export type SignMessageFn = (message: string) => Promise<string>;
 const credentials = new Map<string, WalletAuthCredential>();
 const inflight = new Map<string, Promise<ClientAuth>>();
 
+// Session tokens the server refused (a refresh was asked for while the token
+// was the thing being sent). Never sent again; the wallet signs instead. A
+// token Dynamic rotates in is a different string and gets its own try. Bounded
+// because a tab could in principle see many rotations.
+const refusedSessionTokens = new Set<string>();
+const MAX_REFUSED_SESSION_TOKENS = 8;
+
+/** Set aside the session token an auth result carried, if it carried one. */
+function refuseSessionTokenIn(auth: ClientAuth): void {
+  if (auth.kind !== "ok" || auth.credential !== null) return;
+  const header = auth.headers[WALLET_AUTH_AUTHORIZATION_HEADER] ?? "";
+  const token = header.replace(/^Bearer\s+/i, "").trim();
+  if (token === "") return;
+  refusedSessionTokens.add(token);
+  if (refusedSessionTokens.size > MAX_REFUSED_SESSION_TOKENS) {
+    const oldest = refusedSessionTokens.values().next().value;
+    if (oldest !== undefined) refusedSessionTokens.delete(oldest);
+  }
+}
+
+/** Dynamic's token, or null. Reading it must never break the signing path. */
+function readSessionToken(
+  getSessionToken: SessionTokenFn | null | undefined,
+): string | null {
+  if (getSessionToken === null || getSessionToken === undefined) return null;
+  try {
+    const token = getSessionToken();
+    return typeof token === "string" && token.trim() !== "" ? token.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Test seam and wallet-switch cleanup. Omit the address to drop everything. */
 export function clearWalletAuth(address?: string): void {
   if (address === undefined) {
     credentials.clear();
     inflight.clear();
+    refusedSessionTokens.clear();
     return;
   }
   const key = address.toLowerCase();
@@ -178,19 +297,25 @@ function ok(credential: WalletAuthCredential): ClientAuth {
 }
 
 /**
- * Produce (or reuse) a signature proving control of `address`.
+ * Produce (or reuse) proof of control of `address`: the Dynamic session token
+ * when it covers the wallet, otherwise a signature.
  *
  * Never throws: a declined prompt and a broken signer are states the UI has to
  * render, not exceptions to escape into a render. `refresh` forces a new
- * signature, which is what a 401 on a cached credential calls for.
+ * signature, which is what a 401 on a cached credential calls for; a token
+ * the server refused has already been set aside by the fetch that saw the
+ * 401, so the same refresh signs instead of resending it.
  */
 export async function getWalletAuth(params: {
   address: string | null;
   signMessage: SignMessageFn | null;
   refresh?: boolean;
   /** Use a cached credential if there is one, but never open a wallet prompt.
-   *  For surfaces the user did not ask to unlock. */
+   *  For surfaces the user did not ask to unlock. A session token that covers
+   *  the wallet counts as cached. */
   cachedOnly?: boolean;
+  /** Dynamic's getAuthToken. Omitted or null means signatures only. */
+  getSessionToken?: SessionTokenFn | null;
   now?: () => number;
 }): Promise<ClientAuth> {
   const { address, signMessage } = params;
@@ -199,6 +324,23 @@ export async function getWalletAuth(params: {
 
   const key = address.toLowerCase();
   if (params.refresh === true) clearWalletAuth(address);
+
+  // A refresh does NOT discard the session token: "Check my wearable" asks for
+  // one because the player tapped, and a good token must not turn that tap
+  // into a prompt. Only a 401 against the token itself (fetchWithWalletAuth,
+  // walletAuthFetch) marks it refused.
+  const sessionToken = readSessionToken(params.getSessionToken);
+  if (
+    sessionToken !== null &&
+    !refusedSessionTokens.has(sessionToken) &&
+    sessionTokenCoversAddress(sessionToken, address, now())
+  ) {
+    return {
+      kind: "ok",
+      credential: null,
+      headers: sessionAuthHeaders(sessionToken, address),
+    };
+  }
 
   const cached = cachedWalletAuth(address, now());
   if (cached !== null) return ok(cached);
@@ -271,7 +413,9 @@ export interface WalletAuthFetchResult {
  * what lets the UI say "a claim exists, sign to see it" instead of showing a
  * blank box. A 401 against a credential that WAS attached means the cached
  * signature aged past the server's window, so it is dropped and re-signed once
- * - a stale cache must never look like a permission failure.
+ * - a stale cache must never look like a permission failure. A 401 against a
+ * session token sets that token aside first, so the one retry is a signature
+ * and never the same token again: no loop, and nobody locked out.
  */
 export async function fetchWithWalletAuth(
   url: string,
@@ -295,6 +439,7 @@ export async function fetchWithWalletAuth(
     return { response, auth };
   }
 
+  refuseSessionTokenIn(auth);
   const retryAuth = await requestAuth({ refresh: true });
   if (retryAuth.kind !== "ok") return { response, auth: retryAuth };
   return { response: await send(retryAuth), auth: retryAuth };
@@ -349,19 +494,25 @@ export function walletAuthFetch(
     // surfaces that as a failure, which is the loud direction for a money
     // path. Silently dropping the call would look like a hung UI.
     const headers = auth.kind === "ok" ? auth.headers : {};
+    let response: Response;
     if (typeof input === "string" || input instanceof URL) {
       const merged = new Headers(init?.headers);
       for (const [name, value] of Object.entries(headers)) {
         merged.set(name, value);
       }
-      return fetchImpl(input, { ...init, headers: merged });
+      response = await fetchImpl(input, { ...init, headers: merged });
+    } else {
+      // A Request carries its own headers; merge rather than replace, or the
+      // SDK's content-type and accept headers are lost with the body.
+      const merged = new Headers(input.headers);
+      for (const [name, value] of Object.entries(headers)) {
+        merged.set(name, value);
+      }
+      response = await fetchImpl(new Request(input, { headers: merged }), init);
     }
-    // A Request carries its own headers; merge rather than replace, or the
-    // SDK's content-type and accept headers are lost with the body.
-    const merged = new Headers(input.headers);
-    for (const [name, value] of Object.entries(headers)) {
-      merged.set(name, value);
-    }
-    return fetchImpl(new Request(input, { headers: merged }), init);
+    // No retry here (the SDK owns the body), but a refused session token is
+    // set aside so the SDK's next call signs instead of repeating it.
+    if (response.status === 401) refuseSessionTokenIn(auth);
+    return response;
   };
 }

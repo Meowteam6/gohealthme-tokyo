@@ -199,7 +199,9 @@ export function sensorHoldCopy(
           (deviceLabel === null
             ? "Open your wearable's app so it syncs, then come back. "
             : `Open the ${deviceLabel} app so it syncs, then come back. `) +
-          "Checking asks your wallet for a signature, not a payment: nothing moves.",
+          // "may": a Dynamic session token checks with no prompt; only the
+          // signature fallback asks the wallet (lib/client-auth.ts).
+          "Checking may ask your wallet to sign; it never sends a payment.",
         fix: { kind: "check-sensor", label: "Check my wearable" },
         tone: "wait",
       };
