@@ -119,8 +119,22 @@ page prints the same deadline):
 | Var | Default | Meaning |
 |---|---|---|
 | `MISS_GRACE_HOURS` | `6` | hours after periodEnd before a miss may be recorded; clamped to 1..18 so the miss and the settle land inside the contract's 24h settler-only window (`SETTLE_GRACE`); a non-number falls back to 6 and logs once |
+| `MISS_RULE_FROM_POOL_ID` | unset (rule off) | the first pool id that can record a miss (`app/lib/miss-rule.ts`). Pools below it were joined under the "a miss is refunded" copy and keep that promise; their run pages say "this run cannot record a miss". Set it to `poolCount() + 1` read at the moment this copy deploys (`poolCount()` on `0x0B6E8D47...` was 5 on 2026-09-26, so 6 unless a pool is created first). Pool ids are per contract: a redeployed HealthPoolsV3 needs its own value. Unset or not a positive integer, no pool records a miss and the sweep logs it once |
 
 A change needs a redeploy (the value is inlined at build time).
+
+Review fixes (2026-09-26): the rule also refuses goals whose count is ambiguous (`5 of 7
+nights`, `twice`, no count) or disagrees with the pass path's reading, reads the provider
+pinned at periodStart (a provider switch after the run cannot hide real data), treats a
+night with no-data time or only a nap/short sleep as uncovered, requires the source that
+records workouts (not any source) to report every day of the run and something dated after
+it, and never records a miss the pass path (now on the same local-calendar window) would
+pay. A player whose wearable shows the hit holds the pool until they confirm it or
+`holdUntil` (periodEnd + grace + 2h). `cancelPool()` has no time guard, so a creator can
+still cancel a run after misses are recorded and before settle; every stake then comes back
+through `claimRefund()` (pinned by `test_SpotterMiss_creatorCancelAfterRecordedMiss_refundsTheMiss`,
+disclosed in the Terms). The real fix is contract-side for any redeploy: refuse `cancelPool`
+once any result is recorded, or after periodStart.
 
 ## Tokyo 2026 (ENSv2 Sepolia)
 

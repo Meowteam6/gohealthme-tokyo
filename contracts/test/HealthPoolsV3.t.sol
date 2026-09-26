@@ -935,6 +935,51 @@ contract HealthPoolsV3Test is Test {
         }
     }
 
+    /// @dev Pins the escape hatch the app discloses rather than closes (the
+    ///      deployed contract is unchanged): cancelPool() has no time guard, so
+    ///      a creator who staked on their own challenge and missed can cancel
+    ///      after SPOTTER recorded the miss and before settle, and every joiner,
+    ///      the recorded miss included, takes the stake back through
+    ///      claimRefund(). The achiever gets her stake and no share. A redeploy
+    ///      should refuse cancelPool once any result is recorded.
+    function test_SpotterMiss_creatorCancelAfterRecordedMiss_refundsTheMiss() public {
+        (HealthPoolsV3 v4, uint256 poolId) = _oracleOnlyCommitment();
+        vm.prank(creator);
+        v4.joinPool(poolId); // the creator's own self-staked challenge: misses
+        vm.prank(alice);
+        v4.joinPool(poolId); // hits
+
+        vm.warp(uint256(periodEnd) + MISS_GRACE);
+        uint16 oneX = uint16(v4.BPS());
+        vm.startPrank(oracle);
+        v4.recordResult(poolId, alice, true, oneX);
+        v4.recordResult(poolId, creator, false, 0);
+        vm.stopPrank();
+
+        // Still before settle (the pool waits out the miss grace): the
+        // creator can cancel.
+        vm.prank(creator);
+        v4.cancelPool(poolId);
+
+        uint256 creatorBefore = usdc.balanceOf(creator);
+        vm.prank(creator);
+        v4.claimRefund(poolId);
+        vm.prank(creator);
+        v4.withdraw();
+        assertEq(
+            usdc.balanceOf(creator) - creatorBefore,
+            FEE,
+            "a recorded miss is refunded in full after a cancel"
+        );
+
+        uint256 aliceBefore = usdc.balanceOf(alice);
+        vm.prank(alice);
+        v4.claimRefund(poolId);
+        vm.prank(alice);
+        v4.withdraw();
+        assertEq(usdc.balanceOf(alice) - aliceBefore, FEE, "the achiever gets her stake and no share");
+    }
+
     function _assertNoRefundFor(HealthPoolsV3 v4, uint256 poolId, address who) internal view {
         bytes32 refundSig = keccak256("RefundCredited(uint256,address,uint256)");
         bytes32 paidSig = keccak256("AchieverPaid(uint256,address,uint256)");
