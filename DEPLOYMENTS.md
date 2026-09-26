@@ -70,6 +70,29 @@ project; both values are the new contract address, never `0x66815e3A…`):
   - periodStart 1790368851 (Sat 2026-09-26 05:40 JST), periodEnd 1790472600 (Sun 2026-09-27 10:30 JST); settler-only until 1790559000 (Mon 2026-09-28 10:30 JST), then anyone
   - create tx https://sepolia.basescan.org/tx/0x9a2c22e4d866263b758a76702688c59587be05d7c36656e760affc5b83abe0f8
 
+### Gas drip for unsponsored wallets (Base Sepolia ETH)
+
+Email sign-in gives a Dynamic embedded wallet that is a plain EOA with 0 ETH; the CDP
+paymaster only sponsors smart accounts and `NEXT_PUBLIC_ENABLE_EMAIL_AA` stays off (it would
+change wallet addresses). Before an unsponsored wallet's first money-path write, the client
+(`app/lib/ensure-gas.ts`) calls `POST /api/gas/drip` (EIP-191 signed for the address), and
+the treasury (`TREASURY_PRIVATE_KEY`, refilled by the `treasury-topup` cron from the CDP
+faucet) sends it test ETH. Logic and caps: `app/lib/server/gas-drip.ts`. All treasury Base
+sends share one store lock (`treasury-base-sender`) so drips and USDC deliveries cannot
+collide on a nonce.
+
+Optional env (server only, wei; defaults in code):
+
+| Var | Default | Meaning |
+|---|---|---|
+| `GAS_DRIP_WEI` | `500000000000000` (0.0005 ETH) | sent per drip |
+| `GAS_DRIP_MIN_WEI` | `200000000000000` (0.0002 ETH) | a wallet at or above this gets nothing |
+| `GAS_DRIP_DAILY_BUDGET_WEI` | `30000000000000000` (0.03 ETH) | all drips together per UTC day |
+| `GAS_DRIP_TREASURY_FLOOR_WEI` | `10000000000000000` (0.01 ETH) | refuse (503) below this |
+
+Per address: at most 3 drips per UTC day (429). Refusals carry plain copy that names the
+next step (wait, or the Base Sepolia ETH faucet at portal.cdp.coinbase.com/products/faucet).
+
 ## Tokyo 2026 (ENSv2 Sepolia)
 
 ENSv2 on Ethereum Sepolia (chain 11155111), the 2026-09-15 deployment. Pools stay on Base Sepolia.

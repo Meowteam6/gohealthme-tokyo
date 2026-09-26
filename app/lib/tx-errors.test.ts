@@ -8,6 +8,8 @@ import {
   FUNDING_HELP_DETAIL,
   FUNDING_STEPS,
   JOIN_GAS_MARGIN,
+  NEEDS_GAS_TITLE,
+  GasDripRefusedError,
 } from "@/lib/tx-errors";
 
 // Realistic viem error shapes. viem nests the useful text (revert reason,
@@ -103,21 +105,66 @@ describe("humanizeTxError", () => {
     );
   });
 
-  it("maps the viem insufficient-funds dump to the funding message", () => {
+  // "insufficient funds for gas * price + value" is the node refusing a
+  // NATIVE balance shortfall. On Base that is ETH for gas, never USDC (an
+  // ERC-20 shortfall reverts with "transfer amount exceeds balance" instead).
+  it("maps the viem insufficient-funds dump to the gas message", () => {
     const result = humanizeTxError(viemError(INSUFFICIENT_FUNDS_FIXTURE));
-    expect(result.title).toBe("Not enough USDC");
-    expect(result.detail).toContain("Base Sepolia");
-    expect(result.detail).toContain("faucet.circle.com");
-    // Base pays the fee in ETH; the Arc-era "gas is USDC" line is gone.
+    expect(result.title).toBe(NEEDS_GAS_TITLE);
+    expect(result.needsGas).toBe(true);
     expect(result.detail).not.toMatch(/gas in USDC|Arc/i);
     expect(result.detail).not.toContain("viem");
   });
 
-  it("maps the bare node insufficient-funds message", () => {
+  it("maps the bare node insufficient-funds message to the gas message", () => {
     const result = humanizeTxError(
       viemError("insufficient funds for gas * price + value"),
     );
-    expect(result.title).toBe("Not enough USDC");
+    expect(result.title).toBe(NEEDS_GAS_TITLE);
+  });
+
+  it("maps the email-wallet zero-gas revert to the gas message, not try again", () => {
+    const result = humanizeTxError(
+      viemError(
+        "Execution reverted with reason: gas required exceeds allowance (0).",
+      ),
+    );
+    expect(result.title).toBe("Your wallet needs a little test ETH for gas");
+    expect(result.needsGas).toBe(true);
+    // The action is the drip, which the retry runs; not a bare "try again"
+    // and not the reassuring "Nothing was taken" revert line.
+    expect(result.detail).toMatch(/test ETH/);
+    expect(result.detail).not.toMatch(/Nothing was taken/);
+  });
+
+  it("finds the zero-gas reason nested in a cause", () => {
+    const result = humanizeTxError(
+      viemError(
+        "Transaction reverted.\n\nVersion: viem@2.52.0",
+        new Error("Execution reverted with reason: gas required exceeds allowance (0)."),
+      ),
+    );
+    expect(result.title).toBe(NEEDS_GAS_TITLE);
+  });
+
+  it("leaves a huge allowance (a simulated revert) to the revert rules", () => {
+    const result = humanizeTxError(
+      viemError("execution reverted: gas required exceeds allowance (30000000)"),
+    );
+    expect(result.title).not.toBe(NEEDS_GAS_TITLE);
+  });
+
+  it("shows a refused drip in plain words with the next step", () => {
+    const result = humanizeTxError(
+      new GasDripRefusedError(
+        "This wallet has had 3 gas top-ups today. Try again in about 5 hours, or get Base Sepolia ETH from the faucet.",
+        "address-cap",
+      ),
+    );
+    expect(result.title).toBe(NEEDS_GAS_TITLE);
+    expect(result.detail).toMatch(/Try again in about 5 hours/);
+    expect(result.detail).toMatch(/faucet/);
+    expect(result.needsGas).toBe(false);
   });
 
   it("maps an ERC-20 balance revert to the funding message", () => {

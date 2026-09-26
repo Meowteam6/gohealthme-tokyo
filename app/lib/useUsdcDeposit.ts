@@ -25,6 +25,7 @@ import {
   type GaslessStatus,
   type SponsoredCall,
 } from "@/lib/useGasSponsorship";
+import { useEnsureGas, withDripLine } from "@/lib/useEnsureGas";
 
 /**
  * SWAP POINT: Blink + Gateway deposit replaces this approve+write step
@@ -56,6 +57,9 @@ export type DepositCall =
 
 export type DepositStatus =
   | { kind: "idle" }
+  // An unsponsored wallet is being sent test ETH for gas before its first
+  // write; gasless.dripLine carries the status line.
+  | { kind: "fueling" }
   | { kind: "approving" }
   | { kind: "depositing" }
   // approveHash is null when a prior (max) approval was reused — no approve tx.
@@ -107,7 +111,9 @@ export interface UseUsdcDepositResult {
 export function useUsdcDeposit(): UseUsdcDepositResult {
   const { getArcWalletClient } = useEmbeddedWallet();
   const { address: connectedAddress } = useAccount();
-  const { status: gasless, sendSponsored } = useGasSponsorship();
+  const { status: sponsorship, sendSponsored } = useGasSponsorship();
+  const { dripLine, ensureGas } = useEnsureGas();
+  const gasless = withDripLine(sponsorship, dripLine);
   const [status, setStatus] = useState<DepositStatus>({ kind: "idle" });
   const [needsFunds, setNeedsFunds] = useState<DepositFundingGap | null>(null);
 
@@ -287,6 +293,13 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
           throw new Error("Wallet balance cannot cover this deposit.");
         }
 
+        // ---- Gas for an unsponsored wallet --------------------------------
+        // The email wallet is a plain EOA with 0 ETH and no paymaster. Every
+        // write below (approve, createPool, fundPool; a zero-funding create
+        // too) needs gas, so get it a little test ETH first.
+        setStatus({ kind: "fueling" });
+        await ensureGas(walletClient);
+
         // ---- Approve only if needed -------------------------------------
         // ERC-20 requires the pool contract to be approved before it can pull
         // USDC. We check the existing allowance first and, when an approval is
@@ -361,10 +374,19 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
         throw err instanceof Error ? err : new Error(human.detail);
       }
     },
-    [getArcWalletClient, gasless.willSponsor, sendSponsored, connectedAddress],
+    [
+      getArcWalletClient,
+      gasless.willSponsor,
+      sendSponsored,
+      connectedAddress,
+      ensureGas,
+    ],
   );
 
-  const busy = status.kind === "approving" || status.kind === "depositing";
+  const busy =
+    status.kind === "fueling" ||
+    status.kind === "approving" ||
+    status.kind === "depositing";
 
   return { status, busy, reset, runUsdcDeposit, needsFunds, gasless };
 }

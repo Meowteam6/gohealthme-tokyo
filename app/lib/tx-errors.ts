@@ -13,16 +13,62 @@ export interface HumanTxError {
   title: string;
   detail: string;
   raw: string;
+  /**
+   * The wallet ran out of Base Sepolia ETH for gas. Retrying the same action
+   * runs the gas drip first (lib/ensure-gas.ts), so the retry is the fix.
+   */
+  needsGas?: boolean;
+}
+
+/** Title for every "this wallet has no ETH for gas" state. */
+export const NEEDS_GAS_TITLE = "Your wallet needs a little test ETH for gas";
+
+/** The retry runs the drip, so the copy says so instead of "try again". */
+const NEEDS_GAS_DETAIL =
+  "This network charges a tiny fee in test ETH, and your wallet has none " +
+  "yet. Tap the button again: we send you a little test ETH for free first, " +
+  "then finish. No USDC moved.";
+
+/**
+ * Thrown by ensureGas when the drip route refused (daily cap, daily budget,
+ * treasury low). Its message is the server's plain sentence, which already
+ * names the next step (wait, or the Base Sepolia ETH faucet).
+ */
+export class GasDripRefusedError extends Error {
+  readonly reason: string;
+  constructor(message: string, reason: string) {
+    super(message);
+    this.name = "GasDripRefusedError";
+    this.reason = reason;
+  }
+}
+
+/**
+ * geth's "gas required exceeds allowance (N)": N is the gas the wallet's ETH
+ * balance can buy. A small N is an empty wallet. A block-sized N means the
+ * estimate itself failed (a revert), which the revert rules handle.
+ */
+const GAS_ALLOWANCE = /gas required exceeds allowance \((\d+)\)/i;
+const EMPTY_WALLET_ALLOWANCE_MAX = 1_000_000n;
+
+function isNativeGasShortfall(chain: string): boolean {
+  const allowance = GAS_ALLOWANCE.exec(chain);
+  if (allowance !== null && BigInt(allowance[1]) < EMPTY_WALLET_ALLOWANCE_MAX) {
+    return true;
+  }
+  return /insufficient funds for (?:gas|intrinsic transaction cost)|total cost \(gas \* gas fee \+ value\)[^\n]*exceeds the balance of the account/i.test(
+    chain,
+  );
 }
 
 // ------------------------------------------------------------ funding preflight
 
-// TODO(base-gas): the preflight below (JOIN_GAS_MARGIN, canCoverUsdcCosts)
-// still encodes the Arc-era "gas is paid in USDC" margin. Base gas is ETH and
-// the CDP paymaster sponsors smart-wallet users, so an EOA with USDC but no
-// ETH passes this check and fails at approve. The real fix is an ETH balance
-// check for non-sponsored wallets in JoinPool and useWithdraw. The user-facing
-// copy (FUNDING_STEPS, FUNDING_HELP_DETAIL) is already Base-correct.
+// The preflight below (JOIN_GAS_MARGIN, canCoverUsdcCosts) still carries the
+// Arc-era USDC gas margin; it only makes the USDC check slightly stricter.
+// Base gas is ETH: sponsored smart wallets pay none, and every non-sponsored
+// money path runs ensureGas (lib/ensure-gas.ts) before its first write, which
+// drips test ETH to a wallet that has none. The user-facing copy
+// (FUNDING_STEPS, FUNDING_HELP_DETAIL) is already Base-correct.
 
 /**
  * Gas headroom for a two-transaction flow (approve + write) on Arc testnet,
@@ -52,6 +98,12 @@ export const canCoverJoinCosts = canCoverUsdcCosts;
 
 /** The Circle testnet faucet. One canonical URL for every funding surface. */
 export const FAUCET_URL = "https://faucet.circle.com";
+
+/**
+ * Where a wallet gets Base Sepolia ETH for gas by hand, when the app's own gas
+ * drip (POST /api/gas/drip) has refused. The Circle faucet above is USDC only.
+ */
+export const ETH_FAUCET_URL = "https://portal.cdp.coinbase.com/products/faucet";
 
 /**
  * The funding steps, in the order a first-time user performs them. The faucet
@@ -356,6 +408,15 @@ function firstLine(text: string): string {
 export function humanizeTxError(err: unknown): HumanTxError {
   const raw = rawMessage(err);
   const chain = messageChain(err);
+
+  if (err instanceof GasDripRefusedError) {
+    return { title: NEEDS_GAS_TITLE, detail: err.message, raw: "", needsGas: false };
+  }
+  // Before the funding and revert rules: the node's text contains both
+  // "insufficient funds" and "reverted", and neither story is true here.
+  if (isNativeGasShortfall(chain)) {
+    return { title: NEEDS_GAS_TITLE, detail: NEEDS_GAS_DETAIL, raw, needsGas: true };
+  }
 
   // Configuration errors already carry a human first line - keep it.
   if (/is not configured/i.test(chain)) {

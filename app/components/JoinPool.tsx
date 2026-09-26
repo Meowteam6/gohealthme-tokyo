@@ -21,6 +21,7 @@ import {
   useGasSponsorship,
   type SponsoredCall,
 } from "@/lib/useGasSponsorship";
+import { useEnsureGas, withDripLine } from "@/lib/useEnsureGas";
 import { ErrorNote } from "@/components/ui";
 import FundingHelp from "@/components/FundingHelp";
 import GaslessBadge from "@/components/GaslessBadge";
@@ -46,7 +47,9 @@ function JoinPoolInner({
 }) {
   const { ready, authenticated, address, getArcWalletClient } =
     useEmbeddedWallet();
-  const { status: gasless, sendSponsored } = useGasSponsorship();
+  const { status: sponsorship, sendSponsored } = useGasSponsorship();
+  const { dripLine, ensureGas } = useEnsureGas();
+  const gasless = withDripLine(sponsorship, dripLine);
   const queryClient = useQueryClient();
   const [rawStatus, setStatus] = useState<JoinStatus>({ kind: "idle" });
 
@@ -157,6 +160,10 @@ function JoinPoolInner({
       // msg.sender (ALREADY_JOINED on reuse), so it takes only the poolId — no
       // caller-supplied nullifier. World ID was removed in the Base build.
       const walletClient = await getArcWalletClient();
+      // An unsponsored wallet (the email EOA) pays its own gas. Make sure it
+      // has some before the approve, or the first write fails with
+      // "gas required exceeds allowance (0)" and no retry can help.
+      await ensureGas(walletClient);
       setStatus({ kind: "joining" });
 
       // Entry-fee pools pull USDC on join; approve that amount first.

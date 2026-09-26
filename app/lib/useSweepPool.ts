@@ -26,6 +26,7 @@ import {
   type GaslessStatus,
   type SponsoredCall,
 } from "@/lib/useGasSponsorship";
+import { useEnsureGas, withDripLine } from "@/lib/useEnsureGas";
 
 export type SweepStatus =
   | { kind: "idle" }
@@ -67,7 +68,9 @@ const NOT_CONFIGURED =
 export function useSweepPool(): UseSweepPoolResult {
   const { getArcWalletClient } = useEmbeddedWallet();
   const { address: connectedAddress } = useAccount();
-  const { status: gasless, sendSponsored } = useGasSponsorship();
+  const { status: sponsorship, sendSponsored } = useGasSponsorship();
+  const { dripLine, ensureGas } = useEnsureGas();
+  const gasless = withDripLine(sponsorship, dripLine);
   const [status, setStatus] = useState<SweepStatus>({ kind: "idle" });
 
   const reset = useCallback(() => {
@@ -110,6 +113,9 @@ export function useSweepPool(): UseSweepPoolResult {
         const publicClient = getArcPublicClient();
         const creator = walletClient.account.address;
         setStatus({ kind: "sweeping" });
+        // An unsponsored wallet (the email EOA) pays its own gas: make sure it
+        // has some, or this write fails with "gas required exceeds allowance (0)".
+        await ensureGas(walletClient);
         const txHash = await walletClient.writeContract({
           address: poolsAddress,
           abi: healthPoolsAbi,
@@ -130,7 +136,7 @@ export function useSweepPool(): UseSweepPoolResult {
         throw err instanceof Error ? err : new Error(human.detail);
       }
     },
-    [getArcWalletClient, gasless.willSponsor, sendSponsored, connectedAddress],
+    [getArcWalletClient, gasless.willSponsor, sendSponsored, connectedAddress, ensureGas],
   );
 
   return { status, busy: status.kind === "sweeping", reset, gasless, sweep };
