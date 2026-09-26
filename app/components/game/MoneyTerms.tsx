@@ -11,7 +11,8 @@
 import type { ReactNode } from "react";
 import { Glyph, type GlyphName } from "@/components/run/glyphs";
 import { Skeleton } from "@/components/ui";
-import type { MissChip, MoneyCopy, MoneyTermKey } from "@/lib/game/money-flow";
+import type { MissChip } from "@/lib/commitment-copy";
+import type { MoneyCopy, MoneyTermKey } from "@/lib/game/money-flow";
 
 const CHIP =
   "inline-flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-tag px-2.5 text-[0.8125rem] font-semibold";

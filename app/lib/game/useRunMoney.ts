@@ -7,15 +7,10 @@
 // join, the gate and the money paths are untouched.
 
 import { useQuery } from "@tanstack/react-query";
+import type { MissChip } from "@/lib/commitment-copy";
 import { fetchParticipant, type PoolInfo } from "@/lib/contract";
 import { sponsorPotOf } from "@/lib/game/commitment-copy";
-import {
-  momentLabel,
-  runMoneyOf,
-  type FlowKind,
-  type MissChip,
-  type MoneyCopy,
-} from "@/lib/game/money-flow";
+import { momentLabel, runMoneyOf, type FlowKind, type MoneyCopy } from "@/lib/game/money-flow";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
 import { missConfirmByMs } from "@/lib/miss-grace";
 import { missRulePool } from "@/lib/miss-rule";

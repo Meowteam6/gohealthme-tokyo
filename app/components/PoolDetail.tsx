@@ -9,6 +9,7 @@ import EvidenceUpload from "@/components/EvidenceUpload";
 import { useDocumentProofAvailable } from "@/lib/useProofStatus";
 import WearableCheck from "@/components/WearableCheck";
 import ChallengeInviteShare from "@/components/ChallengeInviteShare";
+import type { ChipInTerms } from "@/components/ChipInWarning";
 import ClaimPayout from "@/components/ClaimPayout";
 import {
   ButtonLink,
@@ -94,6 +95,12 @@ import { verdictShowsClaim, type VerdictScreen } from "@/lib/game/verdict";
 import SweepLeftover from "@/components/SweepLeftover";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { darePot } from "@/lib/challenges";
+import {
+  challengeRunKindOf,
+  creatorStakedIn,
+  inviteShareOf,
+  type ChallengeRunKind,
+} from "@/lib/game/money-sharing";
 import { recordsMissesOf, sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
 import { missRulePool, missRuleReading } from "@/lib/miss-rule";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
@@ -529,6 +536,19 @@ export default function PoolDetail({ id }: { id: string }) {
     includeJoiner: !joined,
     viewer: address,
     feeBps: commitmentFee.bps,
+  });
+  // The creator's ENS name for the chip-in warning ("if nobody hits, it goes
+  // to {creator}"); the same cache key Who's in uses, so no second read.
+  const creatorAddress = poolQuery.data?.pool.creator ?? null;
+  const creatorNameQuery = useQuery({
+    queryKey: ["ens-name", creatorAddress?.toLowerCase() ?? ""],
+    queryFn: () => {
+      if (creatorAddress === null) throw new Error("No creator yet.");
+      return resolveOnce(creatorAddress, fetchResolvedName);
+    },
+    enabled: creatorAddress !== null,
+    staleTime: 5 * 60_000,
+    retry: false,
   });
 
   if (poolId === null) {
@@ -1358,6 +1378,36 @@ export default function PoolDetail({ id }: { id: string }) {
     pot: formatUsdc(p.balance),
   }));
 
+  // -------------------------------------------------------------- Sharing
+
+  // A challenge run is stake on yourself (the creator staked: "Match my
+  // stake" / "Back me") or a reward challenge (lib/game/money-sharing).
+  // Unknown until the player list reads, and then no share card guesses.
+  const { prize: challengePrize } = darePot({
+    balance: pool.balance,
+    entryFee: pool.entryFee,
+    participantCount,
+    settled: pool.settled,
+    cancelled: pool.cancelled,
+  });
+  const creatorStaked =
+    participantsQuery.data !== undefined && creatorStakedIn(pool.creator, participantsQuery.data);
+  const challengeKind: ChallengeRunKind | null =
+    participantsQuery.data !== undefined
+      ? challengeRunKindOf({ creatorStaked, reward: challengePrize })
+      : null;
+  // A challenge's creator is someone the viewer knows; a public run's is not,
+  // so an address with no ENS name there says whose it is.
+  const creatorShort = `${pool.creator.slice(0, 6)}...${pool.creator.slice(-4)}`;
+  const creatorName =
+    creatorNameQuery.data ?? (isChallenge ? creatorShort : `the run's creator (${creatorShort})`);
+  const chipIn: ChipInTerms = {
+    bountyModel: pool.bountyModel,
+    creator: { name: creatorName, you: isCreator },
+    selfStake: isChallenge && creatorStaked,
+    stakers: participantCount,
+  };
+
   return (
     <>
       <LightsOut on={joined && live} />
@@ -1373,13 +1423,13 @@ export default function PoolDetail({ id }: { id: string }) {
         {/* A challenge's link is its PRIVATE /c/<token> invite and pool ids
             are walkable, so only the creator gets it, revealed after a
             one-tap signature. Public runs share from Who's in. */}
-        {isChallenge && isCreator && address !== null ? (
+        {isChallenge && isCreator && address !== null && challengeKind !== null ? (
           <Card as="section" aria-labelledby="send-h">
             <h2 id="send-h" className="m-0 text-[1.0625rem] font-semibold">
-              Send the challenge
+              {inviteShareOf(challengeKind).heading}
             </h2>
             <div className="mt-3">
-              <ChallengeInviteShare poolId={pool.id} address={address} />
+              <ChallengeInviteShare poolId={pool.id} address={address} kind={challengeKind} />
             </div>
           </Card>
         ) : null}
@@ -1405,24 +1455,19 @@ export default function PoolDetail({ id }: { id: string }) {
 
         {!over && canPay && !fundingPaused ? (
           isChallenge ? (
-            // A challenge pool's top-up must carry the sweep disclosure: miss
-            // the goal and sweep() returns the whole pot to the challenger,
-            // not pro-rata to contributors. ChallengeContribute states that
-            // before anyone can add.
-            <ChallengeContribute
-              poolId={pool.id}
-              prizeUsd={(() => {
+            // A challenge pool's top-up must carry the sweep disclosure: if
+            // nobody hits, sweep() hands the pot to the creator (on a
+            // stake-on-yourself run, the person backed), never pro-rata to
+            // contributors. ChipInWarning states that before anyone can add.
+            challengeKind !== null ? (
+              <ChallengeContribute
+                poolId={pool.id}
                 // The prize net of every player's own stake, never raw balance.
-                const { prize } = darePot({
-                  balance: pool.balance,
-                  entryFee: pool.entryFee,
-                  participantCount,
-                  settled: pool.settled,
-                  cancelled: pool.cancelled,
-                });
-                return prize !== null ? formatUsdc(prize) : null;
-              })()}
-            />
+                prizeUsd={challengePrize !== null ? formatUsdc(challengePrize) : null}
+                kind={challengeKind}
+                chipIn={chipIn}
+              />
+            ) : null
           ) : (
             <Card as="section" aria-labelledby="pot-h">
               <details className="group">
@@ -1437,12 +1482,9 @@ export default function PoolDetail({ id }: { id: string }) {
                   <FundPool
                     poolId={pool.id}
                     heading="Add test USDC to this run's pot"
-                    description={
-                      recordsMisses
-                        ? "Anyone can add to the pot. Players who hit split it with the missed stakes."
-                        : "Anyone can add to the pot. Players who hit split it equally."
-                    }
+                    description="Anyone can add to the pot. It is paid out when the run settles."
                     ctaLabel="Approve and add to the pot"
+                    chipIn={chipIn}
                   />
                 </div>
               </details>

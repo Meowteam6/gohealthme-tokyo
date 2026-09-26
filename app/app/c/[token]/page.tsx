@@ -22,6 +22,7 @@ import {
   darePot,
   isBackerView,
 } from "@/lib/challenges";
+import { challengeRunKindOf, creatorStakedIn } from "@/lib/game/money-sharing";
 import { missRulePool } from "@/lib/miss-rule";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
 import { approvalModeStatus } from "@/lib/server/agent/approval-mode-status";
@@ -50,11 +51,19 @@ function nowUnixSeconds(): bigint {
 // This is a private, person-aimed link. It must never be indexed, and its
 // title/description must never leak the goal (which is health-adjacent) into a
 // search result or a link-preview card. The goal is visible ON the page only,
-// behind the unguessable token. Title stays deliberately neutral.
-export const metadata: Metadata = {
-  title: "You've been challenged",
-  robots: NOINDEX,
-};
+// behind the unguessable token. Title stays deliberately neutral; a "Back me"
+// link previews as backing, never as being challenged.
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  const backer = isBackerView((await searchParams).as);
+  return {
+    title: backer ? "Back a friend" : "You've been challenged",
+    robots: NOINDEX,
+  };
+}
 
 export default async function ChallengeLandingPage({
   params,
@@ -114,11 +123,11 @@ export default async function ChallengeLandingPage({
   // Best-effort reads for the money line. A miss leaves that figure unknown
   // (PrizeLine then says less), never wrong.
   const [participants, funding, feeBps] = await Promise.all([
-    fetchParticipants(poolIdBig).catch(() => null),
+    fetchParticipants(poolIdBig).catch((): string[] | null => null),
     fetchPoolFunding(poolIdBig).catch((): PoolFunding | null => null),
     fetchCommitmentFeeBps().catch(() => null),
   ]);
-  const participantCount = participants !== null ? participants.length : null;
+  const participantCount = participants?.length ?? null;
   const pot = darePot({
     balance: pool.balance,
     entryFee: pool.entryFee,
@@ -149,6 +158,17 @@ export default async function ChallengeLandingPage({
   const paused = pauseReason !== null;
   const canGrow = phase === "live" && canPay && !paused;
 
+  // Stake on yourself ("Match my stake" / "Back me") or a reward challenge,
+  // told apart by the creator's own stake (lib/game/money-sharing). The chip-in
+  // warning names the creator: on a stake-on-yourself run, the person backed.
+  const creatorStaked =
+    participants !== null && creatorStakedIn(pool.creator, participants);
+  const kind = challengeRunKindOf({
+    creatorStaked,
+    reward: pot.prize,
+    named: challenge.targetHandle !== null || challenge.message !== null,
+  });
+
   // The commitment terms before the accept, only for a commitment pool
   // (bountyModel 2) that is live, can pay and is not paused, and only from
   // numbers read from chain: the entry fee, the players already in and the
@@ -168,20 +188,24 @@ export default async function ChallengeLandingPage({
           recordsMisses: missRulePool(pool).ok,
           // A challenger who staked in their own run is asking friends to
           // match it (stake on yourself), not offering a reward.
-          creatorStaked:
-            participants !== null
-              ? participants.some((a) => a.toLowerCase() === pool.creator.toLowerCase())
-              : null,
+          creatorStaked: participants !== null ? creatorStaked : null,
           feeBps,
         }
       : null;
 
   const target =
     challenge.targetHandle !== null ? `@${challenge.targetHandle}` : "their friend";
+  const chipIn = {
+    bountyModel: pool.bountyModel,
+    creator: { name: challengerName, you: false },
+    selfStake: creatorStaked,
+    stakers: participantCount,
+  };
 
   if (backer) {
     return (
       <BackerView
+        kind={kind}
         token={token}
         poolId={poolIdBig}
         challengerName={challengerName}
@@ -190,6 +214,7 @@ export default async function ChallengeLandingPage({
         pot={pot}
         backers={contributorNames}
         canGrow={canGrow}
+        chipIn={chipIn}
       />
     );
   }
@@ -204,6 +229,7 @@ export default async function ChallengeLandingPage({
         returnTo={`/c/${token}`}
         intro={
           <ChallengeIntro
+            kind={kind}
             challengerName={challengerName}
             seed={pot.seed}
             targetHandle={challenge.targetHandle}
@@ -226,8 +252,10 @@ export default async function ChallengeLandingPage({
           <ChallengeContribute
             poolId={poolIdBig}
             prizeUsd={pot.prize !== null ? formatUsdc(pot.prize) : null}
+            kind={kind}
+            chipIn={chipIn}
           />
-          <RallyCard token={token} />
+          <RallyCard token={token} kind={kind} name={challengerName} />
         </>
       ) : phase === "live" && canPay && pauseReason !== null ? (
         <ChallengePausedCard reason={pauseReason} />

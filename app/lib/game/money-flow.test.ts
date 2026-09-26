@@ -3,7 +3,6 @@ import {
   challengeCopy,
   flowKindOf,
   groupRunCopy,
-  missConsequence,
   missDetailOf,
   momentLabel,
   runMoneyOf,
@@ -74,14 +73,9 @@ describe("flowKindOf", () => {
   });
 });
 
-describe("missConsequence", () => {
-  it("says goes to who hits only on a recordable run with two or more stakers", () => {
-    expect(missConsequence({ players: 2, recordable: true })).toBe("Miss: goes to who hits");
-    expect(missConsequence({ players: 1, recordable: true })).toBe("Miss: stake back");
-    expect(missConsequence({ players: 5, recordable: false })).toBe("Miss: stake back");
-    expect(missConsequence({ players: 0, recordable: true })).toBe("Miss: stake back");
-  });
-
+// The miss chip's rule (missConsequence) lives in lib/commitment-copy.ts and
+// is pinned in lib/commitment-copy.test.ts; only the head count is here.
+describe("stakersAfter", () => {
   it("counts the reader when they are about to stake", () => {
     expect(stakersAfter(1, true)).toBe(2);
     expect(stakersAfter(1, false)).toBe(1);

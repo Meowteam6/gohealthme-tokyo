@@ -22,10 +22,15 @@ import {
   ChallengePausedCard,
   RallyCard,
 } from "@/components/challenges/ChallengeLanding";
-import ChallengeInviteShare from "@/components/ChallengeInviteShare";
+import ChallengeInviteShare, { InviteLinks } from "@/components/ChallengeInviteShare";
+import ChipInWarning from "@/components/ChipInWarning";
 import { PAGE_COLUMN } from "@/components/night/kit";
 import { Card, ErrorNote, Skeleton } from "@/components/ui";
 import type { PoolInfo } from "@/lib/contract";
+import { inviteShareOf } from "@/lib/game/money-sharing";
+
+const SELF_SHARE = inviteShareOf("self");
+const selfLinks = SELF_SHARE.kind === "links" ? SELF_SHARE.links : [];
 
 // Challenges states for the dev gallery: /challenges signed out, loading,
 // empty, paused, with challenges on both sides, and a failed read. The cards
@@ -180,15 +185,44 @@ export default function ChallengeStates({ meta }: SectionProps) {
         />
       </StateFrame>
 
-      <StateFrame name="challenge-accept" note="/c/[token]: the intro above the lobby, terms from chain">
+      <StateFrame name="challenge-accept" note="/c/[token], reward challenge, nobody in yet: a lone miss comes back">
         <div className={PAGE_COLUMN}>
           <ChallengeIntro
+            kind="reward"
             challengerName="mika.gohealthme.eth"
             seed={5n * USDC}
             targetHandle="andre"
             message="You said you'd start Monday. It's Monday."
-            terms={{ entryFee: 1n * USDC, players: 1, sponsorPot: 5n * USDC, recordsMisses: true }}
+            terms={{ entryFee: 1n * USDC, players: 0, sponsorPot: 5n * USDC, recordsMisses: true }}
             backers={["nikki.gohealthme.eth", "0x51f2...a90c"]}
+          />
+        </div>
+      </StateFrame>
+
+      <StateFrame name="challenge-accept-forwarded" note="reward challenge whose link 2 people already accepted: a miss goes to who hits">
+        <div className={PAGE_COLUMN}>
+          <ChallengeIntro
+            kind="reward"
+            challengerName="mika.gohealthme.eth"
+            seed={5n * USDC}
+            targetHandle="andre"
+            message={null}
+            terms={{ entryFee: 1n * USDC, players: 2, sponsorPot: 5n * USDC, recordsMisses: true }}
+            backers={[]}
+          />
+        </div>
+      </StateFrame>
+
+      <StateFrame name="challenge-accept-match" note="the Match my stake link: the creator staked on themselves">
+        <div className={PAGE_COLUMN}>
+          <ChallengeIntro
+            kind="self"
+            challengerName="mika.gohealthme.eth"
+            seed={0n}
+            targetHandle={null}
+            message={null}
+            terms={{ entryFee: 1n * USDC, players: 1, sponsorPot: 0n, recordsMisses: true }}
+            backers={["nikki.gohealthme.eth"]}
           />
         </div>
       </StateFrame>
@@ -196,6 +230,7 @@ export default function ChallengeStates({ meta }: SectionProps) {
       <StateFrame name="challenge-accept-no-terms" note="a read missed: no invented terms, no seed figure">
         <div className={PAGE_COLUMN}>
           <ChallengeIntro
+            kind="reward"
             challengerName="0x8a39...6141"
             seed={null}
             targetHandle={null}
@@ -208,7 +243,18 @@ export default function ChallengeStates({ meta }: SectionProps) {
 
       <StateFrame name="challenge-grow" note="/c/[token] under the lobby: chip in and rally, while it can pay">
         <div className={`${PAGE_COLUMN} [&>*+*]:mt-8`}>
-          <RallyCard token="fixture-token-0000000000000000" />
+          <RallyCard token="fixture-token-0000000000000000" kind="reward" name="mika.gohealthme.eth" />
+          <RallyCard token="fixture-token-0000000000000000" kind="self" name="mika.gohealthme.eth" />
+        </div>
+      </StateFrame>
+
+      <StateFrame name="chip-in-warnings" note="the one chip-in warning, per bounty model and viewer">
+        <div className={`${PAGE_COLUMN} [&>*+*]:mt-4`}>
+          <ChipInWarning bountyModel={2} creator={{ name: "0xA56e...7F2D", you: false }} selfStake={false} stakers={3} />
+          <ChipInWarning bountyModel={2} creator={{ name: "mika.gohealthme.eth", you: false }} selfStake stakers={1} />
+          <ChipInWarning bountyModel={0} creator={{ name: "acme.gohealthme.eth", you: false }} selfStake={false} stakers={4} />
+          <ChipInWarning bountyModel={1} creator={{ name: "acme.gohealthme.eth", you: false }} selfStake={false} stakers={4} />
+          <ChipInWarning bountyModel={2} creator={{ name: "mika.gohealthme.eth", you: true }} selfStake stakers={1} />
         </div>
       </StateFrame>
 
@@ -218,8 +264,9 @@ export default function ChallengeStates({ meta }: SectionProps) {
         </div>
       </StateFrame>
 
-      <StateFrame name="challenge-backer" note="/c/[token]?as=backer: chip in, never accept">
+      <StateFrame name="challenge-backer" note="/c/[token]?as=backer on a reward challenge: chip in, never accept">
         <BackerView
+          kind="reward"
           token="fixture-token-0000000000000000"
           poolId={44n}
           challengerName="mika.gohealthme.eth"
@@ -228,11 +275,28 @@ export default function ChallengeStates({ meta }: SectionProps) {
           pot={{ prize: 7n * USDC, stakes: 1n * USDC, seed: 5n * USDC }}
           backers={["nikki.gohealthme.eth"]}
           canGrow
+          chipIn={{ bountyModel: 2, creator: { name: "mika.gohealthme.eth", you: false }, selfStake: false, stakers: 1 }}
+        />
+      </StateFrame>
+
+      <StateFrame name="challenge-backer-self" note="the Back me link: Back {name}, and a lone staker gets the chip-in hit or miss">
+        <BackerView
+          kind="self"
+          token="fixture-token-0000000000000000"
+          poolId={45n}
+          challengerName="mika.gohealthme.eth"
+          target="their friend"
+          message={null}
+          pot={{ prize: 2n * USDC, stakes: 1n * USDC, seed: 0n }}
+          backers={["nikki.gohealthme.eth"]}
+          canGrow
+          chipIn={{ bountyModel: 2, creator: { name: "mika.gohealthme.eth", you: false }, selfStake: true, stakers: 1 }}
         />
       </StateFrame>
 
       <StateFrame name="challenge-backer-closed" note="window closed, paid out, or cannot pay here">
         <BackerView
+          kind="reward"
           token="fixture-token-0000000000000000"
           poolId={44n}
           challengerName="mika.gohealthme.eth"
@@ -241,6 +305,7 @@ export default function ChallengeStates({ meta }: SectionProps) {
           pot={{ prize: null, stakes: null, seed: null }}
           backers={[]}
           canGrow={false}
+          chipIn={{ bountyModel: 2, creator: { name: "mika.gohealthme.eth", you: false }, selfStake: false, stakers: null }}
         />
       </StateFrame>
 
@@ -248,10 +313,46 @@ export default function ChallengeStates({ meta }: SectionProps) {
         <ChallengeInvalid />
       </StateFrame>
 
-      <StateFrame name="challenge-invite" note="the creator's own invite link, before the one signature">
+      <StateFrame name="challenge-invite" note="stake on yourself, the creator's links before the one signature">
         <div className={PAGE_COLUMN}>
           <Card>
-            <ChallengeInviteShare poolId={44n} address="0x8a39000000000000000000000000000000006141" />
+            <h2 className="m-0 text-[1.0625rem] font-semibold">{inviteShareOf("self").heading}</h2>
+            <div className="mt-3">
+              <ChallengeInviteShare poolId={45n} address="0x8a39000000000000000000000000000000006141" kind="self" />
+            </div>
+          </Card>
+        </div>
+      </StateFrame>
+
+      <StateFrame name="challenge-invite-links" note="stake on yourself, after the signature: Match my stake and Back me">
+        <div className={PAGE_COLUMN}>
+          <Card>
+            <h2 className="m-0 text-[1.0625rem] font-semibold">{inviteShareOf("self").heading}</h2>
+            <div className="mt-3">
+              <InviteLinks links={selfLinks} token="fixture-token-0000000000000000" />
+            </div>
+          </Card>
+        </div>
+      </StateFrame>
+
+      <StateFrame name="challenge-invite-reward" note="reward challenge, the one accept link">
+        <div className={PAGE_COLUMN}>
+          <Card>
+            <h2 className="m-0 text-[1.0625rem] font-semibold">{inviteShareOf("reward").heading}</h2>
+            <div className="mt-3">
+              <ChallengeInviteShare poolId={44n} address="0x8a39000000000000000000000000000000006141" kind="reward" />
+            </div>
+          </Card>
+        </div>
+      </StateFrame>
+
+      <StateFrame name="challenge-invite-unstaked" note="stake on yourself, creator not locked in yet: no link, and why">
+        <div className={PAGE_COLUMN}>
+          <Card>
+            <h2 className="m-0 text-[1.0625rem] font-semibold">{inviteShareOf("unstaked").heading}</h2>
+            <div className="mt-3">
+              <ChallengeInviteShare poolId={46n} address="0x8a39000000000000000000000000000000006141" kind="unstaked" />
+            </div>
           </Card>
         </div>
       </StateFrame>

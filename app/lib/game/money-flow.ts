@@ -13,10 +13,12 @@
 //
 // The miss chip is the one fact a player must see before a stake: a miss goes
 // to the players who hit only on a run the miss rule covers (lib/miss-rule.ts)
-// with at least two stakers. Everything else gives the stake back. Voice:
-// stake, challenge, pot; never bet, wager or odds.
+// with at least two stakers. Everything else gives the stake back. That rule
+// lives in lib/commitment-copy.ts (missConsequence), the one place every
+// surface reads it from. Voice: stake, challenge, pot; never bet, wager or odds.
 
 import { commitmentOutcome, commitmentRange } from "@/lib/commitment";
+import { missConsequence, type MissChip } from "@/lib/commitment-copy";
 import { formatUsdc } from "@/lib/contract";
 
 export type FlowId = "F1" | "F2" | "F3" | "F4" | "F5";
@@ -80,19 +82,8 @@ export function flowKindOf(
   };
 }
 
-export type MissChip = "Miss: stake back" | "Miss: goes to who hits";
-
-/**
- * The miss chip. A miss goes to the players who hit only on a run that can
- * record one (missRulePool(pool).ok) and has at least two stakers; with one
- * staker there is nobody else to hit, so the stake comes back. `players`
- * counts the reader when they are about to stake (stakersAfter).
- */
-export function missConsequence(input: { players: number; recordable: boolean }): MissChip {
-  return input.recordable && input.players >= 2 ? "Miss: goes to who hits" : "Miss: stake back";
-}
-
-/** Stakers once the reader is in: the count now, plus them when about to join. */
+/** Stakers once the reader is in: the count now, plus them when about to join.
+ *  This is the `players` the miss chip (missConsequence) counts. */
 export function stakersAfter(players: number, includeJoiner: boolean): number {
   return players + (includeJoiner ? 1 : 0);
 }
