@@ -196,11 +196,11 @@ export function sensorHoldCopy(
       return {
         title: "Your wearable has not synced yet",
         detail:
-          `${capitalise(device)} is linked, and nothing has come through from it yet, ` +
-          "so I cannot tell what it measures. Open your wearable's own app so it " +
-          "syncs, then check again. Runs open once I can see what it tracks, " +
-          "before you stake anything.",
-        fix: { kind: "check-sensor", label: "Check again" },
+          (deviceLabel === null
+            ? "Open your wearable's app so it syncs, then come back. "
+            : `Open the ${deviceLabel} app so it syncs, then come back. `) +
+          "Checking asks your wallet for a signature, not a payment: nothing moves.",
+        fix: { kind: "check-sensor", label: "Check my wearable" },
         tone: "wait",
       };
     case "unreadable":
@@ -210,7 +210,7 @@ export function sensorHoldCopy(
           `${capitalise(device)} is linked and nothing is wrong on your side. ` +
           "It is not telling me what it measures this minute, so wearable runs " +
           "stay locked until it answers. Check again shortly.",
-        fix: { kind: "check-sensor", label: "Check again" },
+        fix: { kind: "check-sensor", label: "Check my wearable" },
         tone: "wait",
       };
   }

@@ -274,8 +274,8 @@ describe("sensorHoldCopy", () => {
     (hold) => {
       const copy = sensorHoldCopy(hold, "Junction");
       expect(copy.tone).toBe("wait");
-      expect(copy.fix).toEqual({ kind: "check-sensor", label: "Check again" });
-      expect(copy.detail).toContain("Junction is linked");
+      expect(copy.fix).toEqual({ kind: "check-sensor", label: "Check my wearable" });
+      expect(copy.detail).toContain("Junction");
       // No plumbing reaches a player.
       expect(`${copy.title} ${copy.detail}`).not.toMatch(
         /env|api|undefined|null|capability|[A-Z_]{6,}/,
@@ -287,7 +287,7 @@ describe("sensorHoldCopy", () => {
 
   it("falls back to 'your wearable' with no label", () => {
     expect(sensorHoldCopy("awaiting-sync", null).detail).toMatch(
-      /^Your wearable is linked/,
+      /^Open your wearable's app/,
     );
   });
 });

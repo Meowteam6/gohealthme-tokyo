@@ -335,8 +335,13 @@ describe("lockCopy", () => {
       "/pools",
     );
     expect(copy.title).toBe("Your wearable has not synced yet");
-    expect(copy.detail).toContain("Junction is linked");
-    expect(copy.fix).toEqual({ kind: "check-sensor", label: "Check again" });
+    // Nikki, 2026-09-27: "Check again" opened a wallet signature with no
+    // explanation and read as a transaction. The detail says what to do and
+    // the button says what the tap is.
+    expect(copy.detail).toBe(
+      "Open the Junction app so it syncs, then come back. Checking asks your wallet for a signature, not a payment: nothing moves.",
+    );
+    expect(copy.fix).toEqual({ kind: "check-sensor", label: "Check my wearable" });
     expect(copy.tone).toBe("wait");
   });
 
