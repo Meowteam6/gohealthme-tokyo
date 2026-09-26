@@ -231,12 +231,12 @@ describe("friendNote", () => {
     // Pool 5 on this build: 0 in, 2.00 sponsor pot, cannot record a miss.
     const empty = termsOf({ pool: sleep, players: 0 }, 0, null)!;
     expect(segmentsText(friendNote(empty))).toBe(
-      "Stake 1.00 each in this run. If you both hit, each of you gets 2.00 back.",
+      "Stake 1.00 each. If you both hit, each of you gets 2.00 back.",
     );
     // A run that records a miss also says what their miss is worth to you.
     const recording = termsOf({ pool: sleep, players: 0 }, 0, CUTOFF)!;
     expect(segmentsText(friendNote(recording))).toBe(
-      "Stake 1.00 each in this run. If you both hit, each of you gets 2.00 back. If they miss, you get 4.00.",
+      "Stake 1.00 each. If you both hit, each of you gets 2.00 back. If they miss, you get 4.00.",
     );
   });
 
@@ -244,10 +244,10 @@ describe("friendNote", () => {
     // Pool 2: 1 player in, 3.00 balance, so a 2.00 sponsor pot.
     const busy = termsOf({ pool: workout, players: 1 }, 0, null)!;
     expect(segmentsText(friendNote(busy))).toBe(
-      "Stake 1.00 each in this run. If you both hit, each of you gets your 1.00 back plus an equal share of the 2.00 sponsor pot.",
+      "Stake 1.00 each. If you both hit, each of you gets your 1.00 back plus an equal share of the 2.00 sponsor pot.",
     );
     const noPot = termsOf({ pool: pool({ id: 9n, balance: USDC }), players: 1 }, 0, null)!;
-    expect(segmentsText(friendNote(noPot))).toBe("Stake 1.00 each in this run. If you both hit, you both get your stake back.");
+    expect(segmentsText(friendNote(noPot))).toBe("Stake 1.00 each. If you both hit, you both get your stake back.");
   });
 
   it("asks the question for the kind of run it links to", () => {

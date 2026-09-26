@@ -273,7 +273,7 @@ export function challengeNote(entryFee: bigint, missRule: boolean): Segment[] {
  */
 export function friendNote(terms: RunTerms): Segment[] {
   const stake = formatUsdc(terms.entryFee);
-  const lead: Segment = { text: `Stake ${stake} each in this run. ` };
+  const lead: Segment = { text: `Stake ${stake} each. ` };
   const math = friendMathOf(terms, false);
   if (math !== null) {
     const both: Segment[] = [
