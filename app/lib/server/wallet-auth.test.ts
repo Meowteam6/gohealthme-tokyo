@@ -2,7 +2,14 @@
 // previous run: the whole value of this guard is that it accepts exactly what
 // a wallet produces and nothing else, so the test has to sign the same way a
 // wallet does.
-import { describe, it, expect } from "vitest";
+import { beforeAll, describe, it, expect } from "vitest";
+import {
+  SignJWT,
+  createLocalJWKSet,
+  exportJWK,
+  generateKeyPair,
+  type CryptoKey,
+} from "jose";
 import { privateKeyToAccount } from "viem/accounts";
 import { getAddress } from "viem";
 import {
@@ -17,6 +24,7 @@ import {
   verifyWalletSignature,
   walletAuthMessage,
 } from "@/lib/server/wallet-auth";
+import type { DynamicJwtOptions } from "@/lib/server/dynamic-jwt";
 
 const OWNER = privateKeyToAccount(
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
@@ -400,5 +408,145 @@ describe("requireAddressSignature", () => {
       NOW,
     );
     expect(result.ok).toBe(false);
+  });
+});
+
+// ------------------------------------------------ Dynamic session token path
+//
+// A player Dynamic has already authenticated carries a session JWT that lists
+// the wallets they proved. When it covers the claimed address the server takes
+// it instead of a fresh signature, which is what stops the wallet prompting on
+// every per-wallet read. The signature stays as the fallback.
+
+describe("Dynamic session token", () => {
+  const ENV_ID = "0f2d7c1e-5a4b-4c3d-9e8f-123456789abc";
+  const KID = "dynamic-test-key";
+  const NOW_S = Math.floor(NOW / 1000);
+  let dynamicKey: CryptoKey;
+  let forgerKey: CryptoKey;
+  let options: DynamicJwtOptions;
+
+  beforeAll(async () => {
+    const dynamic = await generateKeyPair("RS256", { extractable: true });
+    const forger = await generateKeyPair("RS256", { extractable: true });
+    dynamicKey = dynamic.privateKey;
+    forgerKey = forger.privateKey;
+    const publicJwk = await exportJWK(dynamic.publicKey);
+    options = {
+      environmentId: ENV_ID,
+      jwks: createLocalJWKSet({ keys: [{ ...publicJwk, kid: KID, alg: "RS256" }] }),
+    };
+  });
+
+  async function sessionToken(
+    wallet: string,
+    key: CryptoKey = dynamicKey,
+  ): Promise<string> {
+    return new SignJWT({
+      environment_id: ENV_ID,
+      iss: `app.dynamicauth.com/${ENV_ID}`,
+      sub: "user-1",
+      scope: "user:basic",
+      verified_credentials: [
+        { format: "blockchain", address: wallet.toLowerCase(), chain: "eip155", id: "vc" },
+      ],
+    })
+      .setProtectedHeader({ alg: "RS256", kid: KID })
+      .setIssuedAt(NOW_S - 60)
+      .setExpirationTime(NOW_S + 3600)
+      .sign(key);
+  }
+
+  it("authenticates a request carrying only a valid token and the address", async () => {
+    const result = await authenticateWallet(
+      request({
+        authorization: `Bearer ${await sessionToken(OWNER.address)}`,
+        [WALLET_AUTH_ADDRESS_HEADER]: OWNER.address,
+      }),
+      NOW,
+      options,
+    );
+    expect(result).toEqual({ ok: true, address: getAddress(OWNER.address) });
+  });
+
+  it("refuses an invalid token with no signature to fall back on, and says why", async () => {
+    const result = await authenticateWallet(
+      request({
+        authorization: `Bearer ${await sessionToken(OWNER.address, forgerKey)}`,
+        [WALLET_AUTH_ADDRESS_HEADER]: OWNER.address,
+      }),
+      NOW,
+      options,
+    );
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toMatch(/sign-in token/);
+  });
+
+  it("falls back to a valid signature when the token is invalid", async () => {
+    const timestamp = new Date(NOW).toISOString();
+    const signature = await sign(OWNER, OWNER.address, timestamp);
+    const result = await authenticateWallet(
+      request({
+        authorization: `Bearer ${await sessionToken(OWNER.address, forgerKey)}`,
+        [WALLET_AUTH_ADDRESS_HEADER]: OWNER.address,
+        [WALLET_AUTH_TIMESTAMP_HEADER]: timestamp,
+        [WALLET_AUTH_SIGNATURE_HEADER]: signature,
+      }),
+      NOW,
+      options,
+    );
+    expect(result).toEqual({ ok: true, address: getAddress(OWNER.address) });
+  });
+
+  it("does not let a valid token for one wallet vouch for another", async () => {
+    // The token lists OWNER; the caller claims STRANGER in the header.
+    const result = await authenticateWallet(
+      request({
+        authorization: `Bearer ${await sessionToken(OWNER.address)}`,
+        [WALLET_AUTH_ADDRESS_HEADER]: STRANGER.address,
+      }),
+      NOW,
+      options,
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it("behaves exactly as before when no token is sent", async () => {
+    const result = await authenticateWallet(request({}), NOW, options);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toContain(
+      WALLET_AUTH_SIGNATURE_HEADER,
+    );
+  });
+
+  it("requireAddressSignature accepts a valid token for the requested address", async () => {
+    const result = await requireAddressSignature(
+      request({
+        authorization: `Bearer ${await sessionToken(OWNER.address)}`,
+        [WALLET_AUTH_ADDRESS_HEADER]: OWNER.address,
+      }),
+      OWNER.address.toLowerCase(),
+      NOW,
+      options,
+    );
+    expect(result).toEqual({ ok: true, address: getAddress(OWNER.address) });
+  });
+
+  it("requireAddressSignature refuses a valid token for a DIFFERENT address", async () => {
+    // Prove your own wallet with your own token, then ask for somebody
+    // else's data: the same attack the signature guard exists for.
+    const result = await requireAddressSignature(
+      request({
+        authorization: `Bearer ${await sessionToken(STRANGER.address)}`,
+        [WALLET_AUTH_ADDRESS_HEADER]: STRANGER.address,
+      }),
+      OWNER.address,
+      NOW,
+      options,
+    );
+    expect(result).toEqual({
+      ok: false,
+      reason: "signature proves control of a different address",
+    });
   });
 });

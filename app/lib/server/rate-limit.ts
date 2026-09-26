@@ -55,9 +55,14 @@
 import { Redis } from "@upstash/redis";
 import { Ratelimit } from "@upstash/ratelimit";
 import {
+  WALLET_AUTH_ADDRESS_HEADER,
   authenticateWallet,
   readWalletAuthHeaders,
 } from "@/lib/server/wallet-auth";
+import {
+  readBearerToken,
+  type DynamicJwtOptions,
+} from "@/lib/server/dynamic-jwt";
 
 /**
  * Traffic classes. Each /api/* path falls into exactly one, and the class
@@ -220,12 +225,18 @@ export function clientIp(headers: Headers): string {
 export async function verifiedAddressBucket(
   request: Request,
   nowMs: number,
+  options?: DynamicJwtOptions,
 ): Promise<string | null> {
-  // Fast path: no signature headers at all, so there is nothing to verify and
-  // no signature work on the hot path for ordinary reads.
-  if (readWalletAuthHeaders(request) === null) return null;
+  // Fast path: no signature headers and no Dynamic session token naming a
+  // wallet, so there is nothing to verify and no work on the hot path for
+  // ordinary reads. A bearer with no address header (a cron secret) is not a
+  // wallet proof and is never sent to the JWKS.
+  const tokenNamesWallet =
+    readBearerToken(request) !== null &&
+    (request.headers.get(WALLET_AUTH_ADDRESS_HEADER)?.trim() ?? "") !== "";
+  if (readWalletAuthHeaders(request) === null && !tokenNamesWallet) return null;
 
-  const auth = await authenticateWallet(request, nowMs);
+  const auth = await authenticateWallet(request, nowMs, options);
   return auth.ok ? auth.address.toLowerCase() : null;
 }
 

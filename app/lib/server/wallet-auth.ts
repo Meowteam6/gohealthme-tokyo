@@ -22,6 +22,12 @@
 // verifies the signature against the claimed address. Nothing is stored, so
 // there is no session table to leak and no logout to get wrong.
 //
+// THE OTHER PROOF. A player Dynamic already authenticated may instead send
+// `Authorization: Bearer <Dynamic session token>` with the address header; it
+// counts when the token verifies and lists that address
+// (lib/server/dynamic-jwt.ts has every claim checked). That is what spares
+// them a signature prompt per read. The signature stays for everyone else.
+//
 // REPLAY. A signature is a bearer credential for as long as it verifies, so
 // the message carries a timestamp and anything older than WALLET_AUTH_MAX_AGE_MS
 // is refused. That bounds a stolen header set to a ten minute window rather
@@ -46,6 +52,11 @@
 
 import { getAddress, isAddress, type Address } from "viem";
 import { getArcPublicClient } from "@/lib/contract";
+import {
+  readBearerToken,
+  verifyDynamicJwt,
+  type DynamicJwtOptions,
+} from "@/lib/server/dynamic-jwt";
 
 export const WALLET_AUTH_ADDRESS_HEADER = "x-gohealthme-address";
 export const WALLET_AUTH_TIMESTAMP_HEADER = "x-gohealthme-timestamp";
@@ -179,11 +190,37 @@ export async function verifyWalletSignature(params: {
  * Authenticate a request from its headers alone. The address is whatever the
  * caller claims and proves, which is what a header-authenticated route needs
  * when the request body is a third-party SDK's, not ours.
+ *
+ * Two proofs are accepted (see lib/server/dynamic-jwt.ts):
+ *   - `Authorization: Bearer <Dynamic session token>` plus the address header,
+ *     when the token verifies and lists that address. No wallet prompt.
+ *   - the three signature headers, exactly as before.
+ * A token that is present but fails is never waved through: the signature
+ * headers are tried if they were sent too, and otherwise the request is
+ * refused with the token's reason. No token at all is the old behaviour.
  */
 export async function authenticateWallet(
   request: Request,
   now?: number,
+  options?: DynamicJwtOptions,
 ): Promise<WalletAuth> {
+  const bearer = readBearerToken(request);
+  if (bearer !== null) {
+    const claimed = request.headers.get(WALLET_AUTH_ADDRESS_HEADER)?.trim() ?? "";
+    const viaToken = await verifyDynamicJwt({
+      token: bearer,
+      address: claimed,
+      now,
+      ...options,
+    });
+    if (viaToken.ok) return viaToken;
+    const signed = readWalletAuthHeaders(request);
+    if (signed === null) {
+      return { ok: false, reason: viaToken.reason };
+    }
+    return verifyWalletSignature({ ...signed, now });
+  }
+
   const headers = readWalletAuthHeaders(request);
   if (headers === null) {
     return {
@@ -200,14 +237,17 @@ export async function authenticateWallet(
  * Guard for routes that already know which address the request is about: the
  * signature must prove control of THAT address, not merely of some address.
  * Without this check a caller could sign for their own wallet and then ask for
- * somebody else's data in the query string.
+ * somebody else's data in the query string. The same holds for a Dynamic
+ * session token: it proves the header's address, and that address must be
+ * the one the route is about.
  */
 export async function requireAddressSignature(
   request: Request,
   address: string,
   now?: number,
+  options?: DynamicJwtOptions,
 ): Promise<WalletAuth> {
-  const auth = await authenticateWallet(request, now);
+  const auth = await authenticateWallet(request, now, options);
   if (!auth.ok) return auth;
 
   if (!isAddress(address)) {
