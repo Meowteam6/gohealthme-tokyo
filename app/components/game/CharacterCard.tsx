@@ -8,8 +8,8 @@ import Link from "next/link";
 import { useState } from "react";
 import EnsName from "@/components/ens/EnsName";
 import { ChevronLink, TEXT_LINK } from "@/components/ui";
-import { measurableGoalsOf } from "@/lib/game/character";
-import { countsLineFor } from "@/lib/game/sensor-copy";
+import { runName } from "@/lib/game/landing";
+import { useOpenRuns } from "@/lib/game/useOpenRuns";
 import type { CharacterView } from "@/lib/game/useCharacter";
 
 function HumanStamp({ verified, mode }: { verified: boolean; mode: "world" | "allowlist" }) {
@@ -38,10 +38,7 @@ function SensorLine({ view }: { view: CharacterView }) {
       return <p className="m-0 text-sm text-haze">Looking at your wearable</p>;
     case "paired":
       return (
-        <p className="m-0 text-[0.9375rem] text-muted">
-          <span className="font-semibold text-foreground">{sensor.device.label}.</span>{" "}
-          {countsLineFor(sensor.device.metrics)}
-        </p>
+        <p className="m-0 text-[0.9375rem] font-semibold text-foreground">{sensor.device.label}</p>
       );
     case "none":
       return (
@@ -118,6 +115,27 @@ export default function CharacterCard({
     );
   }
 
+  return <PlayerCard view={view} nameNode={nameNode} verified={verified} />;
+}
+
+/** The full card on /character: the name with the human stamp beside it, the
+ *  challenges this player can join, and the way into the lobby. The wearable
+ *  already shows on step 4 above, so it only appears here when nothing is
+ *  paired (Nikki's cleanup, 2026-09-27). */
+function PlayerCard({
+  view,
+  nameNode,
+  verified,
+}: {
+  view: CharacterView;
+  nameNode: React.ReactNode;
+  verified: boolean;
+}) {
+  const c = view.character;
+  const open = useOpenRuns();
+  if (c === null) return null;
+  const joinable = open.runs.slice(0, 3);
+  const unpaired = view.sensor.kind !== "paired";
   return (
     <section
       aria-label="Your character"
@@ -125,29 +143,35 @@ export default function CharacterCard({
     >
       <div className="px-5 pb-4 pt-5">
         <p className="m-0 text-[0.8125rem] font-medium text-haze">Player</p>
-        <p className="type-heading m-0 mt-1 break-all text-[1.875rem] min-[900px]:text-[2.25rem]">
-          {nameNode}
-        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="type-heading m-0 break-all text-[1.875rem] min-[900px]:text-[2.25rem]">
+            {nameNode}
+          </p>
+          <HumanStamp verified={verified} mode={view.humanMode} />
+        </div>
       </div>
       <dl className="m-0 divide-y divide-edge border-t border-edge">
-        <div className="flex items-center justify-between gap-3 px-5 py-3">
-          <dt className="text-sm text-haze">Human</dt>
-          <dd className="m-0">
-            <HumanStamp verified={verified} mode={view.humanMode} />
-          </dd>
-        </div>
-        <div className="px-5 py-3">
-          <dt className="text-sm text-haze">Wearable</dt>
-          <dd className="m-0 mt-1">
-            <SensorLine view={view} />
-          </dd>
-        </div>
-        {c.device !== null ? (
+        {unpaired ? (
           <div className="px-5 py-3">
-            <dt className="text-sm text-haze">Runs you can play</dt>
-            <dd className="m-0 mt-1 text-[0.9375rem] text-muted">
-              Goals scored on {measurableGoalsOf(c.device).join(", ")}. Anything
-              else shows as locked in the lobby, with the reason.
+            <dt className="text-sm text-haze">Wearable</dt>
+            <dd className="m-0 mt-1">
+              <SensorLine view={view} />
+            </dd>
+          </div>
+        ) : null}
+        {c.device !== null && joinable.length > 0 ? (
+          <div className="px-5 py-3">
+            <dt className="text-sm text-haze">Challenges you can join</dt>
+            <dd className="m-0 mt-1">
+              <ul className="m-0 flex list-none flex-col gap-1 p-0">
+                {joinable.map((run) => (
+                  <li key={run.pool.id.toString()}>
+                    <Link href={`/pools/${run.pool.id.toString()}`} className={`${TEXT_LINK} text-[0.9375rem]`}>
+                      {runName(run.pool)}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </dd>
           </div>
         ) : null}

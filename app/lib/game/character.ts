@@ -17,7 +17,7 @@
 
 import type { AccessStatus } from "@/lib/useAccess";
 import type { LaneAvailability } from "@/lib/game/lanes";
-import { countsLineFor, launchGoalLabels } from "@/lib/game/sensor-copy";
+import { launchGoalLabels } from "@/lib/game/sensor-copy";
 import {
   viewerMetricsOf,
   type ProviderOptions,
@@ -231,7 +231,7 @@ function sensorStep(i: CharacterInputs): StepState {
     case "paired":
       return {
         status: "done",
-        summary: `${i.sensor.device.label}. ${countsLineFor(i.sensor.device.metrics)}`,
+        summary: i.sensor.device.label,
       };
     case "none":
       return { status: "todo" };

@@ -210,7 +210,7 @@ describe("characterSteps and currentStep", () => {
     // Says what counts, like the pairing card: sleep score is not a launch goal.
     expect(steps.sensor).toEqual({
       status: "done",
-      summary: "WHOOP. Counts sleep efficiency, hours of sleep and workouts.",
+      summary: "WHOOP",
     });
     expect(characterOf(i)?.device).not.toBeNull();
     expect(measurableGoalsOf(characterOf(i)!.device!)).toEqual([

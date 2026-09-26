@@ -267,6 +267,16 @@ export default function OnboardingStates({ meta }: SectionProps) {
           mode="gate"
         />
       </StateFrame>
+      <StateFrame name="player-card" note="the player card after onboarding: name + human stamp, challenges you can join, lobby">
+        <CharacterCard
+          view={view({
+            gate: true,
+            steps: { human: HUMAN_DONE, name: NAME_DONE, sensor: { status: "done", summary: "WHOOP" } },
+            sensor: { kind: "paired", device: WHOOP },
+            providers: WHOOP_PAIRED,
+          })}
+        />
+      </StateFrame>
       <StateFrame name="character-wearable-paired" note="step 4 with WHOOP: the limit is named before any stake">
         <CharacterCreation
           view={view({
