@@ -95,12 +95,7 @@ import { verdictShowsClaim, type VerdictScreen } from "@/lib/game/verdict";
 import SweepLeftover from "@/components/SweepLeftover";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { darePot } from "@/lib/challenges";
-import {
-  challengeRunKindOf,
-  creatorStakedIn,
-  inviteShareOf,
-  type ChallengeRunKind,
-} from "@/lib/game/money-sharing";
+import { creatorStakedIn, shareCardOf } from "@/lib/game/money-sharing";
 import { recordsMissesOf, sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
 import { missRulePool, missRuleReading } from "@/lib/miss-rule";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
@@ -1380,9 +1375,11 @@ export default function PoolDetail({ id }: { id: string }) {
 
   // -------------------------------------------------------------- Sharing
 
-  // A challenge run is stake on yourself (the creator staked: "Match my
-  // stake" / "Back me") or a reward challenge (lib/game/money-sharing).
-  // Unknown until the player list reads, and then no share card guesses.
+  // A challenge run is stake on yourself ("Match my stake" / "Back me") or a
+  // reward challenge, decided money first by useRunMoney from the creator's
+  // seed at create (the pot net of stakes and of backers' money) and their
+  // own stake (lib/game/money-sharing). Null until those read, and then no
+  // share card guesses; and none at all once the run is over.
   const { prize: challengePrize } = darePot({
     balance: pool.balance,
     entryFee: pool.entryFee,
@@ -1392,10 +1389,8 @@ export default function PoolDetail({ id }: { id: string }) {
   });
   const creatorStaked =
     participantsQuery.data !== undefined && creatorStakedIn(pool.creator, participantsQuery.data);
-  const challengeKind: ChallengeRunKind | null =
-    participantsQuery.data !== undefined
-      ? challengeRunKindOf({ creatorStaked, reward: challengePrize })
-      : null;
+  const challengeKind = runMoney?.challengeKind ?? null;
+  const shareCard = shareCardOf({ kind: challengeKind, live });
   // A challenge's creator is someone the viewer knows; a public run's is not,
   // so an address with no ENS name there says whose it is.
   const creatorShort = `${pool.creator.slice(0, 6)}...${pool.creator.slice(-4)}`;
@@ -1423,10 +1418,10 @@ export default function PoolDetail({ id }: { id: string }) {
         {/* A challenge's link is its PRIVATE /c/<token> invite and pool ids
             are walkable, so only the creator gets it, revealed after a
             one-tap signature. Public runs share from Who's in. */}
-        {isChallenge && isCreator && address !== null && challengeKind !== null ? (
+        {isChallenge && isCreator && address !== null && shareCard !== null && challengeKind !== null ? (
           <Card as="section" aria-labelledby="send-h">
             <h2 id="send-h" className="m-0 text-[1.0625rem] font-semibold">
-              {inviteShareOf(challengeKind).heading}
+              {shareCard.heading}
             </h2>
             <div className="mt-3">
               <ChallengeInviteShare poolId={pool.id} address={address} kind={challengeKind} />

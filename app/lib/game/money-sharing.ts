@@ -142,6 +142,17 @@ export function inviteShareOf(kind: ChallengeRunKind): InviteShare {
   };
 }
 
+/**
+ * The creator's share card on the run page: the flow's links while the run
+ * is live, nothing once it is settled, cancelled or past its end (there is
+ * nobody left to bring in), and nothing until the flow has read (`kind`
+ * null), so the card never guesses which links to offer.
+ */
+export function shareCardOf(input: { kind: ChallengeRunKind | null; live: boolean }): InviteShare | null {
+  if (!input.live || input.kind === null) return null;
+  return inviteShareOf(input.kind);
+}
+
 // ------------------------------------------------------------ /c/[token]
 
 /**

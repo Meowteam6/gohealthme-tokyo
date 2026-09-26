@@ -10,6 +10,7 @@ import {
   inviteShareOf,
   lockInHint,
   rallyCopyOf,
+  shareCardOf,
   type ChallengeRunKind,
 } from "@/lib/game/money-sharing";
 
@@ -96,6 +97,24 @@ describe("inviteShareOf: two links on a stake-on-yourself run, one on a reward c
     expect(share.reason).toContain("Lock in your stake first");
     expect(share.reason).toContain("match your stake");
     expect(share.reason).toContain("back you");
+  });
+});
+
+describe("shareCardOf: the creator's share card only while the run is live", () => {
+  it("shows nothing once the run is settled, cancelled or past its end, whatever the flow", () => {
+    for (const kind of ["self", "reward", "unstaked"] as const) {
+      expect(shareCardOf({ kind, live: false })).toBeNull();
+    }
+  });
+
+  it("shows nothing until the flow has read: a card never guesses which links to offer", () => {
+    expect(shareCardOf({ kind: null, live: true })).toBeNull();
+  });
+
+  it("is the flow's own card while live", () => {
+    expect(shareCardOf({ kind: "self", live: true })).toEqual(inviteShareOf("self"));
+    expect(shareCardOf({ kind: "reward", live: true })).toEqual(inviteShareOf("reward"));
+    expect(shareCardOf({ kind: "unstaked", live: true })?.kind).toBe("blocked");
   });
 });
 
