@@ -12,6 +12,10 @@
 // component polls GET /api/ens/resolve until the name resolves back to the
 // wallet, and only then calls onClaimed. A name that cannot be minted is
 // refused at the input, before any wallet prompt.
+//
+// "Use a name I already own": the player types an ENS name, signs the same
+// ownership message, and POST /api/ens/link accepts it only when the name
+// resolves to this wallet on Ethereum mainnet or Sepolia. Nothing is minted.
 
 import { useEffect, useRef, useState } from "react";
 import { useEmbeddedWallet } from "@/lib/wallet";
@@ -46,9 +50,17 @@ type Status =
   | { kind: "idle" }
   | { kind: "signing" }
   | { kind: "minting" }
+  | { kind: "linking" }
   | { kind: "confirming"; name: string; tx: string | null; polls: number }
   | { kind: "done"; name: string; tx: string | null }
   | { kind: "error"; message: string };
+
+type Mode = "claim" | "link";
+
+/** Our own subnames get the ENS-app link; a linked name may live on mainnet. */
+function isOwnSubname(name: string): boolean {
+  return name.endsWith(".gohealthme.eth");
+}
 
 const POLL_MS = 3_000;
 const MAX_POLLS = 40;
@@ -58,6 +70,8 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
   const [label, setLabel] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [editing, setEditing] = useState(currentName === null);
+  const [mode, setMode] = useState<Mode>("claim");
+  const [ownName, setOwnName] = useState("");
   const checkSeq = useRef(0);
 
   // Live availability: the pure rule answers during render and stops the
@@ -140,11 +154,11 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
     return () => clearTimeout(timer);
   }, [status, address, onClaimed]);
 
-  const submit = async () => {
-    if (availability.kind !== "available") return;
-    const check = checkEnsLabel(label);
-    if (!check.ok) return;
-
+  /** Sign the ownership message; null (with the error shown) on failure. */
+  const signProof = async (): Promise<{
+    signerAddress: string;
+    headers: Record<string, string>;
+  } | null> => {
     setStatus({ kind: "signing" });
     let signerAddress: string;
     let signature: string;
@@ -160,18 +174,61 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
       setStatus({
         kind: "error",
         message: isUserRejection(err)
-          ? "Claiming needs a signature to prove the wallet is yours. Nothing is charged and no transaction is sent from your wallet."
+          ? "Your name needs a signature to prove the wallet is yours. Nothing is charged and no transaction is sent from your wallet."
           : "Your wallet could not sign the proof of ownership. Reconnect it and try again.",
       });
-      return;
+      return null;
     }
     if (signerAddress.toLowerCase() !== address.toLowerCase()) {
       setStatus({
         kind: "error",
         message: "The connected wallet is not the one this character belongs to. Switch wallets and try again.",
       });
-      return;
+      return null;
     }
+    return {
+      signerAddress,
+      headers: authHeadersOf({ address: signerAddress, timestamp, signature }),
+    };
+  };
+
+  const submitLink = async () => {
+    const typed = ownName.trim();
+    if (typed === "" || !typed.includes(".")) return;
+    const proof = await signProof();
+    if (proof === null) return;
+    setStatus({ kind: "linking" });
+    try {
+      const response = await fetch("/api/ens/link", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...proof.headers },
+        body: JSON.stringify({ address: proof.signerAddress, name: typed }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        name?: string;
+        error?: string;
+      };
+      if (!response.ok || typeof body.name !== "string") {
+        setStatus({ kind: "error", message: body.error ?? "Could not link that name." });
+        return;
+      }
+      forgetName(address);
+      rememberName(address, body.name);
+      setStatus({ kind: "done", name: body.name, tx: null });
+      onClaimed(body.name);
+    } catch {
+      setStatus({ kind: "error", message: "Could not reach the server. Try again." });
+    }
+  };
+
+  const submit = async () => {
+    if (availability.kind !== "available") return;
+    const check = checkEnsLabel(label);
+    if (!check.ok) return;
+
+    const proof = await signProof();
+    if (proof === null) return;
+    const { signerAddress } = proof;
 
     setStatus({ kind: "minting" });
     try {
@@ -179,7 +236,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
         method: "POST",
         headers: {
           "content-type": "application/json",
-          ...authHeadersOf({ address: signerAddress, timestamp, signature }),
+          ...proof.headers,
         },
         body: JSON.stringify({ address: signerAddress, label: check.label }),
       });
@@ -211,19 +268,28 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
         className="space-y-3 rounded-2xl border border-accent/40 bg-accent/20 p-5"
       >
         <p className="text-base font-semibold text-accent-deep">You are {name}</p>
-        <p className="text-sm text-foreground/80">
-          Resolves on ENSv2 Sepolia to this wallet. The name is yours: the
-          token sits in your wallet and any ENS client can look it up.
-        </p>
+        {isOwnSubname(name) ? (
+          <p className="text-sm text-foreground/80">
+            Resolves on ENSv2 Sepolia to this wallet. The name is yours: the
+            token sits in your wallet and any ENS client can look it up.
+          </p>
+        ) : (
+          <p className="text-sm text-foreground/80">
+            Your own ENS name, checked against this wallet on Ethereum and
+            Sepolia. If it stops pointing here, it stops showing.
+          </p>
+        )}
         <div className="flex flex-wrap gap-3 text-sm">
-          <a
-            href={ensAppUrl(name)}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-xl border border-edge px-4 py-2 font-medium text-foreground hover:bg-surface-raised"
-          >
-            View on the ENS app
-          </a>
+          {isOwnSubname(name) ? (
+            <a
+              href={ensAppUrl(name)}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border border-edge px-4 py-2 font-medium text-foreground hover:bg-surface-raised"
+            >
+              View on the ENS app
+            </a>
+          ) : null}
           {tx !== null ? (
             <a
               href={sepoliaTxUrl(tx)}
@@ -251,11 +317,110 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
   }
 
   const busy =
-    status.kind === "signing" || status.kind === "minting" || status.kind === "confirming";
+    status.kind === "signing" ||
+    status.kind === "minting" ||
+    status.kind === "linking" ||
+    status.kind === "confirming";
   const canSubmit = availability.kind === "available" && !busy && ready;
+  const ownNameReady = ownName.trim().includes(".") && !busy && ready;
+
+  const modeSwitch = (
+    <div role="tablist" className="flex flex-wrap gap-2 text-sm">
+      {(
+        [
+          ["claim", "Pick a gohealthme.eth name"],
+          ["link", "Use a name I already own"],
+        ] as const
+      ).map(([id, text]) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          aria-selected={mode === id}
+          disabled={busy}
+          onClick={() => {
+            setMode(id);
+            setStatus({ kind: "idle" });
+          }}
+          className={`min-h-11 rounded-xl border px-3 py-2 font-medium ${
+            mode === id
+              ? "border-accent bg-accent/15 text-foreground"
+              : "border-edge text-muted hover:text-foreground"
+          }`}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+
+  const errorNote =
+    status.kind === "error" ? (
+      <ErrorNote
+        title={mode === "link" ? "Could not link the name" : "Could not claim the name"}
+        detail={status.message}
+        onRetry={() => setStatus({ kind: "idle" })}
+      />
+    ) : null;
+
+  if (mode === "link") {
+    return (
+      <div data-lane="ens" className="space-y-4">
+        {modeSwitch}
+        <label className="block text-sm font-medium">
+          Your ENS name
+          <input
+            type="text"
+            value={ownName}
+            onChange={(e) => setOwnName(e.target.value)}
+            placeholder="yourname.eth"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            disabled={busy}
+            className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-4 py-3 text-base outline-none"
+          />
+          <span className="mt-1 block text-xs text-muted">
+            It must resolve to this wallet ({address.slice(0, 6)}...{address.slice(-4)}) on
+            Ethereum or Sepolia. Set that in the ENS app first if it does not.
+          </span>
+        </label>
+        <SignInGate note="Sign in to use your name.">
+          {(openSignIn) => (
+            <button
+              type="button"
+              disabled={authenticated ? !ownNameReady : !ready}
+              onClick={() => {
+                if (!authenticated) {
+                  openSignIn();
+                  return;
+                }
+                void submitLink();
+              }}
+              className="w-full rounded-xl bg-accent-strong px-5 py-3.5 text-base font-semibold text-background hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {status.kind === "signing"
+                ? "Waiting for your signature..."
+                : status.kind === "linking"
+                  ? "Checking the name on Ethereum and Sepolia..."
+                  : authenticated
+                    ? "Use this name"
+                    : "Sign in to use your name"}
+            </button>
+          )}
+        </SignInGate>
+        <p className="text-xs text-muted">
+          Signing proves the wallet is yours. Nothing is minted and nothing is
+          charged.
+        </p>
+        {errorNote}
+      </div>
+    );
+  }
 
   return (
     <div data-lane="ens" className="space-y-4">
+      {modeSwitch}
       <label className="block text-sm font-medium">
         Your name
         <div className="mt-1 flex items-center rounded-xl border border-edge bg-surface-raised px-3">
@@ -340,13 +505,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
         </p>
       )}
 
-      {status.kind === "error" ? (
-        <ErrorNote
-          title="Could not claim the name"
-          detail={status.message}
-          onRetry={() => setStatus({ kind: "idle" })}
-        />
-      ) : null}
+      {errorNote}
     </div>
   );
 }

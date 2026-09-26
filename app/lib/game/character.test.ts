@@ -5,6 +5,7 @@ import {
   currentStep,
   gatePassed,
   isReadyToPlay,
+  NAME_LOCKED_NOTE,
   sensorFromOptions,
   type CharacterInputs,
 } from "@/lib/game/character";
@@ -208,6 +209,34 @@ describe("characterSteps and currentStep", () => {
     });
     expect(currentStep(characterSteps(i), gatePassed(i), none, false)).toBe("human");
     expect(currentStep(characterSteps(i), gatePassed(i), new Set(["human"]), false)).toBeNull();
+  });
+
+  it("locks the ENS name step until the human step is done while World is on", () => {
+    const i = inputs({
+      access: { status: "approved", isAdmin: false, loading: false, error: false },
+    });
+    const steps = characterSteps(i);
+    expect(steps.name).toEqual({ status: "locked", note: NAME_LOCKED_NOTE });
+    expect(NAME_LOCKED_NOTE).toBe("Prove you are one human first, then pick your name.");
+    // The locked name is walked past; the human proof is what gets offered.
+    expect(currentStep(steps, gatePassed(i), none, false)).toBe("sensor");
+    expect(currentStep(steps, gatePassed(i), new Set(["sensor"]), false)).toBe("human");
+  });
+
+  it("does not lock the name once the human step is done, or with World off", () => {
+    expect(characterSteps(inputs({ world: { lane: "on", human: "verified" } })).name).toEqual({
+      status: "todo",
+    });
+    const worldOff = inputs({
+      world: { lane: "off", human: "unknown" },
+      access: { status: "approved", isAdmin: false, loading: false, error: false },
+    });
+    expect(characterSteps(worldOff).name).toEqual({ status: "todo" });
+  });
+
+  it("keeps a name claimed before the lock as done", () => {
+    const i = inputs({ ens: { lane: "on", name: "dre.gohealthme.eth" } });
+    expect(characterSteps(i).name).toEqual({ status: "done", summary: "dre.gohealthme.eth" });
   });
 });
 

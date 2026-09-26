@@ -127,7 +127,14 @@ export type StepState =
   /** This lane is not switched on for this build; the flow walks past it. */
   | { status: "off"; note: string }
   /** The read failed; the step offers a retry. */
-  | { status: "error"; note: string };
+  | { status: "error"; note: string }
+  /** Waits on an earlier step; the note says which. Never a button that
+   *  fails after the tap. */
+  | { status: "locked"; note: string };
+
+/** Shown on step 3 while World is on and step 2 is not done. The server
+ *  refuses the claim with the same line (lib/server/ens/human-gate.ts). */
+export const NAME_LOCKED_NOTE = "Prove you are one human first, then pick your name.";
 
 /** How step 2 is satisfied on this deployment. */
 export type HumanMode = "world" | "allowlist";
@@ -205,9 +212,14 @@ function humanStep(i: CharacterInputs): StepState {
 function nameStep(i: CharacterInputs): StepState {
   if (i.ens.lane === "loading") return { status: "loading" };
   if (i.ens.lane === "on") {
-    return i.ens.name !== null
-      ? { status: "done", summary: i.ens.name }
-      : { status: "todo" };
+    if (i.ens.name !== null) return { status: "done", summary: i.ens.name };
+    // Names cost GoHealthMe gas, so the server mints one only for a verified
+    // human while World is on. Say so here, before any signature.
+    if (i.world.lane === "loading") return { status: "loading" };
+    if (i.world.lane === "on" && i.world.human !== "verified") {
+      return { status: "locked", note: NAME_LOCKED_NOTE };
+    }
+    return { status: "todo" };
   }
   // ENS is off on this build: the existing @handle claim is the name.
   return i.handle !== null
@@ -276,7 +288,7 @@ export function currentStep(
   if (onboarded) return null;
   for (const id of STEP_ORDER) {
     if (HARD_STEPS.includes(id)) continue;
-    if (steps[id].status === "done" || skipped.has(id)) continue;
+    if (steps[id].status === "done" || steps[id].status === "locked" || skipped.has(id)) continue;
     return id;
   }
   // A World-on build where the player got in through the allowlist: offer the

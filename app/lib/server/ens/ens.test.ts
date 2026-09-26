@@ -256,6 +256,8 @@ describe("claimEnsName", () => {
       namespace: async () => NS,
     },
     invalidate: vi.fn(async () => undefined),
+    human: { enforced: () => false, humanOf: async () => null },
+    clearLink: vi.fn(async () => undefined),
     ...overrides,
   });
 

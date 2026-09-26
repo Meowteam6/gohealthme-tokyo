@@ -143,6 +143,16 @@ function NameValue({ view }: { view: CharacterView }) {
     }
     return <span className="break-all font-semibold">{name}</span>;
   }
+  if (step.status === "locked") {
+    return (
+      <Link
+        href="/character?step=human"
+        className="inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-2"
+      >
+        {step.note}
+      </Link>
+    );
+  }
   return (
     <Link
       href="/character"

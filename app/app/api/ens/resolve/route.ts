@@ -2,8 +2,10 @@
 // should be shown as, resolved on Sepolia.
 //
 // Public and read-only. A name is returned only when it resolves back to the
-// address on chain (the wallet's ENS primary name, or a gohealthme.eth
-// subname whose addr(60) record is the wallet); there is no lookup table.
+// address on chain: an own ENS name the wallet linked (POST /api/ens/link,
+// re-verified on mainnet and Sepolia at least hourly), else the wallet's ENS
+// primary name, else a gohealthme.eth subname whose addr(60) record is the
+// wallet. There is no lookup table.
 // Cached server-side for a few minutes per address and invalidated by the
 // claim route, so a feed of forty rows is not forty registry walks.
 //
@@ -12,7 +14,7 @@
 
 import { isAddress } from "viem";
 import { cachedResolvedName } from "@/lib/server/ens/cache";
-import { resolveNameForAddress } from "@/lib/server/ens/resolve";
+import { displayNameForAddress } from "@/lib/server/ens/link";
 import { jsonError, newCorrelationId, safeError } from "@/lib/server/http";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +48,7 @@ export async function GET(request: Request) {
       requested.map(async (address) => {
         names[address.toLowerCase()] = await cachedResolvedName(
           address,
-          resolveNameForAddress,
+          (a) => displayNameForAddress(a),
         );
       }),
     );

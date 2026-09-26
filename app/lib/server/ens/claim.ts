@@ -20,6 +20,13 @@ import {
 import { labelOwner, liveResolveDeps, type ResolveDeps } from "@/lib/server/ens/resolve";
 import { liveWriteDeps, mintParticipantName, type WriteDeps } from "@/lib/server/ens/write";
 import { LockUnavailableError } from "@/lib/server/store";
+import {
+  checkNameHuman,
+  liveNameHumanDeps,
+  rememberNameHuman,
+  type NameHumanDeps,
+} from "@/lib/server/ens/human-gate";
+import { unlinkEnsName } from "@/lib/server/ens/link";
 
 export type ClaimOutcome =
   | {
@@ -41,6 +48,10 @@ export interface ClaimDeps {
   /** Cache writer (Supabase profile). Absent or failing never fails the claim. */
   cacheProfile?: (address: Address, label: string) => Promise<void>;
   invalidate: (address: string) => Promise<void>;
+  /** Prove-human gate (human-gate.ts). Off on the deployment means no gate. */
+  human: NameHumanDeps;
+  /** Drops a linked own ENS name, so the freshly claimed subname is shown. */
+  clearLink: (address: string) => Promise<void>;
 }
 
 export function liveClaimDeps(): ClaimDeps {
@@ -54,6 +65,8 @@ export function liveClaimDeps(): ClaimDeps {
     },
     resolve: liveResolveDeps(),
     invalidate: invalidateResolvedName,
+    human: liveNameHumanDeps(),
+    clearLink: unlinkEnsName,
   };
 }
 
@@ -64,6 +77,10 @@ export async function claimEnsName(
   const check = checkEnsLabel(input.rawLabel);
   if (!check.ok) return { ok: false, status: 400, reason: check.reason };
   const label = check.label;
+
+  // A name costs our Sepolia gas, so it needs a human before anything else.
+  const human = await checkNameHuman(input.address, deps.human);
+  if (!human.ok) return human;
 
   if (!deps.ownerConfigured()) {
     return {
@@ -113,6 +130,16 @@ export async function claimEnsName(
     };
   }
 
+  try {
+    await rememberNameHuman(human.humanKey, input.address, label);
+  } catch (err) {
+    console.error(`[ens/claim] human-name record write failed (name is minted): ${errorMessage(err)}`);
+  }
+  try {
+    await deps.clearLink(input.address);
+  } catch (err) {
+    console.error(`[ens/claim] could not drop the linked name: ${errorMessage(err)}`);
+  }
   await deps.invalidate(input.address);
 
   if (deps.cacheProfile !== undefined) {
@@ -157,6 +184,11 @@ export async function mintHandleNameBestEffort(
   if (!/^0x[0-9a-fA-F]{40}$/.test(address)) return;
   if (!deps.ownerConfigured()) return;
   try {
+    const human = await checkNameHuman(address, deps.human);
+    if (!human.ok) {
+      console.info(`[ens/claim] handle "${handle}" kept, no subname: ${human.reason}`);
+      return;
+    }
     const namespace = await deps.namespace();
     if (namespace === null) return;
     const writer = deps.ownerWrite(namespace);
@@ -170,7 +202,8 @@ export async function mintHandleNameBestEffort(
       label: check.label,
       wallet: address as Address,
     }).then(
-      (minted) => {
+      async (minted) => {
+        await rememberNameHuman(human.humanKey, address, check.label).catch(() => undefined);
         console.log(`[ens/claim] minted ${minted.name} (register ${minted.registerTx ?? "existing"}, record ${minted.recordTx ?? "existing"})`);
       },
       (err: unknown) => {

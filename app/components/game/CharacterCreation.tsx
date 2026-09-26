@@ -67,6 +67,8 @@ function StatusText({
       return <span className="text-muted">Not checked this visit</span>;
     case "todo":
       return <span className="text-muted">To do</span>;
+    case "locked":
+      return <span className="text-muted">Locked until step 2 is done</span>;
   }
 }
 
@@ -168,10 +170,34 @@ function HumanBody({
   );
 }
 
-function NameBody({ view, onSkip }: { view: CharacterView; onSkip?: () => void }) {
+function NameBody({
+  view,
+  onSkip,
+  onProveHuman,
+}: {
+  view: CharacterView;
+  onSkip?: () => void;
+  onProveHuman: () => void;
+}) {
   const address = view.address;
   if (address === null) return null;
   const state = view.steps.name;
+  if (state.status === "locked") {
+    // The server mints names for verified humans only while World is on.
+    // Say so before any signature instead of offering a claim that fails.
+    return (
+      <div className="space-y-3">
+        <p className="text-sm">{state.note}</p>
+        <Button type="button" variant="secondary" onClick={onProveHuman}>
+          Go to step 2
+        </Button>
+        <p className="text-xs text-muted">
+          Optional. Without one you play under your short wallet address.
+        </p>
+        {onSkip !== undefined ? <SkipLink onSkip={onSkip} /> : null}
+      </div>
+    );
+  }
   return (
     <div className="space-y-3">
       {view.nameMode === "ens" ? (
@@ -203,10 +229,12 @@ function StepBody({
   id,
   view,
   onSkip,
+  onPick,
 }: {
   id: StepId;
   view: CharacterView;
   onSkip?: () => void;
+  onPick: (id: StepId) => void;
 }): ReactNode {
   switch (id) {
     case "sign-in":
@@ -214,7 +242,7 @@ function StepBody({
     case "human":
       return <HumanBody view={view} onSkip={onSkip} />;
     case "name":
-      return <NameBody view={view} onSkip={onSkip} />;
+      return <NameBody view={view} onSkip={onSkip} onProveHuman={() => onPick("human")} />;
     case "sensor":
       return <SensorStep view={view} onSkip={onSkip} />;
   }
@@ -308,6 +336,7 @@ export default function CharacterCreation({
                   <StepBody
                     id={id}
                     view={view}
+                    onPick={setPicked}
                     onSkip={
                       id === "name" || id === "sensor" || (id === "human" && view.gate)
                         ? () => {
