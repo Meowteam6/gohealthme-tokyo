@@ -273,7 +273,8 @@ export const HARD_STEPS: StepId[] = ["sign-in", "human"];
 /**
  * The step character creation should show, or null when there is nothing to
  * show. Hard steps come first and cannot be skipped. Soft steps are an
- * onboarding pass shown once per device: after the player finishes or skips
+ * onboarding pass shown once, on the device where the player is made (see
+ * creationBlocks): after the player finishes or skips
  * them (`onboarded`), creation never interrupts again and the lobby carries
  * any lock that is left, with its fix, on the run it affects.
  */
@@ -295,6 +296,45 @@ export function currentStep(
   // proof once, skippably, because one-human-one-entry is checked at the join.
   if (steps.human.status === "todo" && !skipped.has("human")) return "human";
   return null;
+}
+
+/**
+ * True when this device has watched a signed-in player stand at a closed hard
+ * gate with every read settled: they are making their character here, right
+ * now, so the onboarding pass should follow the hard steps. A returning player
+ * (any device) arrives with the gate already open and never trips this.
+ */
+export function hardGateClosed(v: {
+  authenticated: boolean;
+  address: string | null;
+  gate: boolean;
+  gateLoading: boolean;
+  accessLoading: boolean;
+  worldLane: LaneAvailability | "loading";
+}): boolean {
+  if (!v.authenticated || v.address === null) return false;
+  if (v.gate || v.gateLoading || v.accessLoading) return false;
+  return v.worldLane !== "loading";
+}
+
+/**
+ * Whether the page gate shows character creation instead of the page. The hard
+ * steps always hold. Past them, the player's real state decides, never the
+ * per-device onboarding flag alone: a player who finished or skipped the soft
+ * steps on another device walks straight in here. Only a player creating
+ * their character on this device (`creatingHere`) is walked through the soft
+ * pass, once, until they finish it or skip what is left.
+ */
+export function creationBlocks(g: {
+  steps: Record<StepId, StepState>;
+  gate: boolean;
+  skipped: ReadonlySet<StepId>;
+  onboarded: boolean;
+  creatingHere: boolean;
+}): boolean {
+  if (!g.gate || g.steps["sign-in"].status !== "done") return true;
+  if (g.onboarded || !g.creatingHere) return false;
+  return true;
 }
 
 /** The character the rest of the app reads. */

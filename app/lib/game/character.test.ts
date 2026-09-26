@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   characterOf,
   characterSteps,
+  creationBlocks,
   currentStep,
   gatePassed,
+  hardGateClosed,
   isReadyToPlay,
   NAME_LOCKED_NOTE,
   sensorFromOptions,
@@ -272,5 +274,118 @@ describe("the character card", () => {
 
   it("has no character before sign-in", () => {
     expect(characterOf(inputs({ authenticated: false, address: null }))).toBeNull();
+  });
+});
+
+// The gate wraps every signed-in page. Whether it shows character creation must
+// come from the player's real state, not a per-browser flag: a player who made
+// their character on a phone opens the laptop and plays.
+describe("creationBlocks (the page gate)", () => {
+  const none = new Set<never>();
+  const complete = inputs({
+    world: { lane: "on", human: "verified" },
+    ens: { lane: "on", name: "dre.gohealthme.eth" },
+    sensor: {
+      kind: "paired",
+      device: { provider: "junction", label: "Junction", metrics: ["steps"] },
+    },
+  });
+
+  it("lets a complete player through on a new device with empty storage", () => {
+    expect(
+      creationBlocks({
+        steps: characterSteps(complete),
+        gate: gatePassed(complete),
+        skipped: none,
+        onboarded: false,
+        creatingHere: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("lets a returning player through when the wearable needs a re-check on this device", () => {
+    const i = inputs({
+      world: { lane: "on", human: "verified" },
+      ens: { lane: "on", name: "dre.gohealthme.eth" },
+      sensor: { kind: "unchecked" },
+    });
+    expect(
+      creationBlocks({
+        steps: characterSteps(i),
+        gate: gatePassed(i),
+        skipped: none,
+        onboarded: false,
+        creatingHere: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("lets through a player who skipped the soft steps on another device", () => {
+    const i = inputs({ world: { lane: "on", human: "verified" } });
+    expect(
+      creationBlocks({
+        steps: characterSteps(i),
+        gate: gatePassed(i),
+        skipped: none,
+        onboarded: false,
+        creatingHere: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("holds a player whose hard step is not done, whatever the local flag says", () => {
+    const signedOut = inputs({ authenticated: false, address: null });
+    expect(
+      creationBlocks({
+        steps: characterSteps(signedOut),
+        gate: gatePassed(signedOut),
+        skipped: none,
+        onboarded: true,
+        creatingHere: false,
+      }),
+    ).toBe(true);
+    const unverified = inputs();
+    expect(
+      creationBlocks({
+        steps: characterSteps(unverified),
+        gate: gatePassed(unverified),
+        skipped: new Set(["name", "sensor"]),
+        onboarded: true,
+        creatingHere: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps a brand-new player in the onboarding pass until they finish or skip it", () => {
+    const i = inputs({ world: { lane: "on", human: "verified" } });
+    const base = { steps: characterSteps(i), gate: gatePassed(i), creatingHere: true };
+    expect(creationBlocks({ ...base, skipped: new Set(), onboarded: false })).toBe(true);
+    expect(
+      creationBlocks({ ...base, skipped: new Set(["name", "sensor"]), onboarded: false }),
+    ).toBe(true);
+    expect(creationBlocks({ ...base, skipped: new Set(), onboarded: true })).toBe(false);
+  });
+});
+
+describe("hardGateClosed (is this player creating their character here)", () => {
+  const settled = {
+    authenticated: true,
+    address: ADDRESS,
+    gate: false,
+    gateLoading: false,
+    accessLoading: false,
+    worldLane: "on" as const,
+  };
+
+  it("is true once every read has settled and the gate is closed", () => {
+    expect(hardGateClosed(settled)).toBe(true);
+  });
+
+  it("is false while signed out, while a read is in flight, or once the gate is open", () => {
+    expect(hardGateClosed({ ...settled, authenticated: false, address: null })).toBe(false);
+    expect(hardGateClosed({ ...settled, gateLoading: true })).toBe(false);
+    expect(hardGateClosed({ ...settled, accessLoading: true })).toBe(false);
+    expect(hardGateClosed({ ...settled, worldLane: "loading" })).toBe(false);
+    expect(hardGateClosed({ ...settled, gate: true })).toBe(false);
   });
 });

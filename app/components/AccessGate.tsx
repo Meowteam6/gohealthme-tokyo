@@ -7,8 +7,10 @@
 // visitor sees the pitch and the open runs, and an invited friend can read a
 // dare before signing in. Everything else shows character creation
 // until the two hard steps pass (signed in; World proof-of-human or the
-// closed-beta allowlist), then once more for the skippable onboarding pass
-// (name, sensor), then never again on this device.
+// closed-beta allowlist). A player who makes their character here is walked
+// through the skippable onboarding pass (name, wearable) once. A returning
+// player on any device, whose hard steps are already done server-side, walks
+// straight in: the per-device flag only remembers skips, it never gates.
 //
 // This is a UX gate. It decides what the browser SHOWS; the server decides what
 // actually happens (isAllowed on gated routes). The two stay separate so a
@@ -16,12 +18,13 @@
 // state. With World off for a build, the allowlist behaves exactly as it did
 // before V4, and there is no skip that works on a deployed environment.
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Skeleton } from "@/components/ui";
 import CharacterCreation from "@/components/game/CharacterCreation";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useOnboarding } from "@/lib/game/onboarding-store";
+import { creationBlocks, hardGateClosed } from "@/lib/game/character";
 import { isPublicPath } from "@/lib/public-paths";
 
 function GateLoading() {
@@ -46,13 +49,39 @@ function CharacterGate({ children }: { children: ReactNode }) {
   // steps there, so the page is never shown twice.
   const onCharacterPage = pathname === "/character";
 
+  // Latched per wallet: once this device has seen the player at a closed hard
+  // gate, they are creating their character here and get the onboarding pass.
+  // Adjusting state during render (not in an effect) keeps it one render.
+  const [creatingFor, setCreatingFor] = useState<string | null>(null);
+  const closedNow = hardGateClosed({
+    authenticated: view.authenticated,
+    address: view.address,
+    gate: view.gate,
+    gateLoading: view.gateLoading,
+    accessLoading: view.access.loading,
+    worldLane: view.worldLane,
+  });
+  if (closedNow && view.address !== null && creatingFor !== view.address) {
+    setCreatingFor(view.address);
+  }
+  const creatingHere = view.address !== null && creatingFor === view.address;
+
   if (view.gateLoading || !onboarding.hydrated) return <GateLoading />;
 
   if (!view.gate) {
     return <CharacterCreation view={view} onboarding={onboarding} mode="gate" />;
   }
 
-  if (!onboarding.done && !onCharacterPage) {
+  if (
+    !onCharacterPage &&
+    creationBlocks({
+      steps: view.steps,
+      gate: view.gate,
+      skipped: onboarding.skipped,
+      onboarded: onboarding.done,
+      creatingHere: creatingHere || closedNow,
+    })
+  ) {
     return <CharacterCreation view={view} onboarding={onboarding} mode="gate" />;
   }
 
