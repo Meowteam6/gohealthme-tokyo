@@ -444,7 +444,7 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
           }
         : {
             headline: "Banked",
-            body: "Verified and recorded on chain. I pay out when the run closes. Nothing for you to do but come back.",
+            body: "Verified and recorded on chain. The contract pays out when the run settles. Nothing for you to do but come back.",
             pose: "cheer",
           };
     case "won":

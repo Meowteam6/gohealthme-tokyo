@@ -3,6 +3,8 @@ import type { PoolInfo } from "@/lib/contract";
 import {
   challengeNote,
   endsAtWords,
+  friendNote,
+  friendQuestion,
   heroNote,
   openLandingRuns,
   openTag,
@@ -93,6 +95,12 @@ describe("run words", () => {
     expect(runName(sleep)).toBe("Sleep 7 hours Saturday night");
     expect(runName(pool({ id: 1n, initiative: "sleep" }))).toBe("Sleep at least 7 hours for 1 night");
     expect(runName(pool({ id: 1n, initiative: "challenge" }))).toBe("Sleep at least 7 hours for 1 night");
+    // An efficiency title written without its sign gets it back, so the lobby,
+    // Also open and the run page say the same number.
+    const eff = { initiative: "Sleep efficiency 85 tonight", goalSpec: "Sleep efficiency 85% or better for 1 night" };
+    expect(runName(eff)).toBe("Sleep efficiency 85% tonight");
+    expect(runName({ ...eff, initiative: "Sleep efficiency 85% tonight" })).toBe("Sleep efficiency 85% tonight");
+    expect(runName({ ...eff, initiative: "Sleep efficiency 90 tonight" })).toBe("Sleep efficiency 90 tonight");
   });
 
   it("kinds, stake words and player counts", () => {
@@ -129,7 +137,7 @@ describe("heroNote", () => {
     const terms = termsOf({ pool: workout, players: 1 }, 0, CUTOFF)!;
     const note = heroNote(terms);
     expect(segmentsText(note)).toBe(
-      "1 player in. Hit it and you get 2.00 to 4.00 back: your 1.00, plus an equal share of the 2.00 pot and any missed stakes.",
+      "1 player in. Hit it and you get 2.00 to 4.00 back: your 1.00, plus an equal share of the 2.00 sponsor pot and any missed stakes.",
     );
     expect(note.filter((s) => s.strong).map((s) => s.text)).toEqual(["2.00", "4.00"]);
   });
@@ -163,7 +171,7 @@ describe("heroNote", () => {
     expect(segmentsText(heroNote(two))).toBe("2 players in. Hit it and your 1.00 comes back. This run cannot record a miss, so a miss comes back too.");
     const withPot = termsOf({ pool: workout, players: 1 }, 0, null)!;
     expect(segmentsText(heroNote(withPot))).toBe(
-      "1 player in. Hit it and you get 2.00 to 3.00 back: your 1.00, plus an equal share of the 2.00 pot. A miss here is refunded.",
+      "1 player in. Hit it and you get 2.00 to 3.00 back: your 1.00, plus an equal share of the 2.00 sponsor pot. A miss here is refunded.",
     );
   });
 });
@@ -215,5 +223,36 @@ describe("challengeNote", () => {
     expect(segmentsText(challengeNote(5n * USDC, true))).toContain("that one gets 10.00.");
     // Miss rule off on this build: nothing past both stakes coming back.
     expect(segmentsText(challengeNote(USDC, false))).toBe("Stake 1.00 each. If you both hit, you both get 1.00 back.");
+  });
+});
+
+describe("friendNote", () => {
+  it("works the featured run's two-player math while nobody else is in", () => {
+    // Pool 5 on this build: 0 in, 2.00 sponsor pot, cannot record a miss.
+    const empty = termsOf({ pool: sleep, players: 0 }, 0, null)!;
+    expect(segmentsText(friendNote(empty))).toBe(
+      "Stake 1.00 each in this run. If you both hit, each of you gets 2.00 back.",
+    );
+    // A run that records a miss also says what their miss is worth to you.
+    const recording = termsOf({ pool: sleep, players: 0 }, 0, CUTOFF)!;
+    expect(segmentsText(friendNote(recording))).toBe(
+      "Stake 1.00 each in this run. If you both hit, each of you gets 2.00 back. If they miss, you get 4.00.",
+    );
+  });
+
+  it("names what a hit is made of once others are in, with no figure it cannot stand behind", () => {
+    // Pool 2: 1 player in, 3.00 balance, so a 2.00 sponsor pot.
+    const busy = termsOf({ pool: workout, players: 1 }, 0, null)!;
+    expect(segmentsText(friendNote(busy))).toBe(
+      "Stake 1.00 each in this run. If you both hit, each of you gets your 1.00 back plus an equal share of the 2.00 sponsor pot.",
+    );
+    const noPot = termsOf({ pool: pool({ id: 9n, balance: USDC }), players: 1 }, 0, null)!;
+    expect(segmentsText(friendNote(noPot))).toBe("Stake 1.00 each in this run. If you both hit, you both get your stake back.");
+  });
+
+  it("asks the question for the kind of run it links to", () => {
+    expect(friendQuestion("workout")).toBe("Know someone who swears they work out every day?");
+    expect(friendQuestion("sleep")).toBe("Know someone who swears they sleep 8 hours?");
+    expect(friendQuestion(null)).toBe("Know someone who swears they sleep 8 hours?");
   });
 });

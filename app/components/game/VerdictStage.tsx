@@ -33,6 +33,7 @@ import { parseScreening, type ScreeningStatus } from "@/lib/game/lanes";
 import { useLaneProbe } from "@/lib/game/useLaneProbe";
 import { commitmentLostCopy, hitRange } from "@/lib/game/commitment-copy";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
+import { paidShareText } from "@/lib/game/run-page";
 import {
   verdictCopy,
   verdictScreenOf,
@@ -516,7 +517,7 @@ export default function VerdictStage({
             {screen.kind === "won" && paid !== null && joined ? (
               <ChallengeFriend
                 path={`/pools/${pool.id.toString()}`}
-                text={`SPOTTER just paid me ${paid} test USDC for hitting ${goalShort} on GoHealthMe. Put money on yourself.`}
+                text={paidShareText(paid, pool.entryFee, goalShort)}
                 label={`Share my ${paid}`}
                 variant={claimWaiting ? "tertiary" : "secondary"}
               />

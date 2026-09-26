@@ -138,7 +138,7 @@ export function commitmentLostCopy(input: {
 export const COMMITMENT_FACTS = {
   effort: "Your result depends only on your own effort, verified by your wearable.",
   hit: "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot.",
-  miss: "Miss it: your stake goes to the players who hit.",
+  miss: "Miss it: if your wearable shows it, your stake goes to the players who hit. If your wearable sends nothing for the run, your stake comes back.",
   nobody: "Nobody hits: everyone gets their stake back.",
   /** A run that cannot record a miss (lib/miss-rule.ts): no missed stake is
    *  ever shared, so a hit is the stake back plus any sponsor pot. */

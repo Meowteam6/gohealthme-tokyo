@@ -104,7 +104,7 @@ import {
   optionCard,
 } from "@/components/night/kit";
 import { commitmentFacts } from "@/lib/game/commitment-copy";
-import { missRuleWouldApply } from "@/lib/miss-rule";
+import { missRuleFromPoolId, missRuleWouldApply } from "@/lib/miss-rule";
 import { useApprovalProbe } from "@/components/game/ApprovalNote";
 import {
   challengeCreateBlock,
@@ -206,12 +206,15 @@ interface DareInvite {
 // The amount picker's live reaction: SPOTTER's one deadpan line in his caption
 // box, keyed to the amount. He never states a number and never claims to hold
 // the money (the run's contract does); the amount lives in the field and the
-// preview card.
+// preview card. On a goal that cannot record a miss (lib/miss-rule.ts) a miss
+// comes back, so no line may say a miss costs anything: the line under the
+// field says the same thing a sentence later.
 type SpotterMood = { line: string };
 
 function getSpotterMoodForAmount(
   amount: number,
   kind: Variant,
+  recordsMisses: boolean,
 ): SpotterMood {
   if (amount < 10) {
     return {
@@ -225,7 +228,9 @@ function getSpotterMoodForAmount(
     return {
       line:
         kind === "self"
-          ? "Respectable. Enough to sting if you miss, not enough to cry about."
+          ? recordsMisses
+            ? "Respectable. Enough to sting if you miss, not enough to cry about."
+            : "Respectable. A miss comes back on this build, so this one is about the streak."
           : "Solid challenge. They'll feel this one.",
     };
   }
@@ -233,7 +238,9 @@ function getSpotterMoodForAmount(
     return {
       line:
         kind === "self"
-          ? "Now we're talking. I love a person with something to lose."
+          ? recordsMisses
+            ? "Now we're talking. I love a person with something to lose."
+            : "Now we're talking. I love a person who means it."
           : "Okay big spender. They better not miss this one.",
     };
   }
@@ -397,15 +404,23 @@ function SuggestionRow({
 function TypePicker({
   value,
   onChange,
+  missRule,
 }: {
   value: Variant;
   onChange: (v: Variant) => void;
+  /** Whether any run on this build can record a miss (lib/miss-rule.ts). The
+   *  goal is not written yet, so this says only what can be true. */
+  missRule: boolean;
 }) {
   const options: { id: Variant; title: string; body: string; icon: ReactNode }[] = [
     {
       id: "self",
       title: "Stake on yourself",
-      body: "Your own stake on your own goal. Hit it and your stake comes back plus an equal share of the pot.",
+      // A new run starts with no sponsor money, and a missed stake is shared
+      // only on a run that can record the miss: "any" for both.
+      body: missRule
+        ? "Your own stake on your own goal. Hit it and your stake comes back plus an equal share of any missed stakes and sponsor pot."
+        : "Your own stake on your own goal. Hit it and your stake comes back plus an equal share of any sponsor pot.",
       icon: <IconSelf className="size-5" />,
     },
     {
@@ -706,7 +721,7 @@ function CreateChallengeInner() {
       return null;
     }
   })();
-  const mood = getSpotterMoodForAmount(headlineAmountNum, variant);
+  const mood = getSpotterMoodForAmount(headlineAmountNum, variant, selfRecordsMisses(goal));
 
   const clearForm = () => {
     reset();
@@ -1170,7 +1185,7 @@ function CreateChallengeInner() {
         <PerchedHeader title="Start a challenge" lead={PAGE_LEAD_COPY} pose="wearable" width={[88, 132]}>
           <Card className="[&>*+*]:mt-6">
             <FormSection label="Whose goal is it">
-              <TypePicker value={variant} onChange={selectVariant} />
+              <TypePicker value={variant} onChange={selectVariant} missRule={missRuleFromPoolId() !== null} />
             </FormSection>
 
             <FormSection label={isDare ? "Pick their goal" : "Pick your goal"} htmlFor="challenge-goal">

@@ -233,7 +233,7 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
       return {
         title: "Pair a wearable to enter",
         detail:
-          "I pay on what your wearable reports, so no wearable means nothing for me to check.",
+          "I read what your wearable reports, so no wearable means nothing for me to check.",
         fix: {
           kind: "link",
           label: "Pair my wearable",
@@ -301,7 +301,7 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
       return {
         title: "Payouts are paused on this build",
         detail:
-          "Winners confirm with World ID before I pay, and that step is not set up here right now. I am not taking stakes that could not pay out. Nothing has been charged.",
+          "Players who hit confirm with World ID before the contract pays, and that step is not set up here right now. I am not taking stakes that could not pay out. Nothing has been charged.",
         fix: { kind: "none" },
         tone: "wait",
       };

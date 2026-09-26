@@ -49,7 +49,7 @@ describe("commitment copy", () => {
 
   it("the run board reminder states all three outcomes", () => {
     expect(commitmentReminder(true)).toBe(
-      "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot. Miss it: your stake goes to the players who hit. Nobody hits: everyone gets their stake back.",
+      "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot. Miss it: if your wearable shows it, your stake goes to the players who hit. If your wearable sends nothing for the run, your stake comes back. Nobody hits: everyone gets their stake back.",
     );
   });
 

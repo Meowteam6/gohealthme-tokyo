@@ -10,6 +10,7 @@
 import { commitmentOutcome, commitmentRange } from "@/lib/commitment";
 import { displayGoalSpec, evidenceTypeOf, formatUsdc, type PoolInfo } from "@/lib/contract";
 import { sponsorPotOf } from "@/lib/game/commitment-copy";
+import { friendMathOf } from "@/lib/game/run-page";
 import { missRuleFromPoolId, missRulePool } from "@/lib/miss-rule";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
 import { classifyWearableGoal, type WearableMetric } from "@/lib/wearable-goal";
@@ -48,7 +49,20 @@ export function runName(pool: Pick<PoolInfo, "initiative" | "goalSpec">): string
   if (name === "" || name === "challenge" || !/\s/.test(name)) {
     return displayGoalSpec(pool.goalSpec).trim();
   }
-  return name;
+  return withPercent(name, pool.goalSpec);
+}
+
+/**
+ * An efficiency run's title was written with a bare number ("Sleep efficiency
+ * 85 tonight"), while its goal and run page say 85%. Put the sign back, only
+ * when the goal really is an efficiency goal at that same number.
+ */
+function withPercent(name: string, goalSpec: string): string {
+  const spec = classifyWearableGoal(goalSpec);
+  if (spec.metric !== "sleep_efficiency") return name;
+  return name.replace(/\befficiency\s+(\d+(?:\.\d+)?)\b(?!\s*%)/i, (whole, n: string) =>
+    Number(n) === spec.threshold ? `${whole}%` : whole,
+  );
 }
 
 /**
@@ -203,10 +217,12 @@ export function heroNote(terms: RunTerms): Segment[] {
       { text: formatUsdc(range.ifEveryone), strong: true },
       { text: " to " },
       { text: formatUsdc(range.ifOnlyYou), strong: true },
-      { text: ` back: your ${stake}, plus an equal share of the ${formatUsdc(pot)} pot. A miss here is refunded.` },
+      { text: ` back: your ${stake}, plus an equal share of the ${formatUsdc(pot)} sponsor pot. A miss here is refunded.` },
     ];
   }
-  const share = pot > 0n ? `an equal share of the ${formatUsdc(pot)} pot and any missed stakes` : "an equal share of any missed stakes";
+  // "Sponsor pot", never bare "pot": once anyone is in, the Pot stat above is
+  // the whole balance (stakes included), and this figure is only the sponsor's.
+  const share = pot > 0n ? `an equal share of the ${formatUsdc(pot)} sponsor pot and any missed stakes` : "an equal share of any missed stakes";
   return [
     { text: `${playersIn(terms.players)}. Hit it and you get ` },
     { text: formatUsdc(range.ifEveryone), strong: true },
@@ -246,6 +262,58 @@ export function challengeNote(entryFee: bigint, missRule: boolean): Segment[] {
     { text: amount(one), strong: true },
     { text: "." },
   ];
+}
+
+/**
+ * The challenge band's line, worked from the featured run the band links to:
+ * the same stake for both of you, and what each of you gets if you both hit.
+ * A figure only while it is exact (friendMathOf: nobody else in yet); with
+ * others in, their nights change the split, so it says what a hit is made of.
+ * Their miss only reaches you on a run that can record one.
+ */
+export function friendNote(terms: RunTerms): Segment[] {
+  const stake = formatUsdc(terms.entryFee);
+  const lead: Segment = { text: `Stake ${stake} each in this run. ` };
+  const math = friendMathOf(terms, false);
+  if (math !== null) {
+    const both: Segment[] = [
+      lead,
+      { text: "If you both hit, each of you gets " },
+      { text: math.bothHit, strong: true },
+      { text: " back." },
+    ];
+    if (!terms.recordsMisses) return both;
+    return [...both, { text: " If they miss, you get " }, { text: math.friendMisses, strong: true }, { text: "." }];
+  }
+  const pot = sponsorPotOf(terms);
+  if (pot > 0n) {
+    return [
+      lead,
+      { text: `If you both hit, each of you gets your ${stake} back plus an equal share of the ` },
+      { text: formatUsdc(pot), strong: true },
+      { text: terms.recordsMisses ? " sponsor pot and any missed stakes." : " sponsor pot." },
+    ];
+  }
+  return [
+    lead,
+    {
+      text: terms.recordsMisses
+        ? "If you both hit, each of you gets your stake back plus an equal share of any missed stakes."
+        : "If you both hit, you both get your stake back.",
+    },
+  ];
+}
+
+/** The band's question, for the kind of run it links to. */
+export function friendQuestion(kind: RunKind | null): string {
+  switch (kind) {
+    case "workout":
+      return "Know someone who swears they work out every day?";
+    case "move":
+      return "Know someone who swears they hit their steps?";
+    default:
+      return "Know someone who swears they sleep 8 hours?";
+  }
 }
 
 // ------------------------------------------------------------ outcomes

@@ -64,7 +64,7 @@ export function distinctPlayers(events: readonly ActivityItem[]): number {
 const LINE: Record<ActivityType, (name: string) => string> = {
   joined: (n) => `${n} joined a run`,
   funded: (n) => `${n} added to a pot`,
-  paid: (n) => `SPOTTER paid ${n}`,
+  paid: (n) => `${n} got paid out`,
 };
 
 export default function HeroActivityTicker() {

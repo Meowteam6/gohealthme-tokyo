@@ -35,7 +35,9 @@ export default function WhosIn({
   action?: ReactNode;
 }) {
   return (
-    <Card as="section" aria-labelledby="who-h">
+    // #friends: the landing's challenge band links here, beside the button
+    // that shares this run.
+    <Card as="section" id="friends" aria-labelledby="who-h" className="scroll-mt-24">
       <h2 id="who-h" className="m-0 text-[1.0625rem] font-semibold">
         Who&apos;s in
       </h2>

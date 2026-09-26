@@ -7,6 +7,7 @@ import {
   friendMathOf,
   leftLabel,
   nightTimelineOf,
+  paidShareText,
   paidSplitOf,
   resultIcs,
   runHeadlineOf,
@@ -19,6 +20,21 @@ const USDC = 1_000_000n;
 // Pool 5: ends Sun 2026-09-27 08:30 JST.
 const END = BigInt(Date.parse("2026-09-27T08:30:00+09:00") / 1000);
 const TZ = "Asia/Tokyo";
+
+describe("paidShareText", () => {
+  it("splits the stake from what the pot paid, and never says SPOTTER paid", () => {
+    expect(paidShareText("3.00", USDC, "7 hours")).toBe(
+      "I hit 7 hours on GoHealthMe: my 1.00 back plus 2.00 from the pot, in test USDC. Put money on yourself.",
+    );
+    expect(paidShareText("1.00", USDC, "the goal")).toBe(
+      "I hit my goal on GoHealthMe: my 1.00 back, in test USDC. Put money on yourself.",
+    );
+    expect(paidShareText("0.50", USDC, "7 hours")).toBe(
+      "I hit 7 hours on GoHealthMe and got 0.50 back, in test USDC. Put money on yourself.",
+    );
+    expect(paidShareText("3.00", USDC, "7 hours")).not.toMatch(/SPOTTER/);
+  });
+});
 
 describe("runHeadlineOf", () => {
   it("names a one-night hours run by the night before its morning close", () => {
@@ -35,6 +51,19 @@ describe("runHeadlineOf", () => {
     expect(eff.rest).toBe("sleep efficiency, Saturday night");
     const steps = runHeadlineOf({ goalSpec: "Walk at least 8,000 steps for 1 day", periodEnd: END, timeZone: TZ });
     expect(steps.figure).toBe("8,000 steps");
+  });
+
+  it("names a one-day run that closes in the morning by the day before", () => {
+    // Pool 2: one workout, closes Sun 08:00 JST. The lobby says "today" on
+    // Saturday evening, so the headline must say Saturday, never Sunday.
+    const close = BigInt(Date.parse("2026-09-27T08:00:00+09:00") / 1000);
+    const workout = runHeadlineOf({ goalSpec: "Complete at least 1 workout for 1 day", periodEnd: close, timeZone: TZ });
+    expect(workout.figure).toBe("1 workout");
+    expect(workout.rest).toBe("Saturday");
+    // An evening close keeps its own day.
+    const evening = BigInt(Date.parse("2026-09-26T22:00:00+09:00") / 1000);
+    const steps = runHeadlineOf({ goalSpec: "Walk at least 8,000 steps for 1 day", periodEnd: evening, timeZone: TZ });
+    expect(steps.rest).toBe("Saturday");
   });
 
   it("counts nights for a longer run and has no figure for a document goal", () => {
@@ -90,7 +119,9 @@ describe("money lines", () => {
     const terms = stakeTermsOf({ entryFee: USDC, sponsorPot: 2n * USDC, goalShort: "7 hours", feeBps: 0, recordsMisses: true });
     expect(terms.hitLabel).toBe("Hit 7 hours:");
     expect(terms.hit).toBe("your 1.00 back, plus an equal share of the missed stakes and the 2.00 sponsor pot.");
-    expect(terms.miss).toBe("your 1.00 goes to the players who hit.");
+    expect(terms.miss).toBe(
+      "if your wearable shows it, your 1.00 goes to the players who hit. If your wearable sends nothing for the run, it comes back.",
+    );
     expect(terms.nobody).toBe("everyone's stake comes back. No cut on this build.");
   });
 

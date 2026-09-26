@@ -104,7 +104,7 @@ export function challengeCreateBlock(
       kind: "paused",
       title: "Challenges are paused for now",
       detail:
-        "Winners confirm with World ID before I pay, and that step is not set up here right now. I am not letting you fund a reward that could not pay out. Nothing has been charged.",
+        "Players who hit confirm with World ID before the contract pays, and that step is not set up here right now. I am not letting you fund a reward that could not pay out. Nothing has been charged.",
     };
   }
   if (verifier === "error") return { kind: "retry", title: "I could not check my document checker just now" };

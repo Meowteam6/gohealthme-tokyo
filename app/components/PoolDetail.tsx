@@ -95,6 +95,7 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import { darePot } from "@/lib/challenges";
 import { recordsMissesOf, sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
 import { missRulePool, missRuleReading } from "@/lib/miss-rule";
+import { runName } from "@/lib/game/landing";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
 import { classifyWearableGoal, metricLabel } from "@/lib/wearable-goal";
 import { fetchResolvedName, resolveOnce } from "@/lib/ens/client-cache";
@@ -754,7 +755,9 @@ export default function PoolDetail({ id }: { id: string }) {
         : phase === "expired"
           ? { tone: "ended" as const, label: "Ended" }
           : closesWithinDay(pool.periodEnd, clockNow)
-            ? { tone: "live" as const, label: sleepRun ? "Open tonight" : "Open today" }
+            ? // The landing and the lobby tag a day run "Open now" (openTag in
+              // lib/game/landing.ts); "today" read as the close's day.
+              { tone: "live" as const, label: sleepRun ? "Open tonight" : "Open now" }
             : { tone: "live" as const, label: "Open" };
   const ends: ReactNode =
     phase === "cancelled" ? (
@@ -1166,7 +1169,7 @@ export default function PoolDetail({ id }: { id: string }) {
             {joined
               ? `Joining closed at ${endClock}. Sync your ${deviceName ?? "wearable"} and send SPOTTER in below, before the run settles.`
               : participantCount === 0
-                ? "Nobody joined this one, so there is nothing here for SPOTTER to pay."
+                ? "Nobody joined this one, so there is nothing here to pay out."
                 : "You are not in this run, so nothing here pays out for you."}
           </p>
           {!joined ? (
@@ -1312,7 +1315,17 @@ export default function PoolDetail({ id }: { id: string }) {
       );
     }
     if (count !== null && count > 0 && !isChallenge) {
-      return <>More players, bigger pot. Each one stakes {stake} too.</>;
+      // Only a run that records a miss grows with its players. Anywhere else a
+      // miss is refunded, so another player splits the same sponsor pot.
+      if (recordsMisses) return <>More players, bigger pot. Each one stakes {stake} too.</>;
+      return sponsorPot > 0n ? (
+        <>
+          Each player stakes {stake}. A miss here comes back, so the players who hit share the{" "}
+          <b className="font-semibold text-gold">{formatUsdc(sponsorPot)}</b> sponsor pot.
+        </>
+      ) : (
+        <>Each player stakes {stake}. A miss here comes back, so a hit is your stake back.</>
+      );
     }
     return undefined;
   };
@@ -1321,7 +1334,8 @@ export default function PoolDetail({ id }: { id: string }) {
 
   const alsoRows: AlsoOpenRow[] = openRuns.slice(0, 2).map((p) => ({
     href: `/pools/${p.id.toString()}`,
-    title: displayGoalSpec(p.goalSpec),
+    // The lobby row's name for the same run, so a link lands on what it said.
+    title: runName(p),
     ends: endsLabel(p.periodEnd),
     stake: formatUsdc(p.entryFee),
     pot: formatUsdc(p.balance),

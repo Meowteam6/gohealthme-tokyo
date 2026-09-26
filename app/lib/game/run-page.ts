@@ -89,7 +89,7 @@ export interface RunHeadline {
 /**
  * The headline for a run, read from its goal text and period. A one-night
  * sleep run is named by the night it ends in the morning of ("Saturday
- * night"); a one-day run by its day; a longer run by its count.
+ * night"); a one-day run by the day it belongs to; a longer run by its count.
  */
 export function runHeadlineOf(input: {
   goalSpec: string;
@@ -99,13 +99,17 @@ export function runHeadlineOf(input: {
   const spec = classifyWearableGoal(input.goalSpec);
   const end = Number(input.periodEnd);
   const sleep = isSleepMetric(spec.metric);
-  // A sleep run that ends in the morning belongs to the night before it; the
-  // 12 hours back lands on that evening for any morning close.
+  // A one-day run belongs to the day before a morning close, whatever it
+  // counts: a workout run that closes Sun 08:00 is Saturday's, the day the
+  // lobby calls "today" and the one SPOTTER's window opens on. 12 hours back
+  // lands on that evening for any morning close, and on the same day for an
+  // afternoon or evening one. A sleep run is that day's night.
+  const day = parts(end - 12 * HOUR, input.timeZone).weekdayLong;
   const when =
     spec.goalDays === 1
       ? sleep
-        ? `${parts(end - 12 * HOUR, input.timeZone).weekdayLong} night`
-        : parts(end - 60, input.timeZone).weekdayLong
+        ? `${day} night`
+        : day
       : `on ${spec.goalDays} ${sleep ? "nights" : "days"}`;
   const t = spec.threshold;
   const base = { metric: spec.metric, threshold: t, goalDays: spec.goalDays };
@@ -215,7 +219,9 @@ export function stakeTermsOf(input: {
   return {
     hitLabel,
     hit: `your ${stake} back, plus an equal share of the missed stakes${pot}.`,
-    miss: `your ${stake} goes to the players who hit.`,
+    // Both halves of the rule, at the moment of commitment: only a miss the
+    // wearable shows costs the stake; no data for the run is not a miss.
+    miss: `if your wearable shows it, your ${stake} goes to the players who hit. If your wearable sends nothing for the run, it comes back.`,
     nobody: `everyone's stake comes back.${fee}`,
   };
 }
@@ -303,6 +309,19 @@ export function paidSplitOf(paidUsd: string, entryFee: bigint): { stake: string;
   const paid = BigInt(match[1]) * 1_000_000n + BigInt((match[2] ?? "").padEnd(6, "0"));
   if (paid < entryFee) return null;
   return { stake: formatUsdc(entryFee), rest: formatUsdc(paid - entryFee) };
+}
+
+/**
+ * The paid verdict's share text. The contract paid, not SPOTTER, and the
+ * stake coming back is not winnings: the line splits the figure the way the
+ * receipt does. Falls back to the total when the figure does not split.
+ */
+export function paidShareText(paidUsd: string, entryFee: bigint, goalShort: string): string {
+  const goal = goalShort === "the goal" ? "my goal" : goalShort;
+  const split = paidSplitOf(paidUsd, entryFee);
+  if (split === null) return `I hit ${goal} on GoHealthMe and got ${paidUsd} back, in test USDC. Put money on yourself.`;
+  if (split.rest === "0.00") return `I hit ${goal} on GoHealthMe: my ${split.stake} back, in test USDC. Put money on yourself.`;
+  return `I hit ${goal} on GoHealthMe: my ${split.stake} back plus ${split.rest} from the pot, in test USDC. Put money on yourself.`;
 }
 
 // ---------------------------------------------------------- calendar file

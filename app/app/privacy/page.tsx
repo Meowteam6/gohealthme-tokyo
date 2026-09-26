@@ -149,8 +149,8 @@ export default function PrivacyPage() {
             run, and one human to one GoHealthMe name.
           </p>
           <p>
-            Before SPOTTER pays a win, it can ask you to confirm the payout
-            with World ID. That proof is made for that one payout. We store
+            Before the settle pays a win, SPOTTER can ask you to confirm the
+            payout with World ID. That proof is made for that one payout. We store
             whether you confirmed, declined, or let the window close, when,
             the nullifier, and the credential kind. The public History page
             shows only the state and the credential kind, never your identity.
@@ -212,8 +212,8 @@ export default function PrivacyPage() {
             Payout wallets are screened
           </h2>
           <p>
-            Before SPOTTER pays a wallet, it sends that wallet address, and
-            nothing else, to Web3 Antivirus (through Intercepta) to check it
+            Before the settle pays a wallet, SPOTTER sends that wallet
+            address, and nothing else, to Web3 Antivirus (through Intercepta) to check it
             against sanction, blacklist and scam data. We keep the answer for
             about an hour so a retry does not ask again. No health data, no
             goal, and no name is sent. A wallet that is flagged, or a check
@@ -272,7 +272,7 @@ export default function PrivacyPage() {
             you type is sent.
           </p>
           <p>
-            When SPOTTER decides whether to pay a claim, it can also ask Gemini
+            When SPOTTER decides whether a claim should be paid, it can also ask Gemini
             to reason over the pool&apos;s public goal text and the
             verifier&apos;s yes-or-no verdict. It never sends your wearable
             data, your document, or your wallet address.

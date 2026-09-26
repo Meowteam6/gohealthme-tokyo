@@ -182,7 +182,7 @@ export function outcomeCopy(outcome: ApprovalOutcome): {
       return {
         headline: "the window closed before you answered. nothing moved.",
         detail:
-          "SPOTTER does not pay without a live yes. Ask again and you get a fresh 90-second window.",
+          "No payout without a live yes. Ask again and you get a fresh 90-second window.",
         askAgain: true,
       };
     case "cancelled":

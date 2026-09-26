@@ -142,8 +142,8 @@ export default function TermsPage() {
           <p>
             To play, you sign in (which creates a wallet) and prove you are one
             human with World ID. One human is bound to one wallet, and one
-            wallet gets one entry per run. SPOTTER will not check or pay a
-            wallet that has not proven it is one human. On a build where World
+            wallet gets one entry per run. SPOTTER will not check a wallet, or
+            settle a payout to it, until it has proven it is one human. On a build where World
             ID is off, the closed-beta list decides who can play instead.
           </p>
           {/* REVIEW: the closed-beta request form refuses residents of 14 US

@@ -12,6 +12,7 @@ import ChallengeFriend from "@/components/run/ChallengeFriend";
 import { commitmentOutcome } from "@/lib/commitment";
 import { formatUsdc } from "@/lib/contract";
 import { hitRange } from "@/lib/game/commitment-copy";
+import { paidShareText } from "@/lib/game/run-page";
 import type { VerdictScreen } from "@/lib/game/verdict";
 import type { SpotterScreenState } from "@/lib/spotter-poses";
 import { GallerySection, StateFrame, type SectionProps } from "../_kit";
@@ -80,7 +81,7 @@ function GoAgain({ share }: { share?: string }) {
       {share !== undefined ? (
         <ChallengeFriend
           path="/pools/5"
-          text={`SPOTTER just paid me ${share} test USDC for hitting ${HEADLINE.short} on GoHealthMe.`}
+          text={paidShareText(share, USDC, HEADLINE.short)}
           label={`Share my ${share}`}
           variant="secondary"
         />
