@@ -66,18 +66,23 @@ const wagmiConfig = createConfig({
 // Night Shift theme for Dynamic's own sign-in modal (docs/DESIGN.md). Colours,
 // fonts and radii come from the --dynamic-* custom properties set on
 // .dynamic-shadow-dom in globals.css, which inherit through the shadow root.
-// A custom property cannot restyle a selector, so the one rule that needs one
-// lives here: Dynamic hard-codes white text on its brand button, and the brand
+// A custom property cannot restyle a selector, so the rules that need one
+// live here: Dynamic hard-codes white text on its brand button, and the brand
 // colour is the cream moon face, so the button takes the moon gradient with ink
 // text. Every value is a token from globals.css, inherited through the host.
 const DYNAMIC_CSS_OVERRIDES = `
 .button--brand-primary {
   color: var(--accent-foreground);
   background: linear-gradient(180deg, var(--accent-top) 0%, var(--accent) 55%, var(--accent-bottom) 100%);
-  box-shadow: var(--elev-moon);
+  box-shadow: var(--elev-moon-flat);
 }
-.button--brand-primary:hover:enabled { box-shadow: var(--elev-moon); filter: brightness(1.04); }
+.button--brand-primary:hover:enabled { box-shadow: var(--elev-moon-flat); filter: brightness(1.04); }
 .button--brand-primary .spinner { color: var(--accent-foreground) !important; }
+.button--brand-primary:disabled {
+  background: var(--fill-quiet);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.button--brand-primary:disabled, .button--brand-primary:disabled * { color: var(--haze) !important; }
 `;
 
 function DynamicMissingBanner() {

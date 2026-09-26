@@ -61,7 +61,7 @@ export function CopyAddressButton({
         onClick={run}
         title={`Tap to copy ${address}`}
         aria-label={`Copy wallet address ${address}`}
-        className="inline-flex min-h-11 items-center rounded-control bg-fill-quiet px-3 py-2 font-mono text-xs text-muted shadow-[inset_0_0_0_1px_var(--border)] hover:text-foreground"
+        className="num inline-flex min-h-11 items-center rounded-control bg-fill-quiet px-3 py-2 text-[0.8125rem] font-medium text-muted shadow-[inset_0_0_0_1px_var(--border)] hover:text-foreground"
       >
         <span aria-live="polite">
           {copy.kind === "copied"

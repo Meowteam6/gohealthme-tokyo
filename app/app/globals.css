@@ -94,6 +94,11 @@
   --elev-moon:
     inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -2px 0 rgba(11, 19, 48, 0.12),
     0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 28px -8px rgba(246, 228, 182, 0.45);
+  /* The moon face without its outer glow, for a host that clips it (Dynamic's
+     modal form cut the glow into a grey band under its button). */
+  --elev-moon-flat:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -2px 0 rgba(11, 19, 48, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.45);
   --elev-moon-pressed:
     inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 1px 3px rgba(11, 19, 48, 0.18),
     0 1px 1px rgba(0, 0, 0, 0.4), 0 6px 18px -8px rgba(246, 228, 182, 0.4);
