@@ -124,7 +124,7 @@ function ClaimHandleInner() {
 
   if (status.kind === "done") {
     return (
-      <div role="status" className="space-y-3">
+      <div role="status" className="[&>*+*]:mt-3">
         <Notice tone="ok" title={<span className="break-all">Handle claimed as @{status.handle}</span>}>
           Your public page is up. It shows the runs you hit and what they paid,
           never the health goal behind them.
@@ -153,7 +153,7 @@ function ClaimHandleInner() {
   const saving = status.kind === "saving";
 
   return (
-    <div className="space-y-4">
+    <div className="[&>*+*]:mt-4">
       <label className="block">
         <span className={FIELD_LABEL}>Handle</span>
         <div className="flex min-h-[52px] items-center rounded-control bg-surface-deep px-3 shadow-[inset_0_0_0_1px_var(--border-strong)] transition-shadow duration-[120ms] focus-within:shadow-[inset_0_0_0_1.5px_var(--foreground)]">

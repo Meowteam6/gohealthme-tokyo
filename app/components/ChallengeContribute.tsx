@@ -28,7 +28,7 @@ export default function ChallengeContribute({
   prizeUsd: string | null;
 }) {
   return (
-    <Card as="section" aria-labelledby="add-to-pot" className="space-y-4">
+    <Card as="section" aria-labelledby="add-to-pot" className="[&>*+*]:mt-4">
       <div>
         <h2 id="add-to-pot" className={CARD_TITLE}>
           Add to the pot

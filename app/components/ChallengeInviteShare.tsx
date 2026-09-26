@@ -78,7 +78,7 @@ export default function ChallengeInviteShare({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="[&>*+*]:mt-2">
       <button
         type="button"
         onClick={() => void reveal()}

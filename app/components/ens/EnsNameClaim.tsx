@@ -284,7 +284,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
     const name = status.kind === "done" ? status.name : (currentName as string);
     const tx = status.kind === "done" ? status.tx : null;
     return (
-      <div data-lane="ens" className="space-y-3">
+      <div data-lane="ens" className="[&>*+*]:mt-3">
         <Notice tone="ok" title={<span className="break-all">You are {name}</span>}>
           {isOwnSubname(name)
             ? "Resolves on ENSv2 Sepolia to this wallet. The name is yours: the token sits in your wallet and any ENS client can look it up."
@@ -386,7 +386,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
 
   if (mode === "link") {
     return (
-      <div data-lane="ens" className="space-y-4">
+      <div data-lane="ens" className="[&>*+*]:mt-4">
         {modeSwitch}
         <label className="block">
           <span className={FIELD_LABEL}>Your ENS name</span>
@@ -440,7 +440,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
   }
 
   return (
-    <div data-lane="ens" className="space-y-4">
+    <div data-lane="ens" className="[&>*+*]:mt-4">
       {modeSwitch}
       <label className="block">
         <span className={FIELD_LABEL}>Your name</span>

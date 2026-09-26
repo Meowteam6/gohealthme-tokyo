@@ -122,7 +122,7 @@ export default function SensorStep({
     view.providers?.providers.some((p) => p.id === "whoop" && p.connected) ??
     false;
   return (
-    <div className="space-y-3">
+    <div className="[&>*+*]:mt-3">
       <WhoopReturnNote whoopConnected={whoopConnected} />
       <SensorStepBody view={view} onSkip={onSkip} />
     </div>
@@ -157,7 +157,7 @@ function SensorStepBody({
 
   if (sensor.kind === "unchecked") {
     return (
-      <div className="space-y-3">
+      <div className="[&>*+*]:mt-3">
         <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
           Sign once so I can see which wearable you have paired and what it
           measures. Free, no transaction, and it covers every run.
@@ -187,7 +187,7 @@ function SensorStepBody({
 
   if (sensor.kind === "unavailable") {
     return (
-      <div className="space-y-3">
+      <div className="[&>*+*]:mt-3">
         <Notice tone="limit" title="The wearable check is not answering">
           I cannot pair anything this minute. Your runs stay locked until it is
           back.
@@ -220,7 +220,7 @@ function SensorStepBody({
       : [];
 
   return (
-    <div className="space-y-4">
+    <div className="[&>*+*]:mt-4">
       {paired !== null ? (
         <Notice tone="ok" title={`${paired.label} is paired`} live>
           <p className="m-0">

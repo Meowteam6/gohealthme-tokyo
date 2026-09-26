@@ -94,7 +94,7 @@ export function ChallengeInvalid() {
 /** Rally more friends: the backer link, which never signs anyone up. */
 export function RallyCard({ token }: { token: string }) {
   return (
-    <Card as="section" aria-labelledby="rally" className="space-y-4">
+    <Card as="section" aria-labelledby="rally" className="[&>*+*]:mt-4">
       <div>
         <h2 id="rally" className={CARD_TITLE}>
           Rally your friends
@@ -166,7 +166,7 @@ function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
         <b className="font-semibold text-gold">{formatUsdc(terms.entryFee)} USDC</b>.{" "}
         {COMMITMENT_FACTS.effort}
       </p>
-      <ul className="num m-0 mt-3 list-none space-y-2.5 p-0">
+      <ul className="num m-0 mt-3 list-none [&>*+*]:mt-2.5 p-0">
         <Fact
           icon={
             <svg {...ICON}>
@@ -253,7 +253,7 @@ export function ChallengeIntro({
         </>
       }
     >
-      <Card className="space-y-4">
+      <Card className="[&>*+*]:mt-4">
         {terms !== null ? <ChallengeTermsList terms={terms} /> : null}
         <BackedBy names={backers} />
         <SpotterCaption line="Accept and your stake goes in. I read your wearable; only the yes or no result goes on chain, never your data." />
@@ -312,7 +312,7 @@ export function BackerView({
   canGrow: boolean;
 }) {
   return (
-    <div className={`${PAGE_COLUMN} space-y-6`}>
+    <div className={`${PAGE_COLUMN} [&>*+*]:mt-6`}>
       <PerchedHeader
         above={<Tag>Back the challenge</Tag>}
         title={`${challengerName} challenged ${target}`}

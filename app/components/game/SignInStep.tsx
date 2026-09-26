@@ -67,10 +67,10 @@ function SignInStepInner() {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="[&>*+*]:mt-3">
       {phase === "email" ? (
         <form
-          className="space-y-3"
+          className="[&>*+*]:mt-3"
           onSubmit={(e) => {
             e.preventDefault();
             void sendCode();
@@ -99,7 +99,7 @@ function SignInStepInner() {
         </form>
       ) : (
         <form
-          className="space-y-3"
+          className="[&>*+*]:mt-3"
           onSubmit={(e) => {
             e.preventDefault();
             void verify();

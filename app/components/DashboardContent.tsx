@@ -444,7 +444,7 @@ function StreakCard({
     <Card>
       <h2 className={CARD_TITLE}>Your streak</h2>
       {healthQuery.isLoading ? (
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 [&>*+*]:mt-2">
           <Skeleton className="h-8 w-40" />
           <Skeleton className="h-4 w-64" />
         </div>
@@ -901,13 +901,13 @@ export default function DashboardContent() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="[&>*+*]:mt-8">
       {headerPose !== null ? (
         <PerchedHeader title="My runs" lead={MY_RUNS_LEAD} pose={headerPose}>
           {firstCard}
         </PerchedHeader>
       ) : (
-        <div className="space-y-5">
+        <div className="[&>*+*]:mt-5">
           <header>
             <h1 className={PAGE_TITLE}>My runs</h1>
             <p className={PAGE_LEAD}>{MY_RUNS_LEAD}</p>
@@ -942,7 +942,7 @@ export default function DashboardContent() {
               },
             );
             return (
-              <div key={entry.pool.id.toString()} className="space-y-3">
+              <div key={entry.pool.id.toString()} className="[&>*+*]:mt-3">
                 <RunBoard pool={entry.pool} address={address} promptForData showLink />
                 {approvalLine !== null ? (
                   <ApprovalRunNote line={approvalLine} poolId={entry.pool.id} />
@@ -958,7 +958,7 @@ export default function DashboardContent() {
           })}
 
           {finishedRuns.length > 0 ? (
-            <section aria-labelledby="finished-runs" className="space-y-3">
+            <section aria-labelledby="finished-runs" className="[&>*+*]:mt-3">
               <h2 id="finished-runs" className={SECTION_TITLE}>
                 Finished runs
               </h2>

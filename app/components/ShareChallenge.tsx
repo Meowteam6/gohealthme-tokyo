@@ -126,7 +126,7 @@ export default function ShareChallenge({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="[&>*+*]:mt-2">
       <div className="flex flex-wrap gap-2">
         {canNativeShare ? (
           <button

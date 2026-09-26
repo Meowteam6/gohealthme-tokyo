@@ -134,14 +134,14 @@ export default function ChallengeStates({ meta }: SectionProps) {
 
       <StateFrame name="challenges-list" note="invited, in, and started, with the start card on top">
         <Frame pose="wave" first={<StartCard pause={null} />}>
-          <section className="space-y-4">
+          <section className="[&>*+*]:mt-4">
             <SectionHead
               title="Invited to you"
               lead="Challenges aimed at your name. Accept one and stake the small lock-in. Hit the goal and your lock-in comes back plus the reward when the run settles."
             />
             <InvitedChallengeCard entry={invited} challengerName="mika.gohealthme.eth" acceptUrl="#challenge-accept" />
           </section>
-          <section className="space-y-4">
+          <section className="[&>*+*]:mt-4">
             <SectionHead
               title="Challenges you're in"
               lead="Challenges a friend aimed at you that you accepted with a lock-in stake. Your wearable decides; hit it and your stake comes back plus the reward."
@@ -149,7 +149,7 @@ export default function ChallengeStates({ meta }: SectionProps) {
             <InChallengeCard entry={inEntry} challengerName="mika.gohealthme.eth" />
             <InChallengeCard entry={paidEntry} challengerName="0x8a39...6141" />
           </section>
-          <section className="space-y-4">
+          <section className="[&>*+*]:mt-4">
             <SectionHead
               title="Challenges you started"
               lead="Commitments you staked on your own goal, and rewards you put up for a friend. You never keep another player's stake."
@@ -207,7 +207,7 @@ export default function ChallengeStates({ meta }: SectionProps) {
       </StateFrame>
 
       <StateFrame name="challenge-grow" note="/c/[token] under the lobby: chip in and rally, while it can pay">
-        <div className={`${PAGE_COLUMN} space-y-8`}>
+        <div className={`${PAGE_COLUMN} [&>*+*]:mt-8`}>
           <RallyCard token="fixture-token-0000000000000000" />
         </div>
       </StateFrame>

@@ -346,7 +346,7 @@ function CreatePoolInner() {
           </Link>
         }
       >
-        <Card className="space-y-6">
+        <Card className="[&>*+*]:mt-6">
           <fieldset className="m-0 min-w-0 border-0 p-0">
             <legend className={SECTION_LABEL}>How the goal is checked</legend>
             <div role="radiogroup" aria-label="How the goal is checked" className="mt-3 grid gap-2.5 sm:grid-cols-3">
@@ -391,7 +391,7 @@ function CreatePoolInner() {
           </fieldset>
 
           {floor === "document" ? (
-            <div className="space-y-3 border-t border-edge pt-5">
+            <div className="[&>*+*]:mt-3 border-t border-edge pt-5">
               <h2 className={SECTION_LABEL}>Preventive-care templates</h2>
               <div className="flex flex-wrap gap-2">
                 {DOC_TEMPLATES.map((template) => (
@@ -426,7 +426,7 @@ function CreatePoolInner() {
             <p className={FIELD_HINT}>A short tag shown on the run, for example sleep or workouts.</p>
           </div>
 
-          <div className="space-y-3">
+          <div className="[&>*+*]:mt-3">
             <label htmlFor="pool-goal" className={`${FIELD_LABEL} !mb-0`}>
               Goal
             </label>
@@ -536,7 +536,7 @@ function CreatePoolInner() {
             </div>
           </div>
 
-          <div className="space-y-3 border-t border-edge pt-5">
+          <div className="[&>*+*]:mt-3 border-t border-edge pt-5">
             <h2 className={SECTION_LABEL}>How long it runs</h2>
             <div role="radiogroup" aria-label="How long it runs" className="flex flex-wrap gap-2">
               {DURATION_OPTIONS.map((opt) => (
@@ -555,7 +555,7 @@ function CreatePoolInner() {
 
           <fieldset className="m-0 min-w-0 border-0 border-t border-edge p-0 pt-5">
             <legend className={`${SECTION_LABEL} float-left mb-3 w-full`}>How it pays</legend>
-            <div className="clear-left space-y-2.5">
+            <div className="clear-left [&>*+*]:mt-2.5">
               {payoutOptions.map((opt) => {
                 const selected = bountyModel === opt.id;
                 return (
@@ -583,7 +583,7 @@ function CreatePoolInner() {
             </div>
           </fieldset>
 
-          <div className="space-y-3 border-t border-edge pt-5">
+          <div className="[&>*+*]:mt-3 border-t border-edge pt-5">
             <SignInGate note="Sign in to create this run.">
               {(openSignIn) => (
                 <Button
@@ -607,7 +607,7 @@ function CreatePoolInner() {
 
             {authenticated ? <GaslessBadge status={gasless} /> : null}
 
-            <div aria-live="polite" className="space-y-3">
+            <div aria-live="polite" className="[&>*+*]:mt-3">
               {status.kind === "approving" || status.kind === "depositing" ? (
                 <Notice tone="info">
                   Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}

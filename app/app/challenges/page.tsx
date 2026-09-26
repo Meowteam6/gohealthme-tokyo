@@ -400,7 +400,7 @@ function MyChallengesContent() {
   return (
     <Frame pose={pause !== null ? "thinking" : "wave"} first={<StartCard pause={pause} />}>
       {invited.length > 0 ? (
-        <section className="space-y-4">
+        <section className="[&>*+*]:mt-4">
           <SectionHead
             title="Invited to you"
             lead="Challenges aimed at your name. Accept one and stake the small lock-in. Hit the goal and your lock-in comes back plus the reward when the run settles."
@@ -416,7 +416,7 @@ function MyChallengesContent() {
         </section>
       ) : null}
 
-      <section className="space-y-4">
+      <section className="[&>*+*]:mt-4">
         <SectionHead
           title="Challenges you're in"
           lead="Challenges a friend aimed at you that you accepted with a lock-in stake. Your wearable decides; hit it and your stake comes back plus the reward."
@@ -437,7 +437,7 @@ function MyChallengesContent() {
         )}
       </section>
 
-      <section className="space-y-4">
+      <section className="[&>*+*]:mt-4">
         <SectionHead
           title="Challenges you started"
           lead="Commitments you staked on your own goal, and rewards you put up for a friend. You never keep another player's stake."

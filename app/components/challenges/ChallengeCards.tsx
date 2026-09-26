@@ -314,7 +314,7 @@ export function Frame({
   children?: ReactNode;
 }) {
   return (
-    <div className={`${PAGE_COLUMN} space-y-10`}>
+    <div className={`${PAGE_COLUMN} [&>*+*]:mt-10`}>
       <PerchedHeader title="Your challenges" lead={lead} pose={pose}>
         {first}
       </PerchedHeader>

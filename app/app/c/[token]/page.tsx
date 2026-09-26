@@ -184,7 +184,7 @@ export default async function ChallengeLandingPage({
   // highlighted and its accept control inside the slip. The lock logic is the
   // lobby's, so the challenge link and the board can never disagree.
   return (
-    <div className={`${PAGE_COLUMN} space-y-8`}>
+    <div className={`${PAGE_COLUMN} [&>*+*]:mt-8`}>
       <Lobby
         highlightId={challenge.poolId}
         returnTo={`/c/${token}`}

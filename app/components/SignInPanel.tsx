@@ -120,7 +120,7 @@ function SignInPanelInner({ surface }: { surface: SignInSurface }) {
       <h2 className="m-0 text-lg font-semibold leading-tight text-foreground">Sign in</h2>
 
       {step.kind === "otp" || step.kind === "verifying" ? (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 [&>*+*]:mt-3">
           <p className="m-0 text-[0.9375rem] text-muted">
             We sent a code to{" "}
             <span className="break-all font-semibold text-foreground">{email.trim()}</span>.
@@ -185,7 +185,7 @@ function SignInPanelInner({ surface }: { surface: SignInSurface }) {
           ) : null}
         </div>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 [&>*+*]:mt-3">
           <p className="m-0 text-[0.9375rem] text-muted">
             The fastest way in is your fingerprint or face. No password to
             remember.

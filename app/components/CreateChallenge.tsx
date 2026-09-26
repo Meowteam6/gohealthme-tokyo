@@ -304,7 +304,7 @@ function AmountChips({
   );
 
   return (
-    <div className="space-y-3">
+    <div className="[&>*+*]:mt-3">
       <div role="radiogroup" aria-label={ariaLabel} className="flex flex-wrap gap-2">
         {chips.map((chip) => (
           <Chip
@@ -571,7 +571,7 @@ function FormSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3 border-t border-edge pt-5 first:border-t-0 first:pt-0">
+    <section className="[&>*+*]:mt-3 border-t border-edge pt-5 first:border-t-0 first:pt-0">
       {htmlFor !== undefined ? (
         <label htmlFor={htmlFor} className={SECTION_LABEL}>
           {label}
@@ -986,7 +986,7 @@ function CreateChallengeInner() {
           lead="One step left: lock it in. Nothing has left your wallet yet; you stake by joining your own run."
           pose="thumbsup"
         >
-          <Card className="space-y-4">
+          <Card className="[&>*+*]:mt-4">
             <p className="num m-0 text-[0.9375rem] leading-[1.5] text-muted">
               Put up your{" "}
               <b className="font-semibold text-gold">
@@ -1021,7 +1021,7 @@ function CreateChallengeInner() {
           lead="The reward is in the run's contract. Send this link to the one person it is for."
           pose="thumbsup"
         >
-          <Card className="space-y-4">
+          <Card className="[&>*+*]:mt-4">
             {address !== null ? (
               <p className="m-0 text-[0.9375rem] text-haze">From {displayName(address)}</p>
             ) : null}
@@ -1031,7 +1031,7 @@ function CreateChallengeInner() {
               settles.
             </p>
             <SpotterCaption line="Send them the link. It pays once their wearable proves it." />
-            <div className="space-y-3 border-t border-edge pt-4">
+            <div className="[&>*+*]:mt-3 border-t border-edge pt-4">
               <h2 className={CARD_TITLE}>Send it to them</h2>
               {/* Web Share / Text / Email, prefilled with the challenge, reward and
                   link. CopyLink stays below as the desktop fallback. */}
@@ -1154,7 +1154,7 @@ function CreateChallengeInner() {
           the right. Stacked on a phone, preview after the form. */}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-10">
         <PerchedHeader title="Start a challenge" lead={PAGE_LEAD_COPY} pose="wearable" width={[88, 132]}>
-          <Card className="space-y-6">
+          <Card className="[&>*+*]:mt-6">
             <FormSection label="Whose goal is it">
               <TypePicker value={variant} onChange={selectVariant} />
             </FormSection>
@@ -1328,7 +1328,7 @@ function CreateChallengeInner() {
         </PerchedHeader>
 
         {/* preview + submit column */}
-        <div className="space-y-4 lg:sticky lg:top-24 lg:pt-3">
+        <div className="[&>*+*]:mt-4 lg:sticky lg:top-24 lg:pt-3">
           <h2 className="m-0 text-[0.9375rem] font-semibold text-muted">What they&apos;ll see</h2>
 
           <PreviewCard
@@ -1368,7 +1368,7 @@ function CreateChallengeInner() {
           </SignInGate>
           <Fine className="text-center">{FOOTER_NOTE}</Fine>
 
-          <div aria-live="polite" className="space-y-3">
+          <div aria-live="polite" className="[&>*+*]:mt-3">
             {status.kind === "approving" || status.kind === "depositing" ? (
               <Notice tone="info">
                 {isDare ? (

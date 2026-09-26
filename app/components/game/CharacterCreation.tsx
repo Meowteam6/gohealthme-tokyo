@@ -150,7 +150,7 @@ function HumanBody({
       );
     }
     return (
-      <div className="space-y-3">
+      <div className="[&>*+*]:mt-3">
         <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
           One scan with World ID proves a real, unique person is playing. I never
           see who you are, only that you are one human.
@@ -181,7 +181,7 @@ function HumanBody({
   // The allowlist: World is not on this build, or the player chose the list.
   if (state.status === "waiting" || view.access.status === "pending") {
     return (
-      <div className="space-y-3">
+      <div className="[&>*+*]:mt-3">
         <Notice tone="limit" title="Your request is in" live>
           You get in as soon as it is approved, and this page opens on its own
           when it is.
@@ -194,7 +194,7 @@ function HumanBody({
   }
   if (state.status === "error") {
     return (
-      <div className="space-y-3">
+      <div className="[&>*+*]:mt-3">
         <Notice tone="limit">{state.note} Your spot is safe.</Notice>
         <Button type="button" variant="secondary" onClick={() => view.access.refetch()}>
           Check again
@@ -203,7 +203,7 @@ function HumanBody({
     );
   }
   return (
-    <div className="space-y-2">
+    <div className="[&>*+*]:mt-2">
       {view.worldLane !== "on" ? (
         <p className="m-0 text-[0.9375rem] text-muted">
           World ID is not switched on for this build, so the list is the way in.
@@ -230,7 +230,7 @@ function NameBody({
     // The server mints names for verified humans only while World is on.
     // Say so before any signature instead of offering a claim that fails.
     return (
-      <div className="space-y-3">
+      <div className="[&>*+*]:mt-3">
         <Notice tone="limit">{state.note}</Notice>
         <Button type="button" variant="secondary" size="sm" onClick={onProveHuman}>
           Go to step 2
@@ -243,7 +243,7 @@ function NameBody({
     );
   }
   return (
-    <div className="space-y-3">
+    <div className="[&>*+*]:mt-3">
       {view.nameMode === "ens" ? (
         <EnsNameClaim
           address={address}
@@ -322,7 +322,7 @@ export default function CharacterCreation({
     <div className="mx-auto grid w-full max-w-5xl gap-6 py-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] lg:items-start lg:gap-10 min-[960px]:py-4">
       <Scene step={open} title={mode === "page" ? "Your player" : "Make your player"} />
 
-      <div className="min-w-0 space-y-6">
+      <div className="min-w-0 [&>*+*]:mt-6">
       <Card as="ol" padding="none" aria-label="Steps" className="m-0 list-none divide-y divide-edge overflow-hidden p-0">
         {STEP_ORDER.map((id, index) => {
           const state = view.steps[id];
@@ -395,7 +395,7 @@ export default function CharacterCreation({
       </Card>
 
       {signedIn && view.gate && current === null && mode === "gate" ? (
-        <div className="space-y-3">
+        <div className="[&>*+*]:mt-3">
           <CharacterCard view={view} />
           <Button type="button" block onClick={onboarding.finish}>
             Take me in
