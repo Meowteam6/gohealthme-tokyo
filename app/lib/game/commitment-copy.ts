@@ -59,59 +59,6 @@ export function feeLine(feeBps: number | null): string | null {
   return `GoHealthMe keeps ${pct}% of missed stakes, never any of a stake that hit.`;
 }
 
-export interface HowItPays {
-  same: string;
-  hit: string;
-  /** Today's numbers for a hit, or null when they cannot be stated exactly. */
-  range: string | null;
-  miss: string;
-  nobody: string;
-  fee: string | null;
-}
-
-/**
- * The "How this run pays" lines. `joining` counts the reader as a player who
- * is about to stake, so the numbers are what they would get after joining.
- */
-export function howThisRunPays(t: CommitmentTerms, joining: boolean): HowItPays {
-  const stake = formatUsdc(t.entryFee);
-  const sponsor = sponsorPotOf(t);
-  const r = hitRange(t, joining);
-  const n = t.players + (joining ? 1 : 0);
-  let range: string | null = null;
-  if (r !== null) {
-    const who = n === 1 ? "With just you in" : `With ${n} players in`;
-    range =
-      r.low === r.high
-        ? `${who}, a hit pays ${formatUsdc(r.low)} USDC.`
-        : `${who}, a hit pays ${formatUsdc(r.low)} USDC if everyone hits, up to ${formatUsdc(r.high)} USDC if only you do.`;
-  }
-  return {
-    same: `Everyone puts in the same ${stake} USDC. Your result depends only on what your wearable verifies, never on chance.`,
-    hit:
-      sponsor > 0n
-        ? `Hit your goal: your ${stake} comes back, plus an equal share of the missed stakes and the ${formatUsdc(sponsor)} USDC sponsor pot.`
-        : `Hit your goal: your ${stake} comes back, plus an equal share of the stakes of players who missed.`,
-    range,
-    miss: `Miss it: your ${stake} goes to the players who hit.`,
-    nobody: "Nobody hits: everyone gets their stake back.",
-    fee: feeLine(t.feeBps),
-  };
-}
-
-/** One plain line under the coin, before the commit. */
-export function joinTermsLine(t: CommitmentTerms): string {
-  const stake = formatUsdc(t.entryFee);
-  const r = hitRange(t, true);
-  const hit =
-    r === null
-      ? `Hit it: your ${stake} back plus a share.`
-      : r.high > t.entryFee
-        ? `Hit it: your ${stake} back plus up to ${formatUsdc(r.high - t.entryFee)} more.`
-        : `Hit it: your ${stake} back.`;
-  return `${hit} Miss: your ${stake} goes to the players who hit. Nobody hits: it comes back to you.`;
-}
-
 /**
  * The paid verdict's breakdown, split from the amount the settle actually
  * credited (the ledger's AchieverPaid figure), the same way commitmentOutcome
@@ -168,6 +115,17 @@ export function commitmentLostCopy(input: {
   };
 }
 
+/**
+ * The four facts with no number past the stake, worded as
+ * components/CommitmentTerms.tsx words them, for the places that cannot state
+ * a range (a count that did not read) and the run board's reminder.
+ */
+export const COMMITMENT_FACTS = {
+  effort: "Your result depends only on your own effort, verified by your wearable.",
+  hit: "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot.",
+  miss: "Miss it: your stake goes to the players who hit.",
+  nobody: "Nobody hits: everyone gets their stake back.",
+} as const;
+
 /** The run board's reminder under the money, for a player already in. */
-export const COMMITMENT_REMINDER =
-  "Hit it and your stake comes back plus an equal share of the missed stakes. Miss it and your stake goes to the players who hit. If nobody hits, every stake comes back.";
+export const COMMITMENT_REMINDER = `${COMMITMENT_FACTS.hit} ${COMMITMENT_FACTS.miss} ${COMMITMENT_FACTS.nobody}`;

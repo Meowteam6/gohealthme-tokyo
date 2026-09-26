@@ -106,7 +106,7 @@ export default function RunBoard({
   });
   const players = usePlayers(pool.id);
   const selfStaked = pool.bountyModel === 2;
-  const feeBps = useCommitmentFee(selfStaked);
+  const feeBps = useCommitmentFee(selfStaked).bps;
 
   const state = progressQuery.data;
   const banked = state?.kind === "ok" ? state.progress.streakDays : null;

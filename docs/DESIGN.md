@@ -101,6 +101,33 @@ SPOTTER is deadpan and dry, first person, with fixed lines per state (`lib/spott
 
 Every game component renders default, loading, empty, error, success and disabled. Each has a SPOTTER pose or a line. A disabled control says why next to it. A lane that is not on this deployment is a state, not an error.
 
+## The commitment model
+
+This is the product's money rule and its compliance line, so every run with `bountyModel` 2 says it in plain words, before any stake. It mirrors `HealthPoolsV3._settleCommitment`.
+
+- **Everyone puts in the same stake.** Your result depends only on your own effort, verified by your wearable, never on chance.
+- **Hit your goal:** your own stake comes back, plus an equal share of the stakes of players who missed, plus any sponsor pot.
+- **Miss:** your stake goes to the players who hit.
+- **Nobody hits:** everyone gets their stake back.
+- **No cut on V4:** `commitmentFeeBps()` is read from chain (`fetchCommitmentFeeBps`, `useCommitmentFee`); "GoHealthMe takes no cut on this build" shows only when it reads 0 (verified 0 on `0x0B6E8D47...A12F`, Base Sepolia, 2026-09-26). A fee that did not read shows no range at all.
+- **Test money:** "Base Sepolia test money, beta" next to the terms. Lead with "your stake back", never a prize. Never bet, wager, odds, gamble or win big.
+
+**Rule: numbers come only from `app/lib/commitment.ts`** (`commitmentOutcome`, `commitmentRange`). No component does its own payout arithmetic. Shared wording lives in `components/CommitmentTerms.tsx` (landing, create-run, create-challenge, `/c/[token]`, the run page) and `lib/game/commitment-copy.ts` (lobby row, run board, verdict).
+
+| Where | What it says | Source |
+|---|---|---|
+| Landing | Three beats (hit, miss, nobody hits) with a worked example | `CommitmentBeats` |
+| Create run, create challenge | Range line under the stake field | `CommitmentRangeLine` |
+| `/c/[token]` | The terms list before accepting | `CommitmentTermsList` |
+| Lobby row (`RunSlip`) | "Stake 1.00 · get it back + a share if you hit" | `commitmentRowTerms` |
+| Run page (`PoolDetail`) | "How this run pays": the list with this run's live count and sponsor pot, plus the fee line; shown locked or playable, before the coin | `HowThisRunPays` -> `CommitmentTermsList`, `feeLine` |
+| Under the coin (`JoinPool`) | One range line: hit, miss, nobody hits | `CommitmentRangeLine` |
+| The run (`RunBoard`) | "If you hit" range (everyone hits to only you) and the three outcomes | `hitRange`, `COMMITMENT_REMINDER` |
+| Verdict, paid (`PayoutMoment`) | "1.00 stake back + 2.00 from missed stakes and any sponsor pot", split from the amount the settle actually credited | `paidBreakdown` |
+| Verdict, not met (`VerdictStage`) | "Your 1.00 went to the players who hit", or "Nobody hit it. Everyone's stake comes back" from the on-chain tally, or the B-2 refund when no miss was written | `commitmentLostCopy` |
+
+Known gap, stated so nobody overclaims: the contract refunds a player whose result was never recorded (B-2), so a miss only goes to the players who hit when SPOTTER writes it on chain. The forward copy states the stricter rule; the verdict states what actually happened.
+
 ## Decisions log
 
 | Date | Decision | Rationale |

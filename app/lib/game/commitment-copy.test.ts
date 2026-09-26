@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMMITMENT_REMINDER,
   commitmentLostCopy,
   commitmentRowTerms,
   feeLine,
   hitRange,
-  howThisRunPays,
-  joinTermsLine,
   paidBreakdown,
   sponsorPotOf,
 } from "@/lib/game/commitment-copy";
@@ -25,42 +24,30 @@ describe("commitment copy", () => {
   it("scenario 1: two players in, no sponsor, no fee, reader about to join", () => {
     const t = { entryFee: ONE, players: 2, balance: 2n * ONE, feeBps: 0 };
     expect(hitRange(t, true)).toEqual({ low: ONE, high: 3n * ONE });
-    expect(howThisRunPays(t, true)).toEqual({
-      same: "Everyone puts in the same 1.00 USDC. Your result depends only on what your wearable verifies, never on chance.",
-      hit: "Hit your goal: your 1.00 comes back, plus an equal share of the stakes of players who missed.",
-      range: "With 3 players in, a hit pays 1.00 USDC if everyone hits, up to 3.00 USDC if only you do.",
-      miss: "Miss it: your 1.00 goes to the players who hit.",
-      nobody: "Nobody hits: everyone gets their stake back.",
-      fee: "GoHealthMe takes no cut on this build.",
-    });
-    expect(joinTermsLine(t)).toBe(
-      "Hit it: your 1.00 back plus up to 2.00 more. Miss: your 1.00 goes to the players who hit. Nobody hits: it comes back to you.",
-    );
+    expect(feeLine(t.feeBps)).toBe("GoHealthMe takes no cut on this build.");
   });
 
   it("scenario 2: just you in, with a 0.50 sponsor pot", () => {
     const t = { entryFee: ONE, players: 1, balance: 1_500_000n, feeBps: 0 };
-    const lines = howThisRunPays(t, false);
-    expect(lines.hit).toBe(
-      "Hit your goal: your 1.00 comes back, plus an equal share of the missed stakes and the 0.50 USDC sponsor pot.",
-    );
-    expect(lines.range).toBe("With just you in, a hit pays 1.50 USDC.");
+    expect(hitRange(t, false)).toEqual({ low: 1_500_000n, high: 1_500_000n });
   });
 
-  it("scenario 3: fee unreadable, so no numbers beyond the stake", () => {
+  it("scenario 3: fee unreadable, so no range and no fee line", () => {
     const t = { entryFee: ONE, players: 2, balance: 2n * ONE, feeBps: null };
     expect(hitRange(t, true)).toBeNull();
-    expect(howThisRunPays(t, true).range).toBeNull();
-    expect(howThisRunPays(t, true).fee).toBeNull();
-    expect(joinTermsLine(t)).toBe(
-      "Hit it: your 1.00 back plus a share. Miss: your 1.00 goes to the players who hit. Nobody hits: it comes back to you.",
-    );
+    expect(feeLine(null)).toBeNull();
   });
 
   it("a fee comes off missed stakes only, matching the contract", () => {
     const t = { entryFee: ONE, players: 3, balance: 3n * ONE, feeBps: 1000 };
     expect(hitRange(t, false)).toEqual({ low: ONE, high: 2_800_000n });
     expect(feeLine(500)).toBe("GoHealthMe keeps 5% of missed stakes, never any of a stake that hit.");
+  });
+
+  it("the run board reminder states all three outcomes", () => {
+    expect(COMMITMENT_REMINDER).toBe(
+      "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot. Miss it: your stake goes to the players who hit. Nobody hits: everyone gets their stake back.",
+    );
   });
 
   it("paid breakdown splits the credited amount into stake back and the rest", () => {

@@ -425,7 +425,7 @@ export default function PoolDetail({ id }: { id: string }) {
     enabled: poolId !== null && settledNow,
     staleTime: 60_000,
   });
-  const commitmentFeeBps = useCommitmentFee(poolQuery.data?.pool.bountyModel === 2);
+  const commitmentFee = useCommitmentFee(poolQuery.data?.pool.bountyModel === 2);
 
   // Resolve the funder address to a handle when it has claimed one. Called
   // unconditionally with whatever is known this render (empty until the pool
@@ -525,7 +525,7 @@ export default function PoolDetail({ id }: { id: string }) {
           entryFee: pool.entryFee,
           players: participantCount,
           balance: pool.balance,
-          feeBps: commitmentFeeBps,
+          feeBps: commitmentFee.bps,
         }
       : null;
   const settleAchievers =
@@ -834,7 +834,8 @@ export default function PoolDetail({ id }: { id: string }) {
             cells={[
               {
                 // After a settle the balance is what was not paid out, not a prize.
-                label: over ? "Left in pool" : "Prize pool",
+                // A commitment run's balance is mostly the players' own stakes.
+                label: over ? "Left in pool" : selfStaked ? "In the pot" : "Prize pool",
                 value: formatUsdc(pool.balance),
                 tone: "money",
                 unit: "test USDC",
@@ -858,7 +859,7 @@ export default function PoolDetail({ id }: { id: string }) {
             signature. Public runs share from the block further down. */}
         {isChallenge && isCreator && address !== null ? (
           <div className="rounded-3xl border border-edge bg-surface p-4">
-            <h2 className="mb-2 font-display text-xl font-bold leading-display">Send the dare</h2>
+            <h2 className="mb-2 font-display text-xl font-bold leading-display">Send the challenge</h2>
             <ChallengeInviteShare poolId={pool.id} address={address} />
           </div>
         ) : null}
@@ -887,8 +888,7 @@ export default function PoolDetail({ id }: { id: string }) {
             <HowThisRunPays
               terms={commitmentTerms}
               entryFee={pool.entryFee}
-              loading={participantsQuery.isLoading}
-              joining
+              loading={participantsQuery.isLoading || commitmentFee.loading}
             />
           ) : null}
           {slot.kind === "cannot-pay" ? (
@@ -931,7 +931,7 @@ export default function PoolDetail({ id }: { id: string }) {
           ) : slot.kind === "playable" ? (
             <section className="rounded-3xl border-2 border-foreground bg-surface p-4 sm:p-6">
               <h2 className="font-display text-[clamp(1.75rem,8vw,2.5rem)] font-extrabold leading-display tracking-display">
-                {isChallenge ? "Take the dare" : "Enter the run"}
+                {isChallenge ? "Take the challenge" : "Enter the run"}
               </h2>
               <p className="mt-3 mb-4 text-sm text-foreground/80">
                 {pool.bountyModel === 2
@@ -1141,7 +1141,7 @@ export default function PoolDetail({ id }: { id: string }) {
               </div>
             ) : null}
             <div className="space-y-4">
-              <h2 className="font-display text-xl font-bold leading-display">Sweeten the pot</h2>
+              <h2 className="font-display text-xl font-bold leading-display">Add to the pot</h2>
               <Card>
                 <FundPool poolId={pool.id} />
               </Card>

@@ -154,7 +154,7 @@ export default function Lobby({
         <>
           {lobby.highlighted !== null ? (
             <Section
-              title="Your dare"
+              title="Your challenge"
               rows={[lobby.highlighted]}
               action={highlightAction}
               returnTo={returnTo}
@@ -196,7 +196,7 @@ export default function Lobby({
               />
               <p className="text-center">
                 <Link href="/challenge/new" className={TEXT_LINK}>
-                  Or dare a friend into one
+                  Or challenge a friend into one
                 </Link>
               </p>
             </div>
@@ -206,7 +206,7 @@ export default function Lobby({
                 Start a run
               </Link>
               <Link href="/challenge/new" className={GHOST_LINK}>
-                Dare a friend
+                Challenge a friend
               </Link>
             </div>
           )}

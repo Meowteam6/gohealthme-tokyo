@@ -30,7 +30,12 @@ import SignInGate from "@/components/SignInGate";
 import Spotter from "@/components/spotter/Spotter";
 import HoldCoin from "@/components/spotter/HoldCoin";
 import { joinCoinCopy, type JoinCoinPhase } from "@/components/join-coin";
-import { joinTermsLine, type CommitmentTerms } from "@/lib/game/commitment-copy";
+import { CommitmentRangeLine } from "@/components/CommitmentTerms";
+import {
+  COMMITMENT_FACTS,
+  sponsorPotOf,
+  type CommitmentTerms,
+} from "@/lib/game/commitment-copy";
 
 type JoinStatus =
   | { kind: "idle" }
@@ -315,9 +320,19 @@ function JoinPoolInner({
       {/* The commitment terms, one line, right under the coin and before
           the hold: what a hit, a miss and nobody hitting pay. */}
       {commitment !== null ? (
-        <p className="text-center text-sm font-bold text-foreground text-pretty">
-          {joinTermsLine(commitment)}
-        </p>
+        <div className="text-center text-pretty">
+          {commitment.feeBps === 0 ? (
+            <CommitmentRangeLine
+              entryFee={commitment.entryFee}
+              players={commitment.players}
+              sponsorPot={sponsorPotOf(commitment)}
+            />
+          ) : (
+            <span className="block text-sm text-muted">
+              {COMMITMENT_FACTS.hit} {COMMITMENT_FACTS.miss} {COMMITMENT_FACTS.nobody}
+            </span>
+          )}
+        </div>
       ) : null}
       {authenticated ? <GaslessBadge status={gasless} /> : null}
       <p className="text-center text-xs text-muted">
