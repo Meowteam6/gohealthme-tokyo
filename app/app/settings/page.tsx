@@ -28,7 +28,7 @@ export default function SettingsPage() {
       ) : (
         <EmptyCard
           title="Sign-in is off on this build"
-          detail="Without sign-in there is no wallet to show here. The home page still explains how a run works."
+          detail="Without sign-in there is no wallet to show here. The home page still explains how a challenge works."
           action={
             <Link href="/" className={buttonClasses({ size: "sm" })}>
               Go to the home page

@@ -198,8 +198,8 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
         <span className="ml-1 text-lg font-semibold text-foreground">USDC</span>
       </p>
       <p className="mt-1 text-sm text-muted">
-        Test balance you can move to your Base wallet to back goals and fund
-        pools.
+        Test balance you can move to your Base wallet to stake on challenges or
+        add to a pot.
       </p>
 
       <button
@@ -216,7 +216,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
       </button>
       <p className="mt-2 text-xs text-muted">
         Testnet faucet: GoHealthMe grants {formatUsdc(FAUCET_GRANT_UUSDC)} test
-        USDC to this address once every 24 hours so you can try a pool. Nothing
+        USDC to this address once every 24 hours so you can try a challenge. Nothing
         is charged and nothing leaves your wallet.
       </p>
       {faucet.kind === "granted" ? (
@@ -255,7 +255,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
       {move.kind === "done" ? (
         <div className="mt-2 rounded-xl border border-edge bg-surface-raised p-3">
           <p className="text-sm font-semibold text-accent-deep">
-            Moved to your Base wallet. It is now spendable on goals and pools.
+            Moved to your Base wallet. It is now spendable on challenges.
           </p>
           <a
             href={arcTxUrl(move.txHash)}

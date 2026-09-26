@@ -27,6 +27,6 @@ describe("provider capabilities", () => {
 
   it("has plain copy", () => {
     expect(launchGoalsSentence()).toBe("sleep efficiency, hours of sleep or workouts");
-    expect(COMING_LINE).toBe("Coming: heart-zone runs and document proof.");
+    expect(COMING_LINE).toBe("Coming: heart-zone challenges and document proof.");
   });
 });

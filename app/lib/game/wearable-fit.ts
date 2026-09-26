@@ -110,9 +110,9 @@ function joinOr(words: readonly string[]): string {
 
 function canCheck(label: string, ok: number, total: number): string {
   if (total === 0) return `${label} works here.`;
-  if (ok === total) return total === 1 ? `${label} can check the open run.` : `${label} can check all ${total} open runs.`;
-  if (ok === 0) return total === 1 ? `${label} can't check the open run.` : `${label} can't check any of the ${total} open runs.`;
-  return `${label} can check ${ok} of ${total} open runs.`;
+  if (ok === total) return total === 1 ? `${label} can check the open challenge.` : `${label} can check all ${total} open challenges.`;
+  if (ok === 0) return total === 1 ? `${label} can't check the open challenge.` : `${label} can't check any of the ${total} open challenges.`;
+  return `${label} can check ${ok} of ${total} open challenges.`;
 }
 
 /**
@@ -139,7 +139,7 @@ export function brandHint(
         text:
           pairable.length > 0
             ? ` To stake, you need a wearable: ${joinOr(pairable)}.`
-            : " No wearable can pair on this build yet, so runs stay locked.",
+            : " No wearable can pair on this build yet, so challenges stay locked.",
       },
     ];
   }
@@ -166,7 +166,7 @@ export function brandHint(
       {
         text:
           missing.length > 0
-            ? ` It has no step counter, so runs on ${joinOr(missing)} stay locked for it.`
+            ? ` It has no step counter, so challenges on ${joinOr(missing)} stay locked for it.`
             : "",
       },
     ];

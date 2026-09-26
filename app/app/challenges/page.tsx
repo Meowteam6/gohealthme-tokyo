@@ -387,7 +387,7 @@ function MyChallengesContent() {
         first={
           <EmptyCard
             title="No challenges yet"
-            detail="Stake on your own goal, or put up a reward and challenge a friend. Your wearable decides. When someone challenges you, it shows up here too."
+            detail="Put money on yourself and challenge a friend to match your stake. Your wearable decides. When someone challenges you, it shows up here too."
             action={<StartAction paused={false} />}
           />
         }
@@ -401,7 +401,7 @@ function MyChallengesContent() {
         <section className="[&>*+*]:mt-4">
           <SectionHead
             title="Invited to you"
-            lead="Challenges aimed at your name. Accept one and stake the small lock-in. Hit the goal and your lock-in comes back plus the reward when the run settles."
+            lead="Challenges aimed at your name. Accept one by putting up the stake it asks for. Hit the goal and your stake comes back, plus your share of any missed stakes and anything added to the pot."
           />
           {invited.map((entry) => (
             <InvitedChallengeCard
@@ -417,7 +417,7 @@ function MyChallengesContent() {
       <section className="[&>*+*]:mt-4">
         <SectionHead
           title="Challenges you're in"
-          lead="Challenges a friend aimed at you that you accepted with a lock-in stake. Your wearable decides; hit it and your stake comes back plus the reward."
+          lead="Challenges a friend sent you that you accepted. Your wearable decides: hit the goal and your stake comes back, plus your share of any missed stakes and anything added to the pot."
         />
         {data.inChallenges.length === 0 ? (
           <EmptyCard
@@ -438,12 +438,12 @@ function MyChallengesContent() {
       <section className="[&>*+*]:mt-4">
         <SectionHead
           title="Challenges you started"
-          lead="Commitments you staked on your own goal, and rewards you put up for a friend. You never keep another player's stake."
+          lead="Whoever hits gets their stake back plus an equal share of any missed stakes and anything added to the pot. If nobody hits, every stake goes back to its player and anything added comes back to you."
         />
         {data.sentChallenges.length === 0 ? (
           <EmptyCard
             title="You have not started one yet"
-            detail="Stake on your own goal, or put up a reward and challenge a friend to hit theirs."
+            detail="Put money on yourself, then send the link so a friend can match your stake."
           />
         ) : (
           data.sentChallenges.map((entry) => (
@@ -471,10 +471,10 @@ export default function ChallengesPage() {
       first={
         <EmptyCard
           title="Sign-in is off on this build"
-          detail="Challenges need a signed-in wallet, and this build has sign-in off. Nothing is wrong on your side. The open runs are still there to look at."
+          detail="Challenges need a signed-in wallet, and this build has sign-in off. Nothing is wrong on your side. The open challenges are still there to look at."
           action={
             <Link href="/pools" className={PRIMARY_LINK}>
-              See the open runs
+              See the open challenges
             </Link>
           }
         />

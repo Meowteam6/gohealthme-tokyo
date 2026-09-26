@@ -221,7 +221,7 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
       return {
         title: "Prove you are one human first",
         detail:
-          "One human, one entry. It takes one scan with World ID and it covers every run.",
+          "One human, one entry. It takes one scan with World ID and it covers every challenge.",
         fix: {
           kind: "link",
           label: "Prove I am human",
@@ -247,7 +247,7 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
       return {
         title: "I have not looked at your wearable this visit",
         detail:
-          "Sign once so I can read what it measures. Free, no transaction, and it unlocks every run at once.",
+          "Sign once so I can read what it measures. Free, no transaction, and it unlocks every challenge at once.",
         fix: { kind: "check-sensor", label: "Check my wearable" },
         tone: "fixable",
       };
@@ -256,7 +256,7 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
       const device = lock.deviceLabel ?? "Your wearable";
       return {
         title: `${device} cannot measure this one`,
-        detail: `This run is scored on ${metric}, and ${device} does not report it. That is the hardware, so waiting will not change it. Pair a wearable that tracks ${metric} to play it.`,
+        detail: `This challenge is scored on ${metric}, and ${device} does not report it. That is the hardware, so waiting will not change it. Pair a wearable that tracks ${metric} to play it.`,
         fix: {
           kind: "link",
           label: "Change my wearable",
@@ -269,7 +269,7 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
       return {
         title: "Wearable checks are down for a bit",
         detail:
-          "The wearable service is not answering me right now. Nothing is wrong with your wearable. This run opens again when it is back.",
+          "The wearable service is not answering me right now. Nothing is wrong with your wearable. This challenge opens again when it is back.",
         fix: { kind: "none" },
         tone: "wait",
       };
@@ -278,14 +278,14 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
         ? {
             title: "You are on the waitlist",
             detail:
-              "The beta is invite-only for now. Your request is in, and this run opens for you the moment it is approved. Nothing has been charged.",
+              "The beta is invite-only for now. Your request is in, and this challenge opens for you the moment it is approved. Nothing has been charged.",
             fix: { kind: "link", label: "See my request", href: `/character?next=${next}` },
             tone: "wait",
           }
         : {
             title: "Get into the beta to enter",
             detail:
-              "The beta is invite-only for now, and this wallet is not on the list yet. Ask for a spot and this run opens for you once you are in. Nothing has been charged.",
+              "The beta is invite-only for now, and this wallet is not on the list yet. Ask for a spot and this challenge opens for you once you are in. Nothing has been charged.",
             fix: { kind: "link", label: "Get in", href: `/character?next=${next}` },
             tone: "fixable",
           };
@@ -293,7 +293,7 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
       return {
         title: "I cannot check uploads right now",
         detail:
-          "This run is scored on a record you upload, and my document checker is paused on this build. I am not taking stakes I cannot check. It opens again when the checker is back. Nothing has been charged.",
+          "This challenge is scored on a record you upload, and my document checker is paused on this build. I am not taking stakes I cannot check. It opens again when the checker is back. Nothing has been charged.",
         fix: { kind: "none" },
         tone: "wait",
       };
@@ -319,7 +319,7 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
 const CHECK_FAILED_TITLE: Record<JoinCheck, string> = {
   human: "I could not check your World ID just now",
   access: "I could not check the beta list just now",
-  payouts: "I could not check how payouts run here just now",
+  payouts: "I could not check how payouts work here just now",
   verifier: "I could not check my document checker just now",
 };
 

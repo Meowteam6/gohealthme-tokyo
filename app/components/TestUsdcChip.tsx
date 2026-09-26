@@ -144,7 +144,7 @@ export default function TestUsdcChip() {
         <span className="text-[11px] text-warning sm:text-xs" aria-live="polite">
           {state.message}{" "}
           <Link href="/dashboard" className="underline">
-            open My runs
+            open My challenges
           </Link>
         </span>
       ) : null}

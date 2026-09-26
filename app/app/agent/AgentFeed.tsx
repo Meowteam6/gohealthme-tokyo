@@ -52,7 +52,7 @@ const STAGE_LABEL: Record<string, string> = {
   buy: "buying the check",
   attester: "reading the evidence",
   record: "recording the result on-chain",
-  settle: "settling the run",
+  settle: "settling the challenge",
   approval: "the payout confirmation",
   other: "an internal step",
 };
@@ -70,7 +70,7 @@ const APPROVAL_LINE: Record<
   approved: { text: "Player confirmed with World ID", tone: "accent" },
   declined: { text: "Player declined. Nothing moved.", tone: "warning" },
   expired: { text: "Confirmation window closed. Nothing moved.", tone: "warning" },
-  cancelled: { text: "Run settled before the player confirmed. Nothing moved.", tone: "warning" },
+  cancelled: { text: "Challenge settled before the player confirmed. Nothing moved.", tone: "warning" },
 };
 
 const SCREEN_LINE: Record<
@@ -173,7 +173,7 @@ export function ClaimCard({ claim, own = false }: { claim: PublicFeedClaim; own?
             ) : null}
           </p>
         ) : settle !== null && settle.status === "already-settled" ? (
-          <p className="m-0 text-haze">Paid in the run&apos;s settle</p>
+          <p className="m-0 text-haze">Paid in the challenge&apos;s settle</p>
         ) : deferredLine !== null ? (
           <p className="m-0 text-haze">{deferredLine}</p>
         ) : null}
@@ -279,8 +279,8 @@ export default function AgentFeed() {
             title={view === "mine" ? "Nothing in your history yet" : "No claims settled yet"}
             detail={
               view === "mine"
-                ? "When SPOTTER checks one of your runs, its verdict, your World ID confirmation and the payout land here. Everyone's claims are one tap away."
-                : "Enter a run and wear your wearable. SPOTTER checks the result and the payout shows here when the run settles."
+                ? "When SPOTTER checks one of your challenges, its verdict, your World ID confirmation and the payout land here. Everyone's claims are one tap away."
+                : "Enter a challenge and wear your wearable. SPOTTER checks the result and the payout shows here when the challenge settles."
             }
           />
         )}
@@ -296,7 +296,7 @@ export function FeedEmpty({ title, detail }: { title: string; detail: string }) 
       <p className="type-heading m-0 text-[1.5rem]">{title}</p>
       <p className="m-0 mx-auto mt-2 max-w-md text-[0.9375rem] text-muted">{detail}</p>
       <Link href="/pools" className={`mt-5 ${buttonClasses({ size: "sm" })}`}>
-        See the open runs
+        See the open challenges
       </Link>
     </div>
   );

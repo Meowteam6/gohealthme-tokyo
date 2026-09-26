@@ -20,10 +20,10 @@ export default function DashboardPage() {
     );
   }
   return (
-    <PerchedHeader title="My runs" pose="meditate" className={PAGE_COLUMN}>
+    <PerchedHeader title="My challenges" pose="meditate" className={PAGE_COLUMN}>
       <EmptyCard
         title="Sign-in is off on this build"
-        detail="Without sign-in there are no runs to show. The home page still explains how a run works."
+        detail="Without sign-in there are no challenges to show. The home page still explains how a challenge works."
         action={
           <Link href="/" className={buttonClasses({ size: "sm" })}>
             Go to the home page
