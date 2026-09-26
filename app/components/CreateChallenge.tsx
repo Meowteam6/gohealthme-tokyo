@@ -49,7 +49,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
-import { parseUsdc, withDocMarker, withProofPolicy } from "@/lib/contract";
+import { parseUsdc } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useDisplayNames } from "@/lib/use-display-names";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
@@ -80,9 +80,14 @@ import { useApprovalProbe } from "@/components/game/ApprovalNote";
 import {
   challengeCreateBlock,
   payoutStateOf,
-  verifierStateOf,
 } from "@/lib/game/join-checks";
-import { useDocumentProofQuery } from "@/lib/useProofStatus";
+import AuthorCapabilityNotice from "@/components/AuthorCapabilityNotice";
+import {
+  launchGoalIssue,
+  LAUNCH_GOAL_EXAMPLES,
+  wearableGoalNotice,
+} from "@/lib/launch-goal-check";
+import { COMING_LINE } from "@/lib/provider-capabilities";
 
 const DURATION_OPTIONS: { label: string; days: number }[] = [
   { label: "1 week", days: 7 },
@@ -97,13 +102,10 @@ const AMOUNT_CHIPS = [5, 10, 25] as const;
 // The friend's lock-in to accept a dare: real money, deliberately small.
 const DARE_LOCKIN_CHIPS = [3, 5, 10] as const;
 
-// Goal / dare ideas, one tap to fill. Ported verbatim from the golden design.
-const NAME_SUGGESTIONS = [
-  "8k steps a day, 7 days straight",
-  "no sugar for 2 weeks",
-  "gym 4x this week, no excuses",
-  "the thing you've been putting off",
-];
+// Every challenge is a wearable run on a launch goal (lib/launch-goal-check), so
+// the one-tap goals are the launch goals, written in the wearable goalSpec
+// format ("for 1 night" sets the qualifying days).
+const NAME_SUGGESTIONS = LAUNCH_GOAL_EXAMPLES;
 
 // Trash-talk one-liners for the dare message. Ported from the golden design.
 const TRASH_TALK_SUGGESTIONS = [
@@ -120,7 +122,7 @@ const SECONDS_PER_DAY = 86_400;
 const SPOTTER_INTRO =
   "I'm SPOTTER. I hold the money, I check your proof, I pay you the second you hit it. No vibes, no chasing anyone for cash. Let's set one up.";
 const HONESTY_NOTE =
-  'Base Sepolia test USDC, not real money. A selfie proves it to your friends; only wearable or enclave data counts as "verified" here.';
+  "Base Sepolia test USDC, not real money. The wearable decides, and only the yes or no verdict goes on chain, never the health data.";
 const FOOTER_NOTE =
   "Base Sepolia test money, beta. Your money, your word, and SPOTTER holding both.";
 
@@ -194,7 +196,7 @@ function getSpotterMoodForAmount(
       line:
         kind === "self"
           ? "Respectable. Enough to sting if you flake, not enough to cry about."
-          : "Solid dare energy. They'll feel this one.",
+          : "Solid challenge. They'll feel this one.",
     };
   }
   if (amount < 50) {
@@ -213,7 +215,7 @@ function getSpotterMoodForAmount(
     line:
       kind === "self"
         ? "I'm holding THAT much? Fine by me. I'm an excellent banker."
-        : "That's a real dare. I'm getting the vault ready.",
+        : "That's a real challenge. I'm getting the vault ready.",
   };
 }
 
@@ -394,7 +396,7 @@ function SuggestionRow({
   items,
   onPick,
 }: {
-  items: string[];
+  items: readonly string[];
   onPick: (value: string) => void;
 }) {
   const hover = "hover:border-foreground/40";
@@ -477,7 +479,7 @@ function TypePicker({
         >
           <IconSwords className="h-5 w-5" />
         </span>
-        <span className="font-display text-lg font-bold">Dare a friend</span>
+        <span className="font-display text-lg font-bold">Challenge a friend</span>
         {!isSelf ? (
           <span className="absolute right-3 top-3 rounded-full bg-foreground px-2.5 py-0.5 text-xs font-bold text-background">
             Selected
@@ -514,7 +516,7 @@ function PreviewCard({
 }) {
   const isSelf = variant === "self";
   const displayTitle =
-    title.trim() !== "" ? title.trim() : "the thing you've been putting off";
+    title.trim() !== "" ? title.trim() : "Pick a goal";
   const displayAmount = amount.trim() !== "" ? amount.trim() : "0";
   const displayLockIn = lockIn.trim() !== "" ? lockIn.trim() : "0";
   const cleanRecipient = recipient.trim().replace(/^@/, "");
@@ -540,7 +542,7 @@ function PreviewCard({
               <IconSwords className="h-3.5 w-3.5 text-foreground" />
             )}
             <span className="text-sm font-bold text-foreground">
-              {isSelf ? "Stake on yourself" : "Friend dare"}
+              {isSelf ? "Stake on yourself" : "Challenge a friend"}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -694,10 +696,6 @@ function CreateChallengeInner() {
   const [reward, setReward] = useState("");
   const [message, setMessage] = useState("");
   const [target, setTarget] = useState("");
-  // Off by default: a challenge stays a document-floor pool (byte-identical to
-  // today) unless the creator explicitly opts into accepting a self-reported
-  // photo, which loosens the floor to also allow the low-trust tier.
-  const [acceptSelf, setAcceptSelf] = useState(false);
   const [durationDays, setDurationDays] = useState(30);
   // Golden "who's it for" toggle. In "link" mode the target is left blank and the
   // dare is shared by link alone - which is exactly the on-chain behaviour of a
@@ -727,15 +725,16 @@ function CreateChallengeInner() {
       ? healthQuery.data.message
       : null;
   const checkingDares = isDare && healthQuery.isLoading;
-  // Every dare is an upload-proof run (encodeGoal below), so it can only be
-  // made while SPOTTER's document checker is on and a win can pay. Decided
-  // before the form and again on submit, never after the deposit.
-  const proofQuery = useDocumentProofQuery();
+  // Every challenge is a wearable run on a launch goal (encodeGoal below), so
+  // the document checker never gates it. The one thing that can: a verified
+  // win that could not pay on this build. Decided before the form and again on
+  // submit, never after the deposit.
   const approvalProbe = useApprovalProbe();
   const createBlock = challengeCreateBlock(
-    verifierStateOf(proofQuery),
+    "available",
     payoutStateOf(approvalProbe.mode),
   );
+  const goalNotice = wearableGoalNotice(goal);
 
   // Switch variants and keep a sensible headline number so the preview never
   // reads $0 the instant you toggle. Seeds a dare reward and a dare lock-in the
@@ -785,7 +784,6 @@ function CreateChallengeInner() {
     setReward("");
     setMessage("");
     setTarget("");
-    setAcceptSelf(false);
     setDurationDays(30);
     setRecipientMode("handle");
   };
@@ -803,7 +801,7 @@ function CreateChallengeInner() {
       setFormError(
         createBlock.kind === "paused"
           ? createBlock.detail
-          : "I am still checking whether dares can run right now. Try again in a moment.",
+          : "I am still checking whether challenges can run right now. Try again in a moment.",
       );
       return;
     }
@@ -814,10 +812,13 @@ function CreateChallengeInner() {
       if (goal.trim() === "") {
         throw new Error(
           isDare
-            ? "Say what they have to do, for example \"lose 10 lbs\"."
-            : "Say what you are going to do, for example \"sleep 8h a night\".",
+            ? "Pick the goal they have to hit, for example \"Sleep at least 7 hours for 1 night\"."
+            : "Pick your goal, for example \"Sleep at least 7 hours for 1 night\".",
         );
       }
+      // Only goals every supported wearable can verify (lib/provider-capabilities).
+      const issue = launchGoalIssue(goal);
+      if (issue !== null) throw new Error(issue);
       // The contract requires every player to be a staker (a zero entry fee
       // reverts DEAD_CONFIG), and a commitment pool with a zero stake makes no
       // pool. The stake is real money on the line for whoever hits the goal.
@@ -871,17 +872,10 @@ function CreateChallengeInner() {
     await submitSelf(stakeUsdc);
   };
 
-  // Shared with both variants: encode the goal's proof policy the same way. A
-  // document floor stays byte-identical to before; opting into self-reported
-  // loosens the floor to also accept a photo, which is the low-trust tier and
-  // never marked verified.
-  const encodeGoal = (): string =>
-    acceptSelf
-      ? withProofPolicy(goal.trim(), {
-          floor: "document",
-          accepted: ["document", "self-reported"],
-        })
-      : withDocMarker(goal.trim());
+  // Shared with both variants. A wearable goal is written unmarked: no proof
+  // marker means the wearable floor, and "for 1 night" / "for 1 day" in the
+  // text sets the qualifying days (lib/wearable-goal classifyWearableGoal).
+  const encodeGoal = (): string => goal.trim();
 
   const periodBounds = (): { periodStart: bigint; periodEnd: bigint } => {
     const now = BigInt(Math.floor(Date.now() / 1000));
@@ -1006,7 +1000,7 @@ function CreateChallengeInner() {
       case "unavailable":
         setPhase({
           kind: "error",
-          title: "Dares are not live here yet",
+          title: "Challenges are not live here yet",
           message: result.message,
         });
         return;
@@ -1037,7 +1031,7 @@ function CreateChallengeInner() {
     driveDare(from, invite, () => {
       // Unreachable by construction (runDareFlow skips the deposit when `from`
       // is set); failing loudly beats ever funding a second pool.
-      throw new Error("A funded dare never deposits again.");
+      throw new Error("A funded challenge never deposits again.");
     });
 
   // DARE A FRIEND: preflight, seed the reward at creation, then mint the link.
@@ -1109,7 +1103,7 @@ function CreateChallengeInner() {
       <div className="mx-auto max-w-xl space-y-5">
         <Card pop className="space-y-2 border-accent/40">
           <p className="font-display text-lg font-bold text-accent-deep">
-            Dare sent. The reward is on the line.
+            Challenge sent. The reward is on the line.
           </p>
           {address !== null ? (
             <p className="text-xs font-medium text-foreground/70">
@@ -1139,14 +1133,14 @@ function CreateChallengeInner() {
           <ShareChallenge
             url={phase.url}
             title="You've been challenged on GoHealthMe"
-            message={`I'm daring you: ${goal.trim()}. Hit it and I pay you ${reward.trim()} USDC.`}
-            emailSubject="I'm daring you - GoHealthMe"
+            message={`I'm challenging you: ${goal.trim()}. Your wearable decides. Hit it and you get ${reward.trim()} test USDC from me.`}
+            emailSubject="I'm challenging you on GoHealthMe"
             includeCopy={false}
-            shareLabel="Share the dare"
+            shareLabel="Share the challenge"
           />
           <CopyLink url={phase.url} />
           <p className="text-xs text-muted">
-            Anyone with this link can see the dare and accept it, so send it
+            Anyone with this link can see the challenge and accept it, so send it
             straight to them. It is not listed anywhere and cannot be guessed.
           </p>
         </div>
@@ -1174,7 +1168,7 @@ function CreateChallengeInner() {
     return (
       <div className="mx-auto max-w-xl space-y-4" aria-busy="true">
         <p className="sr-only" aria-live="polite">
-          Checking whether dares can run
+          Checking whether challenges can run
         </p>
         <Skeleton className="h-14 w-2/3" />
         <Skeleton className="h-64 w-full" />
@@ -1186,9 +1180,8 @@ function CreateChallengeInner() {
       <div className="mx-auto max-w-xl">
         <ErrorNote
           title={createBlock.title}
-          detail="It did not answer, so I am not starting a dare on a guess. Nothing has been charged."
+          detail="It did not answer, so I am not starting a challenge on a guess. Nothing has been charged."
           onRetry={() => {
-            proofQuery.refetch();
             approvalProbe.refetch();
           }}
         />
@@ -1204,16 +1197,16 @@ function CreateChallengeInner() {
         <Spotter
           state="error"
           size="lg"
-          line="Checker's off. I don't hold money I can't check."
+          line="I can't pay a win out on this build. So I'm not holding money for one."
         />
         <h1 className="mt-6 break-words font-display text-[2.5rem] font-extrabold leading-display tracking-display">
-          {createBlock.title}
+          Challenges are paused for now
         </h1>
         <p className="mt-3 max-w-md text-base text-foreground/80">
           {createBlock.detail}
         </p>
         <Link href="/pools" className={`mt-6 ${CANDY_LINK_PRIMARY}`}>
-          Find a wearable run
+          See the open runs
         </Link>
       </div>
     );
@@ -1244,8 +1237,8 @@ function CreateChallengeInner() {
               ? "Retry the link"
               : isDare
                 ? checkingDares
-                  ? "Checking dares are live..."
-                  : "Send the dare"
+                  ? "Checking challenges are live..."
+                  : "Send the challenge"
                 : "Stake on it";
 
   return (
@@ -1282,17 +1275,17 @@ function CreateChallengeInner() {
 
           <section className="space-y-3">
             <label
-              htmlFor="dare-title"
+              htmlFor="challenge-goal"
               className="font-display text-base font-semibold"
             >
-              {isDare ? "Name the dare" : "Name your goal"}
+              {isDare ? "Pick their goal" : "Pick your goal"}
             </label>
             <textarea
-              id="dare-title"
+              id="challenge-goal"
               placeholder={
                 isDare
-                  ? "lose 10 lbs this month"
-                  : "sleep 8h a night for 2 weeks"
+                  ? "Complete at least 1 workout for 1 day"
+                  : "Sleep at least 7 hours for 1 night"
               }
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
@@ -1300,11 +1293,19 @@ function CreateChallengeInner() {
               className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
             />
             <SuggestionRow items={NAME_SUGGESTIONS} onPick={setGoal} />
-            <p className="text-xs text-muted">
+            {goalNotice.kind === "launch-issue" ? (
+              <p role="status" className="text-sm text-warning">
+                {goalNotice.text}
+              </p>
+            ) : goalNotice.kind === "device-check" ? (
+              <AuthorCapabilityNotice goalSpec={goal} noun="challenge" />
+            ) : null}
+            <p className="text-sm text-muted">
               {isDare
-                ? "What they have to do. Proven by an uploaded record - the reward pays the moment it is verified in a confidential enclave."
-                : "What you are going to do. Proven by an uploaded record - verified in a confidential enclave, so nobody ever sees your health data."}
+                ? "Their wearable proves it. SPOTTER reads the summary, never the raw data, and only the yes or no verdict goes on chain."
+                : "Your wearable proves it. SPOTTER reads the summary, never the raw data, and only the yes or no verdict goes on chain."}
             </p>
+            <p className="text-sm text-muted">{COMING_LINE}</p>
           </section>
 
           <section className="space-y-3">
@@ -1463,20 +1464,6 @@ function CreateChallengeInner() {
             </p>
           </section>
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-edge bg-surface-raised p-3">
-            <input
-              type="checkbox"
-              checked={acceptSelf}
-              onChange={(e) => setAcceptSelf(e.target.checked)}
-              className="mt-1"
-            />
-            <span className="text-xs font-normal text-muted">
-              Also accept a self-reported photo (low-trust). We cannot confirm a
-              photo is real, recent, or {isDare ? "theirs" : "yours"}, so it is
-              never marked verified and pays at 1x. Leave off to require a real
-              record.
-            </span>
-          </label>
         </div>
 
         {/* preview + submit column */}
@@ -1563,7 +1550,7 @@ function CreateChallengeInner() {
               role="status"
               className="space-y-2 rounded-xl border border-edge bg-surface-raised p-4 text-sm"
             >
-              <p className="font-semibold">Dares are not live here yet</p>
+              <p className="font-semibold">Challenges are not live here yet</p>
               <p className="text-foreground/80">{daresOff}</p>
               <button
                 type="button"
