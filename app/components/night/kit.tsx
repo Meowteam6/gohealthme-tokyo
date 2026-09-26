@@ -1,11 +1,17 @@
 import type { ReactNode } from "react";
-import { FOCUS_RING } from "@/components/ui";
+import Link from "next/link";
+import { EmptyState, FOCUS_RING } from "@/components/ui";
+import { SpotterFigure } from "@/components/spotter/Spotter";
+import type { SpotterPose, StageWidth } from "@/lib/spotter-poses";
 
 // Night Shift pieces for the pages around the run (docs/DESIGN.md): the page
 // header, form fields, option cards and the inline notice. The primitives in
 // components/ui.tsx stay the source for buttons, cards, chips and stats; this
 // file only holds what those pages repeat and ui.tsx does not carry yet.
 // Server-safe: no hooks.
+
+/** A single-column page (forms, lists, settings): centred, 736px at most. */
+export const PAGE_COLUMN = "mx-auto w-full max-w-[46rem]";
 
 /** The page title: Fraunces, 40px on a phone, 52px from 900px. */
 export const PAGE_TITLE = "type-title m-0 break-words text-[2.5rem] min-[900px]:text-[3.25rem]";
@@ -83,6 +89,121 @@ export function PageHeader({
       {lead !== undefined ? <p className={PAGE_LEAD}>{lead}</p> : null}
       {children}
     </header>
+  );
+}
+
+/**
+ * The page header with SPOTTER standing on the first card's top edge, the way
+ * the run page stands him beside "7 hours" (docs/DESIGN.md: one pose per
+ * viewport, on a card's edge, with a contact shadow). The title and lead sit
+ * on the left, he stands at the right end of the row, and the card that
+ * follows is the floor under his feet. Pass the card as `children`. Pick the
+ * pose from the page's state, so an empty page gets its empty pose here and
+ * nowhere else.
+ */
+export function PerchedHeader({
+  title,
+  lead,
+  pose,
+  width = [92, 148],
+  above,
+  below,
+  children,
+  className = "",
+}: {
+  title: ReactNode;
+  lead?: ReactNode;
+  pose: SpotterPose;
+  /** SPOTTER's width, [phone, from 900px]. */
+  width?: StageWidth;
+  /** Anything over the title (a back link, a tag). */
+  above?: ReactNode;
+  /** Anything under the lead, inside the header (an action, a fine line). */
+  below?: ReactNode;
+  /** The card he stands on. */
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      {/* The title keeps the full width; he stands beside the lead, so a long
+          title never wraps around him. */}
+      <header>
+        {above}
+        <h1 className={PAGE_TITLE}>{title}</h1>
+        <div className="flex gap-3 min-[900px]:gap-8">
+          <div className="min-w-0 flex-1 self-start pb-5 min-[900px]:pb-8">
+            {lead !== undefined ? <p className={PAGE_LEAD}>{lead}</p> : null}
+            {below}
+          </div>
+          <SpotterFigure
+            pose={pose}
+            width={width}
+            decorative
+            priority
+            className="relative z-[3] -mb-1.5 mr-2 self-end min-[900px]:mr-8"
+          />
+        </div>
+      </header>
+      {children}
+    </div>
+  );
+}
+
+/** "< Open runs": the way back, a quiet link with a left chevron. */
+export function BackLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={`-ml-1 inline-flex min-h-11 items-center gap-1.5 pr-2 text-[1.0625rem] font-medium text-muted no-underline hover:text-foreground ${FOCUS_RING}`}
+    >
+      <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" className="flex-none">
+        <path
+          d="M10 3.5 5.5 8 10 12.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * An empty slot with no otter of its own: what goes here and the one action
+ * that fills it. Use it under a PerchedHeader or inside a <Perch>, so the one
+ * pose on screen stands on this card's edge instead of floating in it.
+ */
+export function EmptyCard({
+  title,
+  detail,
+  action,
+}: {
+  title: string;
+  detail: string;
+  action?: ReactNode;
+}) {
+  return <EmptyState pose={null} title={title} detail={detail} action={action} />;
+}
+
+/** A row inside a card: label left, value right, hairline between rows. */
+export function DefRow({
+  label,
+  children,
+  className = "",
+}: {
+  label: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`flex items-baseline justify-between gap-4 border-t border-edge py-3 first:border-t-0 first:pt-0 ${className}`}>
+      <dt className="text-[0.9375rem] text-haze">{label}</dt>
+      <dd className="num m-0 min-w-0 text-right text-[0.9375rem] font-semibold text-foreground">{children}</dd>
+    </div>
   );
 }
 

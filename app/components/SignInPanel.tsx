@@ -26,9 +26,14 @@ import { markExternalConnectIntent } from "@/lib/wallet-connect-intent";
 import { buttonClasses } from "@/components/ui";
 import { FIELD, FIELD_HINT, Notice, QUIET_ACTION } from "@/components/night/kit";
 
-// A well inside whatever card asks for sign-in.
-const PANEL =
-  "rounded-card bg-surface-raised p-4 shadow-[inset_0_0_0_1px_var(--border-strong)] min-[960px]:p-5";
+// A well inside whatever card asks for sign-in, or the card itself when the
+// panel is the floor SPOTTER stands on (a page's first card).
+const PANEL: Record<SignInSurface, string> = {
+  well: "rounded-card bg-surface-raised p-4 shadow-[inset_0_0_0_1px_var(--border-strong)] min-[960px]:p-5",
+  card: "relative rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] px-4 py-[18px] shadow-card min-[960px]:p-6",
+};
+
+export type SignInSurface = "well" | "card";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -37,7 +42,7 @@ type Step =
   | { kind: "otp" }
   | { kind: "verifying" };
 
-function SignInPanelInner() {
+function SignInPanelInner({ surface }: { surface: SignInSurface }) {
   const { login } = useEmbeddedWallet();
   const { connectWithEmail, verifyOneTimePassword, retryOneTimePassword } =
     useConnectWithOtp();
@@ -111,7 +116,7 @@ function SignInPanelInner() {
   };
 
   return (
-    <div className={PANEL}>
+    <div className={PANEL[surface]}>
       <h2 className="m-0 text-lg font-semibold leading-tight text-foreground">Sign in</h2>
 
       {step.kind === "otp" || step.kind === "verifying" ? (
@@ -283,7 +288,7 @@ function SignInPanelInner() {
  * when Dynamic is configured; unconfigured builds get an honest note instead of
  * a thrown hook.
  */
-export default function SignInPanel() {
+export default function SignInPanel({ surface = "well" }: { surface?: SignInSurface } = {}) {
   if (!DYNAMIC_CONFIGURED) {
     return (
       <Notice tone="limit" title="Sign-in is off on this build">
@@ -291,5 +296,5 @@ export default function SignInPanel() {
       </Notice>
     );
   }
-  return <SignInPanelInner />;
+  return <SignInPanelInner surface={surface} />;
 }
