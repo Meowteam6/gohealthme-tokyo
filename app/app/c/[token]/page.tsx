@@ -13,9 +13,13 @@ import {
   formatUsdc,
   type PoolInfo,
 } from "@/lib/contract";
-import { darePot, isBackerView, type DarePot } from "@/lib/challenges";
+import {
+  challengePauseReason,
+  darePot,
+  isBackerView,
+  type DarePot,
+} from "@/lib/challenges";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
-import { needsDocumentVerifier } from "@/lib/game/lobby";
 import { approvalModeStatus } from "@/lib/server/agent/approval-mode-status";
 import { getChallengeByToken } from "@/lib/server/challenges";
 import { fetchPoolFunding, type PoolFunding } from "@/lib/server/pool-funders";
@@ -68,10 +72,10 @@ function InvalidLink() {
         line="This link goes nowhere. I checked twice."
       />
       <h1 className="mt-6 break-words font-display text-[2.5rem] font-extrabold leading-display tracking-display">
-        This dare link does not open
+        This challenge link does not open
       </h1>
       <p className="mt-3 text-base text-foreground/80">
-        It may have been mistyped, or the dare no longer exists. Ask whoever
+        It may have been mistyped, or the challenge no longer exists. Ask whoever
         sent it for a fresh link.
       </p>
       <Link href="/pools" className={`mt-6 ${PRIMARY_LINK}`}>
@@ -126,22 +130,26 @@ export default async function ChallengeLandingPage({
   let pool: PoolInfo;
   let phase: ReturnType<typeof poolPhase>;
   let canPay: boolean;
-  let uploadProof: boolean;
   try {
     pool = await fetchPool(poolIdBig);
     canPay = poolCanPay(pool);
     phase = poolPhase(pool, nowUnixSeconds());
-    uploadProof = needsDocumentVerifier(pool.goalSpec);
   } catch {
     return <InvalidLink />;
   }
 
   // Checked on the server, from the same facts the judge and the approval gate
-  // decide on: a dare nobody can be verified on, or one whose win could not
-  // pay, takes no more money from anyone. The accept control shows the same
-  // limit as a lock (lib/game/lobby.ts); this stops the chip-in and the rally.
-  const verifierOff = uploadProof && !documentProofStatus().available;
-  const payoutsPaused = approvalModeStatus("challenge-page") === "misconfigured";
+  // decide on: a challenge whose win could not pay (or an older document
+  // challenge while the checker is off) takes no more money from anyone. A
+  // wearable challenge never waits on the document checker. The accept control
+  // shows the same limit as a lock (lib/game/lobby.ts); this stops the chip-in
+  // and the rally.
+  const pauseReason = challengePauseReason({
+    goalSpec: pool.goalSpec,
+    documentCheckerAvailable: documentProofStatus().available,
+    payoutsMisconfigured:
+      approvalModeStatus("challenge-page") === "misconfigured",
+  });
 
   // Resolve the challenger to a handle when they have claimed one; otherwise
   // show the truncated address. This is public identity, never a health label.
@@ -186,13 +194,13 @@ export default async function ChallengeLandingPage({
   // Friends can grow the pot and rally more friends only while the challenge is
   // live, can actually pay, and can be checked and paid on this build. The
   // same gate the accept block uses.
-  const paused = verifierOff || payoutsPaused;
+  const paused = pauseReason !== null;
   const canGrow = phase === "live" && canPay && !paused;
 
   const headline =
     pot.seed !== null && pot.seed > 0n
       ? `${challengerName} put ${formatUsdc(pot.seed)} USDC on you`
-      : `${challengerName} dared you`;
+      : `${challengerName} challenged you`;
   const target =
     challenge.targetHandle !== null ? `@${challenge.targetHandle}` : "their friend";
 
@@ -215,15 +223,15 @@ export default async function ChallengeLandingPage({
         </h2>
         <p className="text-sm text-muted">
           This link opens as a backer page: friends can chip in to grow the
-          prize, and it never signs them up for the dare.
+          prize, and it never signs them up for the challenge.
         </p>
       </div>
       <ShareChallenge
         token={token}
         backer
-        title="Back this dare on GoHealthMe"
-        message="Back this dare - there is USDC riding on hitting the goal. Chip in and grow the prize:"
-        emailSubject="Back this dare"
+        title="Back this challenge on GoHealthMe"
+        message="Back this challenge. There is test USDC riding on hitting the goal. Chip in and grow the pot:"
+        emailSubject="Back this challenge"
         shareLabel="Rally friends"
       />
     </div>
@@ -235,9 +243,9 @@ export default async function ChallengeLandingPage({
     return (
       <div className="mx-auto max-w-3xl space-y-8">
         <header className="space-y-4">
-          <p className="text-sm font-semibold text-accent-deep">Back the dare</p>
+          <p className="text-sm font-semibold text-accent-deep">Back the challenge</p>
           <h1 className={HEADLINE}>
-            {challengerName} dared {target}
+            {challengerName} challenged {target}
           </h1>
           {challenge.message !== null ? (
             <blockquote className="border-l-4 border-accent pl-4 text-lg text-foreground/90">
@@ -258,7 +266,7 @@ export default async function ChallengeLandingPage({
           </>
         ) : (
           <EmptyState
-            title="This dare is not taking backers anymore"
+            title="This challenge is not taking backers anymore"
             detail="Its window has closed, it has already paid out, or I cannot check or pay it on this build, so nothing can be added. Nothing was charged."
             line="Pot's closed. I'm on break."
             action={
@@ -270,12 +278,12 @@ export default async function ChallengeLandingPage({
         )}
 
         <p className="text-sm text-muted">
-          Are you the one who got dared?{" "}
+          Are you the one who got challenged?{" "}
           <Link
             href={`/c/${token}`}
             className="font-semibold text-accent-deep underline underline-offset-2"
           >
-            Open the dare to accept it
+            Open the challenge to accept it
           </Link>
         </p>
       </div>
@@ -287,7 +295,7 @@ export default async function ChallengeLandingPage({
   // lobby's, so the dare link and the board can never disagree.
   const intro = (
     <header className="space-y-4">
-      <p className="text-sm font-semibold text-accent-deep">You have been dared</p>
+      <p className="text-sm font-semibold text-accent-deep">You have been challenged</p>
       <h1 className={HEADLINE}>{headline}</h1>
       {challenge.targetHandle !== null ? (
         <p className="text-sm text-muted">For {challenge.targetHandle}</p>
@@ -335,19 +343,26 @@ export default async function ChallengeLandingPage({
           <Spotter
             state="error"
             size="sm"
-            line={verifierOff ? "My checker is off. So is the pot." : "I can't pay this out yet. So I'm not taking money for it."}
+            line={
+              pauseReason === "checker"
+                ? "My checker is off. So is the pot."
+                : "I can't pay this out yet. So I'm not taking money for it."
+            }
           />
           <div className="space-y-2 sm:pb-2">
             <p className="font-display text-xl font-bold leading-display">
               Chipping in is paused too
             </p>
             <p className="text-sm text-foreground/80">
-              I am not taking anyone&apos;s money for a dare I cannot{" "}
-              {verifierOff ? "check" : "pay out"} right now. Nothing has been
-              charged. Wearable runs in the lobby still work.
+              I am not taking anyone&apos;s money for a challenge I cannot{" "}
+              {pauseReason === "checker" ? "check" : "pay out"} right now.
+              Nothing has been charged.
+              {pauseReason === "checker"
+                ? " Wearable runs in the lobby still work."
+                : ""}
             </p>
             <Link href="/pools" className={`mt-1 ${PRIMARY_LINK}`}>
-              Find a wearable run
+              {pauseReason === "checker" ? "Find a wearable run" : "Go to the lobby"}
             </Link>
           </div>
         </div>
