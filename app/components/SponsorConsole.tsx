@@ -21,6 +21,7 @@
 // covered-entity claim. Those change the regulatory posture of the product and
 // are held for legal review, not written into console UI.
 
+import SlowSignInNotice from "@/components/night/SlowSignInNotice";
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -412,6 +413,7 @@ export default function SponsorConsole() {
               Loading the sponsor console
             </p>
             <PoolCardSkeleton />
+            <SlowSignInNotice waiting className="mt-4" />
           </Card>,
         )}
       </div>

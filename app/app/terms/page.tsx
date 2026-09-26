@@ -175,8 +175,8 @@ export default function TermsPage() {
           <ul className="list-disc pl-5 marker:text-haze [&>*+*]:mt-1.5">
             <li>
               If you hit the goal, you get your own stake back plus an equal
-              share of the stakes of players who missed and of any sponsor
-              money in the pot.
+              share of the stakes of players whose miss was recorded and of
+              any sponsor money in the pot.
             </li>
             <li>
               If you miss the goal, your stake goes to the players who hit it,

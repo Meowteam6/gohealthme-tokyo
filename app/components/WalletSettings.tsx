@@ -10,6 +10,7 @@
 // DynamicContextProvider). The private key and recovery phrase never pass
 // through this component or the app; the SDK shows them in isolation.
 
+import SlowSignInNotice from "@/components/night/SlowSignInNotice";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useEmbeddedReveal } from "@dynamic-labs/sdk-react-core";
@@ -460,6 +461,7 @@ export default function WalletSettings() {
         <Skeleton className="h-6 w-1/3" />
         <Skeleton className="mt-4 h-[52px] w-full" />
         <Skeleton className="mt-4 h-4 w-2/3" />
+        <SlowSignInNotice waiting className="mt-4" />
       </Card>
     );
   }

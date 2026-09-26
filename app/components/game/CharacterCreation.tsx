@@ -11,7 +11,7 @@
 // is not on this build is said plainly and walked past, and with World off the
 // allowlist request is the way in, exactly as before V4.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import ProveHuman from "@/components/world/ProveHuman";
 import EnsNameClaim from "@/components/ens/EnsNameClaim";
 import ClaimHandle from "@/components/ClaimHandle";
@@ -23,6 +23,7 @@ import { Notice, PAGE_TITLE, QUIET_ACTION } from "@/components/night/kit";
 import type { SpotterScreenState } from "@/lib/spotter-poses";
 import CharacterCard from "@/components/game/CharacterCard";
 import SignInStep from "@/components/game/SignInStep";
+import SlowSignInNotice from "@/components/night/SlowSignInNotice";
 import SensorStep from "@/components/game/SensorStep";
 import {
   STEP_ORDER,
@@ -269,40 +270,10 @@ function NameBody({
   );
 }
 
-/** How long the sign-in step waits for the wallet SDK before it says so and
- *  offers a reload, instead of "Checking" forever. */
-const SDK_SLOW_MS = 8000;
-
-function useSlow(waiting: boolean, ms: number): boolean {
-  const [slow, setSlow] = useState(false);
-  useEffect(() => {
-    if (!waiting) return;
-    const t = setTimeout(() => setSlow(true), ms);
-    return () => clearTimeout(t);
-  }, [waiting, ms]);
-  return waiting && slow;
-}
-
 function SignInBody({ ready }: { ready: boolean }) {
-  const slow = useSlow(!ready, SDK_SLOW_MS);
   return (
     <>
-      {slow ? (
-        <Notice
-          tone="limit"
-          title="Sign-in is taking longer than usual"
-          role="status"
-          live
-          className="mb-4"
-          action={
-            <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
-              Reload the page
-            </Button>
-          }
-        >
-          The sign-in service has not answered yet. A reload usually fixes it; nothing is lost.
-        </Notice>
-      ) : null}
+      <SlowSignInNotice waiting={!ready} className="mb-4" />
       <SignInStep />
     </>
   );

@@ -20,6 +20,7 @@
 // every read for the session. A refused prompt shows the reason and a way to
 // try again, never an empty card that reads as "you have no wearable".
 
+import SlowSignInNotice from "@/components/night/SlowSignInNotice";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -856,6 +857,7 @@ export default function DashboardContent() {
     return (
       <MyRunsFrame pose="detective">
         <LoadingCard label="Loading your runs" />
+        <SlowSignInNotice waiting className="mt-4" />
       </MyRunsFrame>
     );
   }

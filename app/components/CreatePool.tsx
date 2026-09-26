@@ -663,7 +663,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
     <div className={PAGE_COLUMN}>
       <PerchedHeader
         title="Start a run"
-        lead="Set a goal and a stake. Everyone who joins puts up the same USDC on their own goal, and the players who hit it split what the misses leave behind."
+        lead="Set a goal and a stake. Everyone who joins puts up the same USDC on their own goal, and the players who hit it share the pot."
         pose="wearable"
         below={
           <Link href="/sponsor" className={`${QUIET_ACTION} mt-2`}>

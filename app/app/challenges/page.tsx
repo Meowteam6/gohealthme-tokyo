@@ -34,6 +34,7 @@
 // creator's OWN challenges page - they are entitled to see their own goal text.
 // The public redaction rule (feed / profile / pool metadata) is untouched.
 
+import SlowSignInNotice from "@/components/night/SlowSignInNotice";
 import Link from "next/link";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -302,6 +303,7 @@ function MyChallengesContent() {
             <Skeleton className="h-6 w-2/3" />
             <Skeleton className="mt-3 h-4 w-full" />
             <Skeleton className="mt-5 h-11 w-44" />
+            <SlowSignInNotice waiting className="mt-5" />
           </Card>
         }
       />

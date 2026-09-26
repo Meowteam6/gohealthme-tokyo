@@ -216,6 +216,48 @@ export default function VerdictStates({ meta }: SectionProps) {
           }
         />
       </StateFrame>
+
+      <StateFrame name="verdict-missed-pending" note="a miss SPOTTER recorded on a run that can record one (lib/miss-rule.ts), before settle">
+        <Page
+          spotter="verdict-lost"
+          rows={[NIKKI, ME_MISSED]}
+          card={
+            <VerdictView
+              kind="missed"
+              head={head({ kind: "missed", outcome: "pending", stakeUsd: "1.00" })}
+              actions={<GoAgain />}
+            />
+          }
+        />
+      </StateFrame>
+
+      <StateFrame name="verdict-missed-forfeited" note="the recorded miss after settle: the stake went to the players who hit">
+        <Page
+          spotter="verdict-lost"
+          rows={[NIKKI, ME_MISSED]}
+          card={
+            <VerdictView
+              kind="missed"
+              head={head({ kind: "missed", outcome: "forfeited", stakeUsd: "1.00" })}
+              actions={<GoAgain />}
+            />
+          }
+        />
+      </StateFrame>
+
+      <StateFrame name="verdict-hit-unconfirmed" note="a hit nobody confirmed with World ID before settle: stake back, no share">
+        <Page
+          spotter="verdict-denied"
+          rows={[ME]}
+          card={
+            <VerdictView
+              kind="hit-unconfirmed"
+              head={head({ kind: "hit-unconfirmed" })}
+              actions={<GoAgain />}
+            />
+          }
+        />
+      </StateFrame>
     </GallerySection>
   );
 }

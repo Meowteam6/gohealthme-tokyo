@@ -43,7 +43,9 @@ export default function RunLayout({
   back?: boolean;
 }) {
   return (
-    <div className="pb-6 min-[960px]:pb-16">
+    // -mt-4 lifts the back link to the mock's line under the header: the
+    // run page opens tighter than the shared main padding.
+    <div className="-mt-4 pb-6 min-[960px]:pb-16">
       {back ? <BackLink /> : null}
       <div className="mt-1 grid grid-cols-[minmax(0,1fr)] gap-y-4 [grid-template-areas:'hero'_'stake'_'main'] min-[960px]:mt-3 min-[960px]:grid-cols-[minmax(0,1fr)_420px] min-[960px]:grid-rows-[auto_auto_1fr] min-[960px]:items-start min-[960px]:gap-x-12 min-[960px]:gap-y-5 min-[960px]:[grid-template-areas:'hero_stake'_'main_stake'_'._stake']">
         {hero}
