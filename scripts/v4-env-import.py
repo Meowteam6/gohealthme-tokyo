@@ -39,7 +39,19 @@ SHAPES = {
     "NEXT_PUBLIC_HEALTH_POOLS_ADDRESS": r"^0x(?!66815e3AC541eB18d01D2aed25D0D9779583D832)[0-9a-fA-F]{40}$",
     "ENS_AGENT_PRIVATE_KEY": r"^(0x)?[0-9a-fA-F]{64}$",
     "NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID": r"^[0-9a-f-]{36}$",
+    "GAS_DRIP_WEI": r"^\d+$",
+    "GAS_DRIP_MIN_WEI": r"^\d+$",
+    "GAS_DRIP_DAILY_BUDGET_WEI": r"^\d+$",
+    "GAS_DRIP_TREASURY_FLOOR_WEI": r"^\d+$",
 }
+
+# Gas drip limits in wei. Defaults live in app/lib/server/gas-drip.ts.
+OPTIONAL_WEI = (
+    "GAS_DRIP_WEI",
+    "GAS_DRIP_MIN_WEI",
+    "GAS_DRIP_DAILY_BUDGET_WEI",
+    "GAS_DRIP_TREASURY_FLOOR_WEI",
+)
 
 
 def parse(path):
@@ -120,6 +132,11 @@ def main():
         "WORLD_ENVIRONMENT": local.get("WORLD_ENVIRONMENT", ""),
         **supabase_values(),
     }
+    # Optional: the gas drip (/api/gas/drip) has defaults in code, so these are
+    # pushed only when set locally and never listed as a founder action.
+    for key in OPTIONAL_WEI:
+        if local.get(key):
+            want[key] = local[key]
     ok, founder = [], []
     for key, val in sorted(want.items()):
         shape = SHAPES.get(key)
