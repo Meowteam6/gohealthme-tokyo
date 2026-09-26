@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
@@ -282,6 +283,11 @@ function CreatePoolInner() {
             don&apos;t leave behind. Funding it as a sponsor instead? Seed a
             bounty below and pay achievers from it.
           </p>
+          <p className="mt-2 text-sm">
+            <Link href="/sponsor" className="font-semibold text-accent underline">
+              Put up a prize pot
+            </Link>
+          </p>
         </div>
         {/* SPOTTER pointing at the board. eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -307,7 +313,7 @@ function CreatePoolInner() {
             >
               <span className="block font-semibold">Wearable data</span>
               <span className="block text-xs font-normal">
-                Verified from any connected sensor: sleep efficiency, hours of sleep or workouts.
+                Verified from any connected wearable: sleep efficiency, hours of sleep or workouts.
               </span>
             </button>
             <button

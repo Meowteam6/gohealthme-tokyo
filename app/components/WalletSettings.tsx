@@ -185,7 +185,7 @@ function DeviceSection({
     body = (
       <>
         <p className="text-sm text-muted">
-          Sign once with your wallet to see which sensor is paired. It costs
+          Sign once with your wallet to see which wearable is paired. It costs
           nothing and moves no money.
         </p>
         <button
@@ -196,14 +196,14 @@ function DeviceSection({
           }}
           className="mt-3 min-h-11 rounded-xl border border-edge px-5 py-3 text-sm font-semibold text-foreground hover:border-accent/50 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {view.checkingSensor ? "Waiting for your signature" : "Show my sensor"}
+          {view.checkingSensor ? "Waiting for your signature" : "Show my wearable"}
         </button>
       </>
     );
   } else if (view.sensor.kind === "unavailable") {
     body = (
       <p role="status" className="text-sm text-muted">
-        Could not read your sensor right now. Nothing is wrong with the
+        Could not read your wearable right now. Nothing is wrong with the
         device; try again in a minute.
       </p>
     );
@@ -211,13 +211,13 @@ function DeviceSection({
     body = (
       <>
         <p className="text-sm text-muted">
-          No sensor paired. Runs are checked against a paired wearable.
+          No wearable paired. Runs are checked against a paired wearable.
         </p>
         <Link
           href="/character"
           className="mt-3 inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-2"
         >
-          Pair a sensor
+          Pair a wearable
         </Link>
       </>
     );
@@ -230,7 +230,7 @@ function DeviceSection({
         </p>
         <p className="mt-1 text-sm text-muted">
           Disconnecting stops SPOTTER reading it. A run you are in can only be
-          checked while a sensor is paired.
+          checked while a wearable is paired.
         </p>
         <DisconnectDeviceButton address={address} />
       </>
@@ -243,7 +243,7 @@ function DeviceSection({
       className="rounded-2xl border border-edge bg-surface p-5"
     >
       <h2 id="sensor-heading" className="text-lg font-semibold">
-        Your sensor
+        Your wearable
       </h2>
       <div className="mt-2" aria-live="polite">
         {body}

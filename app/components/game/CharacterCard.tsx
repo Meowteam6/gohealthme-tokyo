@@ -9,6 +9,7 @@ import { useState } from "react";
 import EnsName from "@/components/ens/EnsName";
 import { TAP_TARGET } from "@/components/ui";
 import { measurableGoalsOf } from "@/lib/game/character";
+import { countsLineFor } from "@/lib/game/sensor-copy";
 import type { CharacterView } from "@/lib/game/useCharacter";
 
 function HumanStamp({ verified, mode }: { verified: boolean; mode: "world" | "allowlist" }) {
@@ -34,19 +35,18 @@ function SensorLine({ view }: { view: CharacterView }) {
   const sensor = view.sensor;
   switch (sensor.kind) {
     case "loading":
-      return <p className="text-sm text-muted">Looking at your sensor</p>;
+      return <p className="text-sm text-muted">Looking at your wearable</p>;
     case "paired":
       return (
         <p className="text-sm">
-          <span className="font-semibold">{sensor.device.label}</span>
-          <span className="text-muted"> measures </span>
-          {measurableGoalsOf(sensor.device).join(", ")}
+          <span className="font-semibold">{sensor.device.label}.</span>{" "}
+          {countsLineFor(sensor.device.metrics)}
         </p>
       );
     case "none":
       return (
         <p className="text-sm">
-          <span className="text-muted">No sensor paired. </span>
+          <span className="text-muted">No wearable paired. </span>
           <Link href="/character?step=sensor" className="font-semibold text-accent underline underline-offset-2">
             Pair one
           </Link>
@@ -59,7 +59,7 @@ function SensorLine({ view }: { view: CharacterView }) {
         </p>
       );
     case "unavailable":
-      return <p className="text-sm text-muted">Sensor check is not answering right now.</p>;
+      return <p className="text-sm text-muted">Wearable check is not answering right now.</p>;
     case "unchecked":
       return (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -74,7 +74,7 @@ function SensorLine({ view }: { view: CharacterView }) {
             }}
             className="min-h-11 font-semibold text-accent underline underline-offset-2 disabled:opacity-60"
           >
-            {view.checkingSensor ? "Waiting for your signature" : "Check my sensor (free, no transaction)"}
+            {view.checkingSensor ? "Waiting for your signature" : "Check my wearable (free, no transaction)"}
           </button>
         </div>
       );
@@ -137,7 +137,7 @@ export default function CharacterCard({
           </dd>
         </div>
         <div className="px-5 py-3">
-          <dt className="text-sm text-muted">Sensor</dt>
+          <dt className="text-sm text-muted">Wearable</dt>
           <dd className="mt-1">
             <SensorLine view={view} />
           </dd>

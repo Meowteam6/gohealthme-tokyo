@@ -162,7 +162,7 @@ export default function RunSlip({
       row.slot.kind === "locked" &&
       row.slot.lock.kind === "sensor-unchecked" ? (
         <p className="px-4 pb-4 text-sm text-muted sm:px-5">
-          Locked until I check your sensor. The one tap above opens every run
+          Locked until I check your wearable. The one tap above opens every run
           at once.
         </p>
       ) : null}

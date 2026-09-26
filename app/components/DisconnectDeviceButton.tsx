@@ -2,7 +2,7 @@
 
 /**
  * Unlinking a device. One control, used by the dashboard's streak card and by
- * the Wallet page, so the privacy notice's disconnect promise points at a
+ * the Settings page, so the privacy notice's disconnect promise points at a
  * place every paired player can reach, including players in an active run
  * (the dashboard only mounts the streak card when there is no wearable run).
  *

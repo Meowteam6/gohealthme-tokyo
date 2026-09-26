@@ -34,10 +34,10 @@ export const ASK_GLOBAL_CAP = 400;
  */
 export const HELP_KB = [
   "WHAT GOHEALTHME IS: you stake test USDC on your own health goal (sleep, steps, workouts), your wearable decides, and SPOTTER pays achievers in USDC when the run settles at the end of its window. Sponsors can put up a prize too. It is a beta on the Base Sepolia testnet with play-money USDC that has no real value.",
-  "MAKE YOUR PLAYER: the first time in, you sign in with an email (we create a wallet for you, no seed phrase, nothing to install), prove you are one human with World ID (on a build without World ID, you ask for a spot in the closed beta instead), pick a name, and pair your wearable. The name and the sensor can wait; the human step cannot.",
+  "MAKE YOUR PLAYER: the first time in, you sign in with an email (we create a wallet for you, no seed phrase, nothing to install), prove you are one human with World ID (on a build without World ID, you ask for a spot in the closed beta instead), pick a name, and pair your wearable. The name and the wearable can wait; the human step cannot.",
   "PICK A NAME: on a build with ENS names on, your name is a public subname on Ethereum Sepolia pointing at your wallet; otherwise it is an @handle. It is how friends and the payout feed show you. Optional, and your health data stays private either way.",
-  "PAIR A SENSOR: link a wearable through Junction (WHOOP, Oura, Fitbit, Garmin) or connect WHOOP directly. The lobby then marks which runs your device can actually measure before you stake anything. You can disconnect it any time from the Wallet page.",
-  "ENTER A RUN: open the lobby, pick a run your sensor can play, and stake. If your wallet has no test USDC, the app tries to add some for you; if that fails, the faucet at faucet.circle.com on Base Sepolia works too. Network fees on Base are paid in ETH unless they are sponsored for you.",
+  "PAIR A WEARABLE: link a wearable through Junction (WHOOP, Oura, Fitbit, Garmin) or connect WHOOP directly. The lobby then marks which runs your device can actually measure before you stake anything. You can disconnect it any time from the Settings page.",
+  "ENTER A RUN: open the lobby, pick a run your wearable can play, and stake. If your wallet has no test USDC, the app tries to add some for you; if that fails, the faucet at faucet.circle.com on Base Sepolia works too. Network fees on Base are paid in ETH unless they are sponsored for you.",
   "DARE A FRIEND: create a challenge from the new-challenge page. You fund the reward and get a private invite link to send. Anyone with the link can chip in to grow the pot. You are growing a reward, not placing a bet.",
   "IF THEY MISS A DARE: the leftover pot belongs to the person who created the challenge, not split back to contributors. It stays in the pool until the creator takes it back.",
   "IF YOU MISS YOUR OWN RUN: there is no prize, and your stake is credited back to you when the run settles.",
@@ -50,7 +50,7 @@ export const HELP_KB = [
 export const HELP_SYSTEM_PROMPT = [
   "You are the GoHealthMe onboarding helper. You help people USE the app and nothing else.",
   "",
-  "ANSWER ONLY questions about using the app: signing in, proving you are human, picking a name, pairing a sensor, entering a run, daring a friend, getting paid, the privacy model, what SPOTTER is, and that this is a testnet beta on play-money.",
+  "ANSWER ONLY questions about using the app: signing in, proving you are human, picking a name, pairing a wearable, entering a run, daring a friend, getting paid, the privacy model, what SPOTTER is, and that this is a testnet beta on play-money.",
   "",
   "REFUSE these, every time: medical advice or health guidance of any kind; financial or investment advice; and anything about a specific person's data or account. When a question is one of these, do not answer it - say you can only help with using the app, and that they should talk to a qualified professional for medical or financial questions.",
   "",

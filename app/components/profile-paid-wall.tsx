@@ -329,7 +329,7 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
             <p className="mt-3 flex items-center gap-1.5 text-xs text-accent-strong">
               <CheckBadgeIcon className="h-3.5 w-3.5 shrink-0" />
               <span>
-                {profile.verifiedWins} verified by a sensor or a record
+                {profile.verifiedWins} verified by a wearable or a record
               </span>
             </p>
           ) : null}

@@ -294,7 +294,7 @@ describe("lockCopy", () => {
     }
   });
 
-  it("says a WHOOP cannot count steps and sends the player to change sensor", () => {
+  it("says a WHOOP cannot count steps and sends the player to change wearable", () => {
     const copy = lockCopy(
       { kind: "cannot-measure", metric: "steps", deviceLabel: "WHOOP" },
       "/pools/7",
@@ -304,7 +304,7 @@ describe("lockCopy", () => {
     expect(copy.tone).toBe("hardware");
     expect(copy.fix).toEqual({
       kind: "link",
-      label: "Change my sensor",
+      label: "Change my wearable",
       href: "/character?step=sensor&next=%2Fpools%2F7",
     });
   });
@@ -334,7 +334,7 @@ describe("lockCopy", () => {
       { kind: "sensor-hold", hold: "awaiting-sync", deviceLabel: "Junction" },
       "/pools",
     );
-    expect(copy.title).toBe("Your sensor has not synced yet");
+    expect(copy.title).toBe("Your wearable has not synced yet");
     expect(copy.detail).toContain("Junction is linked");
     expect(copy.fix).toEqual({ kind: "check-sensor", label: "Check again" });
     expect(copy.tone).toBe("wait");

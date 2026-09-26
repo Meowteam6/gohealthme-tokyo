@@ -103,7 +103,7 @@ export function coachChecklist(humanMode: HumanMode): ChecklistRow[] {
       label: humanMode === "world" ? "Prove you are human" : "Get your spot",
     },
     { id: "pickName", label: "Pick a name" },
-    { id: "pairSensor", label: "Pair your sensor" },
+    { id: "pairSensor", label: "Pair your wearable" },
     { id: "enterRun", label: "Enter a run" },
     { id: "paid", label: "Get paid", gold: true },
   ];
@@ -147,9 +147,9 @@ export function coachCopy(id: CoachAction, humanMode: HumanMode): CoachCopy {
       };
     case "pairSensor":
       return {
-        headline: "Pair your sensor",
+        headline: "Pair your wearable",
         body: "Your wearable is the referee. Once it is paired, the lobby shows which runs it can actually measure before you stake anything.",
-        primary: "Pair my sensor",
+        primary: "Pair my wearable",
         secondary: "Look at the runs first",
       };
     case "enterRun":

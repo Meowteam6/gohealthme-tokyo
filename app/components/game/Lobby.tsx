@@ -85,14 +85,14 @@ export default function Lobby({
             The lobby
           </h1>
           <p className="max-w-lg text-lg text-foreground/80">
-            Put a stake on yourself. Your sensor decides. SPOTTER pays you or it
+            Put a stake on yourself. Your wearable decides. SPOTTER pays you or it
             does not. Test money on Base Sepolia, no real dollars.
           </p>
           <SpotterSays
             surface="pools-header"
             state="idle"
             pose="point"
-            say="Playable means I can check it on your sensor. Locked means I tell you why before you stake a cent."
+            say="Playable means I can check it on your wearable. Locked means I tell you why before you stake a cent."
           />
         </header>
       )}
@@ -102,7 +102,7 @@ export default function Lobby({
       ) : (
         <div className="flex flex-col gap-3 rounded-xl border-2 border-foreground bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm">
-            Sign in to see which runs your sensor can play. One email, and a
+            Sign in to see which runs your wearable can play. One email, and a
             wallet is made for you.
           </p>
           <Link

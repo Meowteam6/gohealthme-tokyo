@@ -2,7 +2,7 @@
 // the UX lane. Other lanes feed it through the APIs named in docs/LANES.md.
 //
 // Character creation happens once: sign in, prove you are one human, pick a
-// name, pair a sensor. Every later screen reads the result instead of asking
+// name, pair a wearable. Every later screen reads the result instead of asking
 // again, which is the whole point: the V3 flow interrogated the player at every
 // pool (five separate join refusals), and each refusal arrived as a new screen.
 //
@@ -11,16 +11,13 @@
 // Two of the four steps are HARD gates (the ones the server enforces anyway:
 // a wallet, and either World proof-of-human or the closed-beta allowlist). The
 // other two are soft: a player without a name plays under their short address,
-// and a player without a sensor can browse the lobby and sees every wearable
-// run locked with "pair your sensor" as the fix. Making them hard would be a new
+// and a player without a wearable can browse the lobby and sees every wearable
+// run locked with "pair your wearable" as the fix. Making them hard would be a new
 // wall, which is the thing this module exists to remove.
 
 import type { AccessStatus } from "@/lib/useAccess";
 import type { LaneAvailability } from "@/lib/game/lanes";
-import {
-  metricLabel,
-  type WearableMetric,
-} from "@/lib/wearable-goal";
+import { countsLineFor, launchGoalLabels } from "@/lib/game/sensor-copy";
 import {
   viewerMetricsOf,
   type ProviderOptions,
@@ -98,15 +95,16 @@ export function sensorFromOptions(
     kind: "paired",
     device: {
       provider: active?.id ?? "unknown",
-      label: active?.label ?? "Your sensor",
+      label: active?.label ?? "Your wearable",
       metrics: [...metrics],
     },
   };
 }
 
-/** The measurable goals a device can play, in words, for the character card. */
+/** The run goals a device can play, in words, for the character card. Only
+ *  launch goals: a metric no run is scored on (sleep score) is not a goal. */
 export function measurableGoalsOf(device: CharacterDevice): string[] {
-  return device.metrics.map((m) => metricLabel(m as WearableMetric));
+  return launchGoalLabels(device.metrics);
 }
 
 // ------------------------------------------------------------------- steps
@@ -234,7 +232,7 @@ function sensorStep(i: CharacterInputs): StepState {
     case "paired":
       return {
         status: "done",
-        summary: `${i.sensor.device.label}: ${measurableGoalsOf(i.sensor.device).join(", ")}`,
+        summary: `${i.sensor.device.label}. ${countsLineFor(i.sensor.device.metrics)}`,
       };
     case "none":
       return { status: "todo" };
@@ -248,7 +246,7 @@ function sensorStep(i: CharacterInputs): StepState {
     case "unavailable":
       return {
         status: "error",
-        note: "SPOTTER could not reach the sensor check just now.",
+        note: "SPOTTER could not reach the wearable check just now.",
       };
   }
 }
@@ -273,7 +271,8 @@ export const HARD_STEPS: StepId[] = ["sign-in", "human"];
 /**
  * The step character creation should show, or null when there is nothing to
  * show. Hard steps come first and cannot be skipped. Soft steps are an
- * onboarding pass shown once per device: after the player finishes or skips
+ * onboarding pass shown once, on the device where the player is made (see
+ * creationBlocks): after the player finishes or skips
  * them (`onboarded`), creation never interrupts again and the lobby carries
  * any lock that is left, with its fix, on the run it affects.
  */
@@ -295,6 +294,45 @@ export function currentStep(
   // proof once, skippably, because one-human-one-entry is checked at the join.
   if (steps.human.status === "todo" && !skipped.has("human")) return "human";
   return null;
+}
+
+/**
+ * True when this device has watched a signed-in player stand at a closed hard
+ * gate with every read settled: they are making their character here, right
+ * now, so the onboarding pass should follow the hard steps. A returning player
+ * (any device) arrives with the gate already open and never trips this.
+ */
+export function hardGateClosed(v: {
+  authenticated: boolean;
+  address: string | null;
+  gate: boolean;
+  gateLoading: boolean;
+  accessLoading: boolean;
+  worldLane: LaneAvailability | "loading";
+}): boolean {
+  if (!v.authenticated || v.address === null) return false;
+  if (v.gate || v.gateLoading || v.accessLoading) return false;
+  return v.worldLane !== "loading";
+}
+
+/**
+ * Whether the page gate shows character creation instead of the page. The hard
+ * steps always hold. Past them, the player's real state decides, never the
+ * per-device onboarding flag alone: a player who finished or skipped the soft
+ * steps on another device walks straight in here. Only a player creating
+ * their character on this device (`creatingHere`) is walked through the soft
+ * pass, once, until they finish it or skip what is left.
+ */
+export function creationBlocks(g: {
+  steps: Record<StepId, StepState>;
+  gate: boolean;
+  skipped: ReadonlySet<StepId>;
+  onboarded: boolean;
+  creatingHere: boolean;
+}): boolean {
+  if (!g.gate || g.steps["sign-in"].status !== "done") return true;
+  if (g.onboarded || !g.creatingHere) return false;
+  return true;
 }
 
 /** The character the rest of the app reads. */

@@ -1,6 +1,8 @@
 "use client";
 
-// The public claims feed on SPOTTER's page: every claim the agent has touched,
+// The History feed (/agent): signed in, the player's own claims lead and
+// everyone's sit behind one toggle; signed out, the public feed with one line
+// to sign in. Every claim the agent has touched,
 // redacted server-side to money facts, statuses, and tx hashes - never the
 // model's prose about anyone's medical documents (the /api/agent/feed route
 // does the redaction). Split out of the identity card so the page can render
@@ -12,8 +14,16 @@
 // came back, whether the payout wallet cleared screening, and where the money
 // went. A declined, expired or held claim must never read as a pending payout.
 
+import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useEmbeddedWallet } from "@/lib/wallet";
+import {
+  defaultHistoryView,
+  historyItems,
+  type HistoryView,
+} from "@/lib/agent-history";
 import { baseTxUrl } from "@/lib/chains";
 import { toUsd2 } from "@/lib/agent-receipt";
 import { credentialLabel } from "@/lib/world/credentials";
@@ -180,29 +190,87 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
   );
 }
 
+interface FeedBody {
+  claims: PublicFeedClaim[];
+  mine?: PublicFeedClaim[];
+}
+
+const TOGGLE_LABEL: Record<HistoryView, string> = {
+  mine: "Yours",
+  everyone: "Everyone",
+};
+
 export default function AgentFeed() {
+  const pathname = usePathname();
+  const { authenticated, address } = useEmbeddedWallet();
+  const signedIn = authenticated && address !== null;
+  // Null until the player picks, so the default follows sign-in.
+  const [picked, setPicked] = useState<HistoryView | null>(null);
+  const view: HistoryView = signedIn ? (picked ?? defaultHistoryView(true)) : "everyone";
+
   const feed = useQuery({
-    queryKey: ["agent-feed"],
-    queryFn: async (): Promise<PublicFeedClaim[]> => {
-      const res = await fetch("/api/agent/feed");
+    queryKey: ["agent-feed", signedIn ? address : null],
+    queryFn: async (): Promise<FeedBody> => {
+      const url = signedIn
+        ? `/api/agent/feed?for=${encodeURIComponent(address)}`
+        : "/api/agent/feed";
+      const res = await fetch(url);
       // A failed read is an error, never an empty ledger: "SPOTTER has done
       // nothing yet" on an outage would be a false statement about the chain.
       if (!res.ok) throw new Error(`agent feed responded ${res.status}`);
-      const body = (await res.json()) as { claims?: PublicFeedClaim[] };
-      return body.claims ?? [];
+      const body = (await res.json()) as Partial<FeedBody>;
+      return { claims: body.claims ?? [], mine: body.mine };
     },
     staleTime: 5_000,
     refetchInterval: 10_000,
   });
 
+  const items = feed.data !== undefined ? historyItems(feed.data, view) : [];
+
   return (
     <section className="space-y-3" aria-live="polite">
-      <h2 className="font-display text-lg font-bold">Recent claims</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-display text-lg font-bold">
+          {view === "mine" ? "Your history" : "Everyone's claims"}
+        </h2>
+        {signedIn ? (
+          <div
+            role="group"
+            aria-label="Whose history"
+            className="inline-flex rounded-full border-2 border-foreground p-0.5"
+          >
+            {(["mine", "everyone"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => setPicked(v)}
+                className={`min-h-11 rounded-full px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                  view === v ? "bg-foreground text-background" : "text-muted hover:text-foreground"
+                }`}
+              >
+                {TOGGLE_LABEL[v]}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      {!signedIn ? (
+        <p className="text-sm text-muted">
+          <Link
+            href={`/character?next=${encodeURIComponent(pathname)}`}
+            className="font-semibold text-accent underline"
+          >
+            Sign in
+          </Link>{" "}
+          to see your own verdicts and payouts first.
+        </p>
+      ) : null}
       {feed.isPending ? (
         <Skeleton className="h-24 w-full" />
-      ) : feed.data !== undefined && feed.data.length > 0 ? (
+      ) : items.length > 0 ? (
         <ol className="space-y-3">
-          {feed.data.map((claim) => (
+          {items.map((claim) => (
             <ClaimCard key={claim.goalId} claim={claim} />
           ))}
         </ol>
@@ -213,6 +281,19 @@ export default function AgentFeed() {
           onRetry={() => {
             void feed.refetch();
           }}
+        />
+      ) : view === "mine" ? (
+        <EmptyState
+          title="Nothing in your history yet."
+          detail="When SPOTTER checks one of your runs, its verdict, your World ID confirmation and the payout land here. Everyone's claims are one tap away."
+          action={
+            <Link
+              href="/pools"
+              className="inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-white hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+            >
+              See the open runs
+            </Link>
+          }
         />
       ) : (
         <div className="space-y-4">

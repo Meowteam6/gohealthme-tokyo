@@ -10,20 +10,7 @@ import EnsName from "@/components/ens/EnsName";
 import SpotterStatusLine from "@/components/game/SpotterStatusLine";
 import TestUsdcChip from "@/components/TestUsdcChip";
 import { CopyAddressButton } from "@/components/FundingHelp";
-
-// "Create pool" is deliberately NOT here. It is the sponsor's action - it
-// costs money and a first-time visitor has none - so it lives one level down,
-// as the primary button on /pools. The route is unchanged.
-// Named for the game loop: the lobby is where runs are, "My runs" is the
-// scoreboard for the ones you entered. Routes are unchanged.
-const NAV_ITEMS: { href: string; label: string }[] = [
-  { href: "/pools", label: "Lobby" },
-  { href: "/dashboard", label: "My runs" },
-  { href: "/challenges", label: "Dares" },
-  { href: "/agent", label: "SPOTTER" },
-  { href: "/sponsor", label: "Sponsor" },
-  { href: "/settings", label: "Wallet" },
-];
+import { NAV_ITEMS } from "@/lib/nav";
 
 function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -183,7 +170,7 @@ function AuthOrPill() {
 }
 
 export default function Header() {
-  // Mobile (375px) cannot fit wordmark + six links + auth on one row. Below
+  // Mobile (375px) cannot fit wordmark + five links + auth on one row. Below
   // `sm` the links collapse into a tap-to-open menu (a hidden horizontal
   // scroll strip is undiscoverable on a phone and left Challenges/Wallet
   // unreachable); at `sm` and up the inline nav returns. The menu closes on

@@ -87,7 +87,7 @@ export default function PrivacyPage() {
           <p>
             Before SPOTTER records a win, a build may ask you to confirm the
             payout with World ID. We store whether you confirmed, declined, or
-            let the window close, and when. The public SPOTTER page shows that
+            let the window close, and when. The public History page shows that
             state next to the claim, never your identity.
           </p>
           <p>
@@ -215,7 +215,7 @@ export default function PrivacyPage() {
           <p>
             You can disconnect a device at any time from{" "}
             <Link href="/settings" className="text-accent underline">
-              your Wallet page, under Your sensor
+              your Settings page, under Your wearable
             </Link>
             . For WHOOP that revokes our access at WHOOP and deletes the stored
             token. For a Junction device the page tells you where to unlink it,

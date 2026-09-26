@@ -190,11 +190,11 @@ export function sensorHoldCopy(
   hold: SensorHold,
   deviceLabel: string | null,
 ): SensorHoldCopy {
-  const device = deviceLabel ?? "your sensor";
+  const device = deviceLabel ?? "your wearable";
   switch (hold) {
     case "awaiting-sync":
       return {
-        title: "Your sensor has not synced yet",
+        title: "Your wearable has not synced yet",
         detail:
           `${capitalise(device)} is linked, and nothing has come through from it yet, ` +
           "so I cannot tell what it measures. Open your wearable's own app so it " +
@@ -205,7 +205,7 @@ export function sensorHoldCopy(
       };
     case "unreadable":
       return {
-        title: "I cannot read your sensor right now",
+        title: "I cannot read your wearable right now",
         detail:
           `${capitalise(device)} is linked and nothing is wrong on your side. ` +
           "It is not telling me what it measures this minute, so wearable runs " +
@@ -224,9 +224,9 @@ export function sensorHoldCopy(
 export function uploadFallbackNote(goalSpec: string): string {
   const accepted = proofPolicyOf(goalSpec).accepted;
   return accepted.includes("self-reported")
-    ? "Your sensor cannot prove this one for you right now, so you would " +
+    ? "Your wearable cannot prove this one for you right now, so you would " +
         "prove it with a photo. Photo proof is self-reported and counts as low trust."
-    : "Your sensor cannot prove this one for you right now, so you would " +
+    : "Your wearable cannot prove this one for you right now, so you would " +
         "prove it by uploading a document instead.";
 }
 

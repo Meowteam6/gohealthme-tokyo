@@ -33,14 +33,14 @@ const TITLE: Record<StepId, string> = {
   "sign-in": "Sign in",
   human: "Prove you are one human",
   name: "Pick your name",
-  sensor: "Pair your sensor",
+  sensor: "Pair your wearable",
 };
 
 const SPOTTER_LINE: Record<StepId, string> = {
   "sign-in": "Email in, wallet out. I do the crypto part.",
   human: "One human, one entry. I do not pay bots and I do not pay twins.",
   name: "Your boys should see a name on the board, not 0x-something.",
-  sensor: "I only pay on what the sensor says. Show me what yours can see.",
+  sensor: "I only pay on what the wearable says. Show me what yours can see.",
 };
 
 function StatusText({
@@ -281,7 +281,7 @@ export default function CharacterCreation({
           {mode === "page" ? "Your player" : "Make your player"}
         </h1>
         <p className="mt-3 max-w-md text-base text-foreground/80">
-          Stake on yourself, your sensor decides, SPOTTER pays or it does not.
+          Stake on yourself, your wearable decides, SPOTTER pays or it does not.
           Four steps, once, then every run reads this card. Base Sepolia test
           money only.
         </p>
