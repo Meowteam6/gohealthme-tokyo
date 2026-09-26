@@ -16,8 +16,13 @@
 // signature prompt), walletsFilter still hides MetaMask from the modal list,
 // and lib/wallet.ts still resolves primaryWallet ?? userWallets[0]. This panel
 // only chooses which flow to start.
+//
+// One option stack everywhere: SignInOptions is the stack (Base first, then
+// email, then your own wallet as a quiet link), and both this panel and
+// character creation's step 1 (components/game/SignInStep.tsx) render it, so a
+// player meets the same choices in the same order wherever sign-in caught them.
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useConnectWithOtp } from "@dynamic-labs/sdk-react-core";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
@@ -42,7 +47,14 @@ type Step =
   | { kind: "otp" }
   | { kind: "verifying" };
 
-function SignInPanelInner({ surface }: { surface: SignInSurface }) {
+/**
+ * The sign-in options, with no card or heading of their own: the host gives
+ * them one. Calls Dynamic hooks, so mount it only when DYNAMIC_CONFIGURED.
+ */
+export function SignInOptions() {
+  const ids = useId();
+  const emailId = `${ids}-email`;
+  const codeId = `${ids}-code`;
   const { login } = useEmbeddedWallet();
   const { connectWithEmail, verifyOneTimePassword, retryOneTimePassword } =
     useConnectWithOtp();
@@ -116,21 +128,19 @@ function SignInPanelInner({ surface }: { surface: SignInSurface }) {
   };
 
   return (
-    <div className={PANEL[surface]}>
-      <h2 className="m-0 text-lg font-semibold leading-tight text-foreground">Sign in</h2>
-
+    <div>
       {step.kind === "otp" || step.kind === "verifying" ? (
-        <div className="mt-4 [&>*+*]:mt-3">
+        <div className="[&>*+*]:mt-3">
           <p className="m-0 text-[0.9375rem] text-muted">
             We sent a code to{" "}
             <span className="break-all font-semibold text-foreground">{email.trim()}</span>.
             Enter it to finish.
           </p>
-          <label htmlFor="otp-code" className="sr-only">
+          <label htmlFor={codeId} className="sr-only">
             Email verification code
           </label>
           <input
-            id="otp-code"
+            id={codeId}
             type="text"
             inputMode="numeric"
             autoComplete="one-time-code"
@@ -185,7 +195,7 @@ function SignInPanelInner({ surface }: { surface: SignInSurface }) {
           ) : null}
         </div>
       ) : (
-        <div className="mt-4 [&>*+*]:mt-3">
+        <div className="[&>*+*]:mt-3">
           <p className="m-0 text-[0.9375rem] text-muted">
             The fastest way in is your fingerprint or face. No password to
             remember.
@@ -231,11 +241,11 @@ function SignInPanelInner({ surface }: { surface: SignInSurface }) {
             <span className="h-px flex-1 bg-edge" />
           </div>
 
-          <label htmlFor="signin-email" className="sr-only">
+          <label htmlFor={emailId} className="sr-only">
             Email address
           </label>
           <input
-            id="signin-email"
+            id={emailId}
             type="email"
             autoComplete="email"
             value={email}
@@ -284,9 +294,9 @@ function SignInPanelInner({ surface }: { surface: SignInSurface }) {
 }
 
 /**
- * Sign-in panel. The inner component calls Dynamic hooks, so it is mounted only
- * when Dynamic is configured; unconfigured builds get an honest note instead of
- * a thrown hook.
+ * Sign-in panel: SignInOptions in a well or a card, under a "Sign in" heading.
+ * The options call Dynamic hooks, so they mount only when Dynamic is
+ * configured; unconfigured builds get an honest note instead of a thrown hook.
  */
 export default function SignInPanel({ surface = "well" }: { surface?: SignInSurface } = {}) {
   if (!DYNAMIC_CONFIGURED) {
@@ -296,5 +306,12 @@ export default function SignInPanel({ surface = "well" }: { surface?: SignInSurf
       </Notice>
     );
   }
-  return <SignInPanelInner surface={surface} />;
+  return (
+    <div className={PANEL[surface]}>
+      <h2 className="m-0 text-lg font-semibold leading-tight text-foreground">Sign in</h2>
+      <div className="mt-4">
+        <SignInOptions />
+      </div>
+    </div>
+  );
 }
