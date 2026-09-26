@@ -19,7 +19,9 @@ import { useQuery } from "@tanstack/react-query";
 import JoinPool from "@/components/JoinPool";
 import ApprovalNote from "@/components/game/ApprovalNote";
 import LockPanel from "@/components/game/LockPanel";
-import { fetchParticipant, fetchPool, formatUsdc } from "@/lib/contract";
+import { fetchParticipant, fetchParticipants, fetchPool, formatUsdc } from "@/lib/contract";
+import type { CommitmentTerms } from "@/lib/game/commitment-copy";
+import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { Skeleton, TAP_TARGET } from "@/components/ui";
 import {
@@ -110,6 +112,19 @@ export default function ChallengeAccept({
     retry: false,
     staleTime: 60_000,
   });
+  // Commitment runs (bountyModel 2) show the same terms line under the coin
+  // as the pool page, from the same on-chain count and fee.
+  const selfStaked = poolQuery.data?.bountyModel === 2;
+  const playersQuery = useQuery({
+    queryKey: ["run-players-count", poolId],
+    queryFn: () => {
+      if (poolIdBig === null) throw new Error("Invalid pool id.");
+      return fetchParticipants(poolIdBig);
+    },
+    enabled: poolIdBig !== null && selfStaked,
+    staleTime: 30_000,
+  });
+  const commitmentFee = useCommitmentFee(selfStaked);
 
   if (poolIdBig === null) return null;
 
@@ -227,7 +242,7 @@ export default function ChallengeAccept({
         <div className="space-y-2">
           <p className="text-sm text-foreground/80">
             Accepting stakes your {formatUsdc(pool.entryFee)} USDC. Hit the goal
-            and it comes back with the prize on top; the challenger never keeps
+            and it comes back with your share on top; the challenger never keeps
             it.
           </p>
           {slot.proof === "upload" ? (
@@ -236,8 +251,24 @@ export default function ChallengeAccept({
             </p>
           ) : null}
           <ApprovalNote />
-          <JoinPool poolId={poolIdBig} entryFee={pool.entryFee} alreadyJoined={joined} />
+          <JoinPool
+            poolId={poolIdBig}
+            entryFee={pool.entryFee}
+            alreadyJoined={joined}
+            commitment={commitmentTermsOf(pool, playersQuery.data?.length ?? null, commitmentFee.bps)}
+          />
         </div>
       );
   }
+}
+
+/** The commitment terms for the coin, or null when this is not a commitment
+ *  run or the count or fee has not been read. */
+function commitmentTermsOf(
+  pool: { bountyModel: number; entryFee: bigint; balance: bigint; settled: boolean; cancelled: boolean },
+  players: number | null,
+  feeBps: number | null,
+): CommitmentTerms | null {
+  if (pool.bountyModel !== 2 || players === null || pool.settled || pool.cancelled) return null;
+  return { entryFee: pool.entryFee, players, balance: pool.balance, feeBps };
 }
