@@ -54,6 +54,12 @@ export const canCoverJoinCosts = canCoverUsdcCosts;
 export const FAUCET_URL = "https://faucet.circle.com";
 
 /**
+ * Where a wallet gets Base Sepolia ETH for gas by hand, when the app's own gas
+ * drip (POST /api/gas/drip) has refused. The Circle faucet above is USDC only.
+ */
+export const ETH_FAUCET_URL = "https://portal.cdp.coinbase.com/products/faucet";
+
+/**
  * The funding steps, in the order a first-time user performs them. The faucet
  * takes a pasted address and a chosen network - it does not "send" anywhere -
  * and Base Sepolia sits in a long network dropdown, so both are called out.
