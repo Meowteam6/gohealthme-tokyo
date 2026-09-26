@@ -74,6 +74,12 @@ describe("sensorFromOptions", () => {
       label: "Junction",
     });
   });
+  it("a Junction link before its first sync is linked and waiting, never 'nothing linked' (Nikki, 2026-09-27)", () => {
+    expect(sensorFromOptions(options({ metrics: [] }), false)).toEqual({
+      kind: "unreadable",
+      label: "Junction",
+    });
+  });
   it("pairs a Junction wallet with what it measures", () => {
     expect(sensorFromOptions(options(), false)).toEqual({
       kind: "paired",

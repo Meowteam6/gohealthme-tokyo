@@ -80,13 +80,12 @@ export function sensorFromOptions(
   if (options.status === "unavailable") return { kind: "unavailable" };
   const active = options.providers.find((p) => p.id === options.selected);
   const metrics = viewerMetricsOf(options);
-  if (metrics === null) {
-    if (
-      active !== undefined &&
-      active.configured &&
-      active.connected &&
-      active.capability === "unknown"
-    ) {
+  if (metrics === null || metrics.length === 0) {
+    // Linked but nothing readable yet: a capability SPOTTER cannot establish,
+    // or a fresh Junction link before its first sync. Both are "linked and
+    // waiting", never "nothing linked": the second reading left a paired
+    // player stuck on step 4 with "no wearable paired" (2026-09-27).
+    if (active !== undefined && active.configured && active.connected) {
       return { kind: "unreadable", label: active.label };
     }
     return { kind: "none" };

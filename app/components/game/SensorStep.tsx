@@ -208,7 +208,6 @@ function SensorStepBody({
   const offered = allOptions.filter((p) => p.configured);
   // Apple is listed by the server and switched off until the iPhone app
   // ships. Said plainly, so an Apple Watch wearer is not left wondering.
-  const appleNotYet = allOptions.some((p) => p.id === "apple" && !p.configured);
   const hold = capabilityHoldOf(view.providers);
   const holdLabel =
     allOptions.find((p) => p.id === view.providers?.selected)?.label ??
@@ -284,14 +283,6 @@ function SensorStepBody({
           ))}
         </ul>
       )}
-
-      {appleNotYet ? (
-        <Notice tone="limit" title="Apple Watch can't pair yet">
-          The GoHealthMe iPhone app is not out in this beta, so Apple Health
-          cannot pair here. If you also wear a WHOOP, Oura, Fitbit or Garmin,
-          pair that instead.
-        </Notice>
-      ) : null}
 
       {allOptions
         .filter((p) => !p.configured && p.note)
