@@ -6,11 +6,14 @@
 //
 // Night Shift: chips are tags, not buttons (nothing to press). A miss that
 // goes to the players who hit wears dusk, never red; a stake that comes back
-// is quiet. Money figures inside a sentence are gold, as everywhere else.
+// is quiet. Money figures inside a sentence are bold foreground, as on the
+// landing card and the lobby rows; gold is for the Pot stat and the one
+// payout figure (what a hit pays, in the hit term).
 
 import type { ReactNode } from "react";
 import { Glyph, type GlyphName } from "@/components/run/glyphs";
 import { Skeleton } from "@/components/ui";
+import { StakeLineBox } from "@/components/run/StakeCard";
 import type { MissChip } from "@/lib/commitment-copy";
 import type { MoneyCopy, MoneyTermKey } from "@/lib/game/money-flow";
 
@@ -35,6 +38,18 @@ export function MissTag({ miss }: { miss: MissChip }) {
 }
 
 const KIND_CHIP = `${CHIP} bg-fill-quiet text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)]`;
+
+/** The kind chip alone ("Challenge from @nikki", "Sponsored by ..."), beside
+ *  the run page's tag; a placeholder holds its space while the flow reads. */
+export function KindTag({ kind }: { kind: string | null }) {
+  if (kind !== null) return <span className={KIND_CHIP}>{kind}</span>;
+  return (
+    <span aria-busy="true" className="inline-flex">
+      <span className="sr-only">Reading what kind of run this is</span>
+      <Skeleton className="h-[26px] w-[104px] rounded-tag" />
+    </span>
+  );
+}
 
 /**
  * The two chips: what kind of run this is, and what a miss does. Either is
@@ -88,20 +103,26 @@ export function MoneyChips({
   );
 }
 
-// Money figures inside a sentence ("1.00", "1,250.00") go gold. Dates and
-// clock times ("16:30") never match: they carry no decimal point.
+// Money figures inside a sentence ("1.00", "1,250.00"). Dates and clock
+// times ("16:30") never match: they carry no decimal point.
 const FIGURE = /(\d[\d,]*\.\d{2})/;
 
-function withMoney(text: string): ReactNode[] {
-  return text.split(FIGURE).map((part, i) =>
-    i % 2 === 1 ? (
-      <b key={i} className="font-semibold text-gold">
+/** Figures bold in the foreground. With `payout` (a hit term, whose first
+ *  figure is always the stake), a later figure that is not the stake is what
+ *  the hit pays, and only that goes gold: "1.00 back + a share, 3.00 right
+ *  now". "Can be under 1.00" stays foreground. */
+function withMoney(text: string, payout = false): ReactNode[] {
+  let stake: string | null = null;
+  return text.split(FIGURE).map((part, i) => {
+    if (i % 2 === 0) return part;
+    const paid = payout && stake !== null && part !== stake;
+    if (stake === null) stake = part;
+    return (
+      <b key={i} className={`font-semibold ${paid ? "text-gold" : "text-foreground"}`}>
         {part}
       </b>
-    ) : (
-      part
-    ),
-  );
+    );
+  });
 }
 
 const GLYPH: Record<MoneyTermKey, GlyphName> = {
@@ -123,17 +144,21 @@ function splitLead(text: string): { lead: string; rest: string } {
 
 /**
  * The flow's line and its terms, in the stake card's icon-list form. `line`
- * off renders the terms only (the line already shows above, as a heading).
+ * off renders the terms only (the stake card boxes the line above its action,
+ * MoneyLineBox); `skip` leaves out terms the card already shows (the stake,
+ * which the stat row carries).
  */
 export function MoneyTermsList({
   copy,
   id,
   line = true,
+  skip = [],
   className = "",
 }: {
   copy: MoneyCopy;
   id?: string;
   line?: boolean;
+  skip?: readonly MoneyTermKey[];
   className?: string;
 }) {
   return (
@@ -144,7 +169,7 @@ export function MoneyTermsList({
         </p>
       ) : null}
       <ul id={id} className={`m-0 grid list-none gap-2.5 p-0 ${line ? "mt-3" : ""}`}>
-        {copy.terms.map((term) => {
+        {copy.terms.filter((term) => !skip.includes(term.key)).map((term) => {
           const { lead, rest } = splitLead(term.text);
           return (
             <li
@@ -157,7 +182,7 @@ export function MoneyTermsList({
               <span>
                 {lead !== "" ? <b className="font-semibold text-foreground">{lead}</b> : null}
                 {lead !== "" ? " " : null}
-                {withMoney(rest)}
+                {withMoney(rest, term.key === "hit")}
               </span>
             </li>
           );
@@ -167,6 +192,12 @@ export function MoneyTermsList({
   );
 }
 
+/** The flow's line in the stake card's raised box, between the terms and the
+ *  action, where the approved mock puts the worked line. */
+export function MoneyLineBox({ copy }: { copy: MoneyCopy }) {
+  return <StakeLineBox>{withMoney(copy.line)}</StakeLineBox>;
+}
+
 /** The flow's line alone, for a card that has no room for the terms. Plain:
  *  the card's own stake and pot figures above it already carry the gold. */
 export function MoneyLine({ copy, className = "" }: { copy: MoneyCopy; className?: string }) {
@@ -174,8 +205,10 @@ export function MoneyLine({ copy, className = "" }: { copy: MoneyCopy; className
 }
 
 /**
- * Right under the stake button: the miss chip and what a miss does, the last
- * thing read before the money moves.
+ * Right under the stake button: the miss chip, the last thing read before the
+ * money moves. `detail` adds what a miss does, for a surface whose terms do
+ * not already say it; the run page and the challenge link pass null, since
+ * their Miss term is right above.
  */
 export function MissUnderStake({ miss, detail }: { miss: MissChip; detail: string | null }) {
   return (

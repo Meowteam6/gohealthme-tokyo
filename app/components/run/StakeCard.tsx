@@ -96,10 +96,22 @@ export function StakeTermsPlain({ children }: { children: ReactNode }) {
   );
 }
 
+/** The raised line between the terms and the action (the mock's solo box).
+ *  Its bold figures keep their own colour; SoloNote makes its payout gold. */
+export function StakeLineBox({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <p
+      className={`num m-0 mt-3.5 rounded-control bg-gold/[0.08] px-3.5 py-3 text-[0.9375rem] leading-[1.4] text-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--gold)_18%,transparent)] ${className}`}
+    >
+      {children}
+    </p>
+  );
+}
+
 /** What a hit pays the player about to join, in gold where it is money. */
 export function SoloNote({ line }: { line: SoloLine }) {
   return (
-    <p className="num m-0 mt-3.5 rounded-control bg-gold/[0.08] px-3.5 py-3 text-[0.9375rem] leading-[1.4] text-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--gold)_18%,transparent)] [&_b]:font-bold [&_b]:text-gold">
+    <StakeLineBox className="[&_b]:font-bold [&_b]:text-gold">
       {line.kind === "first" ? (
         <>
           Nobody&apos;s in yet. Hit it alone and <b>{line.total}</b> comes back: your {line.stake}
@@ -116,7 +128,7 @@ export function SoloNote({ line }: { line: SoloLine }) {
           <b>{line.low}</b> comes back if everyone hits, up to <b>{line.high}</b> if only you do.
         </>
       )}
-    </p>
+    </StakeLineBox>
   );
 }
 

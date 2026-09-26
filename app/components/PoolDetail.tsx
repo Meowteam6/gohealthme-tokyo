@@ -21,7 +21,7 @@ import {
   TEXT_LINK,
 } from "@/components/ui";
 import ApprovalNote from "@/components/game/ApprovalNote";
-import { MissUnderStake, MoneyChips, MoneyTermsList } from "@/components/game/MoneyTerms";
+import { KindTag, MissUnderStake, MoneyLineBox, MoneyTermsList } from "@/components/game/MoneyTerms";
 import { usePlayers, useRunNights } from "@/components/game/RunBoard";
 import VerdictStage, {
   proofSurfaceNeeded,
@@ -100,7 +100,7 @@ import { recordsMissesOf, sponsorPotOf, type CommitmentTerms } from "@/lib/game/
 import { missRulePool, missRuleReading } from "@/lib/miss-rule";
 import { runName } from "@/lib/game/landing";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
-import { missDetailOf } from "@/lib/game/money-flow";
+import type { MoneyTermKey } from "@/lib/game/money-flow";
 import { useRunMoney } from "@/lib/game/useRunMoney";
 import { classifyWearableGoal, metricLabel } from "@/lib/wearable-goal";
 import { fetchResolvedName, resolveOnce } from "@/lib/ens/client-cache";
@@ -120,6 +120,9 @@ import {
   stakeTermsOf,
   type RunHeadline,
 } from "@/lib/game/run-page";
+
+/** The stake card's stat row already says the stake, so its terms skip it. */
+const STAKE_CARD_SKIP: readonly MoneyTermKey[] = ["stake"];
 
 // The run page (docs/DESIGN.md, "Run page"): the one big figure with SPOTTER
 // standing on the card below it, the stake card in whichever state the join
@@ -776,11 +779,16 @@ export default function PoolDetail({ id }: { id: string }) {
   const flowTerms = runMoney?.copy ?? null;
   const solo =
     flowTerms === null && terms !== null && commitmentTerms !== null ? soloLineOf(commitmentTerms) : null;
-  const moneyChips =
-    runMoney !== null && live ? <MoneyChips kind={runMoney.kind?.chip ?? null} miss={runMoney.miss} /> : null;
+  // The hero carries the tag alone on a group run, as the approved mock does;
+  // a challenge or a sponsored run adds its kind chip, which names whose money
+  // it is. The miss rule is said once in the terms, and its chip sits under
+  // the stake button, the last thing read before the money moves.
+  const groupRun = pool.bountyModel === 2 && pool.initiative !== "challenge";
+  const kindChip =
+    runMoney !== null && live && !groupRun ? <KindTag kind={runMoney.kind?.chip ?? null} /> : null;
   const underStake =
     runMoney !== null && runMoney.miss !== null && flowTerms !== null ? (
-      <MissUnderStake miss={runMoney.miss} detail={missDetailOf(flowTerms)} />
+      <MissUnderStake miss={runMoney.miss} detail={null} />
     ) : null;
   const friendMath = commitmentTerms !== null ? friendMathOf(commitmentTerms, joined) : null;
 
@@ -817,7 +825,7 @@ export default function PoolDetail({ id }: { id: string }) {
       figure={headline.figure}
       rest={headline.figure !== null ? headline.rest : goalTitle}
       ends={ends}
-      chips={moneyChips}
+      chips={kindChip}
       spotter={heroSpotterOf({ screen, joined, phase, sleepRun, achievers: settleAchievers })}
     />
   );
@@ -859,13 +867,20 @@ export default function PoolDetail({ id }: { id: string }) {
     terms !== null ? (
       <>
         {flowTerms !== null ? (
-          <MoneyTermsList copy={flowTerms} id="stake-terms" className="mt-3.5 border-t border-edge pt-3.5" />
+          <MoneyTermsList
+            copy={flowTerms}
+            id="stake-terms"
+            line={false}
+            skip={STAKE_CARD_SKIP}
+            className="mt-3.5 border-t border-edge pt-3.5"
+          />
         ) : (
           <StakeTerms terms={terms} />
         )}
         {missReading !== null ? (
           <p className="m-0 mt-2 text-[0.8125rem] leading-[1.45] text-haze">{missReading}</p>
         ) : null}
+        {flowTerms !== null ? <MoneyLineBox copy={flowTerms} /> : null}
       </>
     ) : participantsQuery.isLoading || commitmentFee.loading ? (
       <div className="mt-3.5 grid gap-2.5 border-t border-edge pt-3.5" aria-busy="true">
@@ -881,7 +896,16 @@ export default function PoolDetail({ id }: { id: string }) {
       </StakeTermsPlain>
     )
   ) : flowTerms !== null ? (
-    <MoneyTermsList copy={flowTerms} id="stake-terms" className="mt-3.5 border-t border-edge pt-3.5" />
+    <>
+      <MoneyTermsList
+        copy={flowTerms}
+        id="stake-terms"
+        line={false}
+        skip={STAKE_CARD_SKIP}
+        className="mt-3.5 border-t border-edge pt-3.5"
+      />
+      <MoneyLineBox copy={flowTerms} />
+    </>
   ) : (
     <StakeTermsPlain>
       {isDocGoal

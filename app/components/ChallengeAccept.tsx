@@ -30,7 +30,6 @@ import {
   formatUsdc,
 } from "@/lib/contract";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
-import { missDetailOf } from "@/lib/game/money-flow";
 import { useRunMoney } from "@/lib/game/useRunMoney";
 import {
   closeLabelOf,
@@ -285,7 +284,7 @@ export default function ChallengeAccept({
             ),
             underStake:
               money !== null && money.miss !== null && flowTerms !== null ? (
-                <MissUnderStake miss={money.miss} detail={missDetailOf(flowTerms)} />
+                <MissUnderStake miss={money.miss} detail={null} />
               ) : null,
             goalTitle:
               headline.figure !== null
