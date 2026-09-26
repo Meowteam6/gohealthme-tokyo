@@ -198,7 +198,7 @@ describe("the complete journey", () => {
     expect(request.signal).toBe(`${GOAL.toLowerCase()}:1`);
     expect(request.mocked).toBe(true);
     expect(request.world).toBeUndefined();
-    expect(Date.parse(request.expiresAt) - Date.now()).toBeLessThanOrEqual(90_000);
+    expect(Date.parse(request.expiresAt) - Date.now()).toBeLessThanOrEqual(600_000);
 
     const pending = await statusRoute(
       new Request(`http://localhost/api/agent/approval/status?goalId=${GOAL}`),

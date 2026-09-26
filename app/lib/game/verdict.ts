@@ -409,8 +409,8 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
         headline: "Confirm it is you",
         body:
           screen.confirmByMs !== undefined
-            ? `The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. Confirm before ${formatMoment(screen.confirmByMs)}: the run settles by then, and a hit that is not confirmed gets its stake back without a share.`
-            : "The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. No confirmation, no share: your stake still comes back when the run settles.",
+            ? `You hit it. Confirm with World ID by ${formatMoment(screen.confirmByMs)} to get paid; unconfirmed, only your stake comes back.`
+            : "You hit it. Confirm with World ID to get paid; unconfirmed, only your stake comes back.",
         pose: "watching",
       };
     case "confirmed":
@@ -543,4 +543,15 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
             pose: "standing",
           };
   }
+}
+
+/**
+ * How often the verdict stage re-reads server state. While SPOTTER is
+ * writing, or waiting on the human (the World ID window is minutes, not
+ * hours), the page polls so the confirm button appears without a reload.
+ */
+export function pollWhileLive(status: RunStatus | null): number | false {
+  return status === "recorded" || status === "verifying" || status === "awaiting-approval"
+    ? 5_000
+    : false;
 }

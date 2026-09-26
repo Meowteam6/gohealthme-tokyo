@@ -95,9 +95,10 @@ export interface ApprovalRecord {
   note?: string;
 }
 
-/** 90 seconds: long enough to open World App and tap, short enough that a
- *  request nobody answers does not hold a payout open. */
-export const DEFAULT_APPROVAL_TTL_S = 90;
+/** Ten minutes. 90 seconds expired before a real player could open the run
+ *  page (Andre, 2026-09-27, pool 2); a request nobody answers still lapses
+ *  and the sweep settles the pool without the payout. */
+export const DEFAULT_APPROVAL_TTL_S = 600;
 const MIN_TTL_S = 10;
 const MAX_TTL_S = 600;
 

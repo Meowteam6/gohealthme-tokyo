@@ -35,7 +35,7 @@
 
   /* Text. */
   --foreground: #f3ebdd;       /* primary text; also the moon face */
-  --muted: #c4cae0;            /* secondary text */
+  --muted: #e2e6f2;            /* secondary text; near-white so body copy reads on the night field */
   --haze: #8f98b8;             /* meta text */
 
   /* The one action colour: the moon face, with ink text on it. */

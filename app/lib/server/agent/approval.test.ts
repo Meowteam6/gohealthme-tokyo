@@ -32,7 +32,7 @@ beforeEach(() => {
 const T0 = Date.parse("2026-09-26T03:00:00.000Z");
 
 describe("requestApproval", () => {
-  it("opens attempt 1 with a 90s window and one 'requested' ledger row", async () => {
+  it("opens attempt 1 with a ten-minute window and one 'requested' ledger row", async () => {
     const { requestApproval, mockApprovalProvider, readLedger, approvalAction } = await load();
     const result = await requestApproval({
       goalId: GOAL,
@@ -54,7 +54,7 @@ describe("requestApproval", () => {
       status: "pending",
     });
     expect(approvalAction()).toBe("settle");
-    expect(Date.parse(result.record.expiresAt) - T0).toBe(90_000);
+    expect(Date.parse(result.record.expiresAt) - T0).toBe(600_000);
     expect(result.challenge).toEqual({ provider: "mock", mocked: true });
     const rows = await readLedger(GOAL);
     expect(rows).toHaveLength(1);
@@ -97,7 +97,7 @@ describe("requestApproval", () => {
     vi.stubEnv("WORLD_APPROVAL_TTL_S", "120");
     expect(approvalTtlMs()).toBe(120_000);
     vi.stubEnv("WORLD_APPROVAL_TTL_S", "banana");
-    expect(approvalTtlMs()).toBe(90_000);
+    expect(approvalTtlMs()).toBe(600_000);
   });
 });
 
@@ -336,9 +336,9 @@ describe("expiry", () => {
     const { requestApproval, readApproval, mockApprovalProvider, readLedger } = await load();
     const provider = mockApprovalProvider();
     await requestApproval({ goalId: GOAL, poolId: 7n, address: USER, provider, askedBy: "spotter", nowMs: T0 });
-    expect((await readApproval(GOAL, T0 + 89_999))?.status).toBe("pending");
-    expect((await readApproval(GOAL, T0 + 90_000))?.status).toBe("expired");
-    expect((await readApproval(GOAL, T0 + 95_000))?.status).toBe("expired");
+    expect((await readApproval(GOAL, T0 + 599_999))?.status).toBe("pending");
+    expect((await readApproval(GOAL, T0 + 600_000))?.status).toBe("expired");
+    expect((await readApproval(GOAL, T0 + 605_000))?.status).toBe("expired");
     const rows = await readLedger(GOAL);
     expect(rows.map((r) => (r.kind === "approval" ? r.status : r.kind))).toEqual([
       "requested",
@@ -355,7 +355,7 @@ describe("expiry", () => {
       address: USER,
       decision: { decision: "approve", proof: { kind: mod.MOCK_PROOF_KIND, action: record.action, signal: record.signal, approve: true } },
       provider,
-      nowMs: T0 + 100_000,
+      nowMs: T0 + 700_000,
     });
     expect(outcome.status).toBe("expired");
   });
@@ -364,7 +364,7 @@ describe("expiry", () => {
     const mod = await load();
     const provider = mod.mockApprovalProvider();
     const first = await mod.requestApproval({ goalId: GOAL, poolId: 7n, address: USER, provider, askedBy: "spotter", nowMs: T0 });
-    const second = await mod.requestApproval({ goalId: GOAL, poolId: 7n, address: USER, provider, askedBy: "human", nowMs: T0 + 100_000 });
+    const second = await mod.requestApproval({ goalId: GOAL, poolId: 7n, address: USER, provider, askedBy: "human", nowMs: T0 + 700_000 });
     expect(second.created).toBe(true);
     expect(second.record.attempt).toBe(2);
     expect(second.record.action).toBe(first.record.action);
@@ -441,7 +441,7 @@ describe("approvalGate", () => {
     vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
     const { approvalGate } = await load();
     await approvalGate({ goalId: GOAL, poolId: 7n, address: USER, poolSettled: settledNo, nowMs: T0 });
-    const late = await approvalGate({ goalId: GOAL, poolId: 7n, address: USER, poolSettled: settledNo, nowMs: T0 + 91_000 });
+    const late = await approvalGate({ goalId: GOAL, poolId: 7n, address: USER, poolSettled: settledNo, nowMs: T0 + 601_000 });
     expect(late.status).toBe("expired");
   });
 
@@ -492,5 +492,14 @@ describe("approvalGate", () => {
       approvalGate({ goalId: GOAL, poolId: 7n, address: USER, poolSettled: settledNo }),
     ).rejects.toThrow(/WORLD_APP_ID/);
     expect(await readLedger(GOAL)).toEqual([]);
+  });
+});
+
+describe("approval TTL, the window a human has to confirm", () => {
+  it("defaults to ten minutes: 90s expired before Andre could open the page (2026-09-27)", async () => {
+    vi.stubEnv("WORLD_APPROVAL_TTL_S", "");
+    const { approvalTtlMs, DEFAULT_APPROVAL_TTL_S } = await import("@/lib/server/agent/approval");
+    expect(DEFAULT_APPROVAL_TTL_S).toBe(600);
+    expect(approvalTtlMs()).toBe(600_000);
   });
 });

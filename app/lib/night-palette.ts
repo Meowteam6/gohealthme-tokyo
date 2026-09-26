@@ -8,7 +8,7 @@ export const NIGHT_PALETTE = {
   surface: "#111b3d",
   surfaceRaised: "#18244d",
   foreground: "#f3ebdd",
-  muted: "#c4cae0",
+  muted: "#e2e6f2",
   haze: "#8f98b8",
   moonlight: "#f6e4b6",
   gold: "#f5b94a",

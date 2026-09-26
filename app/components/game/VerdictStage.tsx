@@ -39,6 +39,7 @@ import {
   verdictScreenOf,
   type LocalApproval,
   type VerdictScreen,
+  pollWhileLive,
 } from "@/lib/game/verdict";
 
 /** Which screens keep the proof surface (WearableCheck) mounted below: the
@@ -126,7 +127,7 @@ export function useVerdict(input: {
     ["screening", goalId],
     goalParam !== null ? `/api/screen/status?goalId=${goalParam}` : null,
     parseScreening,
-    { refetchInterval: input.runStatus === "recorded" || input.runStatus === "verifying" ? 5_000 : false },
+    { refetchInterval: pollWhileLive(input.runStatus) },
   );
 
   const screen: VerdictScreen =

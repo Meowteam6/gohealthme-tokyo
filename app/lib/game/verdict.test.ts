@@ -571,6 +571,17 @@ describe("F10: a hit the sweep read but the player has not confirmed", () => {
     ];
     const screen = screenFor(ledger, { missConfirmByMs: 1_790_494_200_000 });
     expect(screen).toEqual({ kind: "confirm-human", confirmByMs: 1_790_494_200_000 });
-    expect(verdictCopy(screen)?.body).toMatch(/before/);
+    expect(verdictCopy(screen)?.body).toMatch(/Confirm with World ID by/);
+  });
+});
+
+describe("pollWhileLive", () => {
+  it("keeps polling while SPOTTER waits on the human, so the confirm button appears without a reload", async () => {
+    const { pollWhileLive } = await import("@/lib/game/verdict");
+    expect(pollWhileLive("awaiting-approval")).toBe(5_000);
+    expect(pollWhileLive("recorded")).toBe(5_000);
+    expect(pollWhileLive("verifying")).toBe(5_000);
+    expect(pollWhileLive("no-pay")).toBe(false);
+    expect(pollWhileLive(null)).toBe(false);
   });
 });
