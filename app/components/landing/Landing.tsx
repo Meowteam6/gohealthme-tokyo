@@ -13,16 +13,42 @@ import HowItPays from "@/components/landing/HowItPays";
 import OpenRunsList from "@/components/landing/OpenRunsList";
 import { ButtonLink, ChevronLink } from "@/components/ui";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
-import { challengeNote, termsOf, type OpenRun, type OutcomeKey } from "@/lib/game/landing";
+import {
+  challengeNote,
+  friendNote,
+  friendQuestion,
+  runKind,
+  termsOf,
+  type OpenRun,
+  type OutcomeKey,
+  type Segment,
+} from "@/lib/game/landing";
 import { useMyRuns } from "@/lib/game/useLobby";
 import { useOpenRuns, type OpenRunsStatus } from "@/lib/game/useOpenRuns";
 import { useWearPick } from "@/lib/game/useWearPick";
 import { brandFit, type WearableAvailability, type WearableBrand } from "@/lib/game/wearable-fit";
 import { useEmbeddedWallet } from "@/lib/wallet";
 
-/** The challenge band's example stake, 1.00 USDC; its figures are worked by
- *  challengeNote from lib/commitment.ts. */
+/** The challenge band's example stake, 1.00 USDC, for the one moment no run
+ *  has read yet; its figures are worked by challengeNote from
+ *  lib/commitment.ts. Once the featured run reads, the band works that run. */
 const EXAMPLE_STAKE = 1_000_000n;
+
+function Segments({ segments }: { segments: readonly Segment[] }) {
+  return (
+    <>
+      {segments.map((s, i) =>
+        s.strong === true ? (
+          <b key={i} className="font-semibold text-foreground">
+            {s.text}
+          </b>
+        ) : (
+          <span key={i}>{s.text}</span>
+        ),
+      )}
+    </>
+  );
+}
 
 /** What this deployment does, read on the server (app/page.tsx). */
 export interface LandingFlags {
@@ -107,6 +133,10 @@ export function LandingView({
 }) {
   const count = data.runs.length;
   const terms = data.status === "ready" && data.featured !== null ? termsOf(data.featured, data.feeBps) : null;
+  const featuredKind = data.status === "ready" && data.featured !== null ? runKind(data.featured.pool.goalSpec) : null;
+  // The band sends a friend into the run the hero features, where "Challenge
+  // a friend into this run" shares its link, with that run's own numbers.
+  const friendRun = terms !== null && data.featured !== null ? data.featured : null;
 
   return (
     <div className="max-[639px]:-mb-14">
@@ -125,7 +155,7 @@ export function LandingView({
           <HeroMore status={data.status} count={count} human={flags.human} className="hidden gap-2 min-[900px]:mt-[26px] min-[900px]:flex" />
         </div>
 
-        <HeroStage woke={woke}>
+        <HeroStage woke={woke} kind={featuredKind}>
           <FeaturedRunCard
             status={data.status}
             run={data.featured}
@@ -172,27 +202,37 @@ export function LandingView({
         <div className="flex flex-col items-start gap-4 rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] px-[18px] py-5 shadow-card min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between min-[900px]:gap-10 min-[900px]:px-9 min-[900px]:py-8">
           <div>
             <h2 id="friend-h" className="type-heading m-0 text-[1.5625rem] min-[900px]:text-[2rem]">
-              Know someone who swears they sleep 8 hours?
+              {friendQuestion(featuredKind)}
             </h2>
             <p className="m-0 mt-2 max-w-[52ch] text-muted">
-              Send them a challenge link. They see the goal, the stake and the
-              pot before they sign up.{" "}
-              <span className="num">
-                {challengeNote(EXAMPLE_STAKE, flags.missRule).map((s, i) =>
-                  s.strong === true ? (
-                    <b key={i} className="font-semibold text-foreground">
-                      {s.text}
-                    </b>
-                  ) : (
-                    <span key={i}>{s.text}</span>
-                  ),
-                )}
-              </span>
+              {friendRun !== null && terms !== null ? (
+                <>
+                  Send them this run. They see the goal, the stake and the pot
+                  before they sign up.{" "}
+                  <span className="num">
+                    <Segments segments={friendNote(terms)} />
+                  </span>
+                </>
+              ) : (
+                <>
+                  Send them a challenge link. They see the goal, the stake and
+                  the pot before they sign up.{" "}
+                  <span className="num">
+                    <Segments segments={challengeNote(EXAMPLE_STAKE, flags.missRule)} />
+                  </span>
+                </>
+              )}
             </p>
           </div>
-          <ButtonLink href="/challenge/new" variant="secondary" className="flex-none">
-            Challenge a friend
-          </ButtonLink>
+          {friendRun !== null ? (
+            <ButtonLink href={`/pools/${friendRun.pool.id.toString()}#friends`} variant="secondary" className="flex-none">
+              Challenge a friend into this run
+            </ButtonLink>
+          ) : (
+            <ButtonLink href="/challenge/new" variant="secondary" className="flex-none">
+              Challenge a friend
+            </ButtonLink>
+          )}
         </div>
       </section>
     </div>
