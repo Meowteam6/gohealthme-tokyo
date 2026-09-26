@@ -10,6 +10,7 @@
 import { commitmentOutcome, commitmentRange } from "@/lib/commitment";
 import { displayGoalSpec, evidenceTypeOf, formatUsdc, type PoolInfo } from "@/lib/contract";
 import { sponsorPotOf } from "@/lib/game/commitment-copy";
+import { missRuleFromPoolId, missRulePool } from "@/lib/miss-rule";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
 import { classifyWearableGoal, type WearableMetric } from "@/lib/wearable-goal";
 
@@ -119,11 +120,24 @@ export interface RunTerms {
   balance: bigint;
   /** commitmentFeeBps; null when it could not be read. */
   feeBps: number | null;
+  /** Whether SPOTTER can record a miss on this run (lib/miss-rule.ts). When
+   *  it cannot, a miss is refunded at settle and no missed stake is shared. */
+  recordsMisses: boolean;
 }
 
-export function termsOf(run: OpenRun, feeBps: number | null): RunTerms | null {
+export function termsOf(
+  run: OpenRun,
+  feeBps: number | null,
+  fromPoolId: bigint | null = missRuleFromPoolId(),
+): RunTerms | null {
   if (run.players === null) return null;
-  return { entryFee: run.pool.entryFee, players: run.players, balance: run.pool.balance, feeBps };
+  return {
+    entryFee: run.pool.entryFee,
+    players: run.players,
+    balance: run.pool.balance,
+    feeBps,
+    recordsMisses: missRulePool(run.pool, fromPoolId).ok,
+  };
 }
 
 function playersIn(n: number): string {
@@ -139,7 +153,11 @@ export function heroNote(terms: RunTerms): Segment[] {
   const pot = sponsorPotOf(terms);
   if (terms.feeBps === null) {
     return [
-      { text: `Everyone stakes ${stake}. Hit it and your stake comes back plus a share of the missed stakes.` },
+      {
+        text: terms.recordsMisses
+          ? `Everyone stakes ${stake}. Hit it and your stake comes back plus a share of the missed stakes.`
+          : `Everyone stakes ${stake}. Hit it or miss it, your stake comes back; a hit adds a share of any sponsor pot.`,
+      },
     ];
   }
   const range = commitmentRange({
@@ -148,19 +166,44 @@ export function heroNote(terms: RunTerms): Segment[] {
     sponsorPot: pot,
     feeBps: terms.feeBps,
     includeJoiner: true,
+    recordsMisses: terms.recordsMisses,
   });
   if (terms.players === 0) {
     if (pot === 0n) {
-      return [
-        { text: "Nobody's in yet. Hit it and your " },
-        { text: stake, strong: true },
-        { text: " comes back, plus a share of the stakes that miss." },
-      ];
+      return terms.recordsMisses
+        ? [
+            { text: "Nobody's in yet. Hit it and your " },
+            { text: stake, strong: true },
+            { text: " comes back, plus a share of the stakes that miss." },
+          ]
+        : [
+            { text: "Nobody's in yet. Hit it or miss it, your " },
+            { text: stake, strong: true },
+            { text: " comes back: this run cannot record a miss." },
+          ];
     }
     return [
       { text: "Nobody's in yet. Hit it alone and " },
       { text: formatUsdc(range.ifOnlyYou), strong: true },
       { text: ` comes back: your ${stake} plus the ${formatUsdc(pot)} pot.` },
+    ];
+  }
+  if (!terms.recordsMisses) {
+    // A miss here is refunded before the split, so only the sponsor pot is
+    // shared: with no pot, a hit is the stake back however many hit.
+    if (range.ifEveryone === range.ifOnlyYou) {
+      return [
+        { text: `${playersIn(terms.players)}. Hit it and your ` },
+        { text: formatUsdc(range.ifOnlyYou), strong: true },
+        { text: " comes back. This run cannot record a miss, so a miss comes back too." },
+      ];
+    }
+    return [
+      { text: `${playersIn(terms.players)}. Hit it and you get ` },
+      { text: formatUsdc(range.ifEveryone), strong: true },
+      { text: " to " },
+      { text: formatUsdc(range.ifOnlyYou), strong: true },
+      { text: ` back: your ${stake}, plus an equal share of the ${formatUsdc(pot)} pot. A miss here is refunded.` },
     ];
   }
   const share = pot > 0n ? `an equal share of the ${formatUsdc(pot)} pot and any missed stakes` : "an equal share of any missed stakes";
@@ -181,17 +224,25 @@ export function playersWords(players: number | null): string | null {
 
 /**
  * The challenge band's worked example: two friends at the same stake. Both
- * hit and both stakes come back; only one hits and that one takes both. The
+ * hit and both stakes come back; only one hits and that one takes both, but
+ * only on a challenge that can record the miss (lib/miss-rule.ts). With the
+ * miss rule off on this build (`missRule` false), no challenge records a
+ * miss, so the band promises nothing past both stakes coming back. The
  * figures are commitmentOutcome's, for a challenge with no sponsor pot.
  */
-export function challengeNote(entryFee: bigint): Segment[] {
+export function challengeNote(entryFee: bigint, missRule: boolean): Segment[] {
   const both = commitmentOutcome({ entryFee, players: 2, achievers: 2, sponsorPot: 0n });
   const one = commitmentOutcome({ entryFee, players: 2, achievers: 1, sponsorPot: 0n });
   const amount = (o: typeof one) => formatUsdc(o.kind === "paid" ? o.perAchiever : o.refundEach);
-  return [
+  const lead: Segment[] = [
     { text: `Stake ${formatUsdc(entryFee)} each. If you both hit, you both get ` },
     { text: amount(both), strong: true },
-    { text: " back. If only one of you does, that one gets " },
+    { text: " back." },
+  ];
+  if (!missRule) return lead;
+  return [
+    ...lead,
+    { text: " On a challenge that can record a miss, if only one of you hits, that one gets " },
     { text: amount(one), strong: true },
     { text: "." },
   ];
@@ -211,17 +262,27 @@ export interface OutcomeCopy {
 /**
  * The three ways a run ends, worded once. A miss is only a miss when the
  * wearable shows it: a run with no data from your wearable refunds the stake.
+ * And a miss only goes to the players who hit on a run that can record one
+ * (lib/miss-rule.ts): the featured run's terms say whether it can, and with
+ * no live run `missRule` says whether any run on this build can.
  */
-export function outcomeCopy(key: OutcomeKey, terms: RunTerms | null): OutcomeCopy {
+export function outcomeCopy(
+  key: OutcomeKey,
+  terms: RunTerms | null,
+  missRule: boolean = missRuleFromPoolId() !== null,
+): OutcomeCopy {
   const stake = terms !== null ? formatUsdc(terms.entryFee) : null;
   const pot = terms !== null ? sponsorPotOf(terms) : 0n;
+  const recordsMisses = terms !== null ? terms.recordsMisses : missRule;
   switch (key) {
     case "hit": {
       let worked: OutcomeCopy["worked"] = null;
       if (terms !== null && terms.feeBps !== null) {
+        // On a run that cannot record a miss, everyone else's miss is refunded
+        // before the split, so hitting alone is your stake plus the pot.
         const o = commitmentOutcome({
           entryFee: terms.entryFee,
-          players: terms.players + 1,
+          players: terms.recordsMisses ? terms.players + 1 : 1,
           achievers: 1,
           sponsorPot: pot,
           feeBps: terms.feeBps,
@@ -230,6 +291,18 @@ export function outcomeCopy(key: OutcomeKey, terms: RunTerms | null): OutcomeCop
           label: "In this run, if you hit alone",
           usd: formatUsdc(o.kind === "paid" ? o.perAchiever : o.refundEach),
           tone: "money",
+        };
+      }
+      if (!recordsMisses) {
+        return {
+          heading: pot > 0n ? "Your stake comes back, plus a share." : "Your stake comes back.",
+          body:
+            pot > 0n
+              ? "An equal share of the sponsor pot goes to everyone who hits. This run cannot record a miss, so no missed stake is shared."
+              : terms !== null
+                ? "This run cannot record a miss, so there are no missed stakes to share. A sponsor pot, when a run has one, is shared equally among everyone who hits."
+                : "No run on this build records a miss yet, so a hit is your stake back plus an equal share of any sponsor pot.",
+          worked,
         };
       }
       return {
@@ -242,9 +315,26 @@ export function outcomeCopy(key: OutcomeKey, terms: RunTerms | null): OutcomeCop
       };
     }
     case "miss":
+      if (terms !== null && !terms.recordsMisses) {
+        return {
+          heading: "On this run, your stake comes back.",
+          body: "This run cannot record a miss, so a miss is refunded when it settles. On a run that can, the run page says so before you stake, and a miss your wearable shows goes to the players who hit.",
+          worked: { label: "You get back", usd: formatUsdc(terms.entryFee), tone: "plain" },
+        };
+      }
+      if (terms === null && !missRule) {
+        return {
+          heading: "Your stake comes back.",
+          body: "No run on this build records a miss yet, so a miss is refunded when the run settles.",
+          worked: null,
+        };
+      }
       return {
         heading: "Your stake goes to the players who hit.",
-        body: `${stake !== null ? `Your ${stake}` : "Your stake"} is shared equally among everyone whose wearable shows they hit. If your wearable sends nothing for the run, that is not a miss, and your stake comes back.`,
+        body:
+          terms !== null
+            ? `Your ${stake} is shared equally among everyone whose wearable shows they hit. If your wearable sends nothing for the run, that is not a miss, and your stake comes back.`
+            : "It is shared equally among everyone whose wearable shows they hit, on a run that can record a miss; the run page says so before you stake, and every other run refunds a miss. If your wearable sends nothing for the run, that is not a miss, and your stake comes back.",
         worked: terms !== null ? { label: "You get back", usd: formatUsdc(0n), tone: "dusk" } : null,
       };
     case "none": {

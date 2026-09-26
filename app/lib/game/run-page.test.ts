@@ -84,10 +84,10 @@ describe("nightTimelineOf", () => {
 });
 
 describe("money lines", () => {
-  const empty = { entryFee: USDC, players: 0, balance: 2n * USDC, feeBps: 0 };
+  const empty = { entryFee: USDC, players: 0, balance: 2n * USDC, feeBps: 0, recordsMisses: true };
 
   it("states the three outcomes with the run's own stake and sponsor pot", () => {
-    const terms = stakeTermsOf({ entryFee: USDC, sponsorPot: 2n * USDC, goalShort: "7 hours", feeBps: 0 });
+    const terms = stakeTermsOf({ entryFee: USDC, sponsorPot: 2n * USDC, goalShort: "7 hours", feeBps: 0, recordsMisses: true });
     expect(terms.hitLabel).toBe("Hit 7 hours:");
     expect(terms.hit).toBe("your 1.00 back, plus an equal share of the missed stakes and the 2.00 sponsor pot.");
     expect(terms.miss).toBe("your 1.00 goes to the players who hit.");
@@ -95,9 +95,22 @@ describe("money lines", () => {
   });
 
   it("drops the fee sentence when the fee did not read", () => {
-    const terms = stakeTermsOf({ entryFee: USDC, sponsorPot: 0n, goalShort: "the goal", feeBps: null });
+    const terms = stakeTermsOf({ entryFee: USDC, sponsorPot: 0n, goalShort: "the goal", feeBps: null, recordsMisses: true });
     expect(terms.hitLabel).toBe("Hit it:");
     expect(terms.nobody).toBe("everyone's stake comes back.");
+  });
+
+  it("never promises a missed stake on a run that cannot record a miss", () => {
+    const terms = stakeTermsOf({ entryFee: USDC, sponsorPot: 2n * USDC, goalShort: "7 hours", feeBps: 0, recordsMisses: false });
+    expect(terms.hit).toBe("your 1.00 back, plus an equal share of the 2.00 sponsor pot.");
+    expect(terms.miss).toBe("this run cannot record a miss, so your 1.00 comes back when it settles.");
+    const bare = stakeTermsOf({ entryFee: USDC, sponsorPot: 0n, goalShort: "7 hours", feeBps: 0, recordsMisses: false });
+    expect(bare.hit).toBe("your 1.00 back.");
+    const two = { entryFee: USDC, players: 2, balance: 2n * USDC, feeBps: 0, recordsMisses: false };
+    expect(soloLineOf(two)).toEqual({ kind: "flat", players: 2, total: "1.00" });
+    expect(friendMathOf({ ...empty, balance: 0n, recordsMisses: false }, false)).toBeNull();
+    // With a sponsor pot, a friend's miss is refunded and you keep the pot.
+    expect(friendMathOf({ ...empty, recordsMisses: false }, false)).toEqual({ bothHit: "2.00", friendMisses: "3.00" });
   });
 
   it("says what a first player gets back alone", () => {
@@ -105,7 +118,7 @@ describe("money lines", () => {
   });
 
   it("gives the range once others are in", () => {
-    const two = { entryFee: USDC, players: 2, balance: 4n * USDC, feeBps: 0 };
+    const two = { entryFee: USDC, players: 2, balance: 4n * USDC, feeBps: 0, recordsMisses: true };
     // Three players with the joiner, 2.00 sponsor: everyone hits = 5/3 each (formatUsdc rounds to 1.67), only you = 5.00.
     expect(soloLineOf(two)).toEqual({ kind: "range", players: 2, low: "1.67", high: "5.00" });
     expect(soloLineOf({ ...two, feeBps: null })).toBeNull();
@@ -113,7 +126,7 @@ describe("money lines", () => {
 
   it("only promises the friend math when it is exact", () => {
     expect(friendMathOf(empty, false)).toEqual({ bothHit: "2.00", friendMisses: "4.00" });
-    const justYou = { entryFee: USDC, players: 1, balance: 3n * USDC, feeBps: 0 };
+    const justYou = { entryFee: USDC, players: 1, balance: 3n * USDC, feeBps: 0, recordsMisses: true };
     expect(friendMathOf(justYou, true)).toEqual({ bothHit: "2.00", friendMisses: "4.00" });
     expect(friendMathOf(justYou, false)).toBeNull();
   });

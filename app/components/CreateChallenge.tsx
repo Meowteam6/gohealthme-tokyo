@@ -3,10 +3,12 @@
 // Create a challenge. Two honest variants, one screen, one clear choice:
 //
 //   STAKE ON YOURSELF (commitment) — you put your OWN USDC on your OWN goal.
-//     Hit it, your stake comes back plus a share of anything else in the pot.
-//     A challenge is document-proven (encodeGoal), so SPOTTER never records a
-//     miss on it (lib/miss-rule.ts): a miss is refunded at settle, and there
-//     are no forfeits to promise a cut of (lib/commitment-copy.ts).
+//     Hit it, your stake comes back plus a share of the pot. A challenge is a
+//     wearable run on a launch goal (encodeGoal). Whether SPOTTER can record a
+//     miss on it follows lib/miss-rule.ts (sleep or workouts, one plain count,
+//     past the cutoff): where it can, a miss goes to the players who hit;
+//     where it cannot, a miss is refunded at settle, and the copy says which
+//     before the stake (lib/game/commitment-copy.ts commitmentFacts).
 //
 //   DARE A FRIEND (reward) — you put up a reward for someone else. They stake a
 //     small lock-in to accept, hit the goal, and collect their lock-in back plus
@@ -101,7 +103,8 @@ import {
   QUIET_ACTION,
   optionCard,
 } from "@/components/night/kit";
-import { COMMITMENT_FACTS } from "@/lib/game/commitment-copy";
+import { commitmentFacts } from "@/lib/game/commitment-copy";
+import { missRuleWouldApply } from "@/lib/miss-rule";
 import { useApprovalProbe } from "@/components/game/ApprovalNote";
 import {
   challengeCreateBlock,
@@ -160,6 +163,13 @@ const CHALLENGE_INITIATIVE = "challenge";
 // (every pool carries an entry fee above zero) is satisfied because every player
 // stakes on join.
 const CHALLENGE_BOUNTY_MODEL = 2;
+
+/** Can SPOTTER record a miss on a stake-on-yourself challenge with this goal?
+ *  The goal is written unmarked (wearable only), so the miss rule decides it
+ *  from the text (lib/miss-rule.ts). A new run is always past the cutoff. */
+function selfRecordsMisses(goal: string): boolean {
+  return missRuleWouldApply({ bountyModel: CHALLENGE_BOUNTY_MODEL, goalSpec: goal.trim() });
+}
 
 // Next Links in the shared button looks (components/ui buttonClasses): the
 // primary for the go-do-it action, the secondary for "start another".
@@ -395,7 +405,7 @@ function TypePicker({
     {
       id: "self",
       title: "Stake on yourself",
-      body: "Your own stake on your own goal. Hit it and your stake comes back plus an equal share of the missed stakes.",
+      body: "Your own stake on your own goal. Hit it and your stake comes back plus an equal share of the pot.",
       icon: <IconSelf className="size-5" />,
     },
     {
@@ -459,6 +469,7 @@ function PreviewCard({
   days: number;
 }) {
   const isSelf = variant === "self";
+  const selfFacts = commitmentFacts(selfRecordsMisses(title));
   const displayTitle = title.trim() !== "" ? title.trim() : "Pick a goal";
   const displayAmount = amount.trim() !== "" ? amount.trim() : "0";
   const displayLockIn = lockIn.trim() !== "" ? lockIn.trim() : "0";
@@ -494,7 +505,7 @@ function PreviewCard({
       note={
         isSelf ? (
           <>
-            <b>You vs. yourself.</b> {COMMITMENT_FACTS.hit} {COMMITMENT_FACTS.miss}
+            <b>You vs. yourself.</b> {selfFacts.hit} {selfFacts.miss}
           </>
         ) : (
           <>
@@ -994,7 +1005,8 @@ function CreateChallengeInner() {
               <b className="font-semibold text-gold">
                 {stake.trim() === "" ? "0" : stake.trim()} USDC
               </b>{" "}
-              and you are in. {COMMITMENT_FACTS.hit} {COMMITMENT_FACTS.miss}
+              and you are in. {commitmentFacts(selfRecordsMisses(goal)).hit}{" "}
+              {commitmentFacts(selfRecordsMisses(goal)).miss}
             </p>
             <SpotterCaption line="Locked in. The contract holds the stakes; I just read the wearables." />
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -1215,7 +1227,7 @@ function CreateChallengeInner() {
                 // sponsor money at creation; the creator is the joiner. A friend
                 // challenge gets no range line: its creator does not stake, and
                 // the line speaks to the player who does.
-                <CommitmentRangeLine entryFee={selfStakeUnits} />
+                <CommitmentRangeLine entryFee={selfStakeUnits} recordsMisses={selfRecordsMisses(goal)} />
               ) : (
                 <p className={FIELD_HINT}>Pulled from your wallet when you lock in.</p>
               )}

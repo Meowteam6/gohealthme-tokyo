@@ -21,6 +21,7 @@ import {
   darePot,
   isBackerView,
 } from "@/lib/challenges";
+import { missRulePool } from "@/lib/miss-rule";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
 import { approvalModeStatus } from "@/lib/server/agent/approval-mode-status";
 import { getChallengeByToken } from "@/lib/server/challenges";
@@ -159,7 +160,12 @@ export default async function ChallengeLandingPage({
     !paused &&
     participantCount !== null &&
     pot.prize !== null
-      ? { entryFee: pool.entryFee, players: participantCount, sponsorPot: pot.prize }
+      ? {
+          entryFee: pool.entryFee,
+          players: participantCount,
+          sponsorPot: pot.prize,
+          recordsMisses: missRulePool(pool).ok,
+        }
       : null;
 
   const target =

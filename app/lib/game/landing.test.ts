@@ -19,6 +19,8 @@ import {
 
 const USDC = 1_000_000n;
 const NOW = 1_790_000_000n;
+/** MISS_RULE_FROM_POOL_ID for these fixtures: every pool is past the cutoff. */
+const CUTOFF = 1n;
 
 function pool(over: Partial<PoolInfo> & { id: bigint }): PoolInfo {
   return {
@@ -116,7 +118,7 @@ describe("run words", () => {
 
 describe("heroNote", () => {
   it("nobody in: hitting alone returns the stake plus the sponsor pot", () => {
-    const terms = termsOf({ pool: sleep, players: 0 }, 0);
+    const terms = termsOf({ pool: sleep, players: 0 }, 0, CUTOFF);
     expect(terms).not.toBeNull();
     expect(segmentsText(heroNote(terms!))).toBe(
       "Nobody's in yet. Hit it alone and 3.00 comes back: your 1.00 plus the 2.00 pot.",
@@ -124,7 +126,7 @@ describe("heroNote", () => {
   });
 
   it("players in: the range from everyone hitting to only you", () => {
-    const terms = termsOf({ pool: workout, players: 1 }, 0)!;
+    const terms = termsOf({ pool: workout, players: 1 }, 0, CUTOFF)!;
     const note = heroNote(terms);
     expect(segmentsText(note)).toBe(
       "1 player in. Hit it and you get 2.00 to 4.00 back: your 1.00, plus an equal share of the 2.00 pot and any missed stakes.",
@@ -133,14 +135,14 @@ describe("heroNote", () => {
   });
 
   it("no sponsor pot, nobody in", () => {
-    const terms = termsOf({ pool: pool({ id: 3n, balance: 0n }), players: 0 }, 0)!;
+    const terms = termsOf({ pool: pool({ id: 3n, balance: 0n }), players: 0 }, 0, CUTOFF)!;
     expect(segmentsText(heroNote(terms))).toBe(
       "Nobody's in yet. Hit it and your 1.00 comes back, plus a share of the stakes that miss.",
     );
   });
 
   it("states no figure past the stake when the fee did not read", () => {
-    const terms = termsOf({ pool: sleep, players: 0 }, null)!;
+    const terms = termsOf({ pool: sleep, players: 0 }, null, CUTOFF)!;
     expect(segmentsText(heroNote(terms))).toBe(
       "Everyone stakes 1.00. Hit it and your stake comes back plus a share of the missed stakes.",
     );
@@ -149,10 +151,25 @@ describe("heroNote", () => {
   it("has no terms while the player count is unknown", () => {
     expect(termsOf({ pool: sleep, players: null }, 0)).toBeNull();
   });
+
+  it("never promises a missed stake on a run that cannot record a miss", () => {
+    // No cutoff set: no pool records a miss (lib/miss-rule.ts).
+    const bare = termsOf({ pool: pool({ id: 3n, balance: 0n }), players: 0 }, 0, null)!;
+    expect(bare.recordsMisses).toBe(false);
+    expect(segmentsText(heroNote(bare))).toBe(
+      "Nobody's in yet. Hit it or miss it, your 1.00 comes back: this run cannot record a miss.",
+    );
+    const two = termsOf({ pool: pool({ id: 3n, balance: 2n * USDC }), players: 2 }, 0, null)!;
+    expect(segmentsText(heroNote(two))).toBe("2 players in. Hit it and your 1.00 comes back. This run cannot record a miss, so a miss comes back too.");
+    const withPot = termsOf({ pool: workout, players: 1 }, 0, null)!;
+    expect(segmentsText(heroNote(withPot))).toBe(
+      "1 player in. Hit it and you get 2.00 to 3.00 back: your 1.00, plus an equal share of the 2.00 pot. A miss here is refunded.",
+    );
+  });
 });
 
 describe("outcomeCopy", () => {
-  const terms = termsOf({ pool: sleep, players: 0 }, 0)!;
+  const terms = termsOf({ pool: sleep, players: 0 }, 0, CUTOFF)!;
 
   it("works each outcome's figure from the live run", () => {
     expect(outcomeCopy("hit", terms).worked).toEqual({
@@ -170,18 +187,33 @@ describe("outcomeCopy", () => {
   });
 
   it("shows no worked figure without a live run", () => {
-    expect(outcomeCopy("hit", null).worked).toBeNull();
-    expect(outcomeCopy("miss", null).worked).toBeNull();
-    expect(outcomeCopy("none", null).worked).toBeNull();
-    expect(outcomeCopy("hit", null).body).toBe("An equal share of the missed stakes goes to everyone who hits.");
+    expect(outcomeCopy("hit", null, true).worked).toBeNull();
+    expect(outcomeCopy("miss", null, true).worked).toBeNull();
+    expect(outcomeCopy("none", null, true).worked).toBeNull();
+    expect(outcomeCopy("hit", null, true).body).toBe("An equal share of the missed stakes goes to everyone who hits.");
+    expect(outcomeCopy("miss", null, true).body).toContain("on a run that can record a miss");
+  });
+
+  it("says a miss comes back on a run that cannot record one", () => {
+    const refundRun = termsOf({ pool: sleep, players: 2 }, 0, null)!;
+    const miss = outcomeCopy("miss", refundRun);
+    expect(miss.heading).toBe("On this run, your stake comes back.");
+    expect(miss.worked).toEqual({ label: "You get back", usd: "1.00", tone: "plain" });
+    // Hitting alone beside one other player: their miss is refunded first,
+    // so 1.00 + the 2.00 pot, where a recorded miss would have made it 4.00.
+    expect(outcomeCopy("hit", termsOf({ pool: workout, players: 1 }, 0, null)!).worked?.usd).toBe("3.00");
+    expect(outcomeCopy("hit", termsOf({ pool: workout, players: 1 }, 0, CUTOFF)!).worked?.usd).toBe("4.00");
+    expect(outcomeCopy("miss", null, false).heading).toBe("Your stake comes back.");
   });
 });
 
 describe("challengeNote", () => {
   it("works both friends hitting and only one hitting from commitmentOutcome", () => {
-    expect(segmentsText(challengeNote(USDC))).toBe(
-      "Stake 1.00 each. If you both hit, you both get 1.00 back. If only one of you does, that one gets 2.00.",
+    expect(segmentsText(challengeNote(USDC, true))).toBe(
+      "Stake 1.00 each. If you both hit, you both get 1.00 back. On a challenge that can record a miss, if only one of you hits, that one gets 2.00.",
     );
-    expect(segmentsText(challengeNote(5n * USDC))).toContain("that one gets 10.00.");
+    expect(segmentsText(challengeNote(5n * USDC, true))).toContain("that one gets 10.00.");
+    // Miss rule off on this build: nothing past both stakes coming back.
+    expect(segmentsText(challengeNote(USDC, false))).toBe("Stake 1.00 each. If you both hit, you both get 1.00 back.");
   });
 });

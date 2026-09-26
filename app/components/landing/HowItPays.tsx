@@ -33,17 +33,20 @@ function VaultIcon({ className = "" }: { className?: string }) {
 export default function HowItPays({
   terms,
   confirm,
+  missRule,
   initial = "hit",
 }: {
   /** The featured run's live terms, or null when none was read. */
   terms: RunTerms | null;
   /** SPOTTER asks the player to confirm with World ID before paying. */
   confirm: boolean;
+  /** Whether any run on this build can record a miss (lib/miss-rule.ts). */
+  missRule: boolean;
   initial?: OutcomeKey;
 }) {
   const [active, setActive] = useState<OutcomeKey>(initial);
   const refs = useRef<Record<OutcomeKey, HTMLButtonElement | null>>({ hit: null, miss: null, none: null });
-  const copy = outcomeCopy(active, terms);
+  const copy = outcomeCopy(active, terms, missRule);
   const tab = TABS.find((t) => t.key === active) ?? TABS[0];
   const fee = terms !== null ? feeLine(terms.feeBps) : null;
 

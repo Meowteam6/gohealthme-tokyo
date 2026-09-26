@@ -17,20 +17,41 @@ import { formatUsdc } from "@/lib/contract";
  * One line under a stake field: what a player who hits gets back, from
  * everyone hitting (just the stake) to only them hitting (every stake plus
  * the sponsor pot). `players` counts who is already in; the stake-setter or
- * joiner is added.
+ * joiner is added. `recordsMisses` is whether SPOTTER can record a miss on
+ * this run (lib/miss-rule.ts); when it cannot, a miss is refunded at settle
+ * and the line never promises a missed stake.
  */
 export function CommitmentRangeLine({
   entryFee,
   players = 0,
   sponsorPot = 0n,
+  recordsMisses,
 }: {
   entryFee: bigint;
   players?: number;
   sponsorPot?: bigint;
+  recordsMisses: boolean;
 }) {
   if (entryFee <= 0n) return null;
-  const range = commitmentRange({ entryFee, players, sponsorPot, includeJoiner: true });
+  const range = commitmentRange({ entryFee, players, sponsorPot, includeJoiner: true, recordsMisses });
   const same = range.ifOnlyYou === range.ifEveryone;
+  if (!recordsMisses) {
+    return (
+      <span className="block text-sm leading-[1.45] text-muted">
+        Hit it and you get your <Money usd={formatUsdc(entryFee)} size="sm" /> stake
+        back
+        {same ? (
+          "."
+        ) : (
+          <>
+            {" "}and up to <Money usd={formatUsdc(range.ifOnlyYou)} size="sm" /> with the
+            sponsor pot.
+          </>
+        )}{" "}
+        This run cannot record a miss, so a miss comes back when it settles too.
+      </span>
+    );
+  }
   return (
     <span className="block text-sm leading-[1.45] text-muted">
       Hit it and you get your <Money usd={formatUsdc(entryFee)} size="sm" /> stake
@@ -57,12 +78,15 @@ export function CommitmentTermsList({
   entryFee,
   players = 0,
   sponsorPot = 0n,
+  recordsMisses,
 }: {
   entryFee: bigint;
   players?: number;
   sponsorPot?: bigint;
+  /** Whether SPOTTER can record a miss on this run (lib/miss-rule.ts). */
+  recordsMisses: boolean;
 }) {
-  const range = commitmentRange({ entryFee, players, sponsorPot, includeJoiner: true });
+  const range = commitmentRange({ entryFee, players, sponsorPot, includeJoiner: true, recordsMisses });
   const stake = formatUsdc(entryFee);
   const rows: readonly { term: string; body: ReactNode }[] = [
     {
@@ -76,17 +100,24 @@ export function CommitmentTermsList({
     },
     {
       term: "You hit",
-      body: (
+      body: recordsMisses ? (
         <>
           your stake back plus an equal share of the missed stakes and any
           sponsor pot, up to <Money usd={formatUsdc(range.ifOnlyYou)} size="sm" /> right
           now.
         </>
+      ) : (
+        <>
+          your stake back plus an equal share of any sponsor pot, up to{" "}
+          <Money usd={formatUsdc(range.ifOnlyYou)} size="sm" /> right now.
+        </>
       ),
     },
     {
       term: "You miss",
-      body: "your stake goes to the players who hit. If your wearable sends nothing for the run, that is not a miss, and your stake comes back.",
+      body: recordsMisses
+        ? "your stake goes to the players who hit. If your wearable sends nothing for the run, that is not a miss, and your stake comes back."
+        : "this run cannot record a miss, so your stake comes back when it settles.",
     },
     { term: "Nobody hits", body: "everyone gets their stake back." },
   ];

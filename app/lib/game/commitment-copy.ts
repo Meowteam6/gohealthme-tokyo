@@ -12,6 +12,7 @@
 
 import { commitmentRange } from "@/lib/commitment";
 import { formatUsdc, parseUsdc } from "@/lib/contract";
+import { missRulePool } from "@/lib/miss-rule";
 
 export interface CommitmentTerms {
   /** Stake per player, in uUSDC. */
@@ -22,6 +23,19 @@ export interface CommitmentTerms {
   balance: bigint;
   /** commitmentFeeBps read from chain; null when it could not be read. */
   feeBps: number | null;
+  /** Whether SPOTTER can record a miss on this run (lib/miss-rule.ts). When
+   *  it cannot, a miss is refunded at settle and no missed stake is shared. */
+  recordsMisses: boolean;
+}
+
+/**
+ * Can a miss on this pool go to the players who hit? Only a pool the miss
+ * rule covers (lib/miss-rule.ts): commitment model, wearable only, sleep or
+ * workouts, a plain count, created at or after MISS_RULE_FROM_POOL_ID. Every
+ * other pool refunds a miss at settle, and its copy has to say so.
+ */
+export function recordsMissesOf(pool: { id: bigint; bountyModel: number; goalSpec: string }): boolean {
+  return missRulePool(pool).ok;
 }
 
 /** Sponsor money in a live pool: the balance minus every player's stake. */
@@ -48,6 +62,7 @@ export function hitRange(
     sponsorPot: sponsorPotOf(t),
     feeBps: t.feeBps,
     includeJoiner,
+    recordsMisses: t.recordsMisses,
   });
   return { low: range.ifEveryone, high: range.ifOnlyYou };
 }
@@ -125,7 +140,29 @@ export const COMMITMENT_FACTS = {
   hit: "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot.",
   miss: "Miss it: your stake goes to the players who hit.",
   nobody: "Nobody hits: everyone gets their stake back.",
+  /** A run that cannot record a miss (lib/miss-rule.ts): no missed stake is
+   *  ever shared, so a hit is the stake back plus any sponsor pot. */
+  hitNoMiss: "Hit it: your stake back plus an equal share of any sponsor pot.",
+  missNoMiss: "Miss it: this run cannot record a miss, so your stake comes back when it settles.",
 } as const;
 
+/** The facts for one run: the miss line follows whether it can record one. */
+export function commitmentFacts(recordsMisses: boolean): {
+  effort: string;
+  hit: string;
+  miss: string;
+  nobody: string;
+} {
+  return {
+    effort: COMMITMENT_FACTS.effort,
+    hit: recordsMisses ? COMMITMENT_FACTS.hit : COMMITMENT_FACTS.hitNoMiss,
+    miss: recordsMisses ? COMMITMENT_FACTS.miss : COMMITMENT_FACTS.missNoMiss,
+    nobody: COMMITMENT_FACTS.nobody,
+  };
+}
+
 /** The run board's reminder under the money, for a player already in. */
-export const COMMITMENT_REMINDER = `${COMMITMENT_FACTS.hit} ${COMMITMENT_FACTS.miss} ${COMMITMENT_FACTS.nobody}`;
+export function commitmentReminder(recordsMisses: boolean): string {
+  const f = commitmentFacts(recordsMisses);
+  return `${f.hit} ${f.miss} ${f.nobody}`;
+}

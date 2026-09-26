@@ -35,7 +35,7 @@ import { useWalletAuth } from "@/lib/useWalletAuth";
 import { nightTally, runClock, type NightTally as Tally, type RunStanding } from "@/lib/game/tally";
 import { runFigureOf } from "@/lib/game/run-scene";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
-import { COMMITMENT_REMINDER, hitRange } from "@/lib/game/commitment-copy";
+import { commitmentReminder, hitRange, recordsMissesOf } from "@/lib/game/commitment-copy";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
 
 export const STANDING_LINE: Record<RunStanding, string> = {
@@ -211,10 +211,11 @@ export default function RunBoard({
   // What a hit pays today, from lib/commitment.ts: every other player hitting
   // at the low end, only you at the high end. Before settle only, and only
   // with the player count and the fee both read.
+  const recordsMisses = recordsMissesOf(pool);
   const ifYouHit =
     selfStaked && !pool.settled && !pool.cancelled && players.data !== undefined
       ? hitRange(
-          { entryFee: pool.entryFee, players: playerList.length, balance: pool.balance, feeBps },
+          { entryFee: pool.entryFee, players: playerList.length, balance: pool.balance, feeBps, recordsMisses },
           false,
         )
       : null;
@@ -265,7 +266,7 @@ export default function RunBoard({
         </StatRow>
       </div>
       {selfStaked && !pool.settled && !pool.cancelled ? (
-        <p className="m-0 mt-3 text-sm leading-[1.45] text-muted">{COMMITMENT_REMINDER}</p>
+        <p className="m-0 mt-3 text-sm leading-[1.45] text-muted">{commitmentReminder(recordsMisses)}</p>
       ) : null}
 
       <section aria-label="Who is in" className="mt-4 border-t border-edge pt-3.5">

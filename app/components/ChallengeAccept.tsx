@@ -28,7 +28,7 @@ import {
   fetchPool,
   formatUsdc,
 } from "@/lib/contract";
-import { sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
+import { recordsMissesOf, sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
 import {
   closeLabelOf,
@@ -254,6 +254,7 @@ export default function ChallengeAccept({
               sponsorPot: sponsorPotOf(terms),
               goalShort: headline.short,
               feeBps: terms.feeBps,
+              recordsMisses: terms.recordsMisses,
             })
           : null;
       const solo = terms !== null ? soloLineOf(terms) : null;
@@ -312,10 +313,18 @@ export default function ChallengeAccept({
 /** The commitment terms for the stake, or null when this is not a commitment
  *  run or the count has not been read. */
 function commitmentTermsOf(
-  pool: { bountyModel: number; entryFee: bigint; balance: bigint; settled: boolean; cancelled: boolean },
+  pool: {
+    id: bigint;
+    bountyModel: number;
+    goalSpec: string;
+    entryFee: bigint;
+    balance: bigint;
+    settled: boolean;
+    cancelled: boolean;
+  },
   players: number | null,
   feeBps: number | null,
 ): CommitmentTerms | null {
   if (pool.bountyModel !== 2 || players === null || pool.settled || pool.cancelled) return null;
-  return { entryFee: pool.entryFee, players, balance: pool.balance, feeBps };
+  return { entryFee: pool.entryFee, players, balance: pool.balance, feeBps, recordsMisses: recordsMissesOf(pool) };
 }

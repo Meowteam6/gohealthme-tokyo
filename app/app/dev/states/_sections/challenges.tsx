@@ -187,7 +187,7 @@ export default function ChallengeStates({ meta }: SectionProps) {
             seed={5n * USDC}
             targetHandle="andre"
             message="You said you'd start Monday. It's Monday."
-            terms={{ entryFee: 1n * USDC, players: 1, sponsorPot: 5n * USDC }}
+            terms={{ entryFee: 1n * USDC, players: 1, sponsorPot: 5n * USDC, recordsMisses: true }}
             backers={["nikki.gohealthme.eth", "0x51f2...a90c"]}
           />
         </div>

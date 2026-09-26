@@ -39,4 +39,17 @@ describe("commitmentRange", () => {
   it("counts the player about to join", () => {
     expect(commitmentRange({ entryFee: USDC, players: 0, sponsorPot: 2n * USDC, includeJoiner: true })).toEqual({ ifOnlyYou: 3n * USDC, ifEveryone: 3n * USDC });
   });
+
+  it("on a run that cannot record a miss, a miss is refunded before the split", () => {
+    // Four players, 2.00 sponsor pot: the three who miss have no recorded
+    // result, so settle refunds them first and only your stake and the pot
+    // are split (HealthPoolsV3 B-2).
+    expect(
+      commitmentRange({ entryFee: USDC, players: 4, sponsorPot: 2n * USDC, recordsMisses: false }),
+    ).toEqual({ ifOnlyYou: 3n * USDC, ifEveryone: 1_500_000n });
+    // No sponsor pot: a hit is your stake back, whoever else hits.
+    expect(
+      commitmentRange({ entryFee: USDC, players: 2, sponsorPot: 0n, includeJoiner: true, recordsMisses: false }),
+    ).toEqual({ ifOnlyYou: USDC, ifEveryone: USDC });
+  });
 });

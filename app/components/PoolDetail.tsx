@@ -93,7 +93,8 @@ import { verdictShowsClaim, type VerdictScreen } from "@/lib/game/verdict";
 import SweepLeftover from "@/components/SweepLeftover";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { darePot } from "@/lib/challenges";
-import { sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
+import { recordsMissesOf, sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
+import { missRulePool, missRuleReading } from "@/lib/miss-rule";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
 import { classifyWearableGoal, metricLabel } from "@/lib/wearable-goal";
 import { fetchResolvedName, resolveOnce } from "@/lib/ens/client-cache";
@@ -598,6 +599,9 @@ export default function PoolDetail({ id }: { id: string }) {
   // A commitment run's money terms, for the numbers every surface states.
   // Only meaningful before settle: afterwards the balance tracks payouts.
   const selfStaked = pool.bountyModel === 2;
+  // Whether a miss here can go to the players who hit (lib/miss-rule.ts);
+  // every other run refunds a miss at settle, and its terms say so.
+  const recordsMisses = recordsMissesOf(pool);
   const commitmentTerms: CommitmentTerms | null =
     selfStaked && participantCount !== null && !pool.settled && !pool.cancelled
       ? {
@@ -605,6 +609,7 @@ export default function PoolDetail({ id }: { id: string }) {
           players: participantCount,
           balance: pool.balance,
           feeBps: commitmentFee.bps,
+          recordsMisses,
         }
       : null;
   const settleAchievers =
@@ -731,8 +736,13 @@ export default function PoolDetail({ id }: { id: string }) {
           sponsorPot,
           goalShort: headline.short,
           feeBps: commitmentFee.bps,
+          recordsMisses,
         })
       : null;
+  // How SPOTTER reads the goal when it can record a miss, said before the
+  // stake so a player knows the count a miss is judged on.
+  const missRule = selfStaked ? missRulePool(pool) : null;
+  const missReading = missRule !== null && missRule.ok ? missRuleReading(missRule.spec) : null;
   const solo = terms !== null && commitmentTerms !== null ? soloLineOf(commitmentTerms) : null;
   const friendMath = commitmentTerms !== null ? friendMathOf(commitmentTerms, joined) : null;
 
@@ -806,7 +816,12 @@ export default function PoolDetail({ id }: { id: string }) {
 
   const termsBlock = selfStaked ? (
     terms !== null ? (
-      <StakeTerms terms={terms} />
+      <>
+        <StakeTerms terms={terms} />
+        {missReading !== null ? (
+          <p className="m-0 mt-2 text-[0.8125rem] leading-[1.45] text-haze">{missReading}</p>
+        ) : null}
+      </>
     ) : participantsQuery.isLoading || commitmentFee.loading ? (
       <div className="mt-3.5 grid gap-2.5 border-t border-edge pt-3.5" aria-busy="true">
         <Skeleton className="h-5" />
@@ -815,9 +830,9 @@ export default function PoolDetail({ id }: { id: string }) {
       </div>
     ) : (
       <StakeTermsPlain>
-        Hit it and your stake comes back with a share of the missed stakes and the pot.
-        Miss it and your stake goes to the players who hit. If nobody hits, every stake
-        comes back.
+        {recordsMisses
+          ? "Hit it and your stake comes back with a share of the missed stakes and the pot. Miss it and your stake goes to the players who hit. If nobody hits, every stake comes back."
+          : "Hit it and your stake comes back with a share of any sponsor pot. This run cannot record a miss, so a miss comes back at settle too. If nobody hits, every stake comes back."}
       </StakeTermsPlain>
     )
   ) : (
@@ -1391,7 +1406,11 @@ export default function PoolDetail({ id }: { id: string }) {
                   <FundPool
                     poolId={pool.id}
                     heading="Add test USDC to this run's pot"
-                    description="Anyone can add to the pot. Players who hit split it with the missed stakes."
+                    description={
+                      recordsMisses
+                        ? "Anyone can add to the pot. Players who hit split it with the missed stakes."
+                        : "Anyone can add to the pot. Players who hit split it equally."
+                    }
                     ctaLabel="Approve and add to the pot"
                   />
                 </div>

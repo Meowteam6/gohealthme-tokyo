@@ -181,13 +181,16 @@ export interface StakeTermsCopy {
 
 /**
  * The three outcomes under the stake, with the run's own numbers. Worded as
- * COMMITMENT_FACTS words them; the fee sentence only when the fee read.
+ * COMMITMENT_FACTS words them; the fee sentence only when the fee read. A run
+ * that cannot record a miss (lib/miss-rule.ts) never promises a missed stake:
+ * a miss there is refunded at settle, so a hit is the stake plus any pot.
  */
 export function stakeTermsOf(input: {
   entryFee: bigint;
   sponsorPot: bigint;
   goalShort: string;
   feeBps: number | null;
+  recordsMisses: boolean;
 }): StakeTermsCopy {
   const stake = formatUsdc(input.entryFee);
   const pot = input.sponsorPot > 0n ? ` and the ${formatUsdc(input.sponsorPot)} sponsor pot` : "";
@@ -197,8 +200,20 @@ export function stakeTermsOf(input: {
       : input.feeBps === 0
         ? " No cut on this build."
         : ` GoHealthMe keeps ${(input.feeBps / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}% of missed stakes.`;
+  const hitLabel = input.goalShort === "the goal" ? "Hit it:" : `Hit ${input.goalShort}:`;
+  if (!input.recordsMisses) {
+    return {
+      hitLabel,
+      hit:
+        input.sponsorPot > 0n
+          ? `your ${stake} back, plus an equal share of the ${formatUsdc(input.sponsorPot)} sponsor pot.`
+          : `your ${stake} back.`,
+      miss: `this run cannot record a miss, so your ${stake} comes back when it settles.`,
+      nobody: "everyone's stake comes back.",
+    };
+  }
   return {
-    hitLabel: input.goalShort === "the goal" ? "Hit it:" : `Hit ${input.goalShort}:`,
+    hitLabel,
     hit: `your ${stake} back, plus an equal share of the missed stakes${pot}.`,
     miss: `your ${stake} goes to the players who hit.`,
     nobody: `everyone's stake comes back.${fee}`,
@@ -207,7 +222,10 @@ export function stakeTermsOf(input: {
 
 export type SoloLine =
   | { kind: "first"; total: string; stake: string; pot: string | null }
-  | { kind: "range"; players: number; low: string; high: string };
+  | { kind: "range"; players: number; low: string; high: string }
+  /** Others are in, and a hit pays the same however many hit: a run that
+   *  cannot record a miss and has no sponsor pot. */
+  | { kind: "flat"; players: number; total: string };
 
 /**
  * What a hit pays for someone about to join: alone in an empty run, or the
@@ -238,7 +256,11 @@ export function soloLineOf(t: CommitmentTerms): SoloLine | null {
     sponsorPot,
     feeBps: t.feeBps,
     includeJoiner: true,
+    recordsMisses: t.recordsMisses,
   });
+  if (range.ifEveryone === range.ifOnlyYou) {
+    return { kind: "flat", players: t.players, total: formatUsdc(range.ifOnlyYou) };
+  }
   return {
     kind: "range",
     players: t.players,
@@ -261,8 +283,12 @@ export function friendMathOf(
   if (others !== 0) return null;
   const base = { entryFee: t.entryFee, players: 2, sponsorPot: sponsorPotOf(t), feeBps: t.feeBps };
   const both = commitmentOutcome({ ...base, achievers: 2 });
-  const one = commitmentOutcome({ ...base, achievers: 1 });
+  // On a run that cannot record a miss, the friend's miss is refunded before
+  // the split (HealthPoolsV3 B-2), so only you are in it.
+  const one = commitmentOutcome(t.recordsMisses ? { ...base, achievers: 1 } : { ...base, players: 1, achievers: 1 });
   if (both.kind !== "paid" || one.kind !== "paid") return null;
+  // Nothing to promise when a friend's miss changes nothing for you.
+  if (both.perAchiever === one.perAchiever) return null;
   return { bothHit: formatUsdc(both.perAchiever), friendMisses: formatUsdc(one.perAchiever) };
 }
 

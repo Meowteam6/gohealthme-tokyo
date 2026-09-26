@@ -61,8 +61,9 @@ export const GOAL = "Sleep at least 7 hours for 1 night";
 export const HEADLINE = runHeadlineOf({ goalSpec: GOAL, periodEnd: END, timeZone: TZ });
 
 export function termsFor(players: number): CommitmentTerms {
-  // The sponsor put 2.00 in; every player adds their own 1.00 stake.
-  return { entryFee: USDC, players, balance: 2n * USDC + BigInt(players) * USDC, feeBps: 0 };
+  // The sponsor put 2.00 in; every player adds their own 1.00 stake. A sleep
+  // run past the miss-rule cutoff, so a miss can go to the players who hit.
+  return { entryFee: USDC, players, balance: 2n * USDC + BigInt(players) * USDC, feeBps: 0, recordsMisses: true };
 }
 
 const OPEN = termsFor(0);
@@ -105,6 +106,7 @@ function Terms({ t, id }: { t: CommitmentTerms; id: string }) {
     sponsorPot: sponsorPotOf(t),
     goalShort: HEADLINE.short,
     feeBps: t.feeBps,
+    recordsMisses: t.recordsMisses,
   });
   const solo = soloLineOf(t);
   return (

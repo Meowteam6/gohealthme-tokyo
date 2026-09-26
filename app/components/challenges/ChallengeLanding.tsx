@@ -20,7 +20,7 @@ import { Card, Tag, buttonClasses } from "@/components/ui";
 import { formatUsdc } from "@/lib/contract";
 import type { DarePot } from "@/lib/challenges";
 import { commitmentRange } from "@/lib/commitment";
-import { COMMITMENT_FACTS } from "@/lib/game/commitment-copy";
+import { commitmentFacts } from "@/lib/game/commitment-copy";
 
 const PRIMARY_LINK = buttonClasses({ size: "sm" });
 
@@ -148,7 +148,8 @@ const ICON = {
 /**
  * The commitment terms before someone accepts (docs/DESIGN.md, the commitment
  * model): the same stake, then hit, miss and nobody hits, in the run page's
- * icon-list form. Wording from COMMITMENT_FACTS, the one number from
+ * icon-list form. Wording from commitmentFacts, which follows whether this
+ * run can record a miss (lib/miss-rule.ts), the one number from
  * commitmentRange; no arithmetic here. SPOTTER stands on this card, so the list
  * carries no otter of its own.
  */
@@ -158,13 +159,15 @@ function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
     players: terms.players,
     sponsorPot: terms.sponsorPot,
     includeJoiner: true,
+    recordsMisses: terms.recordsMisses,
   });
+  const facts = commitmentFacts(terms.recordsMisses);
   return (
     <div>
       <p className="num m-0 text-[0.9375rem] text-muted">
         Everyone puts in the same stake:{" "}
         <b className="font-semibold text-gold">{formatUsdc(terms.entryFee)} USDC</b>.{" "}
-        {COMMITMENT_FACTS.effort}
+        {facts.effort}
       </p>
       <ul className="num m-0 mt-3 list-none [&>*+*]:mt-2.5 p-0">
         <Fact
@@ -174,7 +177,7 @@ function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
               <path d="M5.8 9.2 8 11.3l4.2-4.5" />
             </svg>
           }
-          text={COMMITMENT_FACTS.hit}
+          text={facts.hit}
           extra={
             <>
               {" "}Up to <b className="font-semibold text-gold">{formatUsdc(range.ifOnlyYou)}</b> right now.
@@ -188,7 +191,7 @@ function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
               <path d="M5.8 9h6.4" />
             </svg>
           }
-          text={COMMITMENT_FACTS.miss}
+          text={facts.miss}
         />
         <Fact
           icon={
@@ -197,7 +200,7 @@ function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
               <path d="M3.8 8h7.2a3.5 3.5 0 0 1 0 7H9" />
             </svg>
           }
-          text={COMMITMENT_FACTS.nobody}
+          text={facts.nobody}
         />
       </ul>
     </div>
@@ -208,6 +211,8 @@ export interface ChallengeTerms {
   entryFee: bigint;
   players: number;
   sponsorPot: bigint;
+  /** Whether SPOTTER can record a miss on this run (lib/miss-rule.ts). */
+  recordsMisses: boolean;
 }
 
 /**

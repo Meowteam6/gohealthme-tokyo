@@ -105,6 +105,11 @@ export function SoloNote({ line }: { line: SoloLine }) {
           Nobody&apos;s in yet. Hit it alone and <b>{line.total}</b> comes back: your {line.stake}
           {line.pot !== null ? ` plus the ${line.pot} pot.` : "."}
         </>
+      ) : line.kind === "flat" ? (
+        <>
+          {line.players} {line.players === 1 ? "player is" : "players are"} in. Hit it and{" "}
+          <b>{line.total}</b> comes back, however many hit.
+        </>
       ) : (
         <>
           {line.players} {line.players === 1 ? "player is" : "players are"} in. Hit it and{" "}

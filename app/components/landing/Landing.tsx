@@ -30,6 +30,9 @@ export interface LandingFlags {
   human: boolean;
   /** SPOTTER asks the player to confirm with World ID before it pays. */
   confirm: boolean;
+  /** MISS_RULE_FROM_POOL_ID is set, so a run can record a miss at all
+   *  (lib/miss-rule.ts). Off, every miss on this build is refunded. */
+  missRule: boolean;
   /** Which wearable providers this build can pair. */
   availability: WearableAvailability;
 }
@@ -147,7 +150,7 @@ export function LandingView({
         <p className="m-0 mt-2.5 max-w-[44ch] text-[1.0625rem] text-muted text-pretty">
           Your result depends only on what your own wearable records.
         </p>
-        <HowItPays terms={terms} confirm={flags.confirm} initial={outcome} />
+        <HowItPays terms={terms} confirm={flags.confirm} missRule={flags.missRule} initial={outcome} />
       </section>
 
       <section id="runs" aria-labelledby="runs-h" className="scroll-mt-20 pb-10 min-[900px]:pb-[88px]">
@@ -175,7 +178,7 @@ export function LandingView({
               Send them a challenge link. They see the goal, the stake and the
               pot before they sign up.{" "}
               <span className="num">
-                {challengeNote(EXAMPLE_STAKE).map((s, i) =>
+                {challengeNote(EXAMPLE_STAKE, flags.missRule).map((s, i) =>
                   s.strong === true ? (
                     <b key={i} className="font-semibold text-foreground">
                       {s.text}

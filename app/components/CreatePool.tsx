@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createCommitmentCopy } from "@/lib/commitment-copy";
+import { missRuleWouldApply } from "@/lib/miss-rule";
 import { useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import {
@@ -317,6 +318,18 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
     },
   ];
 
+  // The goal as submit will encode it, for the copy that depends on whether
+  // the run can record a miss: only a wearable-only sleep or workout goal
+  // can (lib/miss-rule.ts). Every other self-staked run refunds a miss.
+  const previewAccepted: Modality[] =
+    floor === "self-reported"
+      ? ["self-reported"]
+      : acceptSelfReported
+        ? [floor, "self-reported"]
+        : [floor];
+  const previewGoalSpec = withProofPolicy(goalSpec.trim(), { floor, accepted: previewAccepted });
+  const recordsMisses = missRuleWouldApply({ bountyModel: 2, goalSpec: previewGoalSpec });
+
   const payoutOptions: { id: number; title: string; body: string }[] = [
     {
       id: 0,
@@ -331,7 +344,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
     {
       id: 2,
       title: "Self-staked commitment",
-      body: "Everyone stakes the same entry fee on their own goal. Hit it and your stake comes back plus a share of the missed stakes. No sponsor needed; initial funding can be zero.",
+      body: createCommitmentCopy(previewGoalSpec),
     },
   ];
 
@@ -492,7 +505,11 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
               </p>
               {bountyModel === 2 && entryFeeParsed !== null && entryFeeParsed > 0n ? (
                 <div className="mt-2">
-                  <CommitmentRangeLine entryFee={entryFeeParsed} sponsorPot={fundingParsed} />
+                  <CommitmentRangeLine
+                    entryFee={entryFeeParsed}
+                    sponsorPot={fundingParsed}
+                    recordsMisses={recordsMisses}
+                  />
                 </div>
               ) : null}
               {/* Said once they have typed a zero, not on an empty field. */}

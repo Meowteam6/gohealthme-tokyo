@@ -51,6 +51,11 @@ export function commitmentOutcome(input: CommitmentInput): CommitmentOutcome {
 /**
  * What a player who hits can receive, at the two ends: everyone else misses,
  * or everyone hits. `includeJoiner` counts a player who is about to join.
+ *
+ * `recordsMisses` is whether SPOTTER can write a miss on this run
+ * (lib/miss-rule.ts). When it cannot, a player who misses has no recorded
+ * result, so settle refunds that stake before the split (HealthPoolsV3 B-2)
+ * and "only you hit" leaves just your stake and the sponsor pot in the split.
  */
 export function commitmentRange(input: {
   entryFee: bigint;
@@ -58,10 +63,13 @@ export function commitmentRange(input: {
   sponsorPot: bigint;
   feeBps?: number;
   includeJoiner?: boolean;
+  recordsMisses?: boolean;
 }): { ifOnlyYou: bigint; ifEveryone: bigint } {
   const players = input.players + (input.includeJoiner ? 1 : 0);
   const base = { entryFee: input.entryFee, players, sponsorPot: input.sponsorPot, feeBps: input.feeBps };
-  const only = commitmentOutcome({ ...base, achievers: 1 });
+  const only = commitmentOutcome(
+    input.recordsMisses === false ? { ...base, players: 1, achievers: 1 } : { ...base, achievers: 1 },
+  );
   const all = commitmentOutcome({ ...base, achievers: players });
   const amount = (o: CommitmentOutcome) => (o.kind === "paid" ? o.perAchiever : o.refundEach);
   return { ifOnlyYou: amount(only), ifEveryone: amount(all) };

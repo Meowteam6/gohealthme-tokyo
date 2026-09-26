@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  COMMITMENT_REMINDER,
+  commitmentFacts,
+  commitmentReminder,
   commitmentLostCopy,
   commitmentRowTerms,
   feeLine,
@@ -22,32 +23,41 @@ describe("commitment copy", () => {
   });
 
   it("scenario 1: two players in, no sponsor, no fee, reader about to join", () => {
-    const t = { entryFee: ONE, players: 2, balance: 2n * ONE, feeBps: 0 };
+    const t = { entryFee: ONE, players: 2, balance: 2n * ONE, feeBps: 0, recordsMisses: true };
     expect(hitRange(t, true)).toEqual({ low: ONE, high: 3n * ONE });
+    // The same run where a miss cannot be recorded: every miss is refunded.
+    expect(hitRange({ ...t, recordsMisses: false }, true)).toEqual({ low: ONE, high: ONE });
     expect(feeLine(t.feeBps)).toBe("GoHealthMe takes no cut on this build.");
   });
 
   it("scenario 2: just you in, with a 0.50 sponsor pot", () => {
-    const t = { entryFee: ONE, players: 1, balance: 1_500_000n, feeBps: 0 };
+    const t = { entryFee: ONE, players: 1, balance: 1_500_000n, feeBps: 0, recordsMisses: true };
     expect(hitRange(t, false)).toEqual({ low: 1_500_000n, high: 1_500_000n });
   });
 
   it("scenario 3: fee unreadable, so no range and no fee line", () => {
-    const t = { entryFee: ONE, players: 2, balance: 2n * ONE, feeBps: null };
+    const t = { entryFee: ONE, players: 2, balance: 2n * ONE, feeBps: null, recordsMisses: true };
     expect(hitRange(t, true)).toBeNull();
     expect(feeLine(null)).toBeNull();
   });
 
   it("a fee comes off missed stakes only, matching the contract", () => {
-    const t = { entryFee: ONE, players: 3, balance: 3n * ONE, feeBps: 1000 };
+    const t = { entryFee: ONE, players: 3, balance: 3n * ONE, feeBps: 1000, recordsMisses: true };
     expect(hitRange(t, false)).toEqual({ low: ONE, high: 2_800_000n });
     expect(feeLine(500)).toBe("GoHealthMe keeps 5% of missed stakes, never any of a stake that hit.");
   });
 
   it("the run board reminder states all three outcomes", () => {
-    expect(COMMITMENT_REMINDER).toBe(
+    expect(commitmentReminder(true)).toBe(
       "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot. Miss it: your stake goes to the players who hit. Nobody hits: everyone gets their stake back.",
     );
+  });
+
+  it("a run that cannot record a miss never promises a missed stake", () => {
+    expect(commitmentReminder(false)).toBe(
+      "Hit it: your stake back plus an equal share of any sponsor pot. Miss it: this run cannot record a miss, so your stake comes back when it settles. Nobody hits: everyone gets their stake back.",
+    );
+    expect(commitmentFacts(false).miss).not.toContain("players who hit");
   });
 
   it("paid breakdown splits the credited amount into stake back and the rest", () => {

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Landing from "@/components/landing/Landing";
+import { missRuleFromPoolId } from "@/lib/miss-rule";
 import { approvalMode } from "@/lib/server/agent/approval-provider";
 import { providerConfigured } from "@/lib/server/wearable";
 import { worldSetup } from "@/lib/server/world/config";
@@ -26,6 +27,8 @@ function deploymentFlags() {
   return {
     human,
     confirm,
+    // No cutoff, no run records a miss: the landing then promises none.
+    missRule: missRuleFromPoolId() !== null,
     availability: {
       junction: providerConfigured("junction"),
       whoop: providerConfigured("whoop"),

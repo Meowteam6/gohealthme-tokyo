@@ -81,6 +81,7 @@ const BUSY: OpenRun[] = [
 const FLAGS: LandingFlags = {
   human: true,
   confirm: true,
+  missRule: true,
   availability: { junction: true, whoop: true, apple: false },
 };
 
@@ -143,10 +144,17 @@ function Landing() {
   return <LandingView flags={FLAGS} data={ready(QUIET)} picked={picked} onPick={setPicked} />;
 }
 
-function Outcome({ k }: { k: OutcomeKey }) {
+/** How it pays for the featured run. `recordsMisses` picks the miss-rule
+ *  cutoff: 1 puts every fixture pool past it, null switches the rule off. */
+function Outcome({ k, recordsMisses = true }: { k: OutcomeKey; recordsMisses?: boolean }) {
   const featured = pickFeaturedRun(QUIET);
   return (
-    <HowItPays terms={featured !== null ? termsOf(featured, 0) : null} confirm initial={k} />
+    <HowItPays
+      terms={featured !== null ? termsOf(featured, 0, recordsMisses ? 1n : null) : null}
+      confirm
+      missRule={recordsMisses}
+      initial={k}
+    />
   );
 }
 
@@ -193,6 +201,9 @@ export default function LandingStates({ meta }: SectionProps) {
       </StateFrame>
       <StateFrame name="landing-outcome-none" note="Nobody hits: every stake back">
         <Outcome k="none" />
+      </StateFrame>
+      <StateFrame name="landing-outcome-miss-refund" note="You miss, on a run that cannot record a miss (lib/miss-rule.ts): the stake comes back">
+        <Outcome k="miss" recordsMisses={false} />
       </StateFrame>
 
       <StateFrame name="landing-wearable-whoop" note="WHOOP picked: every open run checks, the step limit is named" phone>

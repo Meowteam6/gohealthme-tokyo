@@ -420,7 +420,16 @@ export default function VerdictStage({
   // you at the high end (lib/commitment.ts).
   const range =
     screen.kind === "confirm-human" && selfStaked && players !== null && !pool.settled
-      ? hitRange({ entryFee: pool.entryFee, players, balance: pool.balance, feeBps: fee.bps }, false)
+      ? hitRange(
+          {
+            entryFee: pool.entryFee,
+            players,
+            balance: pool.balance,
+            feeBps: fee.bps,
+            recordsMisses: missRulePool(pool).ok,
+          },
+          false,
+        )
       : null;
   const paid = screen.kind === "won" ? toUsd2(screen.paidUsd) : null;
 

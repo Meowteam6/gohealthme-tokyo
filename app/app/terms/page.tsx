@@ -71,7 +71,9 @@ export default function TermsPage() {
           <li>
             <strong>Hit the goal:</strong> your stake back plus an equal share
             of the missed stakes and any sponsor pot.{" "}
-            <strong>Miss it:</strong> your stake goes to the players who hit.{" "}
+            <strong>Miss it:</strong> your stake goes to the players who hit,
+            on a run that can record a miss; the run page says before you
+            stake whether it can, and every other run refunds a miss.{" "}
             <strong>Nobody hits:</strong> everyone gets their stake back. V4
             takes no fee.
           </li>
@@ -177,7 +179,9 @@ export default function TermsPage() {
               money in the pot.
             </li>
             <li>
-              If you miss the goal, your stake goes to the players who hit it.
+              If you miss the goal, your stake goes to the players who hit it,
+              on a run that can record a miss (see below). On every other run a
+              miss is refunded.
             </li>
             <li>
               If nobody hits the goal, every stake is refunded in full.

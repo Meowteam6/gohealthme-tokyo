@@ -119,7 +119,7 @@ export default function PayoutMoment({
               <span className="font-semibold">{split.stake}</span>
             </div>
             <div className="flex justify-between gap-3">
-              <span className="text-ink-2">Missed stakes and pot</span>
+              <span className="text-ink-2">Your share of the pot</span>
               <span className="font-semibold">{split.rest}</span>
             </div>
           </div>
