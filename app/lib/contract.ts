@@ -8,6 +8,10 @@ import {
   type Address,
   type Hex,
   type PublicClient,
+  encodeAbiParameters,
+  getAddress,
+  keccak256,
+  toHex,
 } from "viem";
 import { baseSepolia } from "@/lib/chains";
 import { poolsScanFromBlock } from "@/lib/server/chunked-logs";
@@ -246,10 +250,10 @@ export const healthPoolsAbi = [
   },
   {
     type: "function",
-    name: "getParticipants",
+    name: "participantCount",
     stateMutability: "view",
     inputs: [{ name: "poolId", type: "uint256" }],
-    outputs: [{ name: "", type: "address[]" }],
+    outputs: [{ name: "", type: "uint256" }],
   },
   {
     type: "function",
@@ -659,17 +663,54 @@ export async function fetchPool(id: bigint): Promise<PoolInfo> {
   return readPool(address, id);
 }
 
+/**
+ * Storage slot of HealthPoolsV3's `participantList` mapping
+ * (mapping(uint256 => address[])), from `forge inspect HealthPoolsV3
+ * storageLayout`. Pinned by lib/participants.test.ts against the compiled
+ * layout, and checked on every read against participantCount.
+ */
+export const PARTICIPANT_LIST_SLOT = 7n;
+
+/**
+ * Who joined a pool. HealthPoolsV3 keeps the list in an internal array with no
+ * getter (only participantCount), and the public Base RPC caps eth_getLogs at
+ * 1,000 blocks, so the list is read straight from contract storage: the array
+ * length sits at keccak256(poolId . slot) and element i at keccak256(that) + i.
+ * One read per player, exact, in join order. A length that disagrees with
+ * participantCount throws rather than show a wrong list.
+ */
+export async function readParticipants(
+  client: PublicClient,
+  address: Address,
+  id: bigint,
+): Promise<Address[]> {
+  const count = await client.readContract({
+    address,
+    abi: healthPoolsAbi,
+    functionName: "participantCount",
+    args: [id],
+  });
+  if (count === 0n) return [];
+  const lengthSlot = keccak256(
+    encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], [id, PARTICIPANT_LIST_SLOT]),
+  );
+  const stored = BigInt((await client.getStorageAt({ address, slot: lengthSlot })) ?? "0x0");
+  if (stored !== count) {
+    throw new Error(`participant list length ${stored} does not match participantCount ${count}`);
+  }
+  const base = BigInt(keccak256(lengthSlot));
+  const words = await Promise.all(
+    Array.from({ length: Number(count) }, (_, i) =>
+      client.getStorageAt({ address, slot: toHex(base + BigInt(i), { size: 32 }) }),
+    ),
+  );
+  return words.map((word) => getAddress(`0x${(word ?? "0x").slice(-40).padStart(40, "0")}`));
+}
+
 export async function fetchParticipants(id: bigint): Promise<Address[]> {
   const address = getHealthPoolsAddress();
   if (address === null) throw new ContractNotConfiguredError();
-  const client = getArcPublicClient();
-  const list = await client.readContract({
-    address,
-    abi: healthPoolsAbi,
-    functionName: "getParticipants",
-    args: [id],
-  });
-  return [...list];
+  return readParticipants(getArcPublicClient(), address, id);
 }
 
 export async function fetchParticipant(
