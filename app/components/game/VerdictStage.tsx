@@ -19,7 +19,14 @@ import AgentReceipt from "@/components/AgentReceipt";
 import PayoutMoment from "@/components/PayoutMoment";
 import ClaimPayout from "@/components/ClaimPayout";
 import RefundClaim from "@/components/RefundClaim";
-import SpotterSays from "@/components/SpotterSays";
+import Spotter from "@/components/spotter/Spotter";
+import { Stamp } from "@/components/ui";
+import {
+  poseFor,
+  type SpotterPose,
+  type SpotterScreenState,
+  type SpotterSize,
+} from "@/lib/spotter-poses";
 import { toUsd2, type LedgerEntry, type RunStatus } from "@/lib/agent-receipt";
 import { claimStepIndex, claimStepOf, type ClaimStep } from "@/lib/claim-rail";
 import { fetchGoalId, type PoolInfo } from "@/lib/contract";
@@ -164,6 +171,47 @@ export function useVerdict(input: {
   };
 }
 
+/** How a Verdict screen is staged: SPOTTER's pose and size, the wash behind
+ *  him, and the stamp. Only the paid screen gets gold and only a lost run gets
+ *  dusk; a loss is never red (docs/DESIGN.md). Screens with an action below
+ *  keep SPOTTER smaller so the action stays in reach on a phone. */
+export interface VerdictStaging {
+  spotter: { state: SpotterScreenState } | { pose: SpotterPose; size: SpotterSize };
+  wash: "plain" | "dusk";
+  stamp: string | null;
+}
+
+export function verdictStagingOf(screen: VerdictScreen, pose: SpotterPose): VerdictStaging {
+  switch (screen.kind) {
+    case "checking":
+      return { spotter: { state: "checking" }, wash: "plain", stamp: null };
+    case "confirm-human":
+      return { spotter: { pose: "wallet", size: "md" }, wash: "plain", stamp: null };
+    case "confirmed":
+      return { spotter: { pose: "thumbsup", size: "md" }, wash: "plain", stamp: "Confirmed" };
+    case "approval-failed": {
+      const state: SpotterScreenState =
+        screen.outcome === "expired" ? "confirmation-expired" : "confirmation-declined";
+      return {
+        spotter: { pose: poseFor(state).pose, size: screen.settled ? "lg" : "md" },
+        wash: "plain",
+        stamp: null,
+      };
+    }
+    case "lost":
+      return { spotter: { state: "verdict-not-met" }, wash: "dusk", stamp: "Not met" };
+    case "won":
+      // PayoutMoment stages itself: payday, the coin, the gold wash.
+      return { spotter: { state: "verdict-paid" }, wash: "plain", stamp: "Confirmed" };
+    default:
+      return { spotter: { pose, size: "md" }, wash: "plain", stamp: null };
+  }
+}
+
+/** Dusk: a lost run. Light enough that ink and muted text keep AA on it. */
+const DUSK_WASH =
+  "linear-gradient(180deg, color-mix(in srgb, var(--dusk) 12%, var(--surface)) 0%, color-mix(in srgb, var(--dusk) 28%, var(--surface)) 100%)";
+
 export default function VerdictStage({
   pool,
   address,
@@ -183,11 +231,14 @@ export default function VerdictStage({
   const step = claimStepOf(joined, hasClaim, runStatus);
   const selfStaked = pool.bountyModel === 2;
   const showScreening = screen.kind === "banked" || screen.kind === "won";
+  const staging = verdictStagingOf(screen, copy.pose);
+  const line = spotterLineFor(screen);
 
   return (
     <section
       aria-labelledby="verdict-headline"
-      className="overflow-hidden rounded-xl border-2 border-foreground bg-surface"
+      className="overflow-hidden rounded-3xl border-2 border-foreground bg-surface"
+      style={staging.wash === "dusk" ? { background: DUSK_WASH } : undefined}
     >
       <div className="space-y-4 p-4 sm:p-6">
         <RunPath
@@ -199,31 +250,51 @@ export default function VerdictStage({
               : step
           }
         />
-        <div aria-live="polite">
-          <h2
-            id="verdict-headline"
-            className="ghm-stamp font-display text-5xl font-black leading-[0.95] sm:text-6xl"
-          >
-            {copy.headline}
-          </h2>
-          <p className="mt-3 max-w-prose text-base text-foreground/85">{copy.body}</p>
-        </div>
 
         {screen.kind === "won" ? (
-          <div className="space-y-4">
+          <div aria-live="polite" className="space-y-4">
             <PayoutMoment
+              bleed
               paidUsd={toUsd2(screen.paidUsd)}
               txHash={screen.txHash}
               selfReported={screen.selfReported}
               selfStaked={selfStaked}
+              headline={copy.headline}
+              headlineId="verdict-headline"
             />
             {/* The claim tap, folded into the win: the chain credits the win
                 and this pulls it into the wallet. It renders only while money
-                is owed and says "in your wallet" only after Withdrawn fires. */}
-            <ClaimPayout address={address} />
+                is owed and says "in your wallet" only after Withdrawn fires.
+                Quiet here: the payout above is this screen's one big number. */}
+            <ClaimPayout address={address} quiet />
           </div>
         ) : (
-          <SpotterSays surface="evidence" state="verifying" pose={copy.pose} say={spotterLineFor(screen)} />
+          <div className="flex flex-col items-center text-center">
+            <Spotter
+              {...staging.spotter}
+              line={line === "" ? undefined : line}
+              live
+              className={staging.wash === "dusk" ? "[&_img]:grayscale-[25%]" : ""}
+            />
+            <div aria-live="polite" className="mt-3 w-full">
+              {staging.stamp !== null ? (
+                <Stamp tone="accent">{staging.stamp}</Stamp>
+              ) : null}
+              <h2
+                id="verdict-headline"
+                className="ghm-stamp mt-3 font-display text-[clamp(2rem,9vw,3.25rem)] font-extrabold leading-display tracking-display text-balance"
+              >
+                {copy.headline}
+              </h2>
+              <p
+                className={`mx-auto mt-3 max-w-prose text-base text-pretty ${
+                  staging.wash === "dusk" ? "text-foreground" : "text-foreground/85"
+                }`}
+              >
+                {copy.body}
+              </p>
+            </div>
+          </div>
         )}
 
         {/* One card, one position, for the ask and its three refusals: it owns
@@ -268,9 +339,9 @@ export default function VerdictStage({
         ) : null}
 
         {ledger !== null && ledger.length > 0 && !proofSurfaceNeeded(screen) ? (
-          <details className="rounded-lg border-2 border-foreground/15">
-            <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold">
-              SPOTTER&apos;s receipt for this run
+          <details className="rounded-2xl border border-edge bg-surface">
+            <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-bold">
+              See SPOTTER&apos;s receipt for this run
             </summary>
             <div className="p-3">
               <AgentReceipt ledger={ledger} evidenceKind="wearable" />
@@ -282,24 +353,28 @@ export default function VerdictStage({
   );
 }
 
+// SPOTTER's one line per screen: deadpan, first person, aimed at the night or
+// the situation, never at the player. The facts live in the headline and body.
 function spotterLineFor(screen: VerdictScreen): string {
   switch (screen.kind) {
     case "checking":
       return "Reading your nights. I buy the proof, I make the call.";
     case "confirm-human":
-      return "Numbers check out. Now show me it is really you before I move a cent.";
+      return "Numbers check out. Show me it is really you before I move a cent.";
     case "confirmed":
       return "That is you. Writing it down, then the money moves.";
     case "approval-failed":
       return screen.settled
-        ? "No OK from you, no payout. The settle sent your stake home."
-        : "Nothing moved. Your result is still here when you are.";
+        ? "No OK, no payout. The settle sent your stake home."
+        : screen.outcome === "expired"
+          ? "The clock ran out on me. Nothing moved."
+          : "Nothing moved. Your result waits here for you.";
     case "banked":
       return "Banked. I pay when the clock runs out.";
     case "not-yet":
       return "Not yet. Tonight still counts.";
     case "lost":
-      return "The data said no. I do not round up.";
+      return "The night did not cooperate. I do not round up.";
     case "settled-final":
       return "Books are closed on this one. Whatever is yours is below.";
     case "bad-read":
