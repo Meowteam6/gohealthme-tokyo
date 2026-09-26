@@ -82,6 +82,7 @@ import {
   payoutStateOf,
 } from "@/lib/game/join-checks";
 import AuthorCapabilityNotice from "@/components/AuthorCapabilityNotice";
+import { CommitmentRangeLine } from "@/components/CommitmentTerms";
 import {
   launchGoalIssue,
   LAUNCH_GOAL_EXAMPLES,
@@ -451,8 +452,8 @@ function TypePicker({
         </span>
         <span className="font-display text-lg font-bold">Stake on yourself</span>
         <span className="text-sm leading-snug text-muted">
-          Your own USDC on your own goal. Hit it, get it back plus a cut of what
-          everyone who flaked forfeited.
+          Your own stake on your own goal. Hit it and you get your stake back
+          plus an equal share of the missed stakes.
         </span>
         {isSelf ? (
           <span className="absolute right-3 top-3 rounded-full bg-foreground px-2.5 py-0.5 text-xs font-bold text-background">
@@ -487,7 +488,8 @@ function TypePicker({
         ) : null}
         <span className="text-sm leading-snug text-muted">
           You put up the reward, they lock in a small stake. They hit it, they
-          keep both. They flake, everyone gets their money back.
+          get their stake back plus the reward. Nobody hits, every stake comes
+          back and so does your reward.
         </span>
       </button>
     </div>
@@ -570,9 +572,9 @@ function PreviewCard({
                   ? `@${cleanRecipient}`
                   : "whoever opens the link"}
               </span>
-              . Hit it, keep the stake and the reward. Flake, and their stake
-              goes back to them and you take the reward back from the run page
-              once it settles.
+              . Hit it: their stake back plus the reward. Nobody hits: their
+              stake goes back to them and you take the reward back from the run
+              page once it settles.
             </>
           )}
         </p>
@@ -772,6 +774,17 @@ function CreateChallengeInner() {
   // throws on a half-typed amount), so a bad keystroke just leaves SPOTTER at
   // rest rather than erroring.
   const headlineAmountNum = Number(headlineAmount.trim()) || 0;
+  // The self stake in USDC base units, or null while it is empty, half-typed
+  // or zero; parseUsdc throws on a partial amount.
+  const selfStakeUnits = ((): bigint | null => {
+    if (isDare || stake.trim() === "") return null;
+    try {
+      const units = parseUsdc(stake.trim());
+      return units > 0n ? units : null;
+    } catch {
+      return null;
+    }
+  })();
   const mood = getSpotterMoodForAmount(headlineAmountNum, variant);
 
   const clearForm = () => {
@@ -1325,11 +1338,22 @@ function CreateChallengeInner() {
               }
             />
             <MoodSpotter mood={mood} />
-            <p className="text-xs text-muted">
-              {isDare
-                ? "Pulled from your wallet now and held in the pool. If the pool ends with no winner, you reclaim it."
-                : "Pulled from your wallet when you lock in. Hit the goal and it comes back with a cut of the forfeits; miss and it goes to whoever did."}
-            </p>
+            {isDare ? (
+              <p className="text-sm text-muted">
+                Pulled from your wallet now and held in the pool. If nobody hits
+                the goal, you take it back once the run settles.
+              </p>
+            ) : selfStakeUnits !== null ? (
+              // Stake on yourself is a commitment pool (bountyModel 2) with no
+              // sponsor money at creation; the creator is the joiner. A friend
+              // challenge gets no range line: its creator does not stake, and
+              // the line speaks to the player who does.
+              <CommitmentRangeLine entryFee={selfStakeUnits} />
+            ) : (
+              <p className="text-sm text-muted">
+                Pulled from your wallet when you lock in.
+              </p>
+            )}
           </section>
 
           {isDare ? (

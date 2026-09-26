@@ -5,6 +5,7 @@ import ChallengeContribute from "@/components/ChallengeContribute";
 import ShareChallenge from "@/components/ShareChallenge";
 import SpotterSays from "@/components/SpotterSays";
 import Lobby from "@/components/game/Lobby";
+import { CommitmentTermsList } from "@/components/CommitmentTerms";
 import Spotter from "@/components/spotter/Spotter";
 import { EmptyState, Money, TAP_TARGET } from "@/components/ui";
 import {
@@ -85,21 +86,19 @@ function InvalidLink() {
   );
 }
 
-/** The one money line under the headline. pool.balance counts every player's
- *  own stake, so the prize is stated net of stakes and the challenger's seed
- *  is split from friends' top-ups. No figure at all when it cannot be stated
- *  honestly (settled, cancelled, or a read missed). */
-function PrizeLine({ pot, backer }: { pot: DarePot; backer: boolean }) {
+/** The backer's money line. pool.balance counts every player's own stake, so
+ *  the pot is stated net of stakes and the challenger's seed is split from
+ *  friends' top-ups. No figure at all when it cannot be stated honestly
+ *  (settled, cancelled, or a read missed). */
+function PotLine({ pot }: { pot: DarePot }) {
   if (pot.prize === null) return null;
   const fromFriends =
     pot.seed !== null && pot.prize > pot.seed ? pot.prize - pot.seed : 0n;
   return (
     <p className="text-base text-foreground/80">
-      Prize: <Money usd={formatUsdc(pot.prize)} size="md" />
+      In the pot: <Money usd={formatUsdc(pot.prize)} size="md" />
       {fromFriends > 0n ? ` (${formatUsdc(fromFriends)} of it from backers)` : ""}
-      {backer
-        ? ", paid on top of their own lock-in when they hit the goal."
-        : ", paid on top of your own lock-in back when you hit the goal."}
+      , shared by the players who hit the goal on top of their own stake back.
     </p>
   );
 }
@@ -197,6 +196,21 @@ export default async function ChallengeLandingPage({
   const paused = pauseReason !== null;
   const canGrow = phase === "live" && canPay && !paused;
 
+  // The commitment terms before the accept, only for a commitment pool
+  // (bountyModel 2) that is live, can pay and is not paused, and only from
+  // numbers read from chain: the entry fee, the players already in and the
+  // sponsor pot (balance net of stakes). A missed read shows no terms rather
+  // than invented ones.
+  const terms =
+    pool.bountyModel === 2 &&
+    phase === "live" &&
+    canPay &&
+    !paused &&
+    participantCount !== null &&
+    pot.prize !== null
+      ? { entryFee: pool.entryFee, players: participantCount, sponsorPot: pot.prize }
+      : null;
+
   const headline =
     pot.seed !== null && pot.seed > 0n
       ? `${challengerName} put ${formatUsdc(pot.seed)} USDC on you`
@@ -223,7 +237,7 @@ export default async function ChallengeLandingPage({
         </h2>
         <p className="text-sm text-muted">
           This link opens as a backer page: friends can chip in to grow the
-          prize, and it never signs them up for the challenge.
+          pot, and it never signs them up for the challenge.
         </p>
       </div>
       <ShareChallenge
@@ -252,7 +266,7 @@ export default async function ChallengeLandingPage({
               {challenge.message}
             </blockquote>
           ) : null}
-          <PrizeLine pot={pot} backer />
+          <PotLine pot={pot} />
           {backedBy}
         </header>
 
@@ -305,13 +319,21 @@ export default async function ChallengeLandingPage({
           {challenge.message}
         </blockquote>
       ) : null}
-      <PrizeLine pot={pot} backer={false} />
+      {terms !== null ? (
+        <div className="rounded-3xl border border-edge bg-surface p-5">
+          <CommitmentTermsList
+            entryFee={terms.entryFee}
+            players={terms.players}
+            sponsorPot={terms.sponsorPot}
+          />
+        </div>
+      ) : null}
       {backedBy}
       <SpotterSays
         surface="join"
         state="joined"
         pose="cheer"
-        say="Accept and your stake goes in. Hit it and it comes back with the prize. Only the yes or no verdict goes on chain, never your data."
+        say="Accept and your stake goes in. Hit it and it comes back, with a share of the pot. Only the yes or no verdict goes on chain, never your data."
       />
     </header>
   );

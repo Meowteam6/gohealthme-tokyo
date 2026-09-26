@@ -34,7 +34,7 @@ export default function ChallengeContribute({
         </h2>
         {prizeUsd !== null ? (
           <p className="text-lg font-bold leading-snug">
-            The prize is <Money usd={prizeUsd} />
+            In the pot now: <Money usd={prizeUsd} />
           </p>
         ) : null}
         <p className="text-sm text-muted">
