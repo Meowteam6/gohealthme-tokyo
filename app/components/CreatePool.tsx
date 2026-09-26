@@ -19,9 +19,20 @@ import { COMING_LINE } from "@/lib/provider-capabilities";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import { isEconomicallyDeadConfig } from "@/lib/pool-lifecycle";
 import { resolveNewPoolId } from "@/lib/resolve-pool-id";
-import { ArcTxLink, Button, Chip, EmptyState, ErrorNote, buttonClasses } from "@/components/ui";
+import { ArcTxLink, Button, Card, Chip, ErrorNote, Fine, buttonClasses } from "@/components/ui";
 import { CommitmentRangeLine } from "@/components/CommitmentTerms";
-import Spotter from "@/components/spotter/Spotter";
+import {
+  EmptyCard,
+  FIELD,
+  FIELD_HINT,
+  FIELD_LABEL,
+  Notice,
+  OptionMark,
+  PAGE_COLUMN,
+  PerchedHeader,
+  QUIET_ACTION,
+  optionCard,
+} from "@/components/night/kit";
 import GaslessBadge from "@/components/GaslessBadge";
 import SignInGate from "@/components/SignInGate";
 
@@ -34,14 +45,6 @@ const DURATION_OPTIONS: { label: string; days: number }[] = [
 ];
 
 const SECONDS_PER_DAY = 86_400;
-
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2";
-const OPTION = `min-h-11 rounded-2xl border-2 p-3 text-left ${FOCUS_RING}`;
-const OPTION_ON = "border-foreground bg-surface text-foreground";
-const OPTION_OFF =
-  "border-edge bg-surface-raised text-foreground hover:border-foreground/40";
-const FIELD = `mt-1 w-full rounded-2xl border border-edge bg-surface-raised px-3 py-3 text-base ${FOCUS_RING}`;
 
 interface DocTemplate {
   key: string;
@@ -117,16 +120,9 @@ function CreatePoolInner() {
   const poolsAddress = getHealthPoolsAddress();
   if (poolsAddress === null) {
     return (
-      <EmptyState
-        pose="lounging"
-        line="No pond to put a run in. I'm on break."
+      <RunsOff
         title="Runs are off on this build"
         detail="Starting a run is not switched on for this build yet. Nothing is wrong on your side."
-        action={
-          <Link href="/pools" className={`${buttonClasses()}`}>
-            Go to the lobby
-          </Link>
-        }
       />
     );
   }
@@ -191,13 +187,13 @@ function CreatePoolInner() {
 
     try {
       if (initiative.trim() === "") {
-        throw new Error("Enter an initiative name, for example \"sleep\".");
+        throw new Error("Enter a tag, for example \"sleep\".");
       }
       if (goalSpec.trim() === "") {
-        throw new Error("Describe the goal participants must hit.");
+        throw new Error("Describe the goal players must hit.");
       }
       if (floor === "wearable") {
-        // Only goals every supported sensor can verify (lib/provider-capabilities).
+        // Only goals every supported wearable can verify (lib/provider-capabilities).
         const issue = launchGoalIssue(goalSpec);
         if (issue !== null) throw new Error(issue);
       }
@@ -207,7 +203,7 @@ function CreatePoolInner() {
       // with a plain message instead of sending a doomed transaction.
       if (entryFeeUsdc <= 0n) {
         throw new Error(
-          "Set an entry fee above zero. Every participant stakes it to join, and it comes back to them when they hit the goal - the contract does not allow free-to-join pools.",
+          "Set an entry fee above zero. Every player stakes it to join, and it comes back to them when they hit the goal. The contract does not allow free-to-join runs.",
         );
       }
       fundingUsdc = parseUsdc(
@@ -255,7 +251,7 @@ function CreatePoolInner() {
     // deployed contract would revert DEAD_CONFIG on the same condition.
     if (isEconomicallyDeadConfig(bountyModel, entryFeeUsdc)) {
       setFormError(
-        "Set an entry fee above zero - the contract does not allow free-to-join pools.",
+        "Set an entry fee above zero. The contract does not allow free-to-join runs.",
       );
       return;
     }
@@ -286,406 +282,393 @@ function CreatePoolInner() {
 
   const primaryLabel =
     status.kind === "fueling"
-      ? "One moment..."
+      ? "One moment"
       : status.kind === "approving"
-      ? "Approving USDC..."
+      ? "Approving USDC"
       : status.kind === "depositing"
-        ? "Creating pool..."
+        ? "Creating the run"
         : redirecting
-          ? "Opening your pool..."
+          ? "Opening your run"
           : authenticated
             ? fundingIsZero
-              ? "Create pool"
-              : "Approve funding and create pool"
+              ? "Create the run"
+              : "Approve funding and create the run"
             : "Sign in to create";
 
+  const floorOptions: { id: Modality; title: string; body: string; disabled?: boolean }[] = [
+    {
+      id: "wearable",
+      title: "Wearable data",
+      body: "Checked from any paired wearable: sleep efficiency, hours of sleep or workouts.",
+    },
+    {
+      id: "document",
+      title: "Document upload",
+      body: docAvailable
+        ? "Checked from an uploaded record like a flu shot or lab result."
+        : "Paused while the checker is built. Pick a wearable goal for now.",
+      disabled: !docAvailable,
+    },
+    {
+      id: "self-reported",
+      title: "Self-reported",
+      body: "A photo or screenshot. Low trust and still in development: nobody can confirm a photo is real, recent or yours. Use it only when you accept unverified proof.",
+    },
+  ];
+
+  const payoutOptions: { id: number; title: string; body: string }[] = [
+    {
+      id: 0,
+      title: "Fixed bounty per player who hits",
+      body: "Each verified player who hits receives the same fixed payout, a multiple of the entry fee.",
+    },
+    {
+      id: 1,
+      title: "Split the pot pro-rata",
+      body: "The whole pot is shared across the players who hit, in proportion to their results.",
+    },
+    {
+      id: 2,
+      title: "Self-staked commitment",
+      body: "Everyone stakes the same entry fee on their own goal. Hit it and your stake comes back plus a share of the missed stakes. No sponsor needed; initial funding can be zero.",
+    },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="break-words font-display text-[2rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]">
-            Create a pool
-          </h1>
-          <p className="mt-2 max-w-xl text-base text-muted">
-            Set a goal and a stake. Everyone who joins puts up the same USDC on
-            hitting their own goal, and the ones who do split what the ones who
-            don&apos;t leave behind. Funding it as a sponsor instead? Seed a
-            bounty below and pay achievers from it.
-          </p>
-          <p className="mt-1 text-sm">
-            <Link
-              href="/sponsor"
-              className="inline-flex min-h-11 items-center font-bold text-accent-deep underline underline-offset-4"
-            >
-              Put up a prize pot
-            </Link>
-          </p>
-        </div>
-        <Spotter pose="point" size="xs" decorative className="sm:hidden" />
-        <div className="hidden shrink-0 sm:block">
-          <Spotter
-            pose="point"
-            size="sm"
-            line="Pick a goal a wearable can check. I only pay on proof."
-            linePlacement="side"
-            decorative
-          />
-        </div>
-      </div>
-
-      <div className="space-y-5 rounded-3xl border border-edge bg-surface p-4 sm:p-6">
-        <fieldset className="block text-sm font-medium">
-          <legend className="font-bold">How the goal is checked</legend>
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            <button
-              type="button"
-              onClick={() => setFloor("wearable")}
-              aria-pressed={floor === "wearable"}
-              className={`${OPTION} ${floor === "wearable" ? OPTION_ON : OPTION_OFF}`}
-            >
-              <span className="block font-bold">Wearable data</span>
-              <span className="mt-1 block text-xs font-normal text-muted">
-                Verified from any connected wearable: sleep efficiency, hours of sleep or workouts.
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFloor("document")}
-              disabled={!docAvailable}
-              aria-disabled={!docAvailable}
-              aria-pressed={floor === "document"}
-              className={`${OPTION} disabled:cursor-not-allowed disabled:opacity-70 ${floor === "document" ? OPTION_ON : OPTION_OFF}`}
-            >
-              <span className="block font-bold">Document upload</span>
-              <span className="mt-1 block text-xs font-normal text-muted">
-                {docAvailable
-                  ? "Verified from an uploaded record like a flu shot or lab result."
-                  : "Paused while we build the verifier - pick a wearable goal for now."}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFloor("self-reported")}
-              aria-pressed={floor === "self-reported"}
-              className={`${OPTION} ${floor === "self-reported" ? "border-warning bg-warning/10 text-foreground" : OPTION_OFF}`}
-            >
-              <span className="block font-bold">Self-reported</span>
-              <span className="mt-1 block text-xs font-normal text-muted">
-                A photo or screenshot. Low-trust, still in development. We cannot
-                confirm a photo is real, recent, or yours. Use only when you
-                accept unverified proof.
-              </span>
-            </button>
-          </div>
-          {floor !== "self-reported" ? (
-            <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-2xl border border-edge bg-surface-raised p-3">
-              <input
-                type="checkbox"
-                checked={acceptSelfReported}
-                onChange={(e) => setAcceptSelfReported(e.target.checked)}
-                className="mt-1"
-              />
-              <span className="text-xs font-normal text-muted">
-                Also accept self-reported photos/screenshots (low-trust). Adds a
-                second, unverified proof path beside the{" "}
-                {floor === "document" ? "document" : "wearable"} one. Verified
-                claims stay verified; self-reported ones are labeled as such and
-                pay at 1x only.
-              </span>
-            </label>
-          ) : null}
-        </fieldset>
-
-        {floor === "document" ? (
-          <div className="block text-sm font-medium">
-            Preventive-care templates
-            <div className="mt-2 flex flex-wrap gap-2">
-              {DOC_TEMPLATES.map((template) => (
-                <button
-                  key={template.key}
-                  type="button"
-                  onClick={() => applyTemplate(template)}
-                  disabled={!docAvailable}
-                  className={`inline-flex min-h-11 items-center rounded-full border-2 border-edge bg-surface px-4 py-2 text-sm font-bold text-foreground hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`}
-                >
-                  {template.label}
-                </button>
-              ))}
+    <div className={PAGE_COLUMN}>
+      <PerchedHeader
+        title="Start a run"
+        lead="Set a goal and a stake. Everyone who joins puts up the same USDC on their own goal, and the players who hit it split what the misses leave behind."
+        pose="wearable"
+        below={
+          <Link href="/sponsor" className={`${QUIET_ACTION} mt-2`}>
+            Put up a prize pot instead
+          </Link>
+        }
+      >
+        <Card className="space-y-6">
+          <fieldset className="m-0 min-w-0 border-0 p-0">
+            <legend className={SECTION_LABEL}>How the goal is checked</legend>
+            <div role="radiogroup" aria-label="How the goal is checked" className="mt-3 grid gap-2.5 sm:grid-cols-3">
+              {floorOptions.map((opt) => {
+                const selected = floor === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={opt.disabled === true}
+                    onClick={() => setFloor(opt.id)}
+                    className={`${optionCard(selected, opt.disabled === true)} flex flex-col gap-1.5`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-[0.9375rem] font-semibold leading-tight">{opt.title}</span>
+                      <OptionMark selected={selected} />
+                    </span>
+                    <span className="text-[0.8125rem] leading-[1.45] text-haze">{opt.body}</span>
+                  </button>
+                );
+              })}
             </div>
-            <span className="mt-1 block text-xs font-normal text-muted">
-              One tap prefills the goal, entry fee, and a suggested bounty. You
-              can edit anything before creating.
-            </span>
-          </div>
-        ) : null}
+            {floor !== "self-reported" ? (
+              <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-control bg-fill-quiet p-3.5 shadow-[inset_0_0_0_1px_var(--border)]">
+                <input
+                  type="checkbox"
+                  checked={acceptSelfReported}
+                  onChange={(e) => setAcceptSelfReported(e.target.checked)}
+                  className="mt-0.5 size-5 flex-none accent-foreground"
+                />
+                <span className="text-[0.8125rem] leading-[1.45] text-muted">
+                  Also accept self-reported photos or screenshots (low trust). Adds a
+                  second, unverified proof path beside the{" "}
+                  {floor === "document" ? "document" : "wearable"} one. Verified claims
+                  stay verified; self-reported ones are labeled as such and pay at 1x
+                  only.
+                </span>
+              </label>
+            ) : null}
+          </fieldset>
 
-        <label className="block text-sm font-medium">
-          Initiative
-          <input
-            type="text"
-            placeholder="sleep"
-            value={initiative}
-            onChange={(e) => setInitiative(e.target.value)}
-            className={FIELD}
-          />
-          <span className="mt-1 block text-xs text-muted">
-            Short tag shown on the pool, for example sleep or workouts.
-          </span>
-        </label>
-
-        <label className="block text-sm font-medium">
-          Goal
-          {floor === "wearable" ? (
-            <span className="mt-1 flex flex-wrap gap-2">
-              {LAUNCH_GOAL_EXAMPLES.map((example) => (
-                <button
-                  key={example}
-                  type="button"
-                  onClick={() => setGoalSpec(example)}
-                  className={`inline-flex min-h-11 items-center rounded-full border border-edge bg-surface-raised px-3 py-1 text-left text-sm font-normal text-foreground hover:border-foreground/40 ${FOCUS_RING}`}
-                >
-                  {example}
-                </button>
-              ))}
-            </span>
+          {floor === "document" ? (
+            <div className="space-y-3 border-t border-edge pt-5">
+              <h2 className={SECTION_LABEL}>Preventive-care templates</h2>
+              <div className="flex flex-wrap gap-2">
+                {DOC_TEMPLATES.map((template) => (
+                  <Chip
+                    key={template.key}
+                    onClick={() => applyTemplate(template)}
+                    disabled={!docAvailable}
+                  >
+                    {template.label}
+                  </Chip>
+                ))}
+              </div>
+              <p className={FIELD_HINT}>
+                One tap fills in the goal, entry fee and a suggested bounty. You can
+                edit anything before creating.
+              </p>
+            </div>
           ) : null}
-          <textarea
-            placeholder={
-              floor === "document"
-                ? "Get your annual flu shot and upload your vaccination record."
-                : floor === "self-reported"
-                  ? "Post a gym selfie every day for a week."
-                  : "Sleep at least 7 hours every night for the period."
-            }
-            value={goalSpec}
-            onChange={(e) => setGoalSpec(e.target.value)}
-            rows={3}
-            className={FIELD}
-          />
-          {floor === "wearable" ? (
-            <>
-              {goalNotice.kind === "launch-issue" ? (
-                <span className="mt-1 block text-xs text-warning">{goalNotice.text}</span>
+
+          <div className="border-t border-edge pt-5">
+            <label htmlFor="pool-initiative" className={FIELD_LABEL}>
+              Tag
+            </label>
+            <input
+              id="pool-initiative"
+              type="text"
+              placeholder="sleep"
+              value={initiative}
+              onChange={(e) => setInitiative(e.target.value)}
+              className={FIELD}
+            />
+            <p className={FIELD_HINT}>A short tag shown on the run, for example sleep or workouts.</p>
+          </div>
+
+          <div className="space-y-3">
+            <label htmlFor="pool-goal" className={`${FIELD_LABEL} !mb-0`}>
+              Goal
+            </label>
+            {floor === "wearable" ? (
+              <div role="group" aria-label="Goals every wearable can check" className="flex flex-wrap gap-2">
+                {LAUNCH_GOAL_EXAMPLES.map((example) => (
+                  <Chip
+                    key={example}
+                    selected={goalSpec.trim() === example}
+                    onClick={() => setGoalSpec(example)}
+                    className="max-w-full whitespace-normal py-2.5 text-left !leading-snug"
+                  >
+                    {example}
+                  </Chip>
+                ))}
+              </div>
+            ) : null}
+            <textarea
+              id="pool-goal"
+              placeholder={
+                floor === "document"
+                  ? "Get your annual flu shot and upload your vaccination record."
+                  : floor === "self-reported"
+                    ? "Post a gym selfie every day for a week."
+                    : "Sleep at least 7 hours every night for the period."
+              }
+              value={goalSpec}
+              onChange={(e) => setGoalSpec(e.target.value)}
+              rows={3}
+              className={`${FIELD} resize-y`}
+            />
+            {floor === "wearable" ? (
+              goalNotice.kind === "launch-issue" ? (
+                <Notice tone="limit" role="status">
+                  {goalNotice.text}
+                </Notice>
               ) : goalNotice.kind === "device-check" ? (
                 <AuthorCapabilityNotice goalSpec={goalSpec} noun="pool" />
+              ) : null
+            ) : null}
+            <p className={`${FIELD_HINT} !mt-0`}>
+              {floor === "document"
+                ? "Describe what players must upload. Saved as a document goal so the right checker and badge are used."
+                : floor === "self-reported"
+                  ? "Describe the photo or screenshot players must post. Saved as a self-reported goal: low trust and never marked verified."
+                  : `The goal players commit to. ${COMING_LINE}`}
+            </p>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              <label htmlFor="pool-fee" className={FIELD_LABEL}>
+                Entry fee
+              </label>
+              <div className="relative">
+                <input
+                  id="pool-fee"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="5.00"
+                  value={entryFee}
+                  aria-invalid={feeIsZero && entryFee.trim() !== ""}
+                  onChange={(e) => setEntryFee(e.target.value)}
+                  className={`${FIELD} num pr-16`}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[0.9375rem] text-haze">
+                  USDC
+                </span>
+              </div>
+              <p className={FIELD_HINT}>
+                What each player stakes to join. It comes back to them when they hit the
+                goal.
+              </p>
+              {bountyModel === 2 && entryFeeParsed !== null && entryFeeParsed > 0n ? (
+                <div className="mt-2">
+                  <CommitmentRangeLine entryFee={entryFeeParsed} sponsorPot={fundingParsed} />
+                </div>
               ) : null}
-              <span className="mt-1 block text-xs text-muted">{COMING_LINE}</span>
-            </>
-          ) : null}
-          <span className="mt-1 block text-xs text-muted">
-            {floor === "document"
-              ? "Describe what participants must upload. Saved as a document goal so the right verifier and badge are used."
-              : floor === "self-reported"
-                ? "Describe the photo or screenshot participants must post. Saved as a self-reported goal - low-trust and never marked verified."
-                : "The human-readable goal participants commit to."}
-          </span>
-        </label>
+              {/* Said once they have typed a zero, not on an empty field. */}
+              {feeIsZero && entryFee.trim() !== "" ? (
+                <p className="m-0 mt-2 text-[0.8125rem] leading-[1.45] text-danger">
+                  Must be above zero. The contract does not allow free-to-join runs, so
+                  every player who hits is someone who staked.
+                </p>
+              ) : null}
+            </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block text-sm font-medium">
-            Entry fee (USDC)
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="5.00"
-              value={entryFee}
-              onChange={(e) => setEntryFee(e.target.value)}
-              className={FIELD}
-            />
-            <span className="mt-1 block text-xs text-muted">
-              What each participant stakes to join. It comes back to them when
-              they hit the goal.
-            </span>
-            {bountyModel === 2 && entryFeeParsed !== null && entryFeeParsed > 0n ? (
-              <span className="mt-1.5 block font-normal">
-                <CommitmentRangeLine
-                  entryFee={entryFeeParsed}
-                  sponsorPot={fundingParsed}
+            <div>
+              <label htmlFor="pool-funding" className={FIELD_LABEL}>
+                Initial funding
+              </label>
+              <div className="relative">
+                <input
+                  id="pool-funding"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="100.00"
+                  value={initialFunding}
+                  onChange={(e) => setInitialFunding(e.target.value)}
+                  className={`${FIELD} num pr-16`}
                 />
-              </span>
-            ) : null}
-            {feeIsZero ? (
-              <span className="mt-1 block text-xs font-normal text-warning">
-                Must be above zero - the contract does not allow free-to-join
-                pools, so every winner is someone who staked.
-              </span>
-            ) : null}
-          </label>
-
-          <label className="block text-sm font-medium">
-            Initial funding (USDC)
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="100.00"
-              value={initialFunding}
-              onChange={(e) => setInitialFunding(e.target.value)}
-              className={FIELD}
-            />
-            <span className="mt-1 block text-xs text-muted">
-              USDC you seed the bounty with now. Pulled from your wallet.
-            </span>
-          </label>
-        </div>
-
-        <div className="block text-sm font-medium">
-          Duration
-          <div className="mt-2 flex flex-wrap gap-2">
-            {DURATION_OPTIONS.map((opt) => (
-              <Chip
-                key={opt.days}
-                selected={durationDays === opt.days}
-                onClick={() => setDurationDays(opt.days)}
-              >
-                {opt.label}
-              </Chip>
-            ))}
-          </div>
-          <span className="mt-1 block text-xs text-muted">
-            Starts now, ends after the selected duration.
-          </span>
-        </div>
-
-        <fieldset className="block text-sm font-medium">
-          <legend className="font-bold">Payout model</legend>
-          <div className="mt-2 space-y-2">
-            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-edge bg-surface-raised p-3 has-[:checked]:border-foreground has-[:checked]:bg-surface">
-              <input
-                type="radio"
-                name="bountyModel"
-                checked={bountyModel === 0}
-                onChange={() => setBountyModel(0)}
-                className="mt-1"
-              />
-              <span>
-                <span className="block font-bold">
-                  Fixed bounty per achiever
+                <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[0.9375rem] text-haze">
+                  USDC
                 </span>
-                <span className="block text-xs font-normal text-muted">
-                  Each verified achiever receives the same fixed payout, a
-                  multiple of the entry fee.
-                </span>
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-edge bg-surface-raised p-3 has-[:checked]:border-foreground has-[:checked]:bg-surface">
-              <input
-                type="radio"
-                name="bountyModel"
-                checked={bountyModel === 1}
-                onChange={() => setBountyModel(1)}
-                className="mt-1"
-              />
-              <span>
-                <span className="block font-bold">Split the pot pro-rata</span>
-                <span className="block text-xs font-normal text-muted">
-                  The whole pot is shared across achievers in proportion to
-                  their results.
-                </span>
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-edge bg-surface-raised p-3 has-[:checked]:border-foreground has-[:checked]:bg-surface">
-              <input
-                type="radio"
-                name="bountyModel"
-                checked={bountyModel === 2}
-                onChange={() => setBountyModel(2)}
-                className="mt-1"
-              />
-              <span>
-                <span className="block font-bold">
-                  Self-staked commitment
-                </span>
-                <span className="block text-xs font-normal text-muted">
-                  Everyone stakes the same entry fee on their own goal. Hit it
-                  and your stake comes back plus a cut of what the ones who
-                  didn&apos;t forfeit. No sponsor needed - initial funding can be
-                  zero.
-                </span>
-              </span>
-            </label>
-          </div>
-        </fieldset>
-
-        <SignInGate note="Sign in to create this pool.">
-          {(openSignIn) => (
-            <Button
-              type="button"
-              disabled={!ready || busy || redirecting}
-              onClick={() => {
-                if (!authenticated) {
-                  openSignIn();
-                  return;
-                }
-                void submit();
-              }}
-              className="w-full"
-            >
-              {primaryLabel}
-            </Button>
-          )}
-        </SignInGate>
-
-        {authenticated ? <GaslessBadge status={gasless} /> : null}
-
-        {status.kind === "approving" || status.kind === "depositing" ? (
-          <div
-            aria-live="polite"
-            className="flex items-center gap-3 rounded-2xl border border-edge bg-surface-raised p-3 text-sm"
-          >
-            <Spotter state="loading" size="inline" decorative />
-            <p className="font-medium">
-              Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
-              {status.kind === "approving"
-                ? "approving USDC for the pool"
-                : "creating the pool on Base"}
-            </p>
-          </div>
-        ) : null}
-
-        {status.kind === "done" ? (
-          <div
-            aria-live="polite"
-            className="flex items-start gap-3 rounded-2xl border border-edge bg-surface-raised p-3"
-          >
-            <Spotter pose="thumbsup" size="inline" decorative />
-            <div className="min-w-0 space-y-1">
-            <p className="text-sm font-bold text-foreground">
-              Pool created on Base Sepolia. Opening it now.
-            </p>
-            {status.approveHash ? (
-              <>
-                <ArcTxLink
-                  txHash={status.approveHash}
-                  label="View approval tx"
-                />
-                <br />
-              </>
-            ) : null}
-            <ArcTxLink
-              txHash={status.depositHash}
-              label="View createPool tx"
-            />
+              </div>
+              <p className={FIELD_HINT}>USDC you seed the bounty with now. Pulled from your wallet.</p>
             </div>
           </div>
-        ) : null}
 
-        {formError !== null ? (
-          <ErrorNote
-            title="Check the form"
-            detail={formError}
-            onRetry={() => setFormError(null)}
-          />
-        ) : null}
+          <div className="space-y-3 border-t border-edge pt-5">
+            <h2 className={SECTION_LABEL}>How long it runs</h2>
+            <div role="radiogroup" aria-label="How long it runs" className="flex flex-wrap gap-2">
+              {DURATION_OPTIONS.map((opt) => (
+                <Chip
+                  key={opt.days}
+                  role="radio"
+                  selected={durationDays === opt.days}
+                  onClick={() => setDurationDays(opt.days)}
+                >
+                  {opt.label}
+                </Chip>
+              ))}
+            </div>
+            <p className={FIELD_HINT}>Starts now and ends after the chosen length.</p>
+          </div>
 
-        {status.kind === "error" ? (
-          <ErrorNote
-            title="Could not create the pool"
-            detail={status.message}
-            raw={status.raw}
-            onRetry={reset}
-          />
-        ) : null}
-      </div>
+          <fieldset className="m-0 min-w-0 border-0 border-t border-edge p-0 pt-5">
+            <legend className={`${SECTION_LABEL} float-left mb-3 w-full`}>How it pays</legend>
+            <div className="clear-left space-y-2.5">
+              {payoutOptions.map((opt) => {
+                const selected = bountyModel === opt.id;
+                return (
+                  <label
+                    key={opt.id}
+                    className={`${optionCard(selected)} flex cursor-pointer items-start gap-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-[3px] has-[:focus-visible]:outline-foreground`}
+                  >
+                    <input
+                      type="radio"
+                      name="bountyModel"
+                      checked={selected}
+                      onChange={() => setBountyModel(opt.id)}
+                      className="sr-only"
+                    />
+                    <span className="mt-0.5">
+                      <OptionMark selected={selected} />
+                    </span>
+                    <span>
+                      <span className="block text-[0.9375rem] font-semibold leading-tight">{opt.title}</span>
+                      <span className="mt-1 block text-[0.8125rem] leading-[1.45] text-haze">{opt.body}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <div className="space-y-3 border-t border-edge pt-5">
+            <SignInGate note="Sign in to create this run.">
+              {(openSignIn) => (
+                <Button
+                  type="button"
+                  block
+                  aria-busy={busy || redirecting}
+                  disabled={!ready || busy || redirecting}
+                  onClick={() => {
+                    if (!authenticated) {
+                      openSignIn();
+                      return;
+                    }
+                    void submit();
+                  }}
+                >
+                  {primaryLabel}
+                </Button>
+              )}
+            </SignInGate>
+            <Fine className="text-center">Test USDC on Base Sepolia during beta.</Fine>
+
+            {authenticated ? <GaslessBadge status={gasless} /> : null}
+
+            <div aria-live="polite" className="space-y-3">
+              {status.kind === "approving" || status.kind === "depositing" ? (
+                <Notice tone="info">
+                  Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
+                  {status.kind === "approving"
+                    ? "approving USDC for the run"
+                    : "creating the run on Base"}
+                </Notice>
+              ) : null}
+
+              {status.kind === "done" ? (
+                <Notice tone="ok" title="Run created on Base Sepolia. Opening it now.">
+                  {status.approveHash ? (
+                    <ArcTxLink txHash={status.approveHash} label="View the approval tx" />
+                  ) : null}
+                  <ArcTxLink txHash={status.depositHash} label="View the create tx" />
+                </Notice>
+              ) : null}
+            </div>
+
+            {formError !== null ? (
+              <ErrorNote
+                title="Check the form"
+                detail={formError}
+                retryLabel="Edit the run"
+                onRetry={() => setFormError(null)}
+              />
+            ) : null}
+
+            {status.kind === "error" ? (
+              <ErrorNote
+                title="Could not create the run"
+                detail={status.message}
+                raw={status.raw}
+                retryLabel="Try again"
+                onRetry={reset}
+              />
+            ) : null}
+          </div>
+        </Card>
+      </PerchedHeader>
+    </div>
+  );
+}
+
+const SECTION_LABEL = "m-0 block p-0 text-[1.0625rem] font-semibold leading-tight text-foreground";
+
+/** Starting a run is off on this build: said plainly, with the way back. */
+function RunsOff({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className={PAGE_COLUMN}>
+      <PerchedHeader title="Start a run" pose="meditate">
+        <EmptyCard
+          title={title}
+          detail={detail}
+          action={
+            <Link href="/pools" className={buttonClasses({ size: "sm" })}>
+              See the open runs
+            </Link>
+          }
+        />
+      </PerchedHeader>
     </div>
   );
 }
@@ -693,16 +676,9 @@ function CreatePoolInner() {
 export default function CreatePool() {
   if (!DYNAMIC_CONFIGURED) {
     return (
-      <EmptyState
-        pose="lounging"
-        line="Nobody can sign in, so nobody can stake. I'm on break."
+      <RunsOff
         title="Sign-in is off on this build"
         detail="Starting a run needs sign-in, which is not switched on for this build yet. Nothing is wrong on your side."
-        action={
-          <Link href="/pools" className={`${buttonClasses()}`}>
-            Go to the lobby
-          </Link>
-        }
       />
     );
   }
