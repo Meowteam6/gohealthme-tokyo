@@ -6,6 +6,7 @@ import {
   capabilityUnknown,
   disconnectWearable,
   fetchProviderOptions,
+  parseOptions,
   metricLabel,
   PhoneLinkRequiredError,
   PopupBlockedError,
@@ -460,5 +461,19 @@ describe("linked-but-held capability", () => {
 
     expect(options.providers[0]?.capability).toBe("awaiting-sync");
     expect(viewerMetricsOf(options)).toBeNull();
+  });
+});
+
+describe("provider note", () => {
+  it("carries the server's note so the pairing card can say why a provider is off", () => {
+    const options = parseOptions({
+      providers: [
+        { id: "whoop", label: "WHOOP", configured: false, connected: false, metrics: [], note: "WHOOP's direct seats are full." },
+        { id: "junction", label: "Junction", configured: true, connected: false, metrics: [] },
+      ],
+      selected: null,
+    });
+    expect(options.providers.find((p) => p.id === "whoop")?.note).toBe("WHOOP's direct seats are full.");
+    expect(options.providers.find((p) => p.id === "junction")?.note).toBeNull();
   });
 });

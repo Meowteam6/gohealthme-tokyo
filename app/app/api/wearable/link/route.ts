@@ -17,6 +17,7 @@
 // the OAuth redirect as a short-lived ticket (see lib/server/wearable/
 // link-ticket.ts), because a top-level navigation cannot send auth headers.
 
+import { whoopSeatStatus } from "@/lib/server/wearable/whoop-seats";
 import { isAddress } from "viem";
 import { errorMessage, jsonError, readJsonBody } from "@/lib/server/http";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
@@ -57,9 +58,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const providerId = isProviderId(requested)
+    const storedOrRequested = isProviderId(requested)
       ? requested
       : await providerIdFor(address);
+    // A wallet whose stored choice is WHOOP but who may not pair WHOOP any
+    // more (removed from the allowlist, link since lost) must not loop on a
+    // 403 that says "use Junction": with no explicit choice, fall back to
+    // Junction. An explicit request for WHOOP still gets the plain 403 below.
+    const whoopAllowed = (await whoopSeatStatus(address)).allowed;
+    const providerId =
+      !isProviderId(requested) && storedOrRequested === "whoop" && !whoopAllowed
+        ? "junction"
+        : storedOrRequested;
 
     if (!providerConfigured(providerId)) {
       // A configuration gap, reported as one. Telling the user to try again
@@ -75,6 +85,14 @@ export async function POST(request: Request) {
     }
 
     if (providerId === "whoop") {
+      // WHOOP's sandbox app is capped at 10 members, so direct WHOOP pairing
+      // is allowlisted; everyone else pairs through Junction.
+      if (!whoopAllowed) {
+        return jsonError(
+          403,
+          "WHOOP's direct seats are full. Pair through Junction instead; it covers WHOOP straps too.",
+        );
+      }
       // NOT recorded here. WHOOP's flow has a callback that records the choice
       // only once tokens are actually stored, and writing it up front means a
       // user who opens WHOOP's consent screen and backs out has silently

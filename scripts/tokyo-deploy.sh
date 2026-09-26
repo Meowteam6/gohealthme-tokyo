@@ -73,7 +73,7 @@ POOL3_END="${POOL3_END:-1790472600}"   # Sun 2026-09-27 10:30 JST (01:30 UTC)
 # "for 1 night" / "for 1 day" sets goalDays = 1 so a one-day window can pay.
 POOL1_INIT="Sleep 7 hours tonight";  POOL1_GOAL="Sleep at least 7 hours for 1 night"     # sleep_hours 7
 POOL2_INIT="One workout today";      POOL2_GOAL="Complete at least 1 workout for 1 day"  # workouts 1
-POOL3_INIT="Walk 8k steps today";    POOL3_GOAL="Walk at least 8,000 steps for 1 day"    # steps 8000
+POOL3_INIT="Sleep efficiency 85 tonight"; POOL3_GOAL="Sleep efficiency 85% or better for 1 night"  # sleep_efficiency 85 (replaced the steps run, cancelled 2026-09-26: steps is not a launch goal)
 
 DRY_RUN="${DRY_RUN:-0}"
 
@@ -237,7 +237,17 @@ else
     echo "==> createPool: ${!init_var}"
     TX="$(send "$POOLS" "createPool(string,string,uint256,uint64,uint64,uint8,uint256)" \
       "${!init_var}" "${!goal_var}" "$POOL_ENTRY" "$START" "${!end_var}" 2 "$POOL_FUNDING")"
-    PID="$(cast call "$POOLS" "poolCount()(uint256)" --rpc-url "$RPC")"; PID="${PID%% *}"
+    # The pool id comes from this transaction's own PoolCreated event (topic 1),
+    # not poolCount(): the load-balanced public RPC can answer from a node that
+    # has not seen the new block yet and report the previous id.
+    PID="$(cast receipt "$TX" --rpc-url "$RPC" --json | python3 -c '
+import json, sys
+pools = sys.argv[1].lower()
+for log in json.load(sys.stdin)["logs"]:
+    if log["address"].lower() == pools and len(log["topics"]) >= 2:
+        print(int(log["topics"][1], 16)); break
+' "$POOLS")"
+    [ -n "$PID" ] || { echo "error: no PoolCreated event in $TX" >&2; exit 1; }
     echo "    poolId $PID  tx $TX  start $START  end ${!end_var} $(fmt_jst "${!end_var}")"
     log "- $STAMP pool $PID: **${!init_var}** | goalSpec \"${!goal_var}\" | model 2 (commitment) | entry $POOL_ENTRY uUSDC | sponsor pot $POOL_FUNDING uUSDC"
     log "  - periodStart $START ($(fmt_jst "$START")), periodEnd ${!end_var} ($(fmt_jst "${!end_var}")); settler-only until $((${!end_var} + 86400)) ($(fmt_jst $((${!end_var} + 86400)))), then anyone"

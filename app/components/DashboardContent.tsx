@@ -339,7 +339,7 @@ function ProviderChoice({ address }: { address: `0x${string}` }) {
   // second button saying what the first one says. The plain button IS this
   // branch - rendering it separately alongside the picker is what produced
   // three connect buttons on a two-provider deployment.
-  if (offered.length < 2) return <ConnectButton address={address} />;
+  if (offered.length < 2) return <ConnectButton address={address} provider={offered[0]?.id} />;
 
   // The call to action is per provider because the verbs are not the same:
   // Junction and WHOOP connect an account here and now, while a phone-based

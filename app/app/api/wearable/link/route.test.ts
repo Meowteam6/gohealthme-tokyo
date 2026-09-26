@@ -69,6 +69,13 @@ vi.mock("@/lib/server/wallet-auth", () => ({
     requireAddressSignature(...args),
 }));
 
+
+const seat = { allowed: true, seatsLeft: 5 };
+vi.mock("@/lib/server/wearable/whoop-seats", () => ({
+  whoopSeatStatus: async () => ({ ...seat }),
+  claimWhoopSeat: async () => undefined,
+}));
+
 const { POST } = await import("@/app/api/wearable/link/route");
 
 const USER = "0x1111111111111111111111111111111111111111";
@@ -87,6 +94,8 @@ function post(body: unknown, raw = false) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  seat.allowed = true;
+  seat.seatsLeft = 5;
   requireAddressSignature.mockResolvedValue({ ok: true, address: USER });
   providerIdFor.mockResolvedValue("junction");
   providerConfigured.mockReturnValue(true);
@@ -337,5 +346,24 @@ describe("POST /api/wearable/link", () => {
     expect(consoleError).toHaveBeenCalledOnce();
     expect(String(consoleError.mock.calls[0])).toContain("401");
     consoleError.mockRestore();
+  });
+
+  it("refuses the WHOOP path with a 403 when WHOOP's seats are full, minting nothing", async () => {
+    seat.allowed = false;
+    seat.seatsLeft = 0;
+    const res = await post({ address: USER, provider: "whoop" });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toMatch(/seats are full/);
+    expect(mintLinkTicket).not.toHaveBeenCalled();
+  });
+
+  it("falls back to Junction when the stored provider is WHOOP and this wallet may no longer pair WHOOP", async () => {
+    seat.allowed = false;
+    seat.seatsLeft = 0;
+    providerIdFor.mockResolvedValue("whoop");
+    const res = await post({ address: USER });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { provider: string }).provider).toBe("junction");
+    expect(mintLinkTicket).not.toHaveBeenCalled();
   });
 });
