@@ -10,6 +10,7 @@ import { ArcTxLink, Button, ErrorNote } from "@/components/ui";
 import { FIELD, FIELD_HINT, FIELD_LABEL, Notice } from "@/components/night/kit";
 import GaslessBadge from "@/components/GaslessBadge";
 import SignInGate from "@/components/SignInGate";
+import ChipInWarning, { type ChipInTerms } from "@/components/ChipInWarning";
 
 interface FundPoolCopy {
   /** Section heading. Defaults to the sponsor top-up wording. */
@@ -25,7 +26,8 @@ function FundPoolInner({
   heading,
   description,
   ctaLabel,
-}: { poolId: bigint } & FundPoolCopy) {
+  chipIn,
+}: { poolId: bigint; chipIn?: ChipInTerms } & FundPoolCopy) {
   const queryClient = useQueryClient();
   const { ready, authenticated } = useEmbeddedWallet();
   const { status, busy, reset, runUsdcDeposit, gasless } = useUsdcDeposit();
@@ -84,6 +86,9 @@ function FundPoolInner({
     <div className="[&>*+*]:mt-3">
       <h3 className="m-0 text-lg font-semibold leading-tight text-foreground">{heading}</h3>
       <p className="m-0 text-[0.9375rem] leading-[1.45] text-muted">{description}</p>
+
+      {/* Where the money goes, before the amount and the button. */}
+      {chipIn !== undefined ? <ChipInWarning {...chipIn} /> : null}
 
       <div>
         <label htmlFor={`fund-amount-${poolId.toString()}`} className={FIELD_LABEL}>
@@ -174,8 +179,11 @@ export default function FundPool({
   heading = "Add to this run's pot",
   description = "Add test USDC to the pot so more of the players who hit can be paid.",
   ctaLabel = "Approve and add to the pot",
+  chipIn,
 }: {
   poolId: bigint;
+  /** Anyone but the sponsor's own console: the chip-in warning, per model. */
+  chipIn?: ChipInTerms;
 } & Partial<FundPoolCopy>) {
   if (!DYNAMIC_CONFIGURED) {
     return (
@@ -191,6 +199,7 @@ export default function FundPool({
       heading={heading}
       description={description}
       ctaLabel={ctaLabel}
+      chipIn={chipIn}
     />
   );
 }

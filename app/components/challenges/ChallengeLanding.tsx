@@ -7,6 +7,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import ChallengeContribute from "@/components/ChallengeContribute";
+import type { ChipInTerms } from "@/components/ChipInWarning";
 import ShareChallenge from "@/components/ShareChallenge";
 import SpotterCaption from "@/components/spotter/SpotterCaption";
 import {
@@ -21,6 +22,12 @@ import { formatUsdc } from "@/lib/contract";
 import type { DarePot } from "@/lib/challenges";
 import { commitmentRange } from "@/lib/commitment";
 import { commitmentFacts } from "@/lib/game/commitment-copy";
+import {
+  acceptTermsOf,
+  challengeLandingHeadOf,
+  rallyCopyOf,
+  type ChallengeRunKind,
+} from "@/lib/game/money-sharing";
 
 const PRIMARY_LINK = buttonClasses({ size: "sm" });
 
@@ -92,25 +99,32 @@ export function ChallengeInvalid() {
 }
 
 /** Rally more friends: the backer link, which never signs anyone up. */
-export function RallyCard({ token }: { token: string }) {
+export function RallyCard({
+  token,
+  kind,
+  name,
+}: {
+  token: string;
+  kind: ChallengeRunKind;
+  /** The challenger, as displayNameFor shows them. */
+  name: string;
+}) {
+  const copy = rallyCopyOf(kind, name);
   return (
     <Card as="section" aria-labelledby="rally" className="[&>*+*]:mt-4">
       <div>
         <h2 id="rally" className={CARD_TITLE}>
-          Rally your friends
+          {copy.heading}
         </h2>
-        <p className="m-0 mt-1.5 text-[0.9375rem] leading-[1.5] text-muted">
-          This link opens as a backer page: friends can chip in to grow the pot, and
-          it never signs them up for the challenge.
-        </p>
+        <p className="m-0 mt-1.5 text-[0.9375rem] leading-[1.5] text-muted">{copy.detail}</p>
       </div>
       <ShareChallenge
         token={token}
         backer
-        title="Back this challenge on GoHealthMe"
-        message="Back this challenge. There is test USDC riding on hitting the goal. Chip in and grow the pot:"
-        emailSubject="Back this challenge"
-        shareLabel="Rally friends"
+        title={copy.title}
+        message={copy.message}
+        emailSubject={copy.emailSubject}
+        shareLabel={copy.shareLabel}
       />
     </Card>
   );
@@ -147,13 +161,22 @@ const ICON = {
 
 /**
  * The commitment terms before someone accepts (docs/DESIGN.md, the commitment
- * model): the same stake, then hit, miss and nobody hits, in the run page's
- * icon-list form. Wording from commitmentFacts, which follows whether this
- * run can record a miss (lib/miss-rule.ts), the one number from
- * commitmentRange; no arithmetic here. SPOTTER stands on this card, so the list
- * carries no otter of its own.
+ * model): the miss chip and the head count, the same stake, then hit, miss and
+ * nobody hits, in the run page's icon-list form. Wording from acceptTermsOf,
+ * which follows the flow (match a stake, or accept a reward challenge with a
+ * lock-in) and whether this run can record a miss (lib/miss-rule.ts); the one
+ * number from commitmentRange; no arithmetic here. SPOTTER stands on this
+ * card, so the list carries no otter of its own.
  */
-function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
+function ChallengeTermsList({
+  terms,
+  kind,
+  challengerName,
+}: {
+  terms: ChallengeTerms;
+  kind: ChallengeRunKind;
+  challengerName: string;
+}) {
   const range = commitmentRange({
     entryFee: terms.entryFee,
     players: terms.players,
@@ -162,10 +185,24 @@ function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
     recordsMisses: terms.recordsMisses,
   });
   const facts = commitmentFacts(terms.recordsMisses);
+  const lines = acceptTermsOf({
+    kind,
+    recordable: terms.recordsMisses,
+    players: terms.players,
+    challengerName,
+  });
   return (
     <div>
-      <p className="num m-0 text-[0.9375rem] text-muted">
-        Everyone puts in the same stake:{" "}
+      <div className="flex flex-wrap items-center gap-2">
+        <Tag tone="muted" dot={false}>
+          {lines.chip}
+        </Tag>
+        <Tag tone="muted" dot={false}>
+          {lines.count}
+        </Tag>
+      </div>
+      <p className="num m-0 mt-3 text-[0.9375rem] text-muted">
+        {lines.stakeLead}{" "}
         <b className="font-semibold text-gold">{formatUsdc(terms.entryFee)} USDC</b>.{" "}
         {facts.effort}
       </p>
@@ -177,7 +214,7 @@ function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
               <path d="M5.8 9.2 8 11.3l4.2-4.5" />
             </svg>
           }
-          text={facts.hit}
+          text={lines.hit}
           extra={
             <>
               {" "}Up to <b className="font-semibold text-gold">{formatUsdc(range.ifOnlyYou)}</b> right now.
@@ -191,7 +228,7 @@ function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
               <path d="M5.8 9h6.4" />
             </svg>
           }
-          text={facts.miss}
+          text={lines.miss}
         />
         <Fact
           icon={
@@ -200,7 +237,7 @@ function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
               <path d="M3.8 8h7.2a3.5 3.5 0 0 1 0 7H9" />
             </svg>
           }
-          text={facts.nobody}
+          text={lines.nobody}
         />
       </ul>
     </div>
@@ -209,6 +246,7 @@ function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
 
 export interface ChallengeTerms {
   entryFee: bigint;
+  /** Stakers in the run now, not counting whoever is reading. */
   players: number;
   sponsorPot: bigint;
   /** Whether SPOTTER can record a miss on this run (lib/miss-rule.ts). */
@@ -216,10 +254,12 @@ export interface ChallengeTerms {
 }
 
 /**
- * The challenged player's intro above the lobby: who put money on them, their
- * words, and the terms before the accept, with SPOTTER on the terms card.
+ * The invited player's intro above the lobby: who is asking (match their
+ * stake, or a reward challenge that put money on them), their words, and the
+ * terms before the accept, with SPOTTER on the terms card.
  */
 export function ChallengeIntro({
+  kind,
   challengerName,
   seed,
   targetHandle,
@@ -227,6 +267,8 @@ export function ChallengeIntro({
   terms,
   backers,
 }: {
+  /** Which flow this run is (lib/game/money-sharing challengeRunKindOf). */
+  kind: ChallengeRunKind;
   challengerName: string;
   /** The challenger's seed, when it can be stated. */
   seed: bigint | null;
@@ -236,17 +278,18 @@ export function ChallengeIntro({
   terms: ChallengeTerms | null;
   backers: string[];
 }) {
+  const head = challengeLandingHeadOf({ kind, view: "accept", name: challengerName, target: "" });
   const headline: ReactNode =
-    seed !== null && seed > 0n ? (
+    kind === "reward" && seed !== null && seed > 0n ? (
       <>
         {challengerName} put <HeadlineMoney usd={formatUsdc(seed)} /> on you
       </>
     ) : (
-      `${challengerName} challenged you`
+      head.title
     );
   return (
     <PerchedHeader
-      above={<Tag>You have been challenged</Tag>}
+      above={<Tag>{head.tag}</Tag>}
       title={headline}
       pose="wearable"
       below={
@@ -259,9 +302,17 @@ export function ChallengeIntro({
       }
     >
       <Card className="[&>*+*]:mt-4">
-        {terms !== null ? <ChallengeTermsList terms={terms} /> : null}
+        {terms !== null ? (
+          <ChallengeTermsList terms={terms} kind={kind} challengerName={challengerName} />
+        ) : null}
         <BackedBy names={backers} />
-        <SpotterCaption line="Accept and your stake goes in. I read your wearable; only the yes or no result goes on chain, never your data." />
+        <SpotterCaption
+          line={
+            kind === "reward"
+              ? "Accept and your lock-in goes in. I read your wearable; only the yes or no result goes on chain, never your data."
+              : "Accept and your stake goes in. I read your wearable; only the yes or no result goes on chain, never your data."
+          }
+        />
         <p className="m-0 text-[0.8125rem] leading-[1.45] text-haze">Test USDC during beta.</p>
       </Card>
     </PerchedHeader>
@@ -292,10 +343,13 @@ export function ChallengePausedCard({ reason }: { reason: "checker" | "payouts" 
 }
 
 /**
- * The rally link's page: leads with chipping in and never offers accept, so a
- * friend who came to help is never staked into the challenge as a player.
+ * The backer link's page ("Back me", or the rally link): leads with chipping
+ * in and never offers accept, so a friend who came to help is never staked
+ * into the run as a player. On a stake-on-yourself run it is "Back {name}",
+ * never "challenged their friend".
  */
 export function BackerView({
+  kind,
   token,
   poolId,
   challengerName,
@@ -304,7 +358,10 @@ export function BackerView({
   pot,
   backers,
   canGrow,
+  chipIn,
 }: {
+  /** Which flow this run is (lib/game/money-sharing challengeRunKindOf). */
+  kind: ChallengeRunKind;
   token: string;
   poolId: bigint;
   challengerName: string;
@@ -315,12 +372,15 @@ export function BackerView({
   backers: string[];
   /** Live, can pay, and checkable and payable on this build. */
   canGrow: boolean;
+  /** Who the chip-in warning names and how the run pays. */
+  chipIn: ChipInTerms;
 }) {
+  const head = challengeLandingHeadOf({ kind, view: "backer", name: challengerName, target });
   return (
     <div className={`${PAGE_COLUMN} [&>*+*]:mt-6`}>
       <PerchedHeader
-        above={<Tag>Back the challenge</Tag>}
-        title={`${challengerName} challenged ${target}`}
+        above={<Tag>{head.tag}</Tag>}
+        title={head.title}
         pose={canGrow ? "thumbsup" : "meditate"}
         below={
           <>
@@ -338,10 +398,12 @@ export function BackerView({
           <ChallengeContribute
             poolId={poolId}
             prizeUsd={pot.prize !== null ? formatUsdc(pot.prize) : null}
+            kind={kind}
+            chipIn={chipIn}
           />
         ) : (
           <EmptyCard
-            title="This challenge is not taking backers anymore"
+            title={kind === "reward" ? "This challenge is not taking backers anymore" : "This run is not taking backers anymore"}
             detail="Its window has closed, it has already paid out, or it cannot be checked or paid on this build, so nothing can be added. Nothing was charged."
             action={
               <Link href="/pools" className={PRIMARY_LINK}>
@@ -351,14 +413,14 @@ export function BackerView({
           />
         )}
       </PerchedHeader>
-      {canGrow ? <RallyCard token={token} /> : null}
+      {canGrow ? <RallyCard token={token} kind={kind} name={challengerName} /> : null}
       <p className="m-0 text-[0.9375rem] text-muted">
-        Are you the one who got challenged?{" "}
+        {kind === "reward" ? "Are you the one who got challenged? " : "Want to stake alongside them instead? "}
         <Link
           href={`/c/${token}`}
           className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4"
         >
-          Open the challenge to accept it
+          {kind === "reward" ? "Open the challenge to accept it" : "Open the run to match the stake"}
         </Link>
       </p>
     </div>
