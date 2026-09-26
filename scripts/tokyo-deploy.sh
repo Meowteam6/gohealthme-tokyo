@@ -67,13 +67,15 @@ KEEP_MIN="${KEEP_MIN:-15000000}"          # never spend the deployer below 15 US
 POOL1_END="${POOL1_END:-1790465400}"   # Sun 2026-09-27 08:30 JST (Sat 23:30 UTC); the first sleep run ended 19:00 Sat, before any night, and was cancelled
 POOL2_END="${POOL2_END:-1790463600}"   # Sun 2026-09-27 08:00 JST (Sat 23:00 UTC)
 POOL3_END="${POOL3_END:-1790472600}"   # Sun 2026-09-27 10:30 JST (01:30 UTC)
+POOL4_END="${POOL4_END:-1790478000}"   # Sun 2026-09-27 12:00 JST (03:00 UTC); the first run created after MISS_RULE_FROM_POOL_ID, so a wearable-shown miss forfeits
 
 # initiative = the short title the pool list shows; goalSpec = the text
 # app/lib/wearable-goal.ts classifies. No proof marker means wearable floor.
 # "for 1 night" / "for 1 day" sets goalDays = 1 so a one-day window can pay.
 POOL1_INIT="Sleep 7 hours Saturday night";  POOL1_GOAL="Sleep at least 7 hours for 1 night"     # sleep_hours 7 (replaced "Sleep 7 hours tonight", cancelled 2026-09-26: its window held no night)
 POOL2_INIT="One workout today";      POOL2_GOAL="Complete at least 1 workout for 1 day"  # workouts 1
-POOL3_INIT="Sleep efficiency 85 tonight"; POOL3_GOAL="Sleep efficiency 85% or better for 1 night"  # sleep_efficiency 85 (replaced the steps run, cancelled 2026-09-26: steps is not a launch goal)
+POOL3_INIT="Sleep efficiency 85 tonight"; POOL3_GOAL="Sleep efficiency 85% or better for 1 night"
+POOL4_INIT="One workout Sunday";      POOL4_GOAL="Complete at least 1 workout for 1 day"  # workouts 1, the judged commitment-model run (pool 6)  # sleep_efficiency 85 (replaced the steps run, cancelled 2026-09-26: steps is not a launch goal)
 
 DRY_RUN="${DRY_RUN:-0}"
 
@@ -131,7 +133,7 @@ echo "oracle    $ORACLE"
 echo "settler   $SETTLER"
 echo "usdc      $USDC"
 echo "now       $NOW  $(fmt_jst "$NOW")"
-for i in 1 2 3; do
+for i in 1 2 3 4; do
   init_var="POOL${i}_INIT"; goal_var="POOL${i}_GOAL"; end_var="POOL${i}_END"
   echo "pool $i    ${!init_var} | ${!goal_var} | entry $POOL_ENTRY | pot $POOL_FUNDING | ends ${!end_var} $(fmt_jst "${!end_var}")"
 done
@@ -207,7 +209,7 @@ pool_exists() {
 }
 
 TO_SEED=()
-for i in 1 2 3; do
+for i in 1 2 3 4; do
   init_var="POOL${i}_INIT"; end_var="POOL${i}_END"
   if existing="$(pool_exists "${!init_var}")"; then
     echo "==> pool $i already seeded as poolId $existing (${!init_var}); skipping"
