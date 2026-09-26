@@ -1,6 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
-import { Barlow, Big_Shoulders, Geist_Mono } from "next/font/google";
+import {
+  Atkinson_Hyperlegible_Next,
+  Bricolage_Grotesque,
+  Geist_Mono,
+  Patrick_Hand,
+} from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 import Header from "@/components/Header";
@@ -15,20 +20,28 @@ import {
   TITLE_TEMPLATE,
 } from "@/lib/site";
 
-// Type system (docs/DESIGN.md): Big Shoulders is the scoreboard face for
-// titles and the big stake, prize and night figures; Barlow carries every line
-// of running copy; Geist Mono is kept only for addresses, tx hashes and Money.
-const barlow = Barlow({
-  variable: "--font-barlow",
+// Type system (docs/DESIGN.md): Bricolage Grotesque for titles and the big
+// stake, payout and night figures (variable, with the optical-size axis so it
+// tightens at 64px); Atkinson Hyperlegible Next for all running copy and every
+// control; Patrick Hand only inside SPOTTER's speech bubbles; Geist Mono only
+// for addresses and tx hashes.
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  axes: ["opsz"],
   display: "swap",
 });
 
-const shoulders = Big_Shoulders({
-  variable: "--font-shoulders",
+const atkinson = Atkinson_Hyperlegible_Next({
+  variable: "--font-atkinson",
   subsets: ["latin"],
-  weight: ["600", "700", "800", "900"],
+  display: "swap",
+});
+
+const patrickHand = Patrick_Hand({
+  variable: "--font-patrick",
+  subsets: ["latin"],
+  weight: "400",
   display: "swap",
 });
 
@@ -106,7 +119,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${barlow.variable} ${shoulders.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${bricolage.variable} ${atkinson.variable} ${patrickHand.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <script
