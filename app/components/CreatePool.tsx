@@ -119,7 +119,11 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
   const goalNotice = wearableGoalNotice(goalSpec);
   const [entryFee, setEntryFee] = useState<string>("");
   const [durationDays, setDurationDays] = useState<number>(7);
-  const [bountyModel, setBountyModel] = useState<number>(0);
+  // Starting a run (/pools/create) is the commitment model the rest of the
+  // product promises: everyone stakes the same, the players who hit share the
+  // pot. The two sponsor models live behind "Put up a prize pot instead", in
+  // the sponsor console that embeds this form, where a sponsor model leads.
+  const [bountyModel, setBountyModel] = useState<number>(embedded ? 0 : 2);
   const [initialFunding, setInitialFunding] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState<boolean>(false);
@@ -364,7 +368,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
     });
   const selectedMoney = entryFeeParsed !== null && entryFeeParsed > 0n ? moneyOf(bountyModel) : null;
 
-  const payoutOptions: { id: number; title: string; body: string }[] = [
+  const allPayoutOptions: { id: number; title: string; body: string }[] = [
     {
       id: 0,
       title: "Fixed bounty per player who hits",
@@ -381,6 +385,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
       body: createCommitmentCopy(previewGoalSpec),
     },
   ];
+  const payoutOptions = embedded ? allPayoutOptions : allPayoutOptions.filter((opt) => opt.id === 2);
 
   const form = (
         <Card className="[&>*+*]:mt-6">
@@ -574,7 +579,11 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
                   USDC
                 </span>
               </div>
-              <p className={FIELD_HINT}>USDC you seed the bounty with now. Pulled from your wallet.</p>
+              <p className={FIELD_HINT}>
+                {bountyModel === 2
+                  ? "Optional. USDC you add to the pot now, on top of the stakes. Pulled from your wallet."
+                  : "USDC you seed the bounty with now. Pulled from your wallet."}
+              </p>
             </div>
           </div>
 
@@ -598,7 +607,20 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
           <fieldset className="m-0 min-w-0 border-0 border-t border-edge p-0 pt-5">
             <legend className={`${SECTION_LABEL} float-left mb-3 w-full`}>How it pays</legend>
             <div className="clear-left [&>*+*]:mt-2.5">
-              {payoutOptions.map((opt) => {
+              {payoutOptions.length === 1 ? (
+                // One model here, so it is said, not offered as a choice.
+                <div>
+                  <span className="block text-[0.9375rem] font-semibold leading-tight">{payoutOptions[0].title}</span>
+                  <MoneyChips
+                    kind={moneyOf(payoutOptions[0].id).kind.chip}
+                    miss={moneyOf(payoutOptions[0].id).miss}
+                    inline
+                    className="mt-2"
+                  />
+                  <span className="mt-2 block text-[0.8125rem] leading-[1.45] text-haze">{payoutOptions[0].body}</span>
+                </div>
+              ) : null}
+              {payoutOptions.length > 1 ? payoutOptions.map((opt) => {
                 const selected = bountyModel === opt.id;
                 const optMoney = moneyOf(opt.id);
                 return (
@@ -628,7 +650,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
                     </span>
                   </label>
                 );
-              })}
+              }) : null}
             </div>
             {selectedMoney !== null && selectedMoney.copy !== null ? (
               <div
