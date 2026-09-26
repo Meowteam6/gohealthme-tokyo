@@ -13,14 +13,29 @@ describe("SIGNED_OUT_NAV_ITEMS", () => {
 // The header nav, named for the game loop. Every tab points at a real page.
 
 describe("NAV_ITEMS", () => {
-  it("is Lobby, My runs, History, Challenges, Settings, in that order", () => {
+  it("is Challenges, My challenges, History, Settings, in that order (Andre, 2026-09-27)", () => {
     expect(NAV_ITEMS.map((i) => i.label)).toEqual([
-      "Lobby",
-      "My runs",
-      "History",
       "Challenges",
+      "My challenges",
+      "History",
       "Settings",
     ]);
+    expect(NAV_ITEMS.map((i) => i.href)).toEqual([
+      "/pools",
+      "/dashboard",
+      "/agent",
+      "/settings",
+    ]);
+  });
+
+  it("keeps /challenges out of the nav (reached from the lobby and My challenges)", () => {
+    expect(NAV_ITEMS.map((i) => i.href)).not.toContain("/challenges");
+  });
+
+  it("never says run, pool, dare or lobby in a tab label", () => {
+    for (const { label } of [...NAV_ITEMS, ...SIGNED_OUT_NAV_ITEMS]) {
+      expect(label, label).not.toMatch(/\b(runs?|pools?|dares?|lobby)\b/i);
+    }
   });
 
   it("drops the SPOTTER, Sponsor and Wallet tabs", () => {
