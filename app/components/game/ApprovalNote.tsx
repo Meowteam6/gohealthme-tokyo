@@ -35,7 +35,7 @@ export default function ApprovalNote() {
   const mode = useApprovalMode();
   if (mode !== "mock" && mode !== "world") return null;
   return (
-    <p className="rounded-lg border-2 border-foreground/15 bg-surface-raised p-3 text-sm">
+    <p className="rounded-2xl border border-edge bg-surface-raised p-3 text-sm">
       SPOTTER will ask you to confirm with World ID before it pays. No
       confirmation, no payout, and your stake is refunded.
       {mode === "mock" ? (

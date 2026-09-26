@@ -216,18 +216,18 @@ function SpendRow({ row }: { row: SpendReceiptRow }) {
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 break-words text-sm font-medium">
           {row.paidUsd !== null ? (
-            <span aria-hidden className="mr-2 text-accent-deep">
+            <span aria-hidden className="mr-2 font-mono text-accent-deep">
               [x]
             </span>
           ) : (
-            <span aria-hidden className="mr-2 text-muted">
+            <span aria-hidden className="mr-2 font-mono text-muted">
               [ ]
             </span>
           )}
           {row.label}
           {!row.planned ? (
-            <span className="ml-2 text-xs uppercase tracking-wide text-warning">
-              unplanned
+            <span className="ml-2 text-xs font-bold text-warning">
+              Unplanned
             </span>
           ) : null}
         </span>
@@ -331,9 +331,9 @@ export default function AgentReceipt({
   ) as SettleLedgerEntry | undefined;
 
   return (
-    <div className="rounded-xl border border-edge bg-surface-raised p-4 font-mono">
-      <p className="text-xs font-semibold uppercase tracking-widest text-muted">
-        SPOTTER receipt
+    <div className="rounded-2xl border border-edge bg-surface-raised p-4">
+      <p className="font-display text-lg font-bold tracking-display">
+        SPOTTER&apos;s receipt
       </p>
       <ol className="mt-3 space-y-3">
         {items.map((item) => {
@@ -368,8 +368,8 @@ export default function AgentReceipt({
             case "reason":
               return (
                 <li key={item.key} className="animate-rise-in pl-7 text-sm">
-                  <span className="text-xs uppercase tracking-wide text-muted">
-                    decision
+                  <span className="text-xs font-bold text-muted">
+                    Decision:
                   </span>{" "}
                   <span
                     className={
@@ -384,8 +384,8 @@ export default function AgentReceipt({
             case "record":
               return (
                 <li key={item.key} className="animate-rise-in pl-7 text-sm">
-                  <span className="text-xs uppercase tracking-wide text-muted">
-                    recorded on-chain
+                  <span className="text-xs font-bold text-muted">
+                    Recorded on chain
                   </span>
                   {row.resultTx !== null ? (
                     <p className="mt-1">
@@ -442,16 +442,16 @@ export default function AgentReceipt({
             case "approval":
               return (
                 <li key={item.key} className="animate-rise-in pl-7 text-sm">
-                  <span className="text-xs uppercase tracking-wide text-muted">
+                  <span className="text-xs font-bold text-muted">
                     {row.status === "requested"
-                      ? "asked you to confirm"
+                      ? "Asked you to confirm"
                       : row.status === "approved"
-                        ? "you confirmed"
+                        ? "You confirmed"
                         : row.status === "declined"
-                          ? "you declined"
+                          ? "You declined"
                           : row.status === "expired"
-                            ? "request expired"
-                            : "request withdrawn"}
+                            ? "Request expired"
+                            : "Request withdrawn"}
                   </span>
                   {row.provider === "mock" ? (
                     <span className="ml-2 text-xs text-muted">

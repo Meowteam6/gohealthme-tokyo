@@ -54,6 +54,7 @@ import {
   type WorldRequestStage,
 } from "@/lib/world/credentials";
 import { idkitErrorView } from "@/lib/world/idkit-errors";
+import { Button } from "@/components/ui";
 
 export type { ApprovalOutcome };
 
@@ -456,7 +457,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     return (
       <div
         data-lane="world-agents"
-        className="rounded-xl border border-accent/40 bg-accent/10 p-4 text-sm"
+        className="rounded-2xl border border-edge bg-surface-raised p-4 text-sm"
         aria-busy="true"
       >
         <SpotterLabel />
@@ -471,7 +472,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     return (
       <div
         data-lane="world-agents"
-        className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm"
+        className="rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm"
         role="alert"
       >
         <SpotterLabel />
@@ -480,7 +481,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
         </p>
         <p className="mt-2 text-muted">{state.message}</p>
         {state.retry ? (
-          <button
+          <Button
             type="button"
             onClick={() =>
               void (state.needsSignature
@@ -489,10 +490,11 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
                   ? reload()
                   : ask())
             }
-            className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent-deep"
+            variant="ghost"
+            className="mt-3 w-full"
           >
             {state.needsSignature ? "Sign and try again" : "Try again"}
-          </button>
+          </Button>
         ) : (
           <p className="mt-2 text-xs text-muted">
             Nothing is recorded or paid until this is fixed on the deployment.
@@ -507,7 +509,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
       <div
         data-lane="world-agents"
         data-outcome="settled"
-        className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm"
+        className="rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm"
         role="status"
       >
         <SpotterLabel />
@@ -525,26 +527,27 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     const copy = outcomeCopy(state.outcome);
     const tone =
       state.outcome === "approved"
-        ? "border-accent/40 bg-accent/10"
+        ? "border-edge bg-surface-raised"
         : "border-warning/40 bg-warning/10";
     return (
       <div
         data-lane="world-agents"
         data-outcome={state.outcome}
-        className={`rounded-xl border p-4 text-sm ${tone}`}
+        className={`rounded-2xl border p-4 text-sm ${tone}`}
         role="status"
       >
         <SpotterLabel />
         <p className="mt-1 font-semibold">{copy.headline}</p>
         <p className="mt-1 text-foreground/80">{copy.detail}</p>
         {copy.askAgain ? (
-          <button
+          <Button
             type="button"
             onClick={() => void ask()}
-            className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent-deep"
+            variant="ghost"
+            className="mt-3 w-full"
           >
             Ask SPOTTER again
-          </button>
+          </Button>
         ) : null}
       </div>
     );
@@ -560,7 +563,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     <div
       data-lane="world-agents"
       data-request-id={request.requestId}
-      className="rounded-xl border border-accent/40 bg-accent/10 p-4 text-sm"
+      className="rounded-2xl border border-edge bg-surface-raised p-4 text-sm"
     >
       <div className="flex items-baseline justify-between gap-3">
         <SpotterLabel />
@@ -593,14 +596,14 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
       <div className="mt-3 flex flex-col gap-2">
         {world !== null ? (
           <>
-            <button
+            <Button
               type="button"
               disabled={verifying}
               onClick={() => setWidgetOpen(true)}
-              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full"
             >
               {verifying ? "checking your proof..." : "Confirm with World App"}
-            </button>
+            </Button>
             <WorldApprovalWidget
               open={widgetOpen}
               onOpenChange={setWidgetOpen}
@@ -612,23 +615,24 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
             />
           </>
         ) : (
-          <button
+          <Button
             type="button"
             disabled={verifying}
             onClick={() => void approveMock()}
-            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full"
           >
             {verifying ? "checking your proof..." : "Confirm (mocked World ID)"}
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="button"
           disabled={verifying}
           onClick={() => void decline()}
-          className="w-full rounded-xl border border-edge bg-surface-raised px-5 py-3 text-sm font-semibold text-foreground/80 hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
+          variant="secondary"
+          className="w-full"
         >
           Not now, do not pay
-        </button>
+        </Button>
       </div>
       <p className="mt-2 text-xs text-muted">
         Signing proves the wallet is yours; no transaction is sent. Nothing is
@@ -640,8 +644,6 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
 
 function SpotterLabel() {
   return (
-    <span className="text-xs font-semibold uppercase tracking-widest text-muted">
-      SPOTTER asks
-    </span>
+    <span className="text-sm font-bold text-foreground">SPOTTER asks</span>
   );
 }
