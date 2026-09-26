@@ -444,7 +444,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
               onChange={(e) => setIdentity(e.target.value)}
               placeholder="e.g. andre"
               autoComplete="off"
-              className={`rounded-2xl border border-edge bg-background px-3 ${TAP_TARGET} justify-start font-normal`}
+              className={`rounded-control bg-surface-deep px-3.5 text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)] placeholder:text-haze ${TAP_TARGET} justify-start font-normal`}
             />
           </label>
           <Button type="submit" pop disabled={phase.kind !== "idle"}>

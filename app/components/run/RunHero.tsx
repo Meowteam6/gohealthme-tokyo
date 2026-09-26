@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Tag, type TagTone } from "@/components/ui";
 import { SpotterFigure } from "@/components/spotter/Spotter";
 import { poseFor, type SpotterScreenState } from "@/lib/spotter-poses";
@@ -8,6 +8,22 @@ import { poseFor, type SpotterScreenState } from "@/lib/spotter-poses";
 // at the right, his feet on the edge of the card below. One pose per viewport:
 // the paid verdict hides him here because he stands on the receipt instead.
 // Server-safe; the caller passes the live clock in `ends`.
+
+/**
+ * The big figure's size: 60px on a phone and 112px from 960px, shrunk only as
+ * far as it takes to keep a long figure ("8,000 steps") on one line beside
+ * SPOTTER, so a number never breaks away from its unit. Figtree bold runs
+ * about 0.56em a character at this tracking.
+ */
+function figureSize(figure: string, roomPhone: number, roomWide: number): CSSProperties {
+  const n = (Math.max(figure.length, 7) * 0.56).toFixed(2);
+  return {
+    "--fig-sm": `min(3.75rem, calc((100vw - ${32 + roomPhone}px) / ${n}))`,
+    // The left column from 960px: the page's 1200px less its gutters, the
+    // 420px stake column and the 48px gap between them.
+    "--fig-lg": `min(7rem, calc((min(100vw, 75rem) - ${64 + 468 + roomWide}px) / ${n}))`,
+  } as CSSProperties;
+}
 
 export interface RunHeroProps {
   tag: { tone: TagTone; label: string };
@@ -40,18 +56,25 @@ export default function RunHero({
     spotter === null
       ? ""
       : lying
-        ? "max-w-[calc(100%-128px)] min-[960px]:max-w-[calc(100%-260px)]"
-        : "max-w-[calc(100%-104px)] min-[960px]:max-w-[calc(100%-200px)]";
+        ? "max-w-[calc(100%-128px)] min-[900px]:max-w-[calc(100%-260px)]"
+        : "max-w-[calc(100%-104px)] min-[900px]:max-w-[calc(100%-200px)]";
   return (
     <section
       aria-labelledby={headingId}
-      className="relative pt-1 [grid-area:hero] min-[960px]:min-h-[312px] min-[960px]:pt-3"
+      className="relative pt-1 [grid-area:hero] min-[900px]:min-h-[250px] min-[960px]:min-h-[312px] min-[960px]:pt-3"
     >
       <Tag tone={tag.tone}>{tag.label}</Tag>
       <h1 id={headingId} className={`m-0 mt-2.5 ${room}`}>
         {figure !== null ? (
           <>
-            <span className="num block font-sans text-[3.75rem] font-bold leading-[0.95] tracking-[-0.035em] [font-variant-numeric:lining-nums_proportional-nums] min-[960px]:text-[7rem]">
+            <span
+              className="num block whitespace-nowrap font-sans text-[length:var(--fig-sm)] font-bold leading-[0.95] tracking-[-0.035em] [font-variant-numeric:lining-nums_proportional-nums] min-[960px]:text-[length:var(--fig-lg)]"
+              style={figureSize(
+                figure,
+                spotter === null ? 0 : lying ? 128 : 104,
+                spotter === null ? 0 : lying ? 260 : 200,
+              )}
+            >
               {figure}
             </span>
             <span className="type-heading mt-2 block text-[1.375rem] leading-[1.15] min-[960px]:mt-2.5 min-[960px]:text-[2.125rem]">
@@ -73,8 +96,8 @@ export default function RunHero({
         <span
           className={`pointer-events-none absolute z-[3] ${
             lying
-              ? "-right-1 bottom-[-8px] min-[960px]:right-6 min-[960px]:bottom-[-10px]"
-              : "right-0.5 bottom-[-6px] min-[960px]:right-14 min-[960px]:bottom-[-10px]"
+              ? "-right-1 bottom-[-8px] min-[900px]:right-6 min-[900px]:bottom-[-10px]"
+              : "right-0.5 bottom-[-6px] min-[900px]:right-14 min-[900px]:bottom-[-10px]"
           }`}
         >
           <SpotterFigure

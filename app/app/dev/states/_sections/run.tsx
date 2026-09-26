@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ButtonLink, Fine } from "@/components/ui";
+import { ButtonLink, Card, Fine } from "@/components/ui";
+import WearableCheck from "@/components/WearableCheck";
 import HoldCoin from "@/components/spotter/HoldCoin";
 import JoinMoment from "@/components/JoinMoment";
 import { FundingHelpView } from "@/components/FundingHelp";
@@ -153,7 +154,7 @@ function Hold({ bar = false }: { bar?: boolean }) {
   );
 }
 
-function Night({ caption, joined = false }: { caption: string; joined?: boolean }) {
+function Night({ caption, joined = false, device = "WHOOP" }: { caption: string; joined?: boolean; device?: string }) {
   const t = nightTimelineOf({ nowSec: NOW, periodEnd: END, goalHours: HEADLINE.threshold });
   const rail: NightRail | null =
     t !== null
@@ -170,8 +171,8 @@ function Night({ caption, joined = false }: { caption: string; joined?: boolean 
       note={
         <>
           To fit {HEADLINE.short} before the {END_CLOCK} close, be asleep by{" "}
-          <b>{rail?.latestLabel}</b> at the latest. Your WHOOP counts time asleep, not time in
-          bed. Open the WHOOP app when you wake so the night syncs.
+          <b>{rail?.latestLabel}</b> at the latest. Your {device} counts time asleep, not time in
+          bed. Open the {device} app when you wake so the night syncs.
         </>
       }
     />
@@ -228,6 +229,7 @@ function Page({
   caption = WHOOP_CAPTION,
   joined = false,
   also = true,
+  device = "WHOOP",
   children,
 }: {
   spotter?: SpotterScreenState | null;
@@ -235,6 +237,7 @@ function Page({
   caption?: string;
   joined?: boolean;
   also?: boolean;
+  device?: string;
   children?: ReactNode;
 }) {
   const me: RosterRow = {
@@ -247,10 +250,10 @@ function Page({
   };
   return (
     <RunLayout hero={<RunHeroFixture spotter={spotter} />} stake={stake}>
-      <Night caption={caption} joined={joined} />
+      <Night caption={caption} joined={joined} device={device} />
       {children}
       <Roster rows={joined ? [me] : []} joined={joined} />
-      {also ? <AlsoOpen rows={ALSO} sub="Other runs your WHOOP can check" /> : null}
+      {also ? <AlsoOpen rows={ALSO} sub={`Other runs your ${device} can check`} /> : null}
     </RunLayout>
   );
 }
@@ -322,6 +325,7 @@ export default function RunStates({ meta }: SectionProps) {
 
       <StateFrame name="run-locked-apple" note="Apple Watch linked, nothing synced yet: locked before any stake, one tap to check again">
         <Page
+          device="Apple Watch"
           caption="Your Apple Watch has not sent me a night yet. Open its app so it syncs, and I'll check this run."
           stake={
             <StakeCard>
@@ -407,6 +411,19 @@ export default function RunStates({ meta }: SectionProps) {
             </StakeCard>
           }
         />
+      </StateFrame>
+
+      <StateFrame name="run-check" note="joined, the proof card: the live WearableCheck reading pool 5 (signed out here, so it asks you to sign in)">
+        <div className="max-w-[732px]">
+          <Card as="section" aria-labelledby="gallery-proof-h">
+            <h2 id="gallery-proof-h" className="m-0 text-[1.0625rem] font-semibold">
+              Send SPOTTER in
+            </h2>
+            <div className="mt-4">
+              <WearableCheck poolId={5n} goalSpec={GOAL} />
+            </div>
+          </Card>
+        </div>
       </StateFrame>
 
       <StateFrame name="run-hold-bar" phone note="phone only: once the rules were read and the card's own hold scrolled away">

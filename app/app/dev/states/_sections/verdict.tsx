@@ -99,7 +99,7 @@ export default function VerdictStates({ meta }: SectionProps) {
       <StateFrame name="verdict-confirm" note="SPOTTER read a hit: confirm with World ID before any USDC moves">
         <Page
           spotter="verdict-confirm"
-          rows={[{ ...ME, status: "You" }]}
+          rows={[ME_MISSED]}
           card={
             <VerdictView
               kind="confirm-human"
@@ -150,7 +150,7 @@ export default function VerdictStates({ meta }: SectionProps) {
       <StateFrame name="verdict-denied" note="the player said not now: nothing paid, ask again before settle">
         <Page
           spotter="verdict-denied"
-          rows={[{ ...ME, status: "You" }]}
+          rows={[ME_MISSED]}
           card={
             <VerdictView
               kind="approval-failed"
@@ -164,7 +164,7 @@ export default function VerdictStates({ meta }: SectionProps) {
       <StateFrame name="verdict-expired" note="the 90 second World ID request ran out: nothing paid, ask again">
         <Page
           spotter="verdict-denied"
-          rows={[{ ...ME, status: "You" }]}
+          rows={[ME_MISSED]}
           card={
             <VerdictView
               kind="approval-failed"

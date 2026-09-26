@@ -1249,11 +1249,12 @@ export default function PoolDetail({ id }: { id: string }) {
     ) : (
       <>
         The run closes at <b>{endClock}</b>
-        {left !== null ? `, in ${left}` : ""}. Only nights your {device} has scored and synced
-        count, so open {appName} before then.
+        {left !== null ? `, in ${left}` : ""}. Only {sleepRun ? "nights" : "days"} your {device} has
+        scored and synced count, so open {appName} before then.
       </>
     );
   const nightBase = {
+    title: sleepRun ? "Your night" : "Your day",
     nowLabel: now !== null ? `Now ${clockLabel(now)}` : null,
     caption,
     endLabel: endClock,
