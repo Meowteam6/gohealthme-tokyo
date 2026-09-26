@@ -1081,7 +1081,7 @@ export default function PoolDetail({ id }: { id: string }) {
           {solo !== null ? <SoloNote line={solo} /> : null}
           <StakeAction
             id="stake-action"
-            fine="Sign in with email, no seed phrase. You make your player once, then land back on this run."
+            fine="Sign in with Base or email, no seed phrase. You make your player once, then land back on this run."
           >
             <ButtonLink href={fix.kind === "link" ? fix.href : "/character"} block>
               Sign in to stake {stake} USDC
@@ -1321,7 +1321,7 @@ export default function PoolDetail({ id }: { id: string }) {
       return sponsorPot > 0n ? (
         <>
           Each player stakes {stake}. A miss here comes back, so the players who hit share the{" "}
-          <b className="font-semibold text-gold">{formatUsdc(sponsorPot)}</b> sponsor pot.
+          <b>{formatUsdc(sponsorPot)}</b> sponsor pot.
         </>
       ) : (
         <>Each player stakes {stake}. A miss here comes back, so a hit is your stake back.</>

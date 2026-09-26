@@ -213,7 +213,7 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
     case "sign-in":
       return {
         title: "Sign in to enter",
-        detail: "One email, and a wallet is made for you. No seed phrase.",
+        detail: "Base or one email, and a wallet is made for you. No seed phrase.",
         fix: { kind: "link", label: "Sign in", href: `/character?next=${next}` },
         tone: "fixable",
       };

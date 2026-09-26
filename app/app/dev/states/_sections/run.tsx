@@ -271,7 +271,7 @@ export default function RunStates({ meta }: SectionProps) {
             <StakeCard>
               <Terms t={OPEN} id="gallery-terms-1" />
               <StakeAction
-                fine="Sign in with email, no seed phrase. You make your player once, then land back on this run."
+                fine="Sign in with Base or email, no seed phrase. You make your player once, then land back on this run."
               >
                 <ButtonLink href="/character?next=%2Fpools%2F5" block>
                   Sign in to stake {STAKE} USDC

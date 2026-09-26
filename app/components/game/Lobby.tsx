@@ -164,7 +164,7 @@ export default function Lobby({
       <div className="flex flex-col gap-3 min-[640px]:flex-row min-[640px]:items-center min-[640px]:justify-between min-[640px]:gap-6">
         <p className="m-0 max-w-[52ch] text-[0.9375rem] leading-normal text-muted">
           <b className="font-semibold text-foreground">Sign in and I check your own wearable against every run,</b>{" "}
-          before any stake. One email, and a wallet is made for you.
+          before any stake. Base or one email, and a wallet is made for you.
         </p>
         <ButtonLink href={`/character?next=${next}`} className="flex-none">
           Sign in
