@@ -470,9 +470,17 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "feedback", label: "Feedback" },
 ];
 
-/** Routes where the helper bubble never renders. */
+/** Routes where the helper bubble never renders: the landing and the run
+ *  page (SPOTTER already stands on them), and the forms where a floating
+ *  button would sit on a field or the submit (character creation, the
+ *  challenge link, the create forms). */
 function helperHidden(pathname: string): boolean {
-  return pathname === "/" || /^\/pools\/\d+\/?$/.test(pathname);
+  return (
+    pathname === "/" ||
+    /^\/pools\/\d+\/?$/.test(pathname) ||
+    /^\/(character|challenge\/new|pools\/create)\/?$/.test(pathname) ||
+    pathname.startsWith("/c/")
+  );
 }
 
 export default function HelperWidget() {
@@ -551,7 +559,10 @@ function HelperWidgetPanel() {
     setOpen(false);
   }, []);
 
-  const pending = step.id !== "enterRun";
+  // The dot means the helper holds something for this player: a character
+  // step (World ID, a name, a wearable) a signed-in player has not done. A
+  // signed-out first visit has nothing waiting, so no dot.
+  const pending = step.id !== "enterRun" && step.id !== "signIn";
 
   if (!open) {
     return (
