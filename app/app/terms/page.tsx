@@ -274,8 +274,8 @@ export default function TermsPage() {
               stake stays in the pool and can be taken back by the creator.
               Nikki to confirm those models belong in the V4 beta at all. */}
           <p>
-            A sponsor can add money to a run, and a friend can chip in to a
-            dare. In a commitment run that money is shared equally among the
+            A sponsor can add money to a run, and a friend can add to a
+            challenge. In a commitment run that money is shared equally among the
             players who hit the goal. If nobody hits, the stakes are refunded
             and the added money stays in the pool.
           </p>
@@ -293,8 +293,8 @@ export default function TermsPage() {
             nobody won and any missed stakes that stayed in the pool, can only
             be taken back by the person who created the run, through the
             contract&apos;s sweep. It is not split back to contributors. If you
-            chip in to someone else&apos;s dare, your contribution rewards the
-            players who hit, and if nobody hits it belongs to the dare&apos;s
+            add to someone else&apos;s challenge, your contribution rewards the
+            players who hit, and if nobody hits it belongs to the challenge&apos;s
             creator, not to you. On a cancelled run the creator can take back
             only what is left after every player has claimed their refund.
           </p>

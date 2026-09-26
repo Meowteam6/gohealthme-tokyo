@@ -31,14 +31,15 @@ import {
 } from "@/lib/wearable-connect";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { useEmbeddedWallet } from "@/lib/wallet";
+import { Notice } from "@/components/night/kit";
 
 export default function AuthorCapabilityNotice({
   goalSpec,
   /** What the author is making, so the copy can name it. */
-  noun = "pool",
+  noun = "run",
 }: {
   goalSpec: string;
-  noun?: "pool" | "challenge";
+  noun?: "run" | "challenge";
 }) {
   const { address } = useEmbeddedWallet();
   const requestAuth = useWalletAuth();
@@ -72,15 +73,11 @@ export default function AuthorCapabilityNotice({
   );
 
   return (
-    <p
-      role="status"
-      className="mt-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-foreground/80"
-    >
-      Heads up: this goal is measured in {metricLabel(unsupported)}, and{" "}
-      {provider?.label ?? "your connected device"} does not report it. You can
-      still create this {noun} - other people&apos;s devices may well measure it
-      - but you would not be able to join it yourself without connecting a
-      different device.
-    </p>
+    <Notice tone="limit" role="status" className="mt-2">
+      This goal is measured in {metricLabel(unsupported)}, and{" "}
+      {provider?.label ?? "your wearable"} does not report it. You can still
+      create this {noun}, and other players&apos; wearables may measure it, but
+      you could not join it yourself without pairing a different wearable.
+    </Notice>
   );
 }

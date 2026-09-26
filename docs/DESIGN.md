@@ -89,6 +89,10 @@ All in `app/components/ui.tsx` and `app/components/spotter/`. Server-safe unless
 - **Perch** `({ pose | state, width?, side?: "left" | "right", inset?, overlap?, reserve?, children })`: SPOTTER standing on the wrapped card's top edge; reserves his height so nothing overlaps. Give side-by-side cards the same `reserve` so their tops line up.
 - **SpotterCaption** `({ line, live?, label? })`: his caption box.
 - **Moon** `({ diameter?: number | [phone, desktop], id?, className })`: the one warm light; the caller positions it.
+- **RunRow** (`components/game/RunRow.tsx`) is the one open-run card, shared by the landing's Open runs and the lobby, so a run reads the same in both places. It carries the run's lock and its fix (from `LockPanel`) before any stake control.
+- **LockPanel** (`components/game/LockPanel.tsx`) states a lock and its one fix on the card it locks. It no longer draws its own SPOTTER: the page's pose is the one pose in the viewport. The run page's stake card has the same lock as `run/StakeLock`.
+- **Night kit** (`components/night/kit.tsx`) holds the page pieces the non-mocked screens share: `PerchedHeader` (the page title, then SPOTTER standing on the first card with the pose picked from the page's state), `EmptyCard`, `BackLink`, `Notice`, `PAGE_COLUMN`, `PAGE_TITLE`, `SECTION_TITLE`, the `FIELD*` classes, `optionCard` and `DefRow`.
+- **Spacing:** Tailwind v4 gives `space-y-*` zero specificity, so a child with `m-0` (Fine, SpotterCaption, a StatRow) loses its gap. Stack with the owl selector `[&>*+*]:mt-N` instead.
 - **HoldCoin** (client) is the hold button: the moon primary at 60px with an ink disc, a USDC glyph, a gold conic ring and a gold tint that fills left to right over 1.2s. Space or Enter commits; "Tap to confirm instead" opens an inline confirm (`confirmPrompt`, `confirmLabel`, "Not now"); status is announced through `aria-live`. Waiting states (balance check, wallet, in flight) drop to the quiet fill. Props: `onCommit, label, hint?, tapLabel?, confirmPrompt?, confirmLabel?, committedHint?, disabled?, disabledReason?, durationMs?`. Logic in `hold-commit.ts` (node-tested); commits once per mount, remount with a new `key` to retry.
 
 ### Chrome
@@ -133,27 +137,29 @@ This is the product's money rule and its compliance line, so every run with `bou
 
 - **Everyone puts in the same stake.** Your result depends only on your own effort, verified by your wearable, never on chance.
 - **Hit your goal:** your own stake comes back, plus an equal share of the stakes of players who missed, plus any sponsor pot.
-- **Miss (your wearable shows it):** your stake goes to the players who hit.
+- **Miss (your wearable shows it):** your stake goes to the players who hit, **on a run that can record a miss** (`lib/miss-rule.ts`: commitment model, wearable only, sleep or workouts, one plain count, pool id at or after `MISS_RULE_FROM_POOL_ID`). Every other run refunds a miss at settle and says so before the stake.
 - **No wearable data for the run:** your stake comes back.
 - **Nobody hits:** everyone gets their stake back.
 - **No cut on V4:** `commitmentFeeBps()` is read from chain; "No cut on this build" shows only when it reads 0.
 - **Test money:** "Test USDC during beta" under the action and in the footer. Lead with "your stake back", never a prize.
 
-**Rule: numbers come only from `app/lib/commitment.ts`** (`commitmentOutcome`, `commitmentRange`) and wording from `app/lib/game/commitment-copy.ts` and `app/components/CommitmentTerms.tsx`. No component does its own payout arithmetic.
+**Rule: numbers come only from `app/lib/commitment.ts`** (`commitmentOutcome`, `commitmentRange`) and wording from `app/lib/game/commitment-copy.ts`, `app/lib/commitment-copy.ts` and `app/components/CommitmentTerms.tsx`. No component does its own payout arithmetic.
+
+**Rule: every stake line knows whether the run can record a miss.** `recordsMissesOf(pool)` (`lib/game/commitment-copy.ts`, from `missRulePool`) feeds `recordsMisses` into `commitmentRange`, `hitRange`, `stakeTermsOf`, `soloLineOf`, `friendMathOf`, `commitmentFacts`, `commitmentReminder`, `CommitmentRangeLine`, `CommitmentTermsList` and the landing's `termsOf`. On a run that cannot record a miss, a miss is refunded before the split (B-2), so the range never counts another player's stake, and the copy says "this run cannot record a miss". With `MISS_RULE_FROM_POOL_ID` unset, no run can, and the landing's generic tabs and challenge band promise no forfeit.
 
 | Where | What it says | Source |
 |---|---|---|
-| Landing | Outcome tabs (hit, miss, nobody hits) with this run's worked number | `commitmentOutcome`, `CommitmentBeats` until the tabs land |
+| Landing | Outcome tabs (hit, miss, nobody hits) with the featured run's worked number | `outcomeCopy`, `heroNote`, `challengeNote` in `lib/game/landing.ts` |
 | Create run, create challenge | Range line under the stake field | `CommitmentRangeLine` |
 | `/c/[token]` | The terms list before accepting | `CommitmentTermsList` |
 | Lobby row | "Stake 1.00, get it back plus a share if you hit" | `commitmentRowTerms` |
-| Run page | The terms with this run's live count and pot, before the hold button | `HowThisRunPays`, `CommitmentTermsList`, `feeLine` |
+| Run page | The terms on the stake card with this run's live count and pot, before the hold button, plus how SPOTTER reads the goal when it can record a miss | `stakeTermsOf`, `soloLineOf`, `missRuleReading`, `feeLine` |
 | Under the hold button | One range line: hit, miss, nobody hits | `CommitmentRangeLine` |
-| The run | "If you hit" range and the three outcomes | `hitRange`, `COMMITMENT_REMINDER` |
+| The run | "If you hit" range and the three outcomes | `hitRange`, `commitmentReminder` |
 | Verdict, paid | Stake back plus share, split from the amount the settle credited | `paidBreakdown` |
-| Verdict, not met | What the chain recorded (miss to the hitters, nobody hit, or refunded) | `commitmentLostCopy` |
+| Verdict, not met | What the chain recorded (miss to the hitters, nobody hit, or refunded) | `commitmentLostCopy`, `verdictCopy` for `missed` and `hit-unconfirmed` |
 
-Known gap, stated so nobody overclaims: the contract refunds a player whose result was never recorded (B-2), so a miss only goes to the players who hit once SPOTTER records `verdict=false` on chain (being wired on `fix/record-misses`). Until that lands on a deployment, forward copy must not promise the stricter rule; the verdict always states what actually happened.
+SPOTTER records `verdict=false` on chain since `fix/record-misses` (merged to main, then into Night Shift): only on a run the miss rule covers, only when the wearable synced every day of the run, after the grace window. A run it does not cover refunds the unrecorded player at settle (B-2). The verdict always states what actually happened.
 
 ## Decisions log
 
@@ -166,3 +172,4 @@ Known gap, stated so nobody overclaims: the contract refunds a player whose resu
 | 2026-09-26 | Foundation: tokens, Fraunces + Figtree, relit poses, primitives, dark Dynamic modal, `/dev/states` | Branch `design/night-shift`. Every hand-rolled coral button moved onto `buttonClasses` (the token flip made cream text on a cream face). SPOTTER's run-page line no longer says he holds the stake. |
 | 2026-09-26 | Run pages readable signed out, gated again once signed in | "Put 1 USDC on myself" must land on the run, not a wall. A signed-in player who has not proved they are one person goes through character creation before the hold button is in front of them, so nobody is refused at the stake. Server still enforces `isAllowed`. |
 | 2026-09-26 | Header status strip removed; SPOTTER's line shows only during an outage | The strip was operator chrome on every screen. The outage is a real limit before a stake, so it stays, under the bar, only while true. |
+| 2026-09-26 | Night Shift integrated: landing, run page and the rest of the app merged with main's recorded misses | Branches `design/ns-landing`, `design/ns-run`, `design/ns-rest` and `origin/main` merged on `design/night-shift`. The mocks promised a forfeit on every run; after the miss rule the copy follows `recordsMisses` per run, so no screen promises a missed stake a run cannot record. `HowThisRunPays` was unmounted by the run page's stake card and is removed. |

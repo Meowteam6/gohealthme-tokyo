@@ -19,11 +19,11 @@ describe("resultLabel", () => {
 
   it("tells a joiner of a cancelled pool to claim their refund, then that it is claimed", () => {
     expect(resultLabel({ settled: true, cancelled: true }, p({}))).toEqual({
-      text: "Pool cancelled - claim your refund",
+      text: "Run called off - claim your stake back",
       tone: "warning",
     });
     expect(resultLabel({ settled: true, cancelled: true }, p({ refunded: true }))).toEqual({
-      text: "Pool cancelled - refund claimed",
+      text: "Run called off - stake claimed back",
       tone: "muted",
     });
   });

@@ -467,7 +467,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
                   {goalNotice.text}
                 </Notice>
               ) : goalNotice.kind === "device-check" ? (
-                <AuthorCapabilityNotice goalSpec={goalSpec} noun="pool" />
+                <AuthorCapabilityNotice goalSpec={goalSpec} noun="run" />
               ) : null
             ) : null}
             <p className={`${FIELD_HINT} !mt-0`}>

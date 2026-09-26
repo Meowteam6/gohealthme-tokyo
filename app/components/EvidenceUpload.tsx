@@ -50,7 +50,7 @@ import {
 import AgentReceipt from "@/components/AgentReceipt";
 import Countdown from "@/components/Countdown";
 import PayoutMoment from "@/components/PayoutMoment";
-import { ErrorNote, Skeleton, buttonClasses } from "@/components/ui";
+import { Badge, ErrorNote, Skeleton, buttonClasses } from "@/components/ui";
 import SignInGate from "@/components/SignInGate";
 
 // text/plain stays accepted so old sample records keep working, but it is
@@ -840,9 +840,7 @@ function EvidenceUploadInner({
           {selfReported ? "Self-report it." : "Prove it."}
         </h3>
         {selfReported ? (
-          <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-warning">
-            Self-reported · low-trust
-          </span>
+          <Badge tone="warning">Self-reported, low trust</Badge>
         ) : null}
       </div>
       {selfReported ? (
