@@ -14,6 +14,7 @@ import {
   type Modality,
 } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
+import { useDisplayNames } from "@/lib/use-display-names";
 import { useDocumentProofAvailable } from "@/lib/useProofStatus";
 import AuthorCapabilityNotice from "@/components/AuthorCapabilityNotice";
 import { launchGoalIssue, LAUNCH_GOAL_EXAMPLES, wearableGoalNotice } from "@/lib/launch-goal-check";
@@ -23,6 +24,8 @@ import { isEconomicallyDeadConfig } from "@/lib/pool-lifecycle";
 import { resolveNewPoolId } from "@/lib/resolve-pool-id";
 import { ArcTxLink, Button, Card, Chip, ErrorNote, Fine, buttonClasses } from "@/components/ui";
 import { CommitmentRangeLine } from "@/components/CommitmentTerms";
+import { MoneyChips, MoneyTermsList } from "@/components/game/MoneyTerms";
+import { runMoneyOf, type RunMoney } from "@/lib/game/money-flow";
 import {
   EmptyCard,
   FIELD,
@@ -99,7 +102,9 @@ const DOC_TEMPLATES: DocTemplate[] = [
 function CreatePoolInner({ embedded }: { embedded: boolean }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { ready, authenticated } = useEmbeddedWallet();
+  const { ready, authenticated, address } = useEmbeddedWallet();
+  // The sponsor's name as players will read it on the run.
+  const { displayName } = useDisplayNames(address !== null ? [address] : []);
   const { status, busy, reset, runUsdcDeposit, gasless } = useUsdcDeposit();
 
   // The proof floor (highest-trust modality required) and whether the pool ALSO
@@ -330,16 +335,45 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
   const previewGoalSpec = withProofPolicy(goalSpec.trim(), { floor, accepted: previewAccepted });
   const recordsMisses = missRuleWouldApply({ bountyModel: 2, goalSpec: previewGoalSpec });
 
+  // Each model is a money flow (docs/MONEY-FLOWS.md): models 0 and 1 are a
+  // sponsored run, model 2 a group run. The chips and the selected model's
+  // terms show here, before any USDC is approved, in the numbers typed so far.
+  const moneyOf = (model: number): RunMoney =>
+    runMoneyOf({
+      pool: { bountyModel: model, initiative: "" },
+      // Worded as players will read it on the run: signed in, by your name.
+      flow: {
+        players: 0,
+        creatorStaked: null,
+        creatorName: address !== null ? displayName(address) : "you",
+        viewerIsCreator: address === null,
+      },
+      numbers: {
+        entryFee: entryFeeParsed ?? 0n,
+        players: 0,
+        pot: fundingParsed,
+        // Nobody is in yet, so no miss is shared and no fee can apply.
+        feeBps: 0,
+        recordable: model === 2 && recordsMisses,
+        includeJoiner: true,
+        confirmBy: null,
+      },
+      // The deposit typed here is the sponsor's own money, so a sponsored
+      // run's line can say "put up" (on the live run only the pot is known).
+      reward: model === 2 ? null : fundingParsed,
+    });
+  const selectedMoney = entryFeeParsed !== null && entryFeeParsed > 0n ? moneyOf(bountyModel) : null;
+
   const payoutOptions: { id: number; title: string; body: string }[] = [
     {
       id: 0,
       title: "Fixed bounty per player who hits",
-      body: "Each verified player who hits receives the same fixed payout, a multiple of the entry fee.",
+      body: "Each player who hits gets their stake times a multiplier, paid from your pot. A short pot scales every payout down, so a hit can pay less than the stake. A miss gets the stake back.",
     },
     {
       id: 1,
       title: "Split the pot pro-rata",
-      body: "The whole pot is shared across the players who hit, in proportion to their results.",
+      body: "The whole pot is shared across the players who hit, weighted by result, so a share can be less than the stake. A miss gets the stake back.",
     },
     {
       id: 2,
@@ -500,8 +534,9 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
                 </span>
               </div>
               <p className={FIELD_HINT}>
-                What each player stakes to join. It comes back to them when they hit the
-                goal.
+                {bountyModel === 2
+                  ? "What each player stakes to join. It comes back to them when they hit the goal."
+                  : "What each player stakes to join. A miss gets it back; a hit pays by the model below, which can be less than the stake."}
               </p>
               {bountyModel === 2 && entryFeeParsed !== null && entryFeeParsed > 0n ? (
                 <div className="mt-2">
@@ -565,6 +600,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
             <div className="clear-left [&>*+*]:mt-2.5">
               {payoutOptions.map((opt) => {
                 const selected = bountyModel === opt.id;
+                const optMoney = moneyOf(opt.id);
                 return (
                   <label
                     key={opt.id}
@@ -580,14 +616,31 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
                     <span className="mt-0.5">
                       <OptionMark selected={selected} />
                     </span>
-                    <span>
+                    <span className="min-w-0">
                       <span className="block text-[0.9375rem] font-semibold leading-tight">{opt.title}</span>
-                      <span className="mt-1 block text-[0.8125rem] leading-[1.45] text-haze">{opt.body}</span>
+                      <MoneyChips
+                        kind={optMoney.kind.chip}
+                        miss={optMoney.miss}
+                        inline
+                        className="mt-2"
+                      />
+                      <span className="mt-2 block text-[0.8125rem] leading-[1.45] text-haze">{opt.body}</span>
                     </span>
                   </label>
                 );
               })}
             </div>
+            {selectedMoney !== null && selectedMoney.copy !== null ? (
+              <div
+                aria-live="polite"
+                className="mt-4 rounded-control bg-surface-raised p-4 shadow-[inset_0_0_0_1px_var(--border)]"
+              >
+                <p className="m-0 mb-2.5 text-[0.8125rem] font-semibold text-haze">What players read before they stake</p>
+                <MoneyTermsList copy={selectedMoney.copy} id="create-pool-terms" />
+              </div>
+            ) : (
+              <p className={FIELD_HINT}>Set an entry fee above zero to see the terms players get.</p>
+            )}
           </fieldset>
 
           <div className="[&>*+*]:mt-3 border-t border-edge pt-5">

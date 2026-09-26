@@ -47,16 +47,32 @@ describe("commitment copy", () => {
     expect(feeLine(500)).toBe("GoHealthMe keeps 5% of missed stakes, never any of a stake that hit.");
   });
 
-  it("the run board reminder states all three outcomes", () => {
-    expect(commitmentReminder(true)).toBe(
+  it("the run board reminder states all three outcomes once two or more are staked", () => {
+    expect(commitmentReminder({ recordable: true, players: 2 })).toBe(
       "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot. Miss it: your stake goes to the players who hit. Nobody hits: everyone gets their stake back.",
     );
   });
 
-  it("a run that cannot record a miss never promises a missed stake", () => {
-    expect(commitmentReminder(false)).toBe(
-      "Hit it: your stake back plus an equal share of any sponsor pot. Miss it: this run cannot record a miss, so your stake comes back when it settles. Nobody hits: everyone gets their stake back.",
+  it("the reminder follows the miss chip: alone in the run, a miss comes back", () => {
+    // The player reading is already in, so `players` counts them. With one
+    // staker a miss means nobody hit, and every stake comes back.
+    expect(commitmentReminder({ recordable: true, players: 1 })).toBe(
+      "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot. Miss it: your stake comes back while you are the only one in; once others stake, it goes to whoever hits, or comes back if nobody does. Nobody hits: everyone gets their stake back.",
     );
+  });
+
+  it("the reminder never promises a forfeit on a count it has not read", () => {
+    const line = commitmentReminder({ recordable: true, players: null });
+    expect(line).toContain("Miss it: if anyone else hits, your stake goes to them; if nobody hits, it comes back.");
+    expect(line).not.toContain("goes to the players who hit");
+  });
+
+  it("a run that cannot record a miss never promises a missed stake, however many are in", () => {
+    for (const players of [1, 2, 6, null]) {
+      expect(commitmentReminder({ recordable: false, players })).toBe(
+        "Hit it: your stake back plus an equal share of any sponsor pot. Miss it: this run cannot record a miss, so your stake comes back when it settles. Nobody hits: everyone gets their stake back.",
+      );
+    }
     expect(commitmentFacts(false).miss).not.toContain("players who hit");
   });
 

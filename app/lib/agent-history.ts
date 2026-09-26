@@ -50,7 +50,8 @@ export function missStakeLine(
     case "cancelled":
       return `Missed, but the creator cancelled the run, so ${stake} can be claimed back.`;
     default:
-      return `Missed. At settle ${stake} goes to the players who hit; it comes back if nobody hits or the run is cancelled.`;
+      // Conditional until settle (docs/MONEY-FLOWS.md section 3, History).
+      return `Missed. At settle ${stake} goes to who hits, or comes back if nobody does. A cancel before settle gives it back too.`;
   }
 }
 

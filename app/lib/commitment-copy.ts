@@ -88,3 +88,17 @@ export function challengeStakeCopy(): string {
     "record a miss: miss it and your stake comes back at settle."
   );
 }
+
+/**
+ * The miss chip (docs/MONEY-FLOWS.md section 3): what a miss does on this run
+ * right now. A stake moves only when the run can record a miss (`recordable`,
+ * missRulePool(pool).ok) AND someone else is staked to hit: with one staker a
+ * miss means nobody hit, and HealthPoolsV3 refunds every stake. `players`
+ * counts the stakers the reader is asking about, a joiner included when the
+ * chip sits before their stake.
+ */
+export type MissChip = "Miss: stake back" | "Miss: goes to who hits";
+
+export function missConsequence(input: { players: number; recordable: boolean }): MissChip {
+  return input.recordable && input.players >= 2 ? "Miss: goes to who hits" : "Miss: stake back";
+}

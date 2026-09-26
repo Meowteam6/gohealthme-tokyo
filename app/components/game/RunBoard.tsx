@@ -266,7 +266,12 @@ export default function RunBoard({
         </StatRow>
       </div>
       {selfStaked && !pool.settled && !pool.cancelled ? (
-        <p className="m-0 mt-3 text-sm leading-[1.45] text-muted">{commitmentReminder(recordsMisses)}</p>
+        <p className="m-0 mt-3 text-sm leading-[1.45] text-muted">
+          {commitmentReminder({
+            recordable: recordsMisses,
+            players: players.data !== undefined ? playerList.length : null,
+          })}
+        </p>
       ) : null}
 
       <section aria-label="Who is in" className="mt-4 border-t border-edge pt-3.5">

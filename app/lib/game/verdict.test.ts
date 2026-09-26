@@ -463,8 +463,8 @@ describe("verdictCopy", () => {
   it("says a miss plainly: what it costs and where the stake goes, never a lost bet", () => {
     const pending = verdictCopy({ kind: "missed", outcome: "pending", stakeUsd: "1.00" });
     expect(pending?.headline).toBe("Missed");
-    expect(pending?.body).toContain("Your 1.00 stake goes to the players who hit");
-    expect(pending?.body).toContain("If nobody hit, every stake comes back");
+    expect(pending?.body).toContain("At settle your 1.00 stake goes to who hits, or comes back if nobody does.");
+    expect(pending?.body).toContain("cancels before it settles gives every stake back");
     const forfeited = verdictCopy({ kind: "missed", outcome: "forfeited", stakeUsd: "1.00" });
     expect(forfeited?.body).toContain("Your 1.00 stake went to the players who hit");
     const refunded = verdictCopy({ kind: "missed", outcome: "refunded", stakeUsd: "1.00" });

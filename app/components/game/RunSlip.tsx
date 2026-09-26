@@ -5,6 +5,9 @@
 // A lock shows on the card with its reason and its fix, before any stake. The
 // card head links to the run page; the fix and the challenge link's entry
 // control sit outside that link so the two are never nested.
+//
+// Every open row carries the two money chips (what kind of run, what a miss
+// does) and the flow's line before anyone opens it (docs/MONEY-FLOWS.md).
 
 import type { ReactNode } from "react";
 import type { LobbyRow } from "@/lib/game/lobby";
@@ -12,8 +15,11 @@ import type { Fit } from "@/lib/game/wearable-fit";
 import { runKind, runName } from "@/lib/game/landing";
 import { closedRunTag } from "@/lib/game/run-end";
 import LockPanel from "@/components/game/LockPanel";
+import { MoneyChips, MoneyLine } from "@/components/game/MoneyTerms";
 import RunRow, { FitLine } from "@/components/game/RunRow";
 import { Skeleton } from "@/components/ui";
+import { useRunMoney } from "@/lib/game/useRunMoney";
+import { useEmbeddedWallet } from "@/lib/wallet";
 
 /** The row's last line for its slot, or undefined when the footer says it. */
 function slotLine(row: LobbyRow, visitorFit: Fit | null): ReactNode | undefined {
@@ -84,6 +90,25 @@ export default function RunSlip({
 }) {
   const { pool, slot } = row;
   const lock = slot.kind === "locked" ? slot.lock : null;
+  const { address } = useEmbeddedWallet();
+  // The chips and the line only while money can still go in. The highlighted
+  // challenge row sits under the challenge's own terms, so it shows the chips
+  // alone.
+  const money = useRunMoney({
+    pool,
+    players,
+    includeJoiner: slot.kind !== "in-run",
+    viewer: address,
+    feeBps: null,
+  });
+  const open = slot.kind !== "closed" && slot.kind !== "cannot-pay";
+  const moneyBlock = open && money !== null ? (
+    <div className="mt-2.5 [&>*+*]:mt-2">
+      <MoneyChips kind={money.kind?.chip ?? null} miss={money.miss} />
+      {!row.highlighted && money.copy !== null ? <MoneyLine copy={money.copy} /> : null}
+    </div>
+  ) : null;
+  const fitLine = slotLine(row, visitorFit);
   const quiet =
     lock !== null && (lock.kind !== "sign-in" || (visitorFit !== null && !visitorFit.ok));
 
@@ -119,7 +144,14 @@ export default function RunSlip({
       eyebrow={row.highlighted ? "You were challenged into this run" : undefined}
       status={slot.kind === "closed" ? closedRunTag(row.phase) : undefined}
       tone={row.highlighted ? "highlight" : quiet ? "locked" : "default"}
-      fit={slotLine(row, visitorFit)}
+      fit={
+        moneyBlock !== null || fitLine !== undefined ? (
+          <>
+            {moneyBlock}
+            {fitLine}
+          </>
+        ) : undefined
+      }
       footer={footer}
       headingLevel="h3"
     />
