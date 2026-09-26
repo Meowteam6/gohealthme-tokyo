@@ -1,17 +1,20 @@
 "use client";
 
-// The Verdict. SPOTTER checks, then asks the player to confirm it is them
-// (World ID for Agents, the boss moment) before any USDC moves, the payout is
-// screened (one line), and the run ends on a real screen: won with the claim
-// tap folded in, run failed and ask again, not there yet, run lost, stopped
-// for a reason that is not the player's, or cancelled with the stake back.
+// The Verdict (docs/DESIGN.md, "Verdict card"). After the run it takes the
+// stake card's place: SPOTTER read the wearable, asks the player to confirm it
+// is them (World ID for Agents) before any USDC moves, the payout is screened,
+// and the run ends on a real screen: paid on a paper receipt, not confirmed
+// with "Ask again", missed, nobody hit, or stopped for a reason that is not
+// the player's. SPOTTER's pose lives in the page hero, except on the paid
+// receipt, where he stands on the paper instead.
 //
 // The mapping from the ledger, the chain and the approval status to the screen
 // is lib/game/verdict.ts. Nothing here decides money; it shows what the server
-// already recorded and mounts the other lanes' components through their
-// contracts (docs/LANES.md).
+// already recorded, with every figure from lib/commitment.ts or the settle
+// record, and mounts the other lanes' components through their contracts
+// (docs/LANES.md).
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import HumanApprovalCard, { type ApprovalOutcome } from "@/components/world/HumanApprovalCard";
 import PayoutScreening from "@/components/intercepta/PayoutScreening";
@@ -19,58 +22,21 @@ import AgentReceipt from "@/components/AgentReceipt";
 import PayoutMoment from "@/components/PayoutMoment";
 import ClaimPayout from "@/components/ClaimPayout";
 import RefundClaim from "@/components/RefundClaim";
-import Spotter from "@/components/spotter/Spotter";
-import { Stamp } from "@/components/ui";
-import {
-  poseFor,
-  type SpotterPose,
-  type SpotterScreenState,
-  type SpotterSize,
-} from "@/lib/spotter-poses";
+import ChallengeFriend from "@/components/run/ChallengeFriend";
+import { Glyph } from "@/components/run/glyphs";
+import { ButtonLink, Card, Fine } from "@/components/ui";
 import { toUsd2, type LedgerEntry, type RunStatus } from "@/lib/agent-receipt";
-import { claimStepIndex, claimStepOf, type ClaimStep } from "@/lib/claim-rail";
-import { fetchGoalId, type PoolInfo } from "@/lib/contract";
+import { fetchGoalId, formatUsdc, readOwed, type PoolInfo } from "@/lib/contract";
 import { parseScreening, type ScreeningStatus } from "@/lib/game/lanes";
 import { useLaneProbe } from "@/lib/game/useLaneProbe";
-import { commitmentLostCopy } from "@/lib/game/commitment-copy";
+import { commitmentLostCopy, hitRange } from "@/lib/game/commitment-copy";
+import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
 import {
   verdictCopy,
   verdictScreenOf,
   type LocalApproval,
   type VerdictScreen,
 } from "@/lib/game/verdict";
-
-/** The run's path in five words, the claim rail's steps renamed for the game. */
-const PATH: { step: ClaimStep; label: string }[] = [
-  { step: "join", label: "Enter" },
-  { step: "prove", label: "Play" },
-  { step: "checking", label: "SPOTTER checks" },
-  { step: "verdict", label: "Verdict" },
-  { step: "paid", label: "Paid" },
-];
-
-function RunPath({ step }: { step: ClaimStep }) {
-  const active = claimStepIndex(step);
-  return (
-    <ol className="flex flex-wrap gap-x-3 gap-y-1 text-sm" aria-label="Where this run is">
-      {PATH.map((p, i) => (
-        <li
-          key={p.step}
-          aria-current={i === active ? "step" : undefined}
-          className={
-            i < active
-              ? "text-accent-deep"
-              : i === active
-                ? "font-bold text-foreground underline decoration-2 underline-offset-4"
-                : "text-muted"
-          }
-        >
-          {p.label}
-        </li>
-      ))}
-    </ol>
-  );
-}
 
 /** Which screens keep the proof surface (WearableCheck) mounted below: the
  *  ones where its polling loop or its retry button still matters. */
@@ -110,6 +76,16 @@ export interface VerdictStageProps {
    *  that read is loading or before settle. A commitment run's lost screen
    *  says where the stake went from it. */
   settleAchievers?: number | null;
+  /** How many players are in, for what a hit pays before settle. */
+  players?: number | null;
+  /** "7 hours": the goal as a noun phrase. */
+  goalShort?: string;
+  /** "WHOOP", or null when the paired wearable is not known. */
+  deviceName?: string | null;
+  /** The next open run of the same kind, for "Go again tonight". */
+  nextRunHref?: string;
+  /** The player's ENS name, printed on the receipt. */
+  paidTo?: string | null;
 }
 
 /** The approval and screening reads, plus the screen they produce. */
@@ -176,156 +152,280 @@ export function useVerdict(input: {
   };
 }
 
-/** How a Verdict screen is staged: SPOTTER's pose and size, the wash behind
- *  him, and the stamp. Only the paid screen gets gold and only a lost run gets
- *  dusk; a loss is never red (docs/DESIGN.md). Screens with an action below
- *  keep SPOTTER smaller so the action stays in reach on a phone. */
-export interface VerdictStaging {
-  spotter: { state: SpotterScreenState } | { pose: SpotterPose; size: SpotterSize };
-  wash: "plain" | "dusk";
-  stamp: string | null;
+/** When the settle landed, from the ledger's settle entry. */
+function settledAtOf(ledger: LedgerEntry[] | null): string | null {
+  if (ledger === null) return null;
+  for (let i = ledger.length - 1; i >= 0; i -= 1) {
+    const entry = ledger[i];
+    if (entry.kind === "settle" && entry.status === "settled") return entry.at;
+  }
+  return null;
 }
 
-export function verdictStagingOf(screen: VerdictScreen, pose: SpotterPose): VerdictStaging {
+export interface VerdictHead {
+  /** Small line over the headline, sentence case: who read what. */
+  eyebrow: string;
+  headline: string;
+  body: ReactNode;
+}
+
+/**
+ * What the card says for each screen. The run's own goal and wearable fill
+ * the words; the facts behind them are verdictCopy's and commitmentLostCopy's.
+ */
+export function verdictHeadOf(input: {
+  screen: VerdictScreen;
+  goalShort: string;
+  deviceName: string | null;
+  selfStaked: boolean;
+  entryFee: bigint;
+  settleAchievers: number | null;
+}): VerdictHead | null {
+  const { screen, goalShort } = input;
+  const base = verdictCopy(screen);
+  if (base === null) return null;
+  const read = `SPOTTER read your ${input.deviceName ?? "wearable"}`;
+  const hit = goalShort === "the goal" ? "You hit the goal." : `You hit ${goalShort}.`;
   switch (screen.kind) {
     case "checking":
-      return { spotter: { state: "checking" }, wash: "plain", stamp: null };
-    case "confirm-human":
-      return { spotter: { pose: "wallet", size: "md" }, wash: "plain", stamp: null };
-    case "confirmed":
-      return { spotter: { pose: "thumbsup", size: "md" }, wash: "plain", stamp: "Confirmed" };
-    case "approval-failed": {
-      const state: SpotterScreenState =
-        screen.outcome === "expired" ? "confirmation-expired" : "confirmation-declined";
       return {
-        spotter: { pose: poseFor(state).pose, size: screen.settled ? "lg" : "md" },
-        wash: "plain",
-        stamp: null,
+        eyebrow: `SPOTTER is reading your ${input.deviceName ?? "wearable"}`,
+        headline: "Checking the run.",
+        body: base.body,
+      };
+    case "confirm-human":
+      return {
+        eyebrow: read,
+        headline: hit,
+        body: "Confirm it's you and the contract pays you. Before any USDC moves, World ID checks that the person collecting is the person who played.",
+      };
+    case "confirmed":
+      return { eyebrow: "Confirmed with World ID", headline: "That's you. Recording it now.", body: base.body };
+    case "approval-failed":
+      return {
+        eyebrow: screen.settled ? "Not confirmed" : "Not confirmed yet",
+        headline: "Nothing was paid.",
+        body: screen.settled
+          ? base.body
+          : screen.outcome === "expired"
+            ? "The World ID request expired before you answered. You hit the goal, so ask again before the run settles."
+            : screen.outcome === "declined"
+              ? "You said not now, so nothing moved. You hit the goal, so ask again before the run settles if that was a slip."
+              : base.body,
+      };
+    case "banked":
+      return {
+        eyebrow: read,
+        headline: screen.selfReported ? "Logged on your word." : `${hit} Banked.`,
+        body: base.body,
+      };
+    case "won":
+      return { eyebrow: "Credited to you on chain", headline: `${hit} Paid.`, body: null };
+    case "not-yet":
+      return { eyebrow: read, headline: "Not there yet.", body: base.body };
+    case "lost": {
+      if (!input.selfStaked) {
+        return { eyebrow: read, headline: `${goalShort === "the goal" ? "The goal" : goalShort} not reached.`, body: base.body };
+      }
+      const lost = commitmentLostCopy({
+        entryFee: input.entryFee,
+        stakeBack: screen.stakeBack,
+        achievers: input.settleAchievers,
+      });
+      return {
+        eyebrow: read,
+        headline:
+          lost.headline === "Nobody hit it"
+            ? "Nobody hit it."
+            : goalShort === "the goal"
+              ? "You missed the goal."
+              : `You missed ${goalShort}.`,
+        body: lost.body,
       };
     }
-    case "lost":
-      return { spotter: { state: "verdict-not-met" }, wash: "dusk", stamp: "Not met" };
-    case "won":
-      // PayoutMoment stages itself: payday, the coin, the gold wash.
-      return { spotter: { state: "verdict-paid" }, wash: "plain", stamp: "Confirmed" };
-    default:
-      return { spotter: { pose, size: "md" }, wash: "plain", stamp: null };
+    case "settled-final":
+      return { eyebrow: "Run settled", headline: "Every result is final.", body: base.body };
+    case "bad-read":
+      return {
+        eyebrow: `SPOTTER tried your ${input.deviceName ?? "wearable"}`,
+        headline: "I could not get a clean read.",
+        body: base.body,
+      };
+    case "stopped":
+      return { eyebrow: "The check stopped", headline: `${base.headline}.`, body: base.body };
+    case "cancelled":
+      return { eyebrow: "Run called off", headline: screen.refunded ? "Your stake is back." : "Take your stake back.", body: base.body };
+    case "none":
+      return null;
   }
 }
 
-/** Dusk: a lost run. Light enough that ink and muted text keep AA on it. */
-const DUSK_WASH =
-  "linear-gradient(180deg, color-mix(in srgb, var(--dusk) 12%, var(--surface)) 0%, color-mix(in srgb, var(--dusk) 28%, var(--surface)) 100%)";
+/**
+ * The verdict card drawn from props only: who read what, the headline, the
+ * body, what a hit pays, and the slots the live card fills (the receipt, the
+ * World ID ask, the screening line, the claim, the next action, SPOTTER's
+ * receipt). VerdictStage feeds it the live run; the state gallery feeds it
+ * fixtures.
+ */
+export function VerdictView({
+  kind,
+  head,
+  money = null,
+  receipt,
+  approval,
+  screening,
+  claim,
+  actions,
+  log,
+}: {
+  kind: VerdictScreen["kind"];
+  head: VerdictHead;
+  /** What a hit pays before settle: the stake back, and the total. */
+  money?: { stake: string; get: string; range: boolean } | null;
+  receipt?: ReactNode;
+  approval?: ReactNode;
+  screening?: ReactNode;
+  claim?: ReactNode;
+  actions?: ReactNode;
+  log?: ReactNode;
+}) {
+  return (
+    <Card as="section" aria-labelledby="verdict-headline" data-verdict={kind}>
+      <div aria-live="polite">
+        <p className="m-0 text-sm font-semibold text-haze">{head.eyebrow}</p>
+        <h2
+          id="verdict-headline"
+          className={`type-heading m-0 mt-1.5 text-[1.875rem] leading-[1.1] text-balance ${
+            kind === "won" ? "max-w-[calc(100%-112px)]" : ""
+          }`}
+        >
+          {head.headline}
+        </h2>
+        {head.body !== null ? (
+          <p className="num m-0 mt-2.5 text-base leading-[1.5] text-muted [&_b]:font-semibold [&_b]:text-foreground">
+            {head.body}
+          </p>
+        ) : null}
+      </div>
+
+      {money !== null ? (
+        <dl className="num m-0 mt-3.5 grid gap-1 border-t border-edge pt-3 text-[0.9375rem]">
+          <div className="flex justify-between gap-3">
+            <dt className="text-haze">Your stake back</dt>
+            <dd className="m-0 font-semibold">{money.stake}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-haze">{money.range ? "You get, by how many hit" : "You get"}</dt>
+            <dd className="m-0 text-xl font-bold text-gold">{money.get}</dd>
+          </div>
+        </dl>
+      ) : null}
+
+      {receipt}
+      {approval !== undefined && approval !== null ? <div className="mt-4">{approval}</div> : null}
+      {screening !== undefined && screening !== null ? (
+        <div className="mt-3 flex items-start gap-2 text-haze [&_p]:text-[0.8125rem]">
+          <Glyph name="shield" size={15} className="mt-0.5" />
+          {screening}
+        </div>
+      ) : null}
+      {claim}
+      {actions !== undefined && actions !== null ? <div className="mt-4 grid gap-2">{actions}</div> : null}
+      {log !== undefined && log !== null ? (
+        <details className="group mt-4 border-t border-edge pt-1">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-muted hover:text-foreground [&::-webkit-details-marker]:hidden">
+            See SPOTTER&apos;s receipt for this run
+            <Glyph name="chev" className="text-haze transition-transform duration-[120ms] group-open:rotate-90" />
+          </summary>
+          <div className="pt-2">{log}</div>
+        </details>
+      ) : null}
+    </Card>
+  );
+}
 
 export default function VerdictStage({
   pool,
   address,
   joined,
   refunded,
-  runStatus,
   ledger,
-  hasClaim,
   screen,
   goalId,
   screening,
   onApproval,
   settleAchievers = null,
+  players = null,
+  goalShort = "the goal",
+  deviceName = null,
+  nextRunHref = "/pools",
+  paidTo = null,
 }: VerdictStageProps) {
-  const baseCopy = verdictCopy(screen);
-  if (baseCopy === null) return null;
-
-  const step = claimStepOf(joined, hasClaim, runStatus);
   const selfStaked = pool.bountyModel === 2;
-  // A commitment run's miss says where the stake went: to the players who
-  // hit, or back to everyone when nobody hit (HealthPoolsV3 bountyModel 2).
-  const copy =
-    selfStaked && screen.kind === "lost"
-      ? {
-          ...baseCopy,
-          ...commitmentLostCopy({
-            entryFee: pool.entryFee,
-            stakeBack: screen.stakeBack,
-            achievers: settleAchievers,
-          }),
-        }
-      : baseCopy;
-  const showScreening = screen.kind === "banked" || screen.kind === "won";
-  const staging = verdictStagingOf(screen, copy.pose);
-  const line =
-    selfStaked && screen.kind === "lost" && !screen.stakeBack && settleAchievers === 0
-      ? "Nobody made it. Every stake goes home."
-      : spotterLineFor(screen);
+  const fee = useCommitmentFee(selfStaked && screen.kind === "confirm-human");
+  const owedQuery = useQuery({
+    queryKey: ["owed", address],
+    queryFn: () => readOwed(address),
+    staleTime: 15_000,
+    enabled: screen.kind === "won" || screen.kind === "lost",
+  });
+  const head = verdictHeadOf({
+    screen,
+    goalShort,
+    deviceName,
+    selfStaked,
+    entryFee: pool.entryFee,
+    settleAchievers,
+  });
+  if (head === null) return null;
+
+  const stake = formatUsdc(pool.entryFee);
+  const claimWaiting = (owedQuery.data ?? 0n) > 0n;
+
+  // What a hit pays before settle: every player hitting at the low end, only
+  // you at the high end (lib/commitment.ts).
+  const range =
+    screen.kind === "confirm-human" && selfStaked && players !== null && !pool.settled
+      ? hitRange({ entryFee: pool.entryFee, players, balance: pool.balance, feeBps: fee.bps }, false)
+      : null;
+  const paid = screen.kind === "won" ? toUsd2(screen.paidUsd) : null;
 
   return (
-    <section
-      aria-labelledby="verdict-headline"
-      className="overflow-hidden rounded-3xl border-2 border-foreground bg-surface"
-      style={staging.wash === "dusk" ? { background: DUSK_WASH } : undefined}
-    >
-      <div className="space-y-4 p-4 sm:p-6">
-        <RunPath
-          step={
-            screen.kind === "confirm-human" ||
-            screen.kind === "approval-failed" ||
-            screen.kind === "confirmed"
-              ? "verdict"
-              : step
-          }
-        />
-
-        {screen.kind === "won" ? (
-          <div aria-live="polite" className="space-y-4">
-            <PayoutMoment
-              bleed
-              paidUsd={toUsd2(screen.paidUsd)}
-              txHash={screen.txHash}
-              selfReported={screen.selfReported}
-              selfStaked={selfStaked}
-              entryFee={pool.entryFee}
-              headline={copy.headline}
-              headlineId="verdict-headline"
-            />
-            {/* The claim tap, folded into the win: the chain credits the win
-                and this pulls it into the wallet. It renders only while money
-                is owed and says "in your wallet" only after Withdrawn fires.
-                Quiet here: the payout above is this screen's one big number. */}
-            <ClaimPayout address={address} quiet />
-          </div>
-        ) : (
-          <div className="flex flex-col items-center text-center">
-            <Spotter
-              {...staging.spotter}
-              line={line === "" ? undefined : line}
-              live
-              className={staging.wash === "dusk" ? "[&_img]:grayscale-[25%]" : ""}
-            />
-            <div aria-live="polite" className="mt-3 w-full">
-              {staging.stamp !== null ? (
-                <Stamp tone="accent">{staging.stamp}</Stamp>
-              ) : null}
-              <h2
-                id="verdict-headline"
-                className="ghm-stamp mt-3 font-display text-[clamp(2rem,9vw,3.25rem)] font-extrabold leading-display tracking-display text-balance"
-              >
-                {copy.headline}
-              </h2>
-              <p
-                className={`mx-auto mt-3 max-w-prose text-base text-pretty ${
-                  staging.wash === "dusk" ? "text-foreground" : "text-foreground/85"
-                }`}
-              >
-                {copy.body}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* One card, one position, for the ask and its three refusals: it owns
-            the countdown, the fresh verification, and "Ask again" (none after
-            the run settled), so it must not remount between those screens. */}
-        {/* Not mounted once the pool settled: a settle is one-shot, so there
-            is nothing left to ask and the card must not offer "ask again". */}
-        {(screen.kind === "confirm-human" ||
+    <VerdictView
+      kind={screen.kind}
+      head={head}
+      money={
+        range !== null
+          ? {
+              stake,
+              get:
+                range.low === range.high
+                  ? formatUsdc(range.low)
+                  : `${formatUsdc(range.low)} to ${formatUsdc(range.high)}`,
+              range: range.low !== range.high,
+            }
+          : null
+      }
+      receipt={
+        screen.kind === "won" && paid !== null ? (
+          <PayoutMoment
+            paidUsd={paid}
+            txHash={screen.txHash}
+            selfReported={screen.selfReported}
+            selfStaked={selfStaked}
+            entryFee={pool.entryFee}
+            payee={paidTo}
+            paidAt={settledAtOf(ledger)}
+            tuck
+          />
+        ) : null
+      }
+      // One card, one position, for the ask and its three refusals: it owns
+      // the countdown, the fresh verification, and "Ask again" (none after
+      // the run settled), so it must not remount between those screens. Not
+      // mounted once the pool settled: a settle is one-shot.
+      approval={
+        (screen.kind === "confirm-human" ||
           (screen.kind === "approval-failed" && !screen.settled)) &&
         goalId !== null ? (
           <HumanApprovalCard
@@ -334,80 +434,55 @@ export default function VerdictStage({
             address={address}
             onResult={onApproval}
           />
-        ) : null}
-
-        {showScreening ? (
-          <PayoutScreening
-            status={screening.status}
-            reason={screening.reason ?? undefined}
-          />
-        ) : null}
-
-        {screen.kind === "cancelled" ? (
-          <div className="space-y-3">
+        ) : null
+      }
+      screening={
+        screen.kind === "banked" || screen.kind === "won" ? (
+          <PayoutScreening status={screening.status} reason={screening.reason ?? undefined} />
+        ) : null
+      }
+      claim={
+        screen.kind === "cancelled" ? (
+          <div className="mt-4 grid gap-3">
             {!refunded ? (
               <RefundClaim poolId={pool.id} entryFee={pool.entryFee} address={address} />
             ) : null}
-            <ClaimPayout address={address} />
+            <ClaimPayout address={address} quiet />
           </div>
-        ) : null}
-
-        {/* After a settle, a refund or a share sits in owed[] until the player
-            withdraws. The card renders only when the chain says money is owed,
-            and says so when it cannot read that. */}
-        {screen.kind === "settled-final" ||
-        screen.kind === "lost" ||
-        (screen.kind === "approval-failed" && screen.settled) ? (
-          <ClaimPayout address={address} />
-        ) : null}
-
-        {ledger !== null && ledger.length > 0 && !proofSurfaceNeeded(screen) ? (
-          <details className="rounded-2xl border border-edge bg-surface">
-            <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-bold">
-              See SPOTTER&apos;s receipt for this run
-            </summary>
-            <div className="p-3">
-              <AgentReceipt ledger={ledger} evidenceKind="wearable" />
-            </div>
-          </details>
-        ) : null}
-      </div>
-    </section>
+        ) : // After a settle, a refund, a share or a win sits in owed[] until
+        // the player withdraws. The claim renders only when the chain says
+        // money is owed, and says so when it cannot read that.
+        screen.kind === "won" ||
+          screen.kind === "settled-final" ||
+          screen.kind === "lost" ||
+          (screen.kind === "approval-failed" && screen.settled) ? (
+          <ClaimPayout address={address} quiet className="mt-4" />
+        ) : null
+      }
+      actions={
+        screen.kind === "won" || screen.kind === "lost" ? (
+          <>
+            <ButtonLink href={nextRunHref} variant={claimWaiting ? "secondary" : "primary"} block>
+              Go again tonight
+            </ButtonLink>
+            {screen.kind === "won" && paid !== null && joined ? (
+              <ChallengeFriend
+                path={`/pools/${pool.id.toString()}`}
+                text={`SPOTTER just paid me ${paid} test USDC for hitting ${goalShort} on GoHealthMe. Put money on yourself.`}
+                label={`Share my ${paid}`}
+                variant={claimWaiting ? "tertiary" : "secondary"}
+              />
+            ) : (
+              <Fine>Tonight counts on its own. One night never follows you into the next run.</Fine>
+            )}
+          </>
+        ) : null
+      }
+      log={
+        ledger !== null && ledger.length > 0 && !proofSurfaceNeeded(screen) ? (
+          <AgentReceipt ledger={ledger} evidenceKind="wearable" />
+        ) : null
+      }
+    />
   );
-}
-
-// SPOTTER's one line per screen: deadpan, first person, aimed at the night or
-// the situation, never at the player. The facts live in the headline and body.
-function spotterLineFor(screen: VerdictScreen): string {
-  switch (screen.kind) {
-    case "checking":
-      return "Reading your nights. I buy the proof, I make the call.";
-    case "confirm-human":
-      return "Numbers check out. Show me it is really you before I move a cent.";
-    case "confirmed":
-      return "That is you. Writing it down, then the money moves.";
-    case "approval-failed":
-      return screen.settled
-        ? "No OK, no payout. The settle sent your stake home."
-        : screen.outcome === "expired"
-          ? "The clock ran out on me. Nothing moved."
-          : "Nothing moved. Your result waits here for you.";
-    case "banked":
-      return "Banked. I pay when the clock runs out.";
-    case "not-yet":
-      return "Not yet. Tonight still counts.";
-    case "lost":
-      return "The night did not cooperate. I do not round up.";
-    case "settled-final":
-      return "Books are closed on this one. Whatever is yours is below.";
-    case "bad-read":
-      return "Bad read on my side. Sync and send me back in.";
-    case "stopped":
-      return "This one stopped on my side, not yours.";
-    case "cancelled":
-      return "Run called off. Your stake goes back to you.";
-    case "won":
-    case "none":
-      return "";
-  }
 }

@@ -309,10 +309,10 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       data-lane="world-idkit"
       data-phase={phase.kind}
       data-mode={mode}
-      className="rounded-3xl border border-edge bg-surface p-5 sm:p-6"
+      className="rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] px-4 py-[18px] shadow-card min-[960px]:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-2xl font-extrabold leading-display tracking-display text-balance">Prove you&apos;re one human.</h2>
+        <h2 className="type-heading m-0 text-[1.75rem] text-balance">Prove you&apos;re one human.</h2>
         {mode === "mock" ? (
           <Badge tone="warning">Event mode: mocked proofs</Badge>
         ) : mode === "live" && config?.mode === "live" ? (
@@ -344,7 +344,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       ) : null}
 
       {phase.kind === "off" ? (
-        <div className="mt-4 rounded-2xl border border-edge bg-surface-raised p-4">
+        <div className="mt-4 rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
           <p className="text-sm font-semibold">
             Prove-human is not enabled on this deployment.
           </p>
@@ -357,12 +357,12 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       {phase.kind === "verified" ? (
         <div
           role="status"
-          className="mt-4 rounded-2xl border border-edge bg-surface-raised p-4"
+          className="mt-4 rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]"
         >
-          <p className="text-base font-semibold text-accent-deep">
+          <p className="text-base font-semibold text-moonlight">
             Verified: one human.
           </p>
-          <p className="mt-1 text-sm text-foreground/80">
+          <p className="mt-1 text-sm text-muted">
             {phase.mode === "mock"
               ? "Recorded in event mode with a mocked proof. This is not a real World ID verification and would not count outside the hackathon build."
               : `World verified you${
@@ -444,7 +444,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
               onChange={(e) => setIdentity(e.target.value)}
               placeholder="e.g. andre"
               autoComplete="off"
-              className={`rounded-2xl border border-edge bg-background px-3 ${TAP_TARGET} justify-start font-normal`}
+              className={`rounded-control bg-surface-deep px-3.5 text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)] placeholder:text-haze ${TAP_TARGET} justify-start font-normal`}
             />
           </label>
           <Button type="submit" pop disabled={phase.kind !== "idle"}>

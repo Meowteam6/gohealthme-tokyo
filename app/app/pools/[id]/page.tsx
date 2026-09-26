@@ -47,7 +47,7 @@ export async function generateMetadata({
         : goal;
     return {
       title: trimmed,
-      description: `${trimmed}. A GoHealthMe health-goal pool on Base Sepolia testnet, play-money USDC.`,
+      description: `${trimmed}. A GoHealthMe run: put test USDC on yourself, your wearable proves it. Beta on Base Sepolia testnet, no real money.`,
       alternates: { canonical: `/pools/${poolId}` },
     };
   } catch {

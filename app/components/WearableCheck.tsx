@@ -67,7 +67,6 @@ import AgentReceipt from "@/components/AgentReceipt";
 import Countdown from "@/components/Countdown";
 import PayoutMoment from "@/components/PayoutMoment";
 import { Button, ErrorNote, Skeleton, TAP_TARGET, buttonClasses } from "@/components/ui";
-import Spotter from "@/components/spotter/Spotter";
 import SignInGate from "@/components/SignInGate";
 
 // Same cadence as the document flow, but wearable runs wait on provider data
@@ -509,15 +508,7 @@ function WearableCheckInner({
   if (status.kind === "starting") {
     return (
       <div className="space-y-3" aria-busy="true">
-        {verdictShown === true ? null : (
-          <Spotter
-            state="loading"
-            line="Reading the record. Give me a sec."
-            live
-            className="mx-auto"
-          />
-        )}
-        <h3 className="font-display text-xl font-bold tracking-display text-balance">Handing it to SPOTTER</h3>
+        <h3 className="text-[1.0625rem] font-semibold text-balance">Handing it to SPOTTER</h3>
         <p className="text-sm text-muted">
           SPOTTER is reading your synced wearable summary on its server and
           checking it against the goal. Your raw health data stays server-side
@@ -554,9 +545,9 @@ function WearableCheckInner({
   if (status.kind === "locked") {
     return (
       <div className="space-y-3">
-        <h3 className="font-display text-xl font-bold tracking-display text-balance">This claim is private</h3>
-        <div className="rounded-2xl border border-edge bg-surface-raised p-4">
-          <p className="text-sm text-foreground/80">{status.reason}</p>
+        <h3 className="text-[1.0625rem] font-semibold text-balance">This claim is private</h3>
+        <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
+          <p className="text-sm text-muted">{status.reason}</p>
         </div>
         {!authenticated || address === null ? (
           <SignInGate note="Sign in to see this claim.">
@@ -613,11 +604,11 @@ function WearableCheckInner({
         {/* The run keeps going without a signature; only the rows are held
          *  back. Saying so beats a receipt that silently stops printing. */}
         {status.lockedReason !== null ? (
-          <div className="rounded-2xl border border-edge bg-surface-raised p-4">
+          <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
             <p className="text-base font-semibold">
               The receipt is hidden, not stopped
             </p>
-            <p className="mt-1 text-sm text-foreground/80">
+            <p className="mt-1 text-sm text-muted">
               {status.lockedReason} SPOTTER keeps working either way.
             </p>
             <Button
@@ -638,12 +629,12 @@ function WearableCheckInner({
         ) : null}
 
         {!verdictShown && status.runStatus === "recorded" ? (
-          <div className="rounded-2xl border border-edge bg-surface-raised p-4">
+          <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
             <p className="text-base font-semibold">
               Verified and recorded on-chain.
             </p>
             {periodEndMs !== null ? (
-              <p className="mt-1 text-sm text-foreground/80">
+              <p className="mt-1 text-sm text-muted">
                 SPOTTER settles the payout when the pool period ends at{" "}
                 {formatLocalTime(periodEndMs)} (
                 <Countdown
@@ -654,7 +645,7 @@ function WearableCheckInner({
                 no human involved.
               </p>
             ) : (
-              <p className="mt-1 text-sm text-foreground/80">
+              <p className="mt-1 text-sm text-muted">
                 SPOTTER settles the payout the moment the pool period ends - no
                 human involved. Come back after the period closes and the payout
                 appears here.
@@ -665,11 +656,11 @@ function WearableCheckInner({
 
         {failureMode === "evidence" ? (
           <div className="space-y-3">
-            <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
-              <p className="text-base font-semibold text-warning">
+            <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border-strong)]">
+              <p className="text-base font-semibold text-foreground">
                 SPOTTER could not get a clean read
               </p>
-              <p className="mt-1 text-sm text-foreground/80">
+              <p className="mt-1 text-sm text-muted">
                 The data is the problem, not you, and a check costs you nothing.
                 Make sure your wearable is connected and has synced the period,
                 then run it back.
@@ -698,9 +689,9 @@ function WearableCheckInner({
 
         {failureMode === "goal-missed" && !poolClosed ? (
           <div className="space-y-3">
-            <div className="rounded-2xl border border-edge bg-surface-raised p-4">
+            <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
               <p className="text-base font-semibold">Not there yet.</p>
-              <p className="mt-1 text-sm text-foreground/80">
+              <p className="mt-1 text-sm text-muted">
                 The wearable data was read fine and the goal is not met so far.
                 Days inside the pool period still count if they sync before the
                 pool settles, so check again after your next sync.
@@ -717,9 +708,9 @@ function WearableCheckInner({
           </div>
         ) : null}
         {failureMode === "goal-missed" && poolClosed ? (
-          <div className="rounded-2xl border border-edge bg-surface-raised p-4">
+          <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
             <p className="text-base font-semibold">Not paid.</p>
-            <p className="mt-1 text-sm text-foreground/80">
+            <p className="mt-1 text-sm text-muted">
               The wearable data was read fine. It does not show the goal being
               met.
             </p>
@@ -727,11 +718,11 @@ function WearableCheckInner({
         ) : null}
 
         {!verdictShown && status.runStatus === "cap-exceeded" ? (
-          <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
-            <p className="text-base font-semibold text-warning">
+          <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border-strong)]">
+            <p className="text-base font-semibold text-foreground">
               SPOTTER hit its spending cap and stopped
             </p>
-            <p className="mt-1 text-sm text-foreground/80">
+            <p className="mt-1 text-sm text-muted">
               Every claim runs under a hard per-claim budget. This one reached
               it before a verdict landed, so no more money moves.
             </p>
@@ -740,11 +731,11 @@ function WearableCheckInner({
 
         {status.runStatus === "blocked" ? (
           <div className="space-y-3">
-            <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
-              <p className="text-base font-semibold text-warning">
+            <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border-strong)]">
+              <p className="text-base font-semibold text-foreground">
                 Join the pool first
               </p>
-              <p className="mt-1 text-sm text-foreground/80">
+              <p className="mt-1 text-sm text-muted">
                 This wallet is not a participant in the pool on-chain, so
                 nothing can be recorded for it. Join the pool, then run the
                 check again.
@@ -800,7 +791,7 @@ function WearableCheckInner({
   return (
     <div className="space-y-3">
       <WhoopReturnNote whoopConnected={connected} />
-      <h3 className="font-display text-xl font-bold tracking-display text-balance">Verify from your wearable</h3>
+      <h3 className="text-[1.0625rem] font-semibold text-balance">Verify from your wearable</h3>
       <p className="text-sm text-muted">
         {readableGoal === ""
           ? "SPOTTER reads your synced wearable summary and pays if the data shows the goal."
@@ -815,7 +806,7 @@ function WearableCheckInner({
        *  boundary and nothing but the pass/fail verdict and its confidence is
        *  written on-chain, but claiming a sealed enclave here would be a lie:
        *  the wearable summary transits the server. Say what is true. */}
-      <p className="rounded-2xl border border-edge bg-surface-raised p-3 text-xs text-muted">
+      <p className="rounded-control bg-fill-quiet p-3 shadow-[inset_0_0_0_1px_var(--border)] text-xs text-muted">
         Where your wearable data goes: SPOTTER reads your synced summary on its
         server to check the goal. That is the wearable path - not the sealed
         enclave the document path runs in. Your raw health data stays
@@ -846,12 +837,12 @@ function WearableCheckInner({
         // cannot help and the connect call itself 502s. Say what is wrong and
         // hand over the proof path that still works.
         <div className="space-y-3">
-          <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
-            <p className="text-base font-semibold text-warning">
+          <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border-strong)]">
+            <p className="text-base font-semibold text-foreground">
               Wearable verification is down right now
             </p>
-            <p className="mt-1 text-sm text-foreground/80">{providerDown}</p>
-            <p className="mt-2 text-sm text-foreground/80">
+            <p className="mt-1 text-sm text-muted">{providerDown}</p>
+            <p className="mt-2 text-sm text-muted">
               This is on us, not on your device. Connecting one would not change
               it, so SPOTTER is not going to send you round that loop.
             </p>
@@ -882,7 +873,7 @@ function WearableCheckInner({
         // connected" here would send someone to re-link a device that is
         // already linked.
         <div className="space-y-3">
-          <p className="rounded-2xl border border-edge bg-surface-raised p-3 text-sm text-foreground/80">
+          <p className="rounded-control bg-fill-quiet p-3 shadow-[inset_0_0_0_1px_var(--border)] text-sm text-muted">
             {providerAuth}
           </p>
           <Button
@@ -899,16 +890,16 @@ function WearableCheckInner({
         // read that cannot answer, and telling them to wait would be advice
         // that never comes true.
         <div className="space-y-3">
-          <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
-            <p className="text-base font-semibold text-warning">
+          <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border-strong)]">
+            <p className="text-base font-semibold text-foreground">
               Your device does not measure this goal
             </p>
-            <p className="mt-1 text-sm text-foreground/80">
+            <p className="mt-1 text-sm text-muted">
               It is syncing fine, it just does not report the number this pool
               is scored on. That is the hardware, not a delay, so SPOTTER is
               not going to run a check that cannot come back with anything.
             </p>
-            <p className="mt-2 text-sm text-foreground/80">
+            <p className="mt-2 text-sm text-muted">
               Connect a device that tracks it from your dashboard.
             </p>
           </div>
@@ -927,11 +918,11 @@ function WearableCheckInner({
         // would buy a read and return "0 days", which reads as a failure the
         // user did not earn. Every new user passes through this state.
         <div className="space-y-3">
-          <div className="rounded-2xl border border-edge bg-surface-raised p-4">
-            <p className="text-base font-semibold text-accent-deep">
+          <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
+            <p className="text-base font-semibold text-moonlight">
               Waiting on your first sync
             </p>
-            <p className="mt-1 text-sm text-foreground/80">
+            <p className="mt-1 text-sm text-muted">
               Your device is connected and has not sent anything for this goal
               yet. The first sync usually lands within a few minutes. SPOTTER
               will not check this until the data is here, so nothing is charged
@@ -958,7 +949,7 @@ function WearableCheckInner({
         </div>
       ) : !connected ? (
         <div className="space-y-3">
-          <p className="rounded-2xl border border-dashed border-edge bg-surface-raised p-3 text-sm text-foreground">
+          <p className="rounded-control bg-fill-quiet p-3 shadow-[inset_0_0_0_1px_var(--border)] text-sm text-foreground">
             No wearable connected yet - without one, SPOTTER has nothing to
             verify and will not pay. You can pick which device from the
             dashboard.
@@ -1077,7 +1068,7 @@ export default function WearableCheck({
 }) {
   if (!DYNAMIC_CONFIGURED) {
     return (
-      <p className="rounded-2xl border border-edge bg-surface-raised p-4 text-sm text-foreground/80">
+      <p className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)] text-sm text-muted">
         Sign-in is not switched on for this build, so SPOTTER has no wallet to
         check a wearable for.
       </p>
