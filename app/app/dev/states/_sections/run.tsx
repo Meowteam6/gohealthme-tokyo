@@ -245,7 +245,7 @@ function Page({
     name: "mika.gohealthme.eth",
     initial: "M",
     you: true,
-    status: "You",
+    status: "You, night to play",
     hit: false,
   };
   return (

@@ -296,7 +296,7 @@ export function VerdictView({
         <h2
           id="verdict-headline"
           className={`type-heading m-0 mt-1.5 text-[1.875rem] leading-[1.1] text-balance ${
-            kind === "won" ? "max-w-[calc(100%-100px)]" : ""
+            kind === "won" ? "max-w-[calc(100%-112px)]" : ""
           }`}
         >
           {head.headline}

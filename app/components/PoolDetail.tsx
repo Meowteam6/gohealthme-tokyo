@@ -246,11 +246,14 @@ function Roster({
   address,
   copy,
   action,
+  youPlaying,
 }: {
   poolId: bigint;
   address: string | null;
   copy?: (playerCount: number | null) => ReactNode;
   action?: ReactNode;
+  /** The viewer's own status while the run is still on, e.g. "You, night to play". */
+  youPlaying?: string;
 }) {
   const players = usePlayers(poolId);
   const list = players.data ?? [];
@@ -272,7 +275,7 @@ function Roster({
       initial: ens !== null ? ens.slice(0, 1).toUpperCase() : p.address.slice(2, 3).toUpperCase(),
       you,
       hit: p.hit,
-      status: you ? (p.hit ? "You, hit" : "You") : p.hit ? "Hit" : "",
+      status: you ? (p.hit ? "You, hit" : youPlaying ?? "You") : p.hit ? "Hit" : "",
     };
   });
   // The viewer's own row first: it is the one they came to find.
@@ -1329,6 +1332,7 @@ export default function PoolDetail({ id }: { id: string }) {
         <Roster
           poolId={pool.id}
           address={address}
+          youPlaying={live ? (sleepRun ? "You, night to play" : "You, day to play") : undefined}
           copy={rosterCopy}
           action={joined ? null : friendAction !== null ? (
             <ChallengeFriend path={`/pools/${pool.id.toString()}`} text={shareText} variant="secondary" />
