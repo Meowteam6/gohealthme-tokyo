@@ -62,16 +62,13 @@ describe("createCommitmentCopy (the create form)", () => {
 });
 
 describe("missConsequence (the miss chip)", () => {
-  it("reads 'goes to who hits' only on a run that can record a miss with 2 or more stakers", () => {
+  it("reads 'goes to who hits' on a run that can record a miss, at any count", () => {
+    // The chip sits at the moment of commitment: once you are in, anyone who
+    // joins turns a miss your wearable shows into a stake that goes to them.
+    // The solo case is said in the terms beside it, not by the chip.
     const recordable = missRulePool(miss, 1n).ok;
     expect(recordable).toBe(true);
-    expect(missConsequence({ players: 2, recordable })).toBe("Miss: goes to who hits");
-    expect(missConsequence({ players: 7, recordable })).toBe("Miss: goes to who hits");
-  });
-
-  it("reads 'stake back' with one staker: a lone miss means nobody hit, and every stake comes back", () => {
-    expect(missConsequence({ players: 1, recordable: true })).toBe("Miss: stake back");
-    expect(missConsequence({ players: 0, recordable: true })).toBe("Miss: stake back");
+    expect(missConsequence({ recordable })).toBe("Miss: goes to who hits");
   });
 
   it("reads 'stake back' on every run the miss rule does not cover, however many stake", () => {
@@ -83,7 +80,7 @@ describe("missConsequence (the miss chip)", () => {
     ]) {
       const recordable = missRulePool(pool, 6n).ok;
       expect(recordable).toBe(false);
-      expect(missConsequence({ players: 5, recordable })).toBe("Miss: stake back");
+      expect(missConsequence({ recordable })).toBe("Miss: stake back");
     }
   });
 });

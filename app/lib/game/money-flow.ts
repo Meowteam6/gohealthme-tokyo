@@ -11,11 +11,12 @@
 // Every figure comes from lib/commitment.ts (commitmentOutcome and
 // commitmentRange mirror HealthPoolsV3). Nothing here does its own payout math.
 //
-// The miss chip is the one fact a player must see before a stake: a miss goes
-// to the players who hit only on a run the miss rule covers (lib/miss-rule.ts)
-// with at least two stakers. Everything else gives the stake back. That rule
-// lives in lib/commitment-copy.ts (missConsequence), the one place every
-// surface reads it from. Voice: stake, challenge, pot; never bet, wager or odds.
+// The miss chip is the one fact a player must see before a stake: on a run
+// the miss rule covers (lib/miss-rule.ts) a miss goes to the players who hit,
+// at any count, since anyone can join after you; the terms say the solo case.
+// Everything else gives the stake back. That rule lives in
+// lib/commitment-copy.ts (missConsequence), the one place every surface reads
+// it from. Voice: stake, challenge, pot; never bet, wager or odds.
 
 import { commitmentOutcome, commitmentRange } from "@/lib/commitment";
 import { missConsequence, type MissChip } from "@/lib/commitment-copy";
@@ -91,7 +92,7 @@ export function flowKindOf(
 }
 
 /** Stakers once the reader is in: the count now, plus them when about to join.
- *  This is the `players` the miss chip (missConsequence) counts. */
+ *  The miss term counts these for its solo case. */
 export function stakersAfter(players: number, includeJoiner: boolean): number {
   return players + (includeJoiner ? 1 : 0);
 }
@@ -185,8 +186,8 @@ export function groupRunCopy(input: MoneyInput): MoneyCopy {
         text: !input.recordable
           ? `Miss: your ${stake} comes back. This run cannot record a miss.`
           : stakersAfter(input.players, input.includeJoiner) < 2
-            ? // The chip says "stake back" while one staker is in; anyone can
-              // still join, so the change that follows is said before the
+            ? // Alone, a miss comes back. The chip already warns that anyone
+              // can join and change that; the term says both before the
               // stake, with the case that undoes it (nobody hitting refunds
               // every recorded stake, HealthPoolsV3 H = 0).
               `Miss: your ${stake} comes back while you are the only one in; once others stake, a miss your wearable shows goes to whoever hits, or comes back if nobody does.`
@@ -410,10 +411,7 @@ export function runMoneyOf(input: {
 }): RunMoney {
   const kind = flowKindOf(input.pool, input.flow);
   const n = input.numbers;
-  const miss = missConsequence({
-    players: stakersAfter(n.players, n.includeJoiner),
-    recordable: n.recordable,
-  });
+  const miss = missConsequence({ recordable: n.recordable });
   const you = input.flow.viewerIsCreator === true;
   let copy: MoneyCopy | null;
   switch (kind.flow) {

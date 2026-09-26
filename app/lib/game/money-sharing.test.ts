@@ -144,9 +144,11 @@ describe("challengeLandingHeadOf: each link kind has its own headline", () => {
 });
 
 describe("acceptTermsOf: the miss chip and head count before the accept (gap 7)", () => {
-  it("a reward challenge nobody accepted yet: a lone miss comes back, and a forwarded link is named", () => {
+  it("a reward challenge nobody accepted yet: the chip warns, the line says a lone miss comes back", () => {
     const t = acceptTermsOf({ kind: "reward", recordable: true, players: 0, challengerName: MIKA });
-    expect(t.chip).toBe("Miss: stake back");
+    // Anyone holding the link can accept after you, so the chip warns at any
+    // count; the miss line carries the solo case.
+    expect(t.chip).toBe("Miss: goes to who hits");
     expect(t.count).toBe("Nobody has accepted this link yet");
     expect(t.miss).toContain("your lock-in comes back");
     expect(t.miss).toContain("If someone else accepts this link and hits, it goes to them.");

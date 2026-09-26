@@ -90,15 +90,16 @@ export function challengeStakeCopy(): string {
 }
 
 /**
- * The miss chip (docs/MONEY-FLOWS.md section 3): what a miss does on this run
- * right now. A stake moves only when the run can record a miss (`recordable`,
- * missRulePool(pool).ok) AND someone else is staked to hit: with one staker a
- * miss means nobody hit, and HealthPoolsV3 refunds every stake. `players`
- * counts the stakers the reader is asking about, a joiner included when the
- * chip sits before their stake.
+ * The miss chip (docs/MONEY-FLOWS.md section 3): what a miss does on this run.
+ * On a run that can record a miss (`recordable`, missRulePool(pool).ok) the
+ * chip reads "goes to who hits" whatever the count, because it sits at the
+ * moment of commitment: once you are in, anyone who joins after you turns a
+ * miss your wearable shows into a stake that goes to them. The solo case (you
+ * alone, a miss means nobody hit and every stake comes back) is said in the
+ * explanatory line beside the chip, never by a friendlier chip.
  */
 export type MissChip = "Miss: stake back" | "Miss: goes to who hits";
 
-export function missConsequence(input: { players: number; recordable: boolean }): MissChip {
-  return input.recordable && input.players >= 2 ? "Miss: goes to who hits" : "Miss: stake back";
+export function missConsequence(input: { recordable: boolean }): MissChip {
+  return input.recordable ? "Miss: goes to who hits" : "Miss: stake back";
 }

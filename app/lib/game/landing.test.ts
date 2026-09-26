@@ -185,13 +185,15 @@ describe("outcomeCopy", () => {
       usd: "3.00",
       tone: "money",
     });
-    expect(outcomeCopy("miss", terms).worked).toEqual({ label: "You get back", usd: "0.00", tone: "dusk" });
+    // The 0.00 is the case the heading names; nobody hitting gives it back.
+    expect(outcomeCopy("miss", terms).worked).toEqual({ label: "If anyone else hits", usd: "0.00", tone: "dusk" });
     expect(outcomeCopy("none", terms).worked).toEqual({ label: "Your stake back", usd: "1.00", tone: "plain" });
   });
 
   it("says a run with no wearable data is not a miss", () => {
     expect(outcomeCopy("miss", terms).body).toContain("If your wearable sends nothing for the run, that is not a miss");
     expect(outcomeCopy("miss", terms).body).toContain("Your 1.00 is shared equally");
+    expect(outcomeCopy("miss", terms).body).toContain("If nobody hits, it comes back.");
   });
 
   it("shows no worked figure without a live run", () => {

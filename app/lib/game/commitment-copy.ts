@@ -163,11 +163,11 @@ export function commitmentFacts(recordsMisses: boolean): {
 }
 
 /**
- * The run board's reminder under the money, for a player already in. The
- * miss line follows the miss chip (missConsequence): a stake goes to the
- * players who hit only on a run that can record a miss with two or more
- * staked, the reader counted. Alone, a miss means nobody hit and every stake
- * comes back; with the count unread, the line is the one true at any count.
+ * The run board's reminder under the money, for a player already in. On a
+ * run that can record a miss, a stake goes to the players who hit once two or
+ * more are staked, the reader counted. Alone, a miss means nobody hit and
+ * every stake comes back, so the line says so (the chip beside it warns at
+ * any count); with the count unread, the line is the one true at any count.
  */
 export function commitmentReminder(input: {
   recordable: boolean;
@@ -179,7 +179,7 @@ export function commitmentReminder(input: {
     ? f.miss
     : input.players === null
       ? "Miss it: if anyone else hits, your stake goes to them; if nobody hits, it comes back."
-      : missConsequence({ players: input.players, recordable: true }) === "Miss: goes to who hits"
+      : input.players >= 2
         ? f.miss
         : "Miss it: your stake comes back while you are the only one in; once others stake, it goes to whoever hits, or comes back if nobody does.";
   return `${f.hit} ${miss} ${f.nobody}`;

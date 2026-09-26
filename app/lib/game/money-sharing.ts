@@ -210,7 +210,7 @@ export function rallyCopyOf(
  * and nobody-hits lines, the miss chip and the head count. A stake-on-yourself
  * run words hit and miss as commitmentFacts does; a reward challenge words
  * them for a lock-in. `players` is the stakers in the run now, not counting
- * the joiner; the miss chip counts them in, because it describes the joiner's
+ * the joiner; the miss line counts them in, because it describes the joiner's
  * own stake.
  */
 export function acceptTermsOf(input: {
@@ -220,8 +220,10 @@ export function acceptTermsOf(input: {
   challengerName: string;
 }): { stakeLead: string; hit: string; miss: string; nobody: string; chip: string; count: string } {
   const { kind, recordable, players, challengerName } = input;
-  const chip = missConsequence({ players: players + 1, recordable });
-  const consequence = { chip, toHitters: chip === "Miss: goes to who hits" };
+  // The chip warns at any count; the miss line keeps the solo case (the
+  // joiner alone: a miss means nobody hit, so it comes back).
+  const chip = missConsequence({ recordable });
+  const consequence = { chip, toHitters: recordable && players + 1 >= 2 };
   if (kind === "reward") {
     return {
       stakeLead: "Your lock-in to accept:",

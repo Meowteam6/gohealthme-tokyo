@@ -401,9 +401,10 @@ export function outcomeCopy(
         heading: "Your stake goes to the players who hit.",
         body:
           terms !== null
-            ? `Your ${stake} is shared equally among everyone whose wearable shows they hit. If your wearable sends nothing for the run, that is not a miss, and your stake comes back.`
-            : "It is shared equally among everyone whose wearable shows they hit, on a run that can record a miss; the run page says so before you stake, and every other run refunds a miss. If your wearable sends nothing for the run, that is not a miss, and your stake comes back.",
-        worked: terms !== null ? { label: "You get back", usd: formatUsdc(0n), tone: "dusk" } : null,
+            ? `Your ${stake} is shared equally among everyone whose wearable shows they hit. If nobody hits, it comes back. If your wearable sends nothing for the run, that is not a miss, and your stake comes back.`
+            : "It is shared equally among everyone whose wearable shows they hit, on a run that can record a miss; the run page says so before you stake, and every other run refunds a miss. If nobody hits, it comes back. If your wearable sends nothing for the run, that is not a miss, and your stake comes back.",
+        // The worked figure is the case the heading names: someone else hit.
+        worked: terms !== null ? { label: "If anyone else hits", usd: formatUsdc(0n), tone: "dusk" } : null,
       };
     case "none": {
       let worked: OutcomeCopy["worked"] = null;
