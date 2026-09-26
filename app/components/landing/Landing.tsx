@@ -13,12 +13,16 @@ import HowItPays from "@/components/landing/HowItPays";
 import OpenRunsList from "@/components/landing/OpenRunsList";
 import { ButtonLink, ChevronLink } from "@/components/ui";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
-import { termsOf, type OpenRun, type OutcomeKey } from "@/lib/game/landing";
+import { challengeNote, termsOf, type OpenRun, type OutcomeKey } from "@/lib/game/landing";
 import { useMyRuns } from "@/lib/game/useLobby";
 import { useOpenRuns, type OpenRunsStatus } from "@/lib/game/useOpenRuns";
 import { useWearPick } from "@/lib/game/useWearPick";
 import type { WearableAvailability, WearableBrand } from "@/lib/game/wearable-fit";
 import { useEmbeddedWallet } from "@/lib/wallet";
+
+/** The challenge band's example stake, 1.00 USDC; its figures are worked by
+ *  challengeNote from lib/commitment.ts. */
+const EXAMPLE_STAKE = 1_000_000n;
 
 /** What this deployment does, read on the server (app/page.tsx). */
 export interface LandingFlags {
@@ -105,7 +109,7 @@ export function LandingView({
     <div className="max-[639px]:-mb-14">
       <section
         aria-labelledby="poster-title"
-        className="relative isolate pb-7 max-[899px]:-mx-[var(--gutter)] max-[899px]:overflow-x-clip max-[899px]:px-[var(--gutter)] min-[900px]:grid min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,500px)] min-[900px]:items-center min-[900px]:gap-x-14 min-[900px]:pb-[72px] min-[900px]:pt-2"
+        className="relative isolate mx-[calc(50%-50vw)] overflow-x-clip px-[calc(50vw-50%)] pb-7 min-[900px]:grid min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,500px)] min-[900px]:items-center min-[900px]:gap-x-14 min-[900px]:pb-[72px] min-[900px]:pt-2"
       >
         <div>
           <h1 id="poster-title" className="type-display m-0 text-[2.75rem] min-[900px]:text-[5rem] min-[900px]:leading-[0.98]">
@@ -164,8 +168,18 @@ export function LandingView({
             </h2>
             <p className="m-0 mt-2 max-w-[52ch] text-muted">
               Send them a challenge link. They see the goal, the stake and the
-              pot before they sign up, and the same rules hold: hit it and your
-              stake comes back.
+              pot before they sign up.{" "}
+              <span className="num">
+                {challengeNote(EXAMPLE_STAKE).map((s, i) =>
+                  s.strong === true ? (
+                    <b key={i} className="font-semibold text-foreground">
+                      {s.text}
+                    </b>
+                  ) : (
+                    <span key={i}>{s.text}</span>
+                  ),
+                )}
+              </span>
             </p>
           </div>
           <ButtonLink href="/challenge/new" variant="secondary" className="flex-none">

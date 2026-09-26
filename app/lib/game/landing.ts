@@ -179,6 +179,24 @@ export function playersWords(players: number | null): string | null {
   return players === 0 ? "Nobody in yet" : playersIn(players);
 }
 
+/**
+ * The challenge band's worked example: two friends at the same stake. Both
+ * hit and both stakes come back; only one hits and that one takes both. The
+ * figures are commitmentOutcome's, for a challenge with no sponsor pot.
+ */
+export function challengeNote(entryFee: bigint): Segment[] {
+  const both = commitmentOutcome({ entryFee, players: 2, achievers: 2, sponsorPot: 0n });
+  const one = commitmentOutcome({ entryFee, players: 2, achievers: 1, sponsorPot: 0n });
+  const amount = (o: typeof one) => formatUsdc(o.kind === "paid" ? o.perAchiever : o.refundEach);
+  return [
+    { text: `Stake ${formatUsdc(entryFee)} each. If you both hit, you both get ` },
+    { text: amount(both), strong: true },
+    { text: " back. If only one of you does, that one gets " },
+    { text: amount(one), strong: true },
+    { text: "." },
+  ];
+}
+
 // ------------------------------------------------------------ outcomes
 
 export type OutcomeKey = "hit" | "miss" | "none";

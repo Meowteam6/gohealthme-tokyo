@@ -61,11 +61,26 @@ function NavLinks({
   );
 }
 
+/** How long the header waits for the wallet SDK before offering Sign in
+ *  anyway. A returning player's session usually resolves well inside this;
+ *  past it, a skeleton that may never resolve is worse than a working link. */
+const AUTH_SETTLE_MS = 2500;
+
+function useSettled(ms: number): boolean {
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(true), ms);
+    return () => clearTimeout(t);
+  }, [ms]);
+  return settled;
+}
+
 function AuthControls() {
   const pathname = usePathname();
   const { ready, authenticated, logout } = useEmbeddedWallet();
+  const settled = useSettled(AUTH_SETTLE_MS);
 
-  if (!ready) {
+  if (!ready && !settled) {
     return (
       <div
         aria-hidden="true"
@@ -74,9 +89,11 @@ function AuthControls() {
     );
   }
 
-  if (!authenticated) {
+  if (!ready || !authenticated) {
     // One way in. Character creation owns sign-in (email makes the wallet,
-    // your own wallet is a quiet link inside it).
+    // your own wallet is a quiet link inside it). A wallet SDK still loading
+    // after AUTH_SETTLE_MS lands here too, so the header never shows a
+    // placeholder forever; /character waits for the SDK itself.
     const next =
       pathname === "/character" ? "" : `?next=${encodeURIComponent(pathname)}`;
     return (

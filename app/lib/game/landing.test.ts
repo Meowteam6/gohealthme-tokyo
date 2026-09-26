@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PoolInfo } from "@/lib/contract";
 import {
+  challengeNote,
   endsAtWords,
   heroNote,
   openLandingRuns,
@@ -173,5 +174,14 @@ describe("outcomeCopy", () => {
     expect(outcomeCopy("miss", null).worked).toBeNull();
     expect(outcomeCopy("none", null).worked).toBeNull();
     expect(outcomeCopy("hit", null).body).toBe("An equal share of the missed stakes goes to everyone who hits.");
+  });
+});
+
+describe("challengeNote", () => {
+  it("works both friends hitting and only one hitting from commitmentOutcome", () => {
+    expect(segmentsText(challengeNote(USDC))).toBe(
+      "Stake 1.00 each. If you both hit, you both get 1.00 back. If only one of you does, that one gets 2.00.",
+    );
+    expect(segmentsText(challengeNote(5n * USDC))).toContain("that one gets 10.00.");
   });
 });
