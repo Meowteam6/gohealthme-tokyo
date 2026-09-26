@@ -346,8 +346,14 @@ export function challengeCopy(
 export function sponsoredCopy(input: {
   bountyModel: number;
   entryFee: bigint;
-  /** R: the sponsor's money in the pot. */
+  /** R + B: the balance net of every stake, which is the sponsor's money
+   *  plus anything backers added. The whole of it goes back to the sponsor
+   *  when nobody hits. */
   pot: bigint;
+  /** R alone, where it is known: the deposit typed on the create form. Null
+   *  on a live run, where the chain cannot tell R from B, so the line names
+   *  the pot instead of crediting the sponsor with backers' money. */
+  reward: bigint | null;
   /** "@handle", a short address, or "You". */
   sponsorName: string;
   sponsorIsYou: boolean;
@@ -355,9 +361,13 @@ export function sponsoredCopy(input: {
   const stake = usd(input.entryFee);
   const sponsor = input.sponsorIsYou ? "You" : input.sponsorName;
   const sponsorMid = input.sponsorIsYou ? "you" : input.sponsorName;
+  const opening =
+    input.reward !== null
+      ? `${sponsor} put up ${usd(input.reward)} USDC.`
+      : `The pot holds ${usd(input.pot)} USDC.`;
   return {
     flow: "F4",
-    line: `${sponsor} put up ${usd(input.pot)} USDC. Stake ${stake} to enter.`,
+    line: `${opening} Stake ${stake} to enter.`,
     terms: [
       {
         key: "hit",
@@ -391,7 +401,9 @@ export function runMoneyOf(input: {
   /** F3 only: the challenged player, and whether they are reading. */
   targetName?: string | null;
   targetIsYou?: boolean;
-  /** F3 only: the challenger's reward R, when it can be told apart. */
+  /** F3 and F4: the creator's own money R, where it can be told from
+   *  backers' money (the create form, the link page's funding read). Absent
+   *  on a live run page, whose line then names the pot. */
   reward?: bigint | null;
   /** F3 only: the run's end, formatted. */
   endsOn?: string;
@@ -427,6 +439,7 @@ export function runMoneyOf(input: {
         bountyModel: input.pool.bountyModel,
         entryFee: n.entryFee,
         pot: n.pot,
+        reward: input.reward ?? null,
         sponsorName: input.flow.creatorName,
         sponsorIsYou: you,
       });

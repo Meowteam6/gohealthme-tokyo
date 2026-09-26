@@ -358,6 +358,9 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
         includeJoiner: true,
         confirmBy: null,
       },
+      // The deposit typed here is the sponsor's own money, so a sponsored
+      // run's line can say "put up" (on the live run only the pot is known).
+      reward: model === 2 ? null : fundingParsed,
     });
   const selectedMoney = entryFeeParsed !== null && entryFeeParsed > 0n ? moneyOf(bountyModel) : null;
 

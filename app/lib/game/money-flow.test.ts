@@ -259,8 +259,15 @@ describe("F3 challenge a friend", () => {
 });
 
 describe("F4 sponsored run", () => {
-  it("model 0: a multiple of the stake that can come in under it", () => {
-    const copy = sponsoredCopy({ bountyModel: 0, entryFee: 5n * ONE, pot: 20n * ONE, sponsorName: "@acme", sponsorIsYou: false });
+  it("model 0 at create: a multiple of the stake that can come in under it", () => {
+    const copy = sponsoredCopy({
+      bountyModel: 0,
+      entryFee: 5n * ONE,
+      pot: 20n * ONE,
+      reward: 20n * ONE,
+      sponsorName: "@acme",
+      sponsorIsYou: false,
+    });
     expect(copy.line).toBe("@acme put up 20.00 USDC. Stake 5.00 to enter.");
     expect(texts(copy.terms)).toEqual([
       "Hit: pays 5.00 × your multiplier, scaled down if the pot is short, so it can be under 5.00.",
@@ -269,14 +276,48 @@ describe("F4 sponsored run", () => {
     ]);
   });
 
-  it("model 1: a weighted share, the sponsor reading", () => {
-    const copy = sponsoredCopy({ bountyModel: 1, entryFee: 5n * ONE, pot: 20n * ONE, sponsorName: "@acme", sponsorIsYou: true });
+  it("model 1 at create: a weighted share, the sponsor reading", () => {
+    const copy = sponsoredCopy({
+      bountyModel: 1,
+      entryFee: 5n * ONE,
+      pot: 20n * ONE,
+      reward: 20n * ONE,
+      sponsorName: "@acme",
+      sponsorIsYou: true,
+    });
     expect(copy.line).toBe("You put up 20.00 USDC. Stake 5.00 to enter.");
     expect(texts(copy.terms)).toEqual([
       "Hit: pays a weighted share, which can be under 5.00.",
       "Miss: 5.00 comes back.",
       "Nobody hits: 20.00 goes back to you.",
     ]);
+  });
+
+  it("on a live run the figure is the pot (balance net of stakes), not the sponsor's deposit", () => {
+    // R + B: what the sponsor put up plus what backers added. Nobody can
+    // tell them apart from the chain, so the line names the pot, and the
+    // whole of it goes back to the sponsor when nobody hits.
+    const copy = sponsoredCopy({
+      bountyModel: 0,
+      entryFee: 5n * ONE,
+      pot: 23n * ONE,
+      reward: null,
+      sponsorName: "@acme",
+      sponsorIsYou: false,
+    });
+    expect(copy.line).toBe("The pot holds 23.00 USDC. Stake 5.00 to enter.");
+    expect(copy.terms[2].text).toBe("Nobody hits: 23.00 goes back to @acme.");
+    expect(copy.line).not.toMatch(/put up/);
+  });
+
+  it("runMoneyOf words a sponsored run by its pot on a live page and by the deposit on the create form", () => {
+    const pool = { bountyModel: 0, initiative: "Steps" };
+    const flow = { players: 2, creatorStaked: null, creatorName: "@acme" };
+    const numbers = { ...base, players: 2, pot: 23n * ONE, recordable: false };
+    expect(runMoneyOf({ pool, flow, numbers }).copy?.line).toBe("The pot holds 23.00 USDC. Stake 1.00 to enter.");
+    expect(runMoneyOf({ pool, flow, numbers, reward: 23n * ONE }).copy?.line).toBe(
+      "@acme put up 23.00 USDC. Stake 1.00 to enter.",
+    );
   });
 });
 
@@ -315,9 +356,11 @@ describe("missDetailOf", () => {
     expect(missDetailOf(groupRunCopy({ ...base, players: 1 }))).toBe(
       "If anyone hits, your 1.00 goes to them; if nobody hits, it comes back.",
     );
-    expect(missDetailOf(sponsoredCopy({ bountyModel: 0, entryFee: ONE, pot: ONE, sponsorName: "@a", sponsorIsYou: false }))).toBe(
-      "1.00 comes back.",
-    );
+    expect(
+      missDetailOf(
+        sponsoredCopy({ bountyModel: 0, entryFee: ONE, pot: ONE, reward: null, sponsorName: "@a", sponsorIsYou: false }),
+      ),
+    ).toBe("1.00 comes back.");
   });
 });
 
