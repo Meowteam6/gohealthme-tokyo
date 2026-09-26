@@ -410,7 +410,7 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
         body:
           screen.confirmByMs !== undefined
             ? `The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. Confirm before ${formatMoment(screen.confirmByMs)}: the run settles by then, and a hit that is not confirmed gets its stake back without a share.`
-            : "The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. No confirmation, no payout.",
+            : "The numbers check out. Before any USDC moves, confirm with World ID that the person collecting is the person who played. No confirmation, no share: your stake still comes back when the run settles.",
         pose: "watching",
       };
     case "confirmed":
