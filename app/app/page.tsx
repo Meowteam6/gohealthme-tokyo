@@ -66,9 +66,8 @@ export default function Home() {
           </h1>
           <p className="max-w-xl text-xl leading-snug text-foreground/85">
             Stake on your own health goal. Your wearable decides. Hit it and
-            you get your stake back plus a share of the stakes of players who
-            missed. Miss it and your stake goes to the players who hit. If
-            nobody hits, everyone gets their stake back. Only the verdict goes
+            you get your stake back plus your share of the pot. Miss it and
+            your stake is refunded when the run settles. Only the verdict goes
             on chain, never your health data.
           </p>
           <LandingCta />
