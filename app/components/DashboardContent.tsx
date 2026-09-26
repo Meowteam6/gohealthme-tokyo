@@ -29,6 +29,8 @@ import RefundClaim from "@/components/RefundClaim";
 import Countdown from "@/components/Countdown";
 import SignInPanel from "@/components/SignInPanel";
 import SpotterSays from "@/components/SpotterSays";
+import Spotter from "@/components/spotter/Spotter";
+import { GHOST_LINK, PRIMARY_LINK } from "@/components/game/link-styles";
 import {
   Badge,
   Button,
@@ -296,7 +298,7 @@ function ConnectButton({
             href={fallbackUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={`inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-foreground shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-hover active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
+            className={PRIMARY_LINK}
           >
             Open the wearable connect page
           </a>
@@ -440,8 +442,8 @@ function StreakCard({
   };
 
   return (
-    <Card pop className="bg-dot-grid">
-      <h2 className="font-display text-lg font-semibold">Streak progress</h2>
+    <Card>
+      <h2 className="font-display text-xl font-bold leading-display">Streak progress</h2>
       {healthQuery.isLoading ? (
         <div className="mt-3 space-y-2">
           <Skeleton className="h-8 w-40" />
@@ -458,7 +460,7 @@ function StreakCard({
           </p>
           <Link
             href="/pools"
-            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full border-2 border-edge bg-secondary px-5 py-2.5 font-display text-sm font-bold text-secondary-foreground transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className={`mt-3 ${GHOST_LINK}`}
           >
             Find a goal you can still prove
           </Link>
@@ -537,7 +539,7 @@ function StreakCard({
               <SpotterSays surface="dashboard-empty" state="empty" />
             )}
           </div>
-          <p className="font-display text-4xl font-bold text-accent-deep">
+          <p className="font-display text-[2.5rem] font-extrabold leading-display tracking-display tabular-nums text-foreground">
             {progress?.streakDays ?? 0}
             <span className="font-display text-lg font-semibold text-foreground">
               {progress?.targetDays !== null && progress?.targetDays !== undefined
@@ -652,7 +654,7 @@ function RecentDataCard({ address }: { address: `0x${string}` }) {
 
   return (
     <Card>
-      <h2 className="font-display text-lg font-semibold">Latest synced data</h2>
+      <h2 className="font-display text-xl font-bold leading-display">Latest synced data</h2>
       <p className="mt-1 text-sm text-muted">
         {data.provider === null || data.provider === undefined
           ? "Pulled live from your linked device."
@@ -856,12 +858,13 @@ export default function DashboardContent() {
     return (
       <div className="mx-auto max-w-md space-y-4">
         <div className="text-center">
-          <p className="font-display text-lg font-semibold">
-            Sign in to see your goals
+          <Spotter state="settings" size="sm" className="mx-auto mb-3 justify-center" />
+          <p className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
+            Sign in to see your runs
           </p>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            Your joined pools, streak progress, and payouts live here once you
-            sign in.
+            Your runs, your nights and your payouts live here once you sign
+            in.
           </p>
         </div>
         <SignInPanel />
@@ -901,23 +904,24 @@ export default function DashboardContent() {
           <Skeleton className="h-40" />
         </div>
       ) : joinedQuery.isError ? (
-        <div role="alert" className="rounded-xl border-2 border-danger/40 bg-danger/5 p-4">
-          <p className="font-semibold">I could not read your runs from Base Sepolia just now.</p>
-          <p className="mt-1 text-sm text-foreground/80">Nothing changed on your side.</p>
-          <Button type="button" variant="secondary" className="mt-3" onClick={() => void joinedQuery.refetch()}>
-            Read my runs again
-          </Button>
+        <div role="alert" className="flex gap-3 rounded-[20px] border-2 border-danger/40 bg-surface p-4">
+          <Spotter state="error" size="inline" decorative className="shrink-0 self-start" />
+          <div className="min-w-0">
+            <p className="font-bold">I could not read your runs from Base Sepolia just now.</p>
+            <p className="mt-1 text-sm text-foreground/85">Nothing changed on your side.</p>
+            <Button type="button" variant="ghost" className="mt-3" onClick={() => void joinedQuery.refetch()}>
+              Read my runs again
+            </Button>
+          </div>
         </div>
       ) : runs.length === 0 ? (
         <EmptyState
           title="You are not in a run yet"
-          detail="Pick a run in the lobby, stake on yourself, and your nights show up here."
+          line="Nothing running. I'm on break."
+          detail="Pick a run in the lobby and put money on yourself. Your nights show up here."
           action={
-            <Link
-              href="/pools"
-              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-6 font-semibold text-foreground hover:bg-accent-hover"
-            >
-              Go to the lobby
+            <Link href="/pools" className={PRIMARY_LINK}>
+              Find a run
             </Link>
           }
         />
@@ -958,7 +962,7 @@ export default function DashboardContent() {
 
           {runs.some(({ pool }) => pool.settled || pool.cancelled) ? (
             <section className="space-y-3">
-              <h2 className="font-display text-3xl font-extrabold">Finished runs</h2>
+              <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">Finished runs</h2>
               {runs
                 .filter(({ pool }) => pool.settled || pool.cancelled)
                 .map((entry) => {
@@ -971,14 +975,24 @@ export default function DashboardContent() {
                   return (
                     <div
                       key={pool.id.toString()}
-                      className="rounded-xl border-2 border-foreground/15 bg-surface p-4"
+                      className="rounded-[20px] border border-edge bg-surface p-4"
                     >
                       <Link
                         href={`/pools/${pool.id.toString()}`}
-                        className="block hover:text-accent-deep"
+                        className="flex gap-3 rounded-[14px] hover:text-accent-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
                       >
+                        <Spotter
+                          state={
+                            participant.resultRecorded && participant.verdict
+                              ? "history-verified"
+                              : "history-other"
+                          }
+                          decorative
+                          className="shrink-0 self-start"
+                        />
+                        <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="font-display text-2xl font-extrabold leading-tight">
+                          <h3 className="min-w-0 break-words text-base font-bold leading-snug">
                             {displayGoalSpec(pool.goalSpec)}
                           </h3>
                           <Badge tone={result.tone}>{result.text}</Badge>
@@ -986,8 +1000,12 @@ export default function DashboardContent() {
                         <p className="mt-1 text-sm text-muted">
                           {/* After settle this is what was NOT paid out; calling
                               it the prize read as if the winner won nothing. */}
-                          Left in pool {formatUsdc(pool.balance)} test USDC
+                          Left in pool{" "}
+                          <span className="font-bold tabular-nums text-gold-deep">
+                            {formatUsdc(pool.balance)} test USDC
+                          </span>
                         </p>
+                        </div>
                       </Link>
                       {pool.cancelled && !participant.refunded ? (
                         <RefundClaim
@@ -1011,7 +1029,7 @@ export default function DashboardContent() {
         <StreakCard address={address} />
       ) : null}
       <section className="space-y-3">
-        <h2 className="font-display text-3xl font-extrabold">On the river tonight</h2>
+        <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">On the river tonight</h2>
         <HeroActivityTicker />
       </section>
       <RecentDataCard address={address} />

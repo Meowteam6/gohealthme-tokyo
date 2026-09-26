@@ -2,12 +2,14 @@
 
 // A run's lock, with its fix, shown before any stake. The same panel on the
 // lobby row, the pool page and the challenge link, fed by lib/game/lobby.ts,
-// so the three surfaces can never word the same limit differently.
+// so the three surfaces can never word the same limit differently. SPOTTER's
+// detective pose sits inline with the reason (docs/DESIGN.md, locked run row).
 
 import Link from "next/link";
 import { useState } from "react";
 import { lockCopy, type RunLock } from "@/lib/game/lobby";
-import { TAP_TARGET } from "@/components/ui";
+import Spotter from "@/components/spotter/Spotter";
+import { GHOST_LINK, PRIMARY_LINK } from "@/components/game/link-styles";
 
 export default function LockPanel({
   lock,
@@ -29,63 +31,66 @@ export default function LockPanel({
   const [checking, setChecking] = useState(false);
   const [declined, setDeclined] = useState(false);
 
+  // A lock is never a loss and never an error: a raised cream well, with
+  // warning ink only on the hardware limit no tap can fix.
   const tone =
     copy.tone === "hardware"
-      ? "border-warning/60 bg-warning/5"
+      ? "border-warning/50 bg-surface-raised"
       : copy.tone === "wait"
         ? "border-edge bg-surface-raised"
-        : "border-accent/50 bg-accent/5";
+        : "border-foreground/25 bg-surface-raised";
 
   const fix = copy.fix;
   return (
-    <div className={`rounded-lg border-2 ${tone} ${compact ? "p-3" : "p-4"}`}>
-      <p className={`font-semibold ${copy.tone === "hardware" ? "text-warning" : "text-foreground"}`}>
-        {copy.title}
-      </p>
-      <p className="mt-1 text-sm text-foreground/80">{copy.detail}</p>
-      {fix.kind === "link" ? (
-        <Link
-          href={fix.href}
-          className={`mt-3 rounded-lg border-2 border-foreground bg-surface font-semibold text-foreground hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
-        >
-          {fix.label}
-        </Link>
-      ) : fix.kind === "retry" ? (
-        onRetry !== undefined ? (
-          <button
-            type="button"
-            onClick={onRetry}
-            className={`mt-3 rounded-lg border-2 border-foreground bg-surface font-semibold text-foreground hover:bg-foreground hover:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
-          >
+    <div className={`flex gap-3 rounded-[20px] border-2 ${tone} ${compact ? "p-3" : "p-4"}`}>
+      <Spotter
+        state="locked-row"
+        size={compact ? "row" : "inline"}
+        decorative
+        className="shrink-0 self-start"
+      />
+      <div className="min-w-0 flex-1">
+        <p className={`font-bold ${copy.tone === "hardware" ? "text-warning" : "text-foreground"}`}>
+          {copy.title}
+        </p>
+        <p className="mt-1 text-sm text-foreground/85">{copy.detail}</p>
+        {fix.kind === "link" ? (
+          <Link href={fix.href} className={`mt-3 ${GHOST_LINK}`}>
             {fix.label}
-          </button>
-        ) : (
-          <p className="mt-2 text-xs text-muted">Reload the page to check again.</p>
-        )
-      ) : fix.kind === "check-sensor" && onCheckSensor !== undefined ? (
-        <div className="mt-3">
-          <button
-            type="button"
-            disabled={checking}
-            onClick={() => {
-              setChecking(true);
-              setDeclined(false);
-              void onCheckSensor()
-                .then((signed) => setDeclined(!signed))
-                .catch(() => setDeclined(true))
-                .finally(() => setChecking(false));
-            }}
-            className={`rounded-lg bg-accent font-semibold text-foreground hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${TAP_TARGET}`}
-          >
-            {checking ? "Waiting for your signature" : fix.label}
-          </button>
-          <p className="mt-2 text-xs text-muted" aria-live="polite">
-            {declined
-              ? "No signature, so I still cannot see it. Tap again when you are ready."
-              : "Signing costs nothing and sends no transaction."}
-          </p>
-        </div>
-      ) : null}
+          </Link>
+        ) : fix.kind === "retry" ? (
+          onRetry !== undefined ? (
+            <button type="button" onClick={onRetry} className={`mt-3 ${GHOST_LINK}`}>
+              {fix.label}
+            </button>
+          ) : (
+            <p className="mt-2 text-xs text-muted">Reload the page to check again.</p>
+          )
+        ) : fix.kind === "check-sensor" && onCheckSensor !== undefined ? (
+          <div className="mt-3">
+            <button
+              type="button"
+              disabled={checking}
+              onClick={() => {
+                setChecking(true);
+                setDeclined(false);
+                void onCheckSensor()
+                  .then((signed) => setDeclined(!signed))
+                  .catch(() => setDeclined(true))
+                  .finally(() => setChecking(false));
+              }}
+              className={`${PRIMARY_LINK} disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none`}
+            >
+              {checking ? "Waiting for your signature" : fix.label}
+            </button>
+            <p className="mt-2 text-xs text-muted" aria-live="polite">
+              {declined
+                ? "No signature, so I still cannot see it. Tap again when you are ready."
+                : "Signing costs nothing and sends no transaction."}
+            </p>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

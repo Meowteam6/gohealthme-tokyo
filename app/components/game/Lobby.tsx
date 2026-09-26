@@ -8,14 +8,18 @@
 // (lib/game/lobby.ts). What used to be five separate refusal screens at the
 // join is now a lock on the row, and the "sign so I can check your device"
 // step is one button at the top that unlocks every run at once.
+//
+// Riverbank (docs/DESIGN.md): rows over cards, stake to pot in gold, SPOTTER
+// peeking up from the bottom edge.
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import SpotterSays from "@/components/SpotterSays";
-import { Skeleton, TAP_TARGET } from "@/components/ui";
+import Spotter from "@/components/spotter/Spotter";
+import { EmptyState, Skeleton } from "@/components/ui";
 import CharacterCard from "@/components/game/CharacterCard";
 import LockPanel from "@/components/game/LockPanel";
 import RunSlip from "@/components/game/RunSlip";
+import { GHOST_LINK, PRIMARY_LINK, TEXT_LINK } from "@/components/game/link-styles";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useLobby } from "@/lib/game/useLobby";
 import { lobbyNeedsSensorCheck, type LobbyRow } from "@/lib/game/lobby";
@@ -40,11 +44,13 @@ function Section({
   if (rows.length === 0) return null;
   return (
     <section className="space-y-3" aria-label={title}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-display text-3xl font-extrabold">{title}</h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
+          {title}
+        </h2>
         {note}
       </div>
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-2.5 lg:grid-cols-2">
         {rows.map((row) => (
           <RunSlip
             key={row.pool.id.toString()}
@@ -76,38 +82,35 @@ export default function Lobby({
   const view = useCharacter();
   const { lobby, loading, error, retry, outage, retryChecks } = useLobby(view, highlightId);
   const signedIn = view.authenticated && view.address !== null;
+  const nothingOpen =
+    lobby !== null && lobby.open.length === 0 && lobby.highlighted === null;
 
   return (
     <div className="space-y-8">
       {intro ?? (
-        <header className="space-y-4">
-          <h1 className="font-display text-6xl font-black leading-[0.9] tracking-tight sm:text-7xl">
+        <header className="space-y-3">
+          <h1 className="font-display text-[clamp(2.5rem,12vw,4rem)] font-extrabold leading-display tracking-[-0.03em]">
             The lobby
           </h1>
-          <p className="max-w-lg text-lg text-foreground/80">
-            Put a stake on yourself. Your wearable decides. SPOTTER pays you or it
-            does not. Test money on Base Sepolia, no real dollars.
+          <p className="max-w-lg text-base text-foreground/85 sm:text-lg">
+            Put money on yourself. Your wearable decides. SPOTTER pays you or it
+            does not.
           </p>
-          <SpotterSays
-            surface="pools-header"
-            state="idle"
-            pose="point"
-            say="Playable means I can check it on your wearable. Locked means I tell you why before you stake a cent."
-          />
+          <p className="text-sm text-muted">Base Sepolia test money, beta. No real dollars.</p>
         </header>
       )}
 
       {signedIn ? (
         <CharacterCard view={view} variant="strip" />
       ) : (
-        <div className="flex flex-col gap-3 rounded-xl border-2 border-foreground bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-[20px] border border-edge bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm">
             Sign in to see which runs your wearable can play. One email, and a
             wallet is made for you.
           </p>
           <Link
             href={`/character?next=${encodeURIComponent(returnTo)}`}
-            className={`shrink-0 rounded-lg bg-accent font-semibold text-foreground hover:bg-accent-hover ${TAP_TARGET}`}
+            className={`shrink-0 ${PRIMARY_LINK}`}
           >
             Sign in
           </Link>
@@ -124,24 +127,27 @@ export default function Lobby({
       {outage ? <LockPanel lock={{ kind: "outage" }} returnTo={returnTo} /> : null}
 
       {loading ? (
-        <div className="space-y-3" aria-busy="true">
+        <div className="space-y-2.5" aria-busy="true">
           <p className="sr-only" aria-live="polite">
             Loading the runs
           </p>
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
+          <Skeleton className="h-24 rounded-[20px]" />
+          <Skeleton className="h-24 rounded-[20px]" />
+          <Skeleton className="h-24 rounded-[20px]" />
         </div>
       ) : error || lobby === null ? (
-        <div role="alert" className="rounded-xl border-2 border-danger/40 bg-danger/5 p-4">
-          <p className="font-semibold">I could not read the runs from Base Sepolia just now.</p>
-          <p className="mt-1 text-sm text-foreground/80">Nothing changed on your side.</p>
-          <button
-            type="button"
-            onClick={retry}
-            className={`mt-3 rounded-lg border-2 border-foreground font-semibold ${TAP_TARGET}`}
-          >
-            Read the runs again
-          </button>
+        <div
+          role="alert"
+          className="flex gap-3 rounded-[20px] border-2 border-danger/40 bg-surface p-4"
+        >
+          <Spotter state="error" size="inline" decorative className="shrink-0 self-start" />
+          <div className="min-w-0">
+            <p className="font-bold">I could not read the runs from Base Sepolia just now.</p>
+            <p className="mt-1 text-sm text-foreground/85">Nothing changed on your side.</p>
+            <button type="button" onClick={retry} className={`mt-3 ${GHOST_LINK}`}>
+              Read the runs again
+            </button>
+          </div>
         </div>
       ) : (
         <>
@@ -160,8 +166,8 @@ export default function Lobby({
             rows={lobby.mine}
             returnTo={returnTo}
             note={
-              <Link href="/dashboard" className="text-sm font-semibold text-accent-deep underline underline-offset-2">
-                Open the scoreboard
+              <Link href="/dashboard" className={TEXT_LINK}>
+                Open My runs
               </Link>
             }
           />
@@ -173,37 +179,43 @@ export default function Lobby({
               onRetry={retryChecks}
               onCheckSensor={view.checkSensor}
             />
-          ) : lobby.highlighted === null ? (
-            <section className="rounded-xl border-2 border-dashed border-foreground/30 p-6">
-              <h2 className="font-display text-3xl font-extrabold">No open runs right now</h2>
-              <p className="mt-2 text-sm text-foreground/80">
-                Nobody has put a goal on the board. Start one, or dare a friend
-                into one.
-              </p>
-            </section>
           ) : null}
 
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/pools/create"
-              className={`rounded-lg border-2 border-foreground font-semibold hover:bg-foreground hover:text-background ${TAP_TARGET}`}
-            >
-              Start a run
-            </Link>
-            <Link
-              href="/challenge/new"
-              className={`rounded-lg border-2 border-foreground font-semibold hover:bg-foreground hover:text-background ${TAP_TARGET}`}
-            >
-              Dare a friend
-            </Link>
-          </div>
+          {nothingOpen ? (
+            <div className="space-y-2">
+              <EmptyState
+                title="No open runs right now"
+                line="Nothing running. I'm on break."
+                detail="Nobody has put a goal on the board. Start one and I will hold the coin."
+                action={
+                  <Link href="/pools/create" className={PRIMARY_LINK}>
+                    Start a run
+                  </Link>
+                }
+              />
+              <p className="text-center">
+                <Link href="/challenge/new" className={TEXT_LINK}>
+                  Or dare a friend into one
+                </Link>
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              <Link href="/pools/create" className={GHOST_LINK}>
+                Start a run
+              </Link>
+              <Link href="/challenge/new" className={GHOST_LINK}>
+                Dare a friend
+              </Link>
+            </div>
+          )}
 
           {lobby.closed.length > 0 ? (
-            <details className="rounded-xl border-2 border-foreground/15 bg-surface">
-              <summary className="flex min-h-12 cursor-pointer items-center px-4 font-semibold">
+            <details className="rounded-[20px] border border-edge bg-surface">
+              <summary className="flex min-h-12 cursor-pointer items-center px-4 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground">
                 Ended runs ({lobby.closed.length})
               </summary>
-              <div className="grid gap-3 p-3 lg:grid-cols-2">
+              <div className="grid gap-2.5 p-3 lg:grid-cols-2">
                 {lobby.closed.map((row) => (
                   <RunSlip
                     key={row.pool.id.toString()}
@@ -216,6 +228,19 @@ export default function Lobby({
           ) : null}
         </>
       )}
+
+      {/* SPOTTER peeks up from the bottom edge of the lobby. His line is the
+          lobby's promise: locks are told before a stake, never after. */}
+      {intro === undefined && !nothingOpen ? (
+        <div className="-mb-8 flex justify-end">
+          <Spotter
+            state="lobby"
+            size="sm"
+            line="Locked means I tell you why before you stake a cent."
+            linePlacement="side"
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
