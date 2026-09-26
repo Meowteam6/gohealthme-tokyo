@@ -128,7 +128,7 @@ export default function RootLayout({
         />
         <Providers>
           <Header />
-          <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+          <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-24 pt-8 sm:pb-8">
             <AccessGate>{children}</AccessGate>
           </main>
           <footer className="border-t border-edge bg-surface-raised/60 px-4 pb-24 pt-6 text-sm text-muted sm:pb-6">
