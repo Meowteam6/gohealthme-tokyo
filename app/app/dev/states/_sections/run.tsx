@@ -11,17 +11,16 @@ import RunLayout from "@/components/run/RunLayout";
 import HoldBar from "@/components/run/HoldBar";
 import StakeLock from "@/components/run/StakeLock";
 import {
-  SoloNote,
   StakeAction,
   StakeCard,
   StakeChecks,
   StakeFailed,
   StakePending,
   StakeStats,
-  StakeTerms,
   StakeVault,
   type StakeCheck,
 } from "@/components/run/StakeCard";
+import { MissUnderStake, MoneyChips, MoneyTermsList } from "@/components/game/MoneyTerms";
 import YourNight, { type NightRail } from "@/components/run/YourNight";
 import WhosIn, { type RosterRow } from "@/components/run/WhosIn";
 import AlsoOpen from "@/components/run/AlsoOpen";
@@ -29,6 +28,8 @@ import ChallengeFriend from "@/components/run/ChallengeFriend";
 import { joinCoinCopy } from "@/components/join-coin";
 import { formatUsdc } from "@/lib/contract";
 import { sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
+import { missDetailOf, momentLabel, runMoneyOf, type RunMoney } from "@/lib/game/money-flow";
+import { missConfirmByMs } from "@/lib/miss-grace";
 import type { SpotterScreenState } from "@/lib/spotter-poses";
 import {
   clockLabel,
@@ -38,8 +39,6 @@ import {
   leftLabel,
   nightTimelineOf,
   runHeadlineOf,
-  soloLineOf,
-  stakeTermsOf,
 } from "@/lib/game/run-page";
 import { GallerySection, StateFrame, type SectionProps } from "../_kit";
 
@@ -68,17 +67,47 @@ export function termsFor(players: number): CommitmentTerms {
 
 const OPEN = termsFor(0);
 const IN = termsFor(1);
+
+/** The run's money flow as the page builds it (lib/game/money-flow.ts): a
+ *  group run, the reader about to stake unless already in. */
+function moneyFor(t: CommitmentTerms, includeJoiner = true): RunMoney {
+  return runMoneyOf({
+    pool: { bountyModel: 2, initiative: "Sleep 7 hours Saturday night" },
+    flow: { players: t.players, creatorStaked: null, creatorName: "0x5A1c...00b7" },
+    numbers: {
+      entryFee: t.entryFee,
+      players: t.players,
+      pot: sponsorPotOf(t),
+      feeBps: t.feeBps,
+      recordable: t.recordsMisses,
+      includeJoiner,
+      confirmBy: momentLabel(missConfirmByMs(END), TZ),
+    },
+  });
+}
+
+/** The miss chip and its sentence, under the stake button. */
+function UnderStake({ t }: { t: CommitmentTerms }) {
+  const money = moneyFor(t);
+  return money.copy !== null ? <MissUnderStake miss={money.miss} detail={missDetailOf(money.copy)} /> : null;
+}
 const STAKE = formatUsdc(USDC);
 const END_CLOCK = clockLabel(Number(END), TZ);
 
 export function RunHeroFixture({
   spotter,
   ended = false,
+  players = 0,
+  joined = false,
 }: {
   spotter: SpotterScreenState | null;
   ended?: boolean;
+  /** Players already in, the reader not counted unless joined. */
+  players?: number;
+  joined?: boolean;
 }) {
   const left = leftLabel(END, NOW);
+  const money = moneyFor(termsFor(joined ? Math.max(players, 1) : players), !joined);
   return (
     <RunHero
       tag={ended ? { tone: "ended", label: "Ended" } : { tone: "live", label: "Open tonight" }}
@@ -95,25 +124,20 @@ export function RunHeroFixture({
           </>
         )
       }
+      chips={ended ? null : <MoneyChips kind={money.kind.chip} miss={money.miss} />}
       spotter={spotter}
     />
   );
 }
 
 function Terms({ t, id }: { t: CommitmentTerms; id: string }) {
-  const copy = stakeTermsOf({
-    entryFee: t.entryFee,
-    sponsorPot: sponsorPotOf(t),
-    goalShort: HEADLINE.short,
-    feeBps: t.feeBps,
-    recordsMisses: t.recordsMisses,
-  });
-  const solo = soloLineOf(t);
+  const money = moneyFor(t);
   return (
     <>
       <StakeStats stake={STAKE} pot={formatUsdc(t.balance)} players={t.players} />
-      <StakeTerms terms={copy} id={id} />
-      {solo !== null ? <SoloNote line={solo} /> : null}
+      {money.copy !== null ? (
+        <MoneyTermsList copy={money.copy} id={id} className="mt-3.5 border-t border-edge pt-3.5" />
+      ) : null}
     </>
   );
 }
@@ -232,10 +256,13 @@ function Page({
   joined = false,
   also = true,
   device = "WHOOP",
+  players = 0,
   children,
 }: {
   spotter?: SpotterScreenState | null;
   stake: ReactNode;
+  /** Players already in, for the header's money chips. */
+  players?: number;
   caption?: string;
   joined?: boolean;
   also?: boolean;
@@ -251,7 +278,7 @@ function Page({
     hit: false,
   };
   return (
-    <RunLayout hero={<RunHeroFixture spotter={spotter} />} stake={stake}>
+    <RunLayout hero={<RunHeroFixture spotter={spotter} players={players} joined={joined} />} stake={stake}>
       <Night caption={caption} joined={joined} device={device} />
       {children}
       <Roster rows={joined ? [me] : []} joined={joined} />
@@ -276,6 +303,7 @@ export default function RunStates({ meta }: SectionProps) {
                 <ButtonLink href="/character?next=%2Fpools%2F5" block>
                   Sign in to stake {STAKE} USDC
                 </ButtonLink>
+                <UnderStake t={OPEN} />
               </StakeAction>
               <StakeVault />
             </StakeCard>
@@ -291,6 +319,27 @@ export default function RunStates({ meta }: SectionProps) {
               <StakeChecks items={CLEARED} />
               <StakeAction fine={BETA}>
                 <Hold />
+                <UnderStake t={OPEN} />
+              </StakeAction>
+              <StakeVault />
+            </StakeCard>
+          }
+        />
+      </StateFrame>
+
+      <StateFrame
+        name="run-default-one-in"
+        note="one player already in: joining makes two, so a miss goes to who hits, on the chip and under the hold"
+      >
+        <Page
+          players={1}
+          stake={
+            <StakeCard>
+              <Terms t={IN} id="gallery-terms-2b" />
+              <StakeChecks items={CLEARED} />
+              <StakeAction fine={BETA}>
+                <Hold />
+                <UnderStake t={IN} />
               </StakeAction>
               <StakeVault />
             </StakeCard>
