@@ -73,6 +73,10 @@ The thesis, in one line each. Do not reframe the product; add the mechanism.
 - `goalId` is read from the contract, never re-derived in the app.
 - Base Sepolia HealthPoolsV3 `0x66815e3AC541eB18d01D2aed25D0D9779583D832`, USDC `0x036CbD53842c5426634e7929541eC2318f3dCF7e`, oracle on chain `0xA56eAD3A32b6261bDE6C2A45495C9250084F7F2D` (DEPLOYMENTS.md lists a different oracle; chain wins). V4 may redeploy its own HealthPoolsV3 for the demo; record it in DEPLOYMENTS.md under a Tokyo heading.
 
+## Design System
+
+Always read `docs/DESIGN.md` (SPOTTER's Riverbank, adopted 2026-09-26) before any visual or UI decision. Fonts, colors, spacing, SPOTTER pose per state and voice are defined there. Do not deviate without Andre's approval. In QA, flag any screen that does not match it. The previous system is at git tag `pre-redesign-2026-09-26`.
+
 ## Research-first
 
 Read this file, `~/Desktop/eth/docs/tokyo-prizes.md`, the ledger, and the specific route or contract before changing anything. Map the flow end to end (join gate -> wearable summary -> SPOTTER verdict -> human authorization -> settle -> payout) before touching any link. Expand existing code; check existing branches before implementing a fix.
