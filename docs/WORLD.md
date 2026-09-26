@@ -7,7 +7,7 @@ Hackathon build. Two World tracks, two lanes, one document:
 
 World ID existed in V1 (ETHGlobal NY, IDKit 4.1.8, per-pool actions, removed in V2). V4 reimplements it on **@worldcoin/idkit 4.3.0** with the World ID 4.0 RP-signed request flow, read from `docs.world.org/world-id/idkit/integrate` and the package's own type definitions on 2026-09-26. Nothing from V1 was resurrected.
 
-**Proofs are mocked at this event.** The prize page says so, and the event has no sandbox app. `WORLD_VERIFY_MODE=mock` is the deployment we demo on; it accepts an IDKit-shaped payload, checks its wallet binding, and derives a deterministic nullifier without calling World. Every screen that shows a mocked result says "event mode, mocked proofs". It is not a proof of personhood and must never run on a deployment with real users. `WORLD_VERIFY_MODE=live` is the real integration against World's cloud verify API and is what the code is written for.
+**Production runs live.** `WORLD_VERIFY_MODE=live` is the real integration against World's cloud verify API and is what the production deployment runs: a Production app and registered RP in the Developer Portal, driven on a phone with a real World App credential on 2026-09-26. `WORLD_VERIFY_MODE=mock` exists for tests, local runs and preview deployments only; it accepts an IDKit-shaped payload, checks its wallet binding, and derives a deterministic nullifier without calling World, every screen that shows a mocked result says "event mode, mocked proofs", and `config.ts` refuses the mode outright when `VERCEL_ENV=production`. It is not a proof of personhood and never reaches real users.
 
 ## Setup (Andre, about ten minutes)
 
@@ -244,8 +244,10 @@ environment is configured. Never ship it past the hackathon.
 in the browser),
 and World's v4 verify endpoint. It is built from the docs fetched on
 2026-09-26 (human-in-the-loop integrate and SDK reference, the verify
-reference, the RP signatures page) and has NOT been exercised against a real
-relying party yet; that is the booth step below.
+reference, the RP signatures page) and is the mode the production deployment
+runs (`WORLD_APPROVAL_MODE=world`; mock is refused on production). As of
+2026-09-27 06:00 JST no V4 run had settled, so the payout confirmation had
+been exercised end to end in the route tests and not yet on a live payout.
 
 ### Files
 
