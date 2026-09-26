@@ -61,7 +61,7 @@ export default function GaslessBadge({ status }: { status: GaslessStatus }) {
   if (status.willSponsor) {
     return (
       <p
-        className="flex items-center gap-2 rounded-xl border border-accent/40 bg-accent/20 px-3 py-2 text-xs font-medium text-accent-deep"
+        className="flex items-center gap-2 rounded-xl border border-edge bg-surface-raised px-3 py-2 text-xs font-medium text-foreground"
         aria-live="polite"
       >
         <span aria-hidden="true">*</span>

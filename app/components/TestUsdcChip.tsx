@@ -105,16 +105,11 @@ export default function TestUsdcChip() {
     <div className="flex flex-wrap items-center gap-2 py-1">
       <span
         title="Not real money — for trying things out, never charged."
-        className="inline-flex min-h-11 items-center rounded-lg border border-edge bg-surface-raised px-2 font-mono text-[11px] text-muted sm:px-3 sm:text-xs"
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-edge bg-surface px-3 text-xs text-muted"
       >
-        <span className="font-sans font-semibold uppercase tracking-wide">
-          Practice money
-        </span>
-        <span aria-hidden className="mx-1">
-          :
-        </span>
-        <span className="tabular-nums">
-          ${balance !== undefined ? formatUsdc(balance) : "--"}
+        <span className="font-semibold">Practice money</span>
+        <span className="font-display text-sm font-extrabold tabular-nums text-gold-deep">
+          {balance !== undefined ? `${formatUsdc(balance)} USDC` : "--"}
         </span>
       </span>
       <button
@@ -124,7 +119,7 @@ export default function TestUsdcChip() {
           void run();
         }}
         title="Add practice money to your account. Not real money — never charged."
-        className="inline-flex min-h-11 items-center rounded-lg border border-accent/50 px-2 text-[11px] font-semibold text-accent-deep hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 sm:text-xs"
+        className="inline-flex min-h-11 items-center rounded-full border-2 border-foreground px-3 text-xs font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {label}
       </button>
@@ -148,7 +143,7 @@ export default function TestUsdcChip() {
         <span className="text-[11px] text-warning sm:text-xs" aria-live="polite">
           {state.message}{" "}
           <Link href="/dashboard" className="underline">
-            open dashboard
+            open My runs
           </Link>
         </span>
       ) : null}

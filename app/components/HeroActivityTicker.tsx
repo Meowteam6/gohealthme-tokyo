@@ -12,6 +12,7 @@
 // can leak what anyone's goal actually is.
 
 import { useQuery } from "@tanstack/react-query";
+import Spotter from "@/components/spotter/Spotter";
 import { Skeleton } from "@/components/ui";
 
 type ActivityType = "joined" | "funded" | "paid";
@@ -54,8 +55,8 @@ const META: Record<
   ActivityType,
   { dot: string; line: (name: string) => string }
 > = {
-  joined: { dot: "bg-accent", line: (n) => `${n} entered a run` },
-  funded: { dot: "bg-coral", line: (n) => `${n} put up a reward` },
+  joined: { dot: "bg-foreground", line: (n) => `${n} entered a run` },
+  funded: { dot: "bg-gold", line: (n) => `${n} put up a reward` },
   paid: { dot: "bg-gold", line: (n) => `SPOTTER paid ${n}` },
 };
 
@@ -75,9 +76,9 @@ export default function HeroActivityTicker() {
   const events = (data?.events ?? []).slice(0, 5);
 
   return (
-    <div className="rounded-xl border-2 border-foreground/15 bg-surface p-4">
+    <div className="rounded-3xl border border-edge bg-surface p-4">
       <div className="mb-3 flex items-center gap-2">
-        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-accent" aria-hidden="true" />
+        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-foreground" aria-hidden="true" />
         <p className="text-sm font-semibold text-muted">What just happened on chain</p>
       </div>
 
@@ -93,7 +94,7 @@ export default function HeroActivityTicker() {
           <Skeleton className="h-12 w-full" />
         </div>
       ) : isError && events.length === 0 ? (
-        <div className="rounded-lg border-2 border-dashed border-warning/40 px-4 py-6" role="status">
+        <div className="rounded-[18px] border-2 border-dashed border-warning/40 px-4 py-5" role="status">
           <p className="text-sm font-bold text-foreground">
             Could not read the chain right now.
           </p>
@@ -111,12 +112,15 @@ export default function HeroActivityTicker() {
           </button>
         </div>
       ) : events.length === 0 ? (
-        <div className="rounded-lg border-2 border-dashed border-edge px-4 py-6">
+        <div className="flex items-center gap-3 rounded-[18px] border-2 border-dashed border-edge px-4 py-5">
+          <Spotter state="empty" size="xs" decorative className="shrink-0" />
+          <div className="min-w-0">
           <p className="text-sm font-bold text-foreground">Quiet right now.</p>
           <p className="mt-1 text-sm text-muted">
             Be the first. Enter a run or dare a friend and it shows up here
             once it lands on chain.
           </p>
+          </div>
         </div>
       ) : (
         <ul className="space-y-2">
@@ -127,7 +131,7 @@ export default function HeroActivityTicker() {
             return (
               <li
                 key={e.id}
-                className="flex items-center gap-3 rounded-lg border border-edge bg-surface-raised px-3 py-2.5"
+                className="flex items-center gap-3 rounded-[16px] border border-edge bg-background px-3 py-2.5"
               >
                 <span
                   className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`}
@@ -140,7 +144,7 @@ export default function HeroActivityTicker() {
                   <p className="text-xs text-muted">{relativeTime(e.at)}</p>
                 </div>
                 {amt !== "" ? (
-                  <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-gold-deep">
+                  <span className="shrink-0 font-display text-base font-extrabold tabular-nums text-gold-deep">
                     +{amt} USDC
                   </span>
                 ) : null}

@@ -128,7 +128,7 @@ function FundPoolInner({
       ) : null}
 
       {status.kind === "done" ? (
-        <div className="space-y-1 rounded-xl border border-accent/40 bg-accent/20 p-4">
+        <div className="space-y-1 rounded-xl border border-edge bg-surface-raised p-4">
           <p className="text-sm font-semibold text-accent-deep">
             Pool topped up.
           </p>

@@ -220,7 +220,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
         is charged and nothing leaves your wallet.
       </p>
       {faucet.kind === "granted" ? (
-        <div className="mt-2 rounded-xl border border-accent/40 bg-accent/20 p-3">
+        <div className="mt-2 rounded-xl border border-edge bg-surface-raised p-3">
           <p className="text-sm font-semibold text-accent-deep">
             Granted {formatUsdc(FAUCET_GRANT_UUSDC)} test USDC to your balance.
           </p>
@@ -253,7 +253,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
       </p>
 
       {move.kind === "done" ? (
-        <div className="mt-2 rounded-xl border border-accent/40 bg-accent/20 p-3">
+        <div className="mt-2 rounded-xl border border-edge bg-surface-raised p-3">
           <p className="text-sm font-semibold text-accent-deep">
             Moved to your Base wallet. It is now spendable on goals and pools.
           </p>
