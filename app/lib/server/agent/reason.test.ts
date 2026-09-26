@@ -129,7 +129,8 @@ describe("geminiReason", () => {
     const { geminiReason } = await load();
     const result = await geminiReason(ctx());
     expect(result.decision).toBe("pay");
-    expect(result.note).toMatch(/gemini unavailable/);
+    expect(result.note).toMatch(/^Checked by SPOTTER's fixed rule\./);
+    expect(result.note).not.toMatch(/GOOGLE_CLOUD_PROJECT|gemini/i);
     expect(generateContent).not.toHaveBeenCalled();
   });
 
@@ -167,7 +168,7 @@ describe("geminiReason", () => {
     const result = await geminiReason(ctx());
 
     expect(result.decision).toBe("pay");
-    expect(result.note).toMatch(/no usable decision/);
+    expect(result.note).toMatch(/^Checked by SPOTTER's fixed rule\./);
   });
 
   it("passes inline credentials to the Vertex client when configured", async () => {
@@ -236,6 +237,7 @@ describe("geminiReason", () => {
     );
 
     expect(result.decision).toBe("no-pay");
-    expect(result.note).toMatch(/gemini unavailable \(RESOURCE_EXHAUSTED/);
+    expect(result.note).toMatch(/^Checked by SPOTTER's fixed rule\./);
+    expect(result.note).not.toMatch(/RESOURCE_EXHAUSTED|gemini/i);
   });
 });

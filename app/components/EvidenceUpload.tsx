@@ -750,8 +750,8 @@ function EvidenceUploadInner({
                 SPOTTER could not read that
               </p>
               <p className="mt-1 text-sm text-foreground/80">
-                It spent real money trying. The photo is the problem, not you —
-                shoot it again in actual light and run it back.
+                The photo is the problem, not you, and a check costs you nothing.
+                Shoot it again in actual light and run it back.
               </p>
             </div>
             <button

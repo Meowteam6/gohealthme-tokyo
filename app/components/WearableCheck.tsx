@@ -660,8 +660,8 @@ function WearableCheckInner({
                 SPOTTER could not get a clean read
               </p>
               <p className="mt-1 text-sm text-foreground/80">
-                It spent real money trying. The data is the problem, not you -
-                make sure your wearable is connected and has synced the period,
+                The data is the problem, not you, and a check costs you nothing.
+                Make sure your wearable is connected and has synced the period,
                 then run it back.
               </p>
             </div>

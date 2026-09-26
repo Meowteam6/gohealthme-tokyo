@@ -176,14 +176,19 @@ function coerce(text: string | undefined, anchor: ReasonDecision): ReasonDecisio
   }
 }
 
+/**
+ * The ledger note when the fixed rule decided instead of the model. Players
+ * and judges read this note, so it names the path in plain words; the config
+ * or error detail goes to the server log, never the receipt.
+ */
+const FIXED_RULE_PREFIX = "Checked by SPOTTER's fixed rule.";
+
 export const geminiReason: ReasonFn = async (ctx) => {
   const anchor = deterministicReason(ctx);
   const client = vertexClient();
   if (client === null) {
-    return {
-      decision: anchor.decision,
-      note: `gemini unavailable (GOOGLE_CLOUD_PROJECT not set); deterministic rule applied. ${anchor.note}`,
-    };
+    console.info("[agent/reason] gemini off (GOOGLE_CLOUD_PROJECT not set); fixed rule decided");
+    return { decision: anchor.decision, note: `${FIXED_RULE_PREFIX} ${anchor.note}` };
   }
   try {
     const response = await client.models.generateContent({
@@ -200,17 +205,13 @@ export const geminiReason: ReasonFn = async (ctx) => {
     });
     const decision = coerce(response.text, anchor);
     if (decision === null) {
-      return {
-        decision: anchor.decision,
-        note: `gemini returned no usable decision; deterministic rule applied. ${anchor.note}`,
-      };
+      console.warn("[agent/reason] gemini returned no usable decision; fixed rule decided");
+      return { decision: anchor.decision, note: `${FIXED_RULE_PREFIX} ${anchor.note}` };
     }
     return decision;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return {
-      decision: anchor.decision,
-      note: `gemini unavailable (${message.slice(0, 120)}); deterministic rule applied. ${anchor.note}`,
-    };
+    console.warn(`[agent/reason] gemini call failed (${message.slice(0, 200)}); fixed rule decided`);
+    return { decision: anchor.decision, note: `${FIXED_RULE_PREFIX} ${anchor.note}` };
   }
 };
