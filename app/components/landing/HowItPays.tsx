@@ -107,9 +107,10 @@ export default function HowItPays({
         aria-labelledby={`pays-tab-${active}`}
         className="[grid-area:outcome]"
       >
-        {/* A fixed reserve so switching tabs never moves the page; a taller
-            pose rises into the gap under the tabs instead. */}
-        <Perch state={tab.state} side="right" inset={[14, 24]} reserve={[98, 118]} decorative>
+        {/* A fixed reserve so switching tabs never moves the page. It fits
+            the tallest pose (facepalm) from 900px, where the tabs sit right
+            above with no row gap; on a phone the 20px gap takes the rest. */}
+        <Perch state={tab.state} side="right" inset={[14, 24]} reserve={[98, 146]} decorative>
           <Card className="min-h-[172px] min-[900px]:min-h-[184px]">
             <h3 className="m-0 max-w-[calc(100%-96px)] text-[1.1875rem] font-semibold leading-[1.3] min-[900px]:text-[1.3125rem]">
               {copy.heading}
