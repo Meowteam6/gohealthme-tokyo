@@ -11,7 +11,6 @@
 // odds, gamble or a prize-first framing.
 
 import { commitmentRange } from "@/lib/commitment";
-import { missConsequence } from "@/lib/commitment-copy";
 import { formatUsdc, parseUsdc } from "@/lib/contract";
 import { missRulePool } from "@/lib/miss-rule";
 
