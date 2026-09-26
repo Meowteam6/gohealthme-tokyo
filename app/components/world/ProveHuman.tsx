@@ -313,12 +313,13 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="type-heading m-0 text-[1.75rem] text-balance">Prove you&apos;re one human.</h2>
+        {/* A player sees a chip only when the proof is not the real thing:
+            mocked on a dev or preview build, or World's test network. The
+            real World ID needs no label. */}
         {mode === "mock" ? (
           <Badge tone="warning">Event mode: mocked proofs</Badge>
-        ) : mode === "live" && config?.mode === "live" ? (
-          <Badge tone={config.environment === "production" ? "accent" : "muted"}>
-            World ID {config.environment}
-          </Badge>
+        ) : mode === "live" && config?.mode === "live" && config.environment === "staging" ? (
+          <Badge tone="muted">World ID test mode</Badge>
         ) : null}
       </div>
       <p className="mt-2 text-sm text-muted">
@@ -327,7 +328,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       </p>
 
       {phase.kind === "loading" ? (
-        <p className="mt-4 text-sm text-muted">Checking what this deployment supports…</p>
+        <p className="mt-4 text-sm text-muted">Getting World ID ready…</p>
       ) : null}
 
       {phase.kind === "unavailable" ? (
