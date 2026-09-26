@@ -55,6 +55,7 @@ export default function SpotterSays({
   align = "left",
   locale,
   say,
+  bare = false,
 }: {
   surface: Surface;
   state: SpotterState;
@@ -64,6 +65,9 @@ export default function SpotterSays({
   size?: "sm" | "md";
   align?: "left" | "right";
   locale?: Locale;
+  /** Only his caption box, no figure: for a card on a page that already has
+   *  its one pose (docs/DESIGN.md, one pose per viewport). */
+  bare?: boolean;
 }) {
   const picked = useSyncExternalStore(
     noSubscription,
@@ -73,6 +77,7 @@ export default function SpotterSays({
 
   const text = say ?? picked?.text;
   if (text === undefined) return null;
+  if (bare) return <SpotterCaption line={text} className="max-w-md" />;
 
   return (
     <Perch

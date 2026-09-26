@@ -124,26 +124,27 @@ export function PerchedHeader({
   children: ReactNode;
   className?: string;
 }) {
+  // One grid, one figure. On a phone the title takes the full width and he
+  // stands beside the lead; from 900px he stands beside the title and the
+  // lead together, so the header is never taller than he is by much.
   return (
     <div className={className}>
-      {/* The title keeps the full width; he stands beside the lead, so a long
-          title never wraps around him. */}
-      <header>
-        {above !== undefined ? <div className="mb-4">{above}</div> : null}
-        <h1 className={PAGE_TITLE}>{title}</h1>
-        <div className="flex gap-3 min-[900px]:gap-8">
-          <div className="min-w-0 flex-1 self-start pb-5 min-[900px]:pb-8">
-            {lead !== undefined ? <p className={PAGE_LEAD}>{lead}</p> : null}
-            {below}
-          </div>
-          <SpotterFigure
-            pose={pose}
-            width={width}
-            decorative
-            priority
-            className="relative z-[3] -mb-1.5 mr-2 self-end min-[900px]:mr-8"
-          />
+      <header className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 min-[900px]:grid-rows-[auto_1fr] min-[900px]:gap-x-8">
+        <div className="col-span-2 min-[900px]:col-span-1">
+          {above !== undefined ? <div className="mb-4">{above}</div> : null}
+          <h1 className={PAGE_TITLE}>{title}</h1>
         </div>
+        <div className="col-start-1 row-start-2 min-w-0 self-start pb-5 min-[900px]:pb-8">
+          {lead !== undefined ? <p className={PAGE_LEAD}>{lead}</p> : null}
+          {below}
+        </div>
+        <SpotterFigure
+          pose={pose}
+          width={width}
+          decorative
+          priority
+          className="relative z-[3] col-start-2 row-start-2 -mb-1.5 mr-2 self-end min-[900px]:row-span-2 min-[900px]:row-start-1 min-[900px]:mr-8"
+        />
       </header>
       {children}
     </div>
