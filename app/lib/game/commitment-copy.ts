@@ -122,10 +122,10 @@ export function paidBreakdown(paidUsd: string, entryFee: bigint): string {
   try {
     paid = parseUsdc(paidUsd);
   } catch {
-    return `${paidUsd} USDC credited to you.`;
+    return `${paidUsd} USDC paid out.`;
   }
   const stake = formatUsdc(entryFee);
-  if (paid < entryFee) return `${formatUsdc(paid)} USDC credited to you.`;
+  if (paid < entryFee) return `${formatUsdc(paid)} USDC paid out.`;
   const extra = paid - entryFee;
   if (extra === 0n) {
     return `${stake} stake back. Everyone hit it, so there were no missed stakes to share.`;
@@ -167,3 +167,7 @@ export function commitmentLostCopy(input: {
     body: `Your ${stake} went to the players who hit.`,
   };
 }
+
+/** The run board's reminder under the money, for a player already in. */
+export const COMMITMENT_REMINDER =
+  "Hit it and your stake comes back plus an equal share of the missed stakes. Miss it and your stake goes to the players who hit. If nobody hits, every stake comes back.";

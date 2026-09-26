@@ -93,8 +93,9 @@ export default function Lobby({
             The lobby
           </h1>
           <p className="max-w-lg text-base text-foreground/85 sm:text-lg">
-            Put money on yourself. Your wearable decides. SPOTTER pays you or it
-            does not.
+            Put money on yourself. Everyone stakes the same and your wearable
+            decides: hit your goal and your stake comes back with a share of
+            the stakes that missed.
           </p>
           <p className="text-sm text-muted">Base Sepolia test money, beta. No real dollars.</p>
         </header>

@@ -37,6 +37,8 @@ import { useWalletAuth } from "@/lib/useWalletAuth";
 import { nightTally, runClock, type RunStanding } from "@/lib/game/tally";
 import { runFigureOf, runSceneOf } from "@/lib/game/run-scene";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
+import { COMMITMENT_REMINDER, hitRange } from "@/lib/game/commitment-copy";
+import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
 
 const STANDING_LINE: Record<RunStanding, string> = {
   "on-target": "That is enough nights. Have me check it and the verdict is mine to make.",
@@ -103,6 +105,8 @@ export default function RunBoard({
     retry: false,
   });
   const players = usePlayers(pool.id);
+  const selfStaked = pool.bountyModel === 2;
+  const feeBps = useCommitmentFee(selfStaked);
 
   const state = progressQuery.data;
   const banked = state?.kind === "ok" ? state.progress.streakDays : null;
@@ -126,10 +130,19 @@ export default function RunBoard({
     ended: clock?.ended === true,
   });
   const night = scene === "run-night-sleep";
-  const selfStaked = pool.bountyModel === 2;
 
   const playerList = players.data ?? [];
   const hitCount = playerList.filter((p) => p.hit).length;
+  // What a hit pays today, from lib/commitment.ts: every other player hitting
+  // at the low end, only you at the high end. Before settle only, and only
+  // with the player count and the fee both read.
+  const ifYouHit =
+    selfStaked && !pool.settled && !pool.cancelled && players.data !== undefined
+      ? hitRange(
+          { entryFee: pool.entryFee, players: playerList.length, balance: pool.balance, feeBps },
+          false,
+        )
+      : null;
   const goal = displayGoalSpec(pool.goalSpec);
 
   // The nights, in whichever state the wearable read is in. Every branch
@@ -265,7 +278,28 @@ export default function RunBoard({
             <Money usd={formatUsdc(pool.balance)} size="lg" />
           </dd>
         </div>
+        {ifYouHit !== null ? (
+          <div>
+            <dt className="text-sm text-muted">If you hit</dt>
+            <dd className="flex flex-wrap items-baseline gap-x-1.5">
+              {ifYouHit.low === ifYouHit.high ? (
+                <Money usd={formatUsdc(ifYouHit.low)} size="lg" />
+              ) : (
+                <>
+                  <Money usd={formatUsdc(ifYouHit.low)} size="md" />
+                  <span className="text-sm text-muted">to</span>
+                  <Money usd={formatUsdc(ifYouHit.high)} size="md" />
+                </>
+              )}
+            </dd>
+          </div>
+        ) : null}
       </dl>
+      {selfStaked && !pool.settled && !pool.cancelled ? (
+        <p className="px-1 text-sm text-foreground/80">
+          {COMMITMENT_REMINDER}
+        </p>
+      ) : null}
 
       <section aria-label="Who is in" className="rounded-3xl border border-edge bg-surface p-4 sm:p-5">
         <h3 className="font-display text-xl font-bold leading-display">Who is in</h3>

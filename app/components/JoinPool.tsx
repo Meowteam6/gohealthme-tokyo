@@ -30,6 +30,7 @@ import SignInGate from "@/components/SignInGate";
 import Spotter from "@/components/spotter/Spotter";
 import HoldCoin from "@/components/spotter/HoldCoin";
 import { joinCoinCopy, type JoinCoinPhase } from "@/components/join-coin";
+import { joinTermsLine, type CommitmentTerms } from "@/lib/game/commitment-copy";
 
 type JoinStatus =
   | { kind: "idle" }
@@ -43,10 +44,12 @@ function JoinPoolInner({
   poolId,
   entryFee,
   alreadyJoined,
+  commitment,
 }: {
   poolId: bigint;
   entryFee: bigint;
   alreadyJoined: boolean;
+  commitment: CommitmentTerms | null;
 }) {
   const { ready, authenticated, address, getArcWalletClient } =
     useEmbeddedWallet();
@@ -309,6 +312,13 @@ function JoinPoolInner({
           )
         }
       </SignInGate>
+      {/* The commitment terms, one line, right under the coin and before
+          the hold: what a hit, a miss and nobody hitting pay. */}
+      {commitment !== null ? (
+        <p className="text-center text-sm font-bold text-foreground text-pretty">
+          {joinTermsLine(commitment)}
+        </p>
+      ) : null}
       {authenticated ? <GaslessBadge status={gasless} /> : null}
       <p className="text-center text-xs text-muted">
         One wallet, one entry. Sign in with an email - the wallet is created
@@ -329,10 +339,14 @@ export default function JoinPool({
   poolId,
   entryFee,
   alreadyJoined = false,
+  commitment = null,
 }: {
   poolId: bigint;
   entryFee: bigint;
   alreadyJoined?: boolean;
+  /** A commitment run's terms (bountyModel 2), stated under the coin.
+   *  Null or omitted for other models, or while the count is unread. */
+  commitment?: CommitmentTerms | null;
 }) {
   if (!DYNAMIC_CONFIGURED) {
     // Fail closed, in plain language. A build without a wallet signer must
@@ -359,6 +373,7 @@ export default function JoinPool({
       poolId={poolId}
       entryFee={entryFee}
       alreadyJoined={alreadyJoined}
+      commitment={commitment}
     />
   );
 }

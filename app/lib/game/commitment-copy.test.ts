@@ -70,7 +70,7 @@ describe("commitment copy", () => {
     expect(paidBreakdown("1.00", ONE)).toBe(
       "1.00 stake back. Everyone hit it, so there were no missed stakes to share.",
     );
-    expect(paidBreakdown("0.5", ONE)).toBe("0.50 USDC credited to you.");
+    expect(paidBreakdown("0.5", ONE)).toBe("0.50 USDC paid out.");
   });
 
   it("a miss says where the stake went, from what the chain recorded", () => {

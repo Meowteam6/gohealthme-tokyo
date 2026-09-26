@@ -13,6 +13,7 @@ import { formatRunClock, runClock } from "@/lib/game/tally";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
 import type { LobbyRow } from "@/lib/game/lobby";
 import { closedRunTag } from "@/lib/game/run-end";
+import { commitmentRowTerms } from "@/lib/game/commitment-copy";
 import LockPanel from "@/components/game/LockPanel";
 import Spotter from "@/components/spotter/Spotter";
 import { Skeleton } from "@/components/ui";
@@ -123,6 +124,11 @@ export default function RunSlip({
             <StateTag row={row} />
           </div>
           <p className="text-right text-xs text-muted">test USDC</p>
+          {selfStaked && row.slot.kind !== "closed" ? (
+            <p className="col-span-2 text-sm text-foreground/85">
+              {commitmentRowTerms(pool.entryFee)}
+            </p>
+          ) : null}
         </div>
       </RowHead>
       {action !== undefined ? (
