@@ -35,16 +35,22 @@
 // The public redaction rule (feed / profile / pool metadata) is untouched.
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Countdown from "@/components/Countdown";
 import SceneHeader from "@/components/SceneHeader";
 import SignInPanel from "@/components/SignInPanel";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
+import Spotter from "@/components/spotter/Spotter";
+import { useApprovalProbe } from "@/components/game/ApprovalNote";
+import {
+  challengeCreateBlock,
+  payoutStateOf,
+  verifierStateOf,
+} from "@/lib/game/join-checks";
+import { useDocumentProofQuery } from "@/lib/useProofStatus";
 import {
   Badge,
-  Button,
   Card,
   EmptyState,
   ErrorNote,
@@ -71,6 +77,14 @@ import { fetchWithWalletAuth, type WalletAuthRequester } from "@/lib/client-auth
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { useDisplayNames } from "@/lib/use-display-names";
+
+// The coral pressable (components/ui Button) and the ink ghost, for Links.
+const PRIMARY_LINK = `w-full rounded-[18px] bg-accent font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 motion-reduce:transition-none sm:w-auto ${TAP_TARGET}`;
+const GHOST_LINK = `w-full rounded-[18px] border-2 border-foreground font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 sm:w-auto ${TAP_TARGET}`;
+const CARD_TITLE =
+  "mt-1 break-words font-display text-xl font-bold leading-snug";
+const SECTION_TITLE =
+  "font-display text-[1.75rem] font-extrabold leading-display tracking-display";
 
 /** The on-chain initiative string every challenge pool carries. Mirrors
  *  CHALLENGE_INITIATIVE in CreateChallenge.tsx, which writes it at createPool. */
@@ -348,7 +362,7 @@ function InvitedChallengeCard({
         <span className="font-semibold text-foreground">{challengerName}</span>{" "}
         invited you
       </p>
-      <h3 className="mt-1 font-display text-lg font-semibold leading-snug">
+      <h3 className={CARD_TITLE}>
         {displayGoalSpec(pool.goalSpec)}
       </h3>
       {message !== null ? (
@@ -358,10 +372,7 @@ function InvitedChallengeCard({
         <RewardFigure pool={pool} participantCount={entry.participantCount} />
         <Countdown periodStart={pool.periodStart} periodEnd={pool.periodEnd} />
       </div>
-      <Link
-        href={acceptUrl}
-        className={`mt-4 w-full rounded-full bg-accent font-display font-bold text-foreground hover:bg-accent-hover ${TAP_TARGET}`}
-      >
+      <Link href={acceptUrl} className={`mt-4 ${PRIMARY_LINK}`}>
         Accept the dare
       </Link>
     </Card>
@@ -391,7 +402,7 @@ function InChallengeCard({
         <span className="font-semibold text-foreground">{challengerName}</span>{" "}
         challenged you
       </p>
-      <h3 className="mt-1 font-display text-lg font-semibold leading-snug">
+      <h3 className={CARD_TITLE}>
         {displayGoalSpec(pool.goalSpec)}
       </h3>
       <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
@@ -400,11 +411,7 @@ function InChallengeCard({
       </div>
       <Link
         href={`/pools/${id}`}
-        className={`mt-4 w-full rounded-full font-display font-bold ${TAP_TARGET} ${
-          needsProof
-            ? "bg-accent text-foreground hover:bg-accent-hover"
-            : "border-2 border-edge text-foreground hover:border-accent/50"
-        }`}
+        className={`mt-4 ${needsProof ? PRIMARY_LINK : GHOST_LINK}`}
       >
         {needsProof ? "Upload your proof" : "View challenge"}
       </Link>
@@ -462,7 +469,7 @@ function SentChallengeCard({ entry }: { entry: SentChallenge }) {
             ? "Your commitment - lock in your stake"
             : "A reward you put up for a friend"}
       </p>
-      <h3 className="mt-1 font-display text-lg font-semibold leading-snug">
+      <h3 className={CARD_TITLE}>
         {displayGoalSpec(pool.goalSpec)}
       </h3>
       <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
@@ -476,37 +483,66 @@ function SentChallengeCard({ entry }: { entry: SentChallenge }) {
         <Countdown periodStart={pool.periodStart} periodEnd={pool.periodEnd} />
         {countLabel !== null ? <span>{countLabel}</span> : null}
       </div>
-      <Link
-        href={`/pools/${id}`}
-        className={`mt-4 w-full rounded-full border-2 border-edge font-display font-bold text-foreground hover:border-accent/50 ${TAP_TARGET}`}
-      >
+      <Link href={`/pools/${id}`} className={`mt-4 ${GHOST_LINK}`}>
         View challenge
       </Link>
     </Card>
   );
 }
 
-/** The two honest ways to start a challenge, side by side. Both land on
- *  /challenge/new with the matching variant preselected. Emerald for the stake
- *  you put on yourself; coral for the human act of daring a friend - coral is
- *  warmth, never a number. */
-function StartChallengeCTAs() {
-  const router = useRouter();
+/** Whether a new dare can start on this build, from the same two probes the
+ *  create page decides on (lib/game/join-checks). Read-only: /challenge/new
+ *  still checks again before any money moves. Only a definite "paused" changes
+ *  what this page offers; checking or a failed probe keeps the normal action. */
+function useDarePause(): { title: string; detail: string } | null {
+  const proof = useDocumentProofQuery();
+  const approval = useApprovalProbe();
+  const block = challengeCreateBlock(
+    verifierStateOf(proof),
+    payoutStateOf(approval.mode),
+  );
+  return block.kind === "paused"
+    ? { title: block.title, detail: block.detail }
+    : null;
+}
+
+const PAUSED_LINE = "Checker's off. I don't hold money I can't check.";
+
+/** The one action that starts something. When dares are paused on this build
+ *  it points at what still works (wearable runs) instead of a form that would
+ *  refuse. */
+function StartAction({ paused }: { paused: boolean }) {
+  return paused ? (
+    <Link href="/pools" className={PRIMARY_LINK}>
+      Find a wearable run
+    </Link>
+  ) : (
+    <Link href="/challenge/new" className={PRIMARY_LINK}>
+      Start a dare
+    </Link>
+  );
+}
+
+/** Dares are paused on this build: SPOTTER says so plainly, with the one next
+ *  action that works. Never hidden, never a dead box. */
+function DaresPausedNote({
+  pause,
+}: {
+  pause: { title: string; detail: string };
+}) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-      <Button
-        pop
-        onClick={() => router.push("/challenge/new?v=self")}
-      >
-        Stake on yourself
-      </Button>
-      <Button
-        variant="coral"
-        pop
-        onClick={() => router.push("/challenge/new?v=dare")}
-      >
-        Dare a friend
-      </Button>
+    <div
+      role="status"
+      className="flex flex-col items-center gap-4 rounded-3xl border border-edge bg-surface-raised p-5 text-center sm:flex-row sm:items-end sm:text-left"
+    >
+      <Spotter state="error" size="sm" line={PAUSED_LINE} />
+      <div className="space-y-2 sm:pb-2">
+        <p className="font-display text-xl font-bold leading-display">
+          {pause.title}
+        </p>
+        <p className="text-sm text-foreground/80">{pause.detail}</p>
+        <StartAction paused />
+      </div>
     </div>
   );
 }
@@ -547,6 +583,7 @@ function MyChallengesContent() {
     [query.data, invitedQuery.data],
   );
   const { displayName } = useDisplayNames(nameAddresses);
+  const pause = useDarePause();
 
   const origin =
     typeof window === "undefined" ? "" : window.location.origin;
@@ -565,11 +602,12 @@ function MyChallengesContent() {
     // the wallet, an external wallet is the deliberate second choice inside it.
     return (
       <div className="mx-auto max-w-md space-y-4">
-        <div className="text-center">
-          <p className="font-display text-lg font-semibold">
-            Sign in to see your challenges
+        <div className="flex flex-col items-center text-center">
+          <Spotter state="history-other" size="sm" decorative />
+          <p className="mt-3 font-display text-[1.75rem] font-extrabold leading-display tracking-display">
+            Sign in to see your dares
           </p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted">
+          <p className="mx-auto mt-2 max-w-md text-base text-muted">
             The dares aimed at you and the ones you have sent live here once you
             sign in.
           </p>
@@ -591,8 +629,8 @@ function MyChallengesContent() {
   if (query.isError) {
     return (
       <ErrorNote
-        title="Could not load your challenges"
-        detail="We could not read your challenges from Base Sepolia. Try again."
+        title="Could not load your dares"
+        detail="I could not read your dares from Base Sepolia. Nothing changed. Try again."
         raw={
           query.error instanceof Error &&
           !(query.error instanceof ContractNotConfiguredError)
@@ -625,21 +663,31 @@ function MyChallengesContent() {
   }
 
   if (nothing) {
-    return (
+    return pause !== null ? (
       <EmptyState
-        title="No challenges yet"
-        detail="Stake on your own goal, or dare a friend and put up a reward. When someone dares you back, it shows up here too."
-        action={<StartChallengeCTAs />}
+        pose="thinking"
+        title={pause.title}
+        detail={pause.detail}
+        line={PAUSED_LINE}
+        action={<StartAction paused />}
+      />
+    ) : (
+      <EmptyState
+        title="No dares yet"
+        detail="Stake on your own goal, or put up a reward and dare a friend. When someone dares you back, it shows up here too."
+        line="Nothing running. I'm on break."
+        action={<StartAction paused={false} />}
       />
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
+      {pause !== null ? <DaresPausedNote pause={pause} /> : null}
       {invited.length > 0 ? (
         <section className="space-y-4">
           <div>
-            <h2 className="font-display text-lg font-semibold">Invited to you</h2>
+            <h2 className={SECTION_TITLE}>Invited to you</h2>
             <p className="mt-1 text-sm text-muted">
               Dares aimed straight at your handle. Accept one, stake the small
               lock-in, and go for the goal - hit it and you collect your lock-in
@@ -659,9 +707,7 @@ function MyChallengesContent() {
 
       <section className="space-y-4">
         <div>
-          <h2 className="font-display text-lg font-semibold">
-            Challenges you&apos;re in
-          </h2>
+          <h2 className={SECTION_TITLE}>Dares you&apos;re in</h2>
           <p className="mt-1 text-sm text-muted">
             Dares a friend aimed at you and you accepted with a lock-in stake.
             Upload your proof and you collect your stake back plus the reward the
@@ -670,8 +716,9 @@ function MyChallengesContent() {
         </div>
         {data.inChallenges.length === 0 ? (
           <EmptyState
-            title="No challenges aimed at you yet"
-            detail="When a friend dares you and you open their link to accept, the challenge shows up here."
+            pose={null}
+            title="No dares aimed at you yet"
+            detail="When a friend dares you and you open their link to accept, the dare shows up here."
           />
         ) : (
           data.inChallenges.map((entry) => (
@@ -686,9 +733,7 @@ function MyChallengesContent() {
 
       <section className="space-y-4">
         <div>
-          <h2 className="font-display text-lg font-semibold">
-            Challenges you started
-          </h2>
+          <h2 className={SECTION_TITLE}>Dares you started</h2>
           <p className="mt-1 text-sm text-muted">
             Commitments you staked on your own goal, and rewards you put up for a
             friend. Either way you never keep a participant&apos;s stake.
@@ -696,10 +741,10 @@ function MyChallengesContent() {
         </div>
         {data.sentChallenges.length === 0 ? (
           <EmptyState
-            title="You have not started any challenges yet"
+            pose={null}
+            title="You have not started a dare yet"
             detail="Stake on your own goal, or put up a reward and dare a friend to hit theirs."
-            action={<StartChallengeCTAs />}
-            pose="point"
+            action={pause !== null ? undefined : <StartAction paused={false} />}
           />
         ) : (
           data.sentChallenges.map((entry) => (
@@ -715,24 +760,22 @@ export default function ChallengesPage() {
   return (
     <div className="space-y-6">
       <SceneHeader
-        title="My challenges"
-        subtitle="The goals you have put testnet USDC behind - your own commitments, the dares you sent, and the ones aimed at you."
-        pose="spotter-greet.webp"
-        poseAlt="SPOTTER the otter waving hello, ready to introduce your dares"
+        title="Your dares"
+        subtitle="The goals you have put Base Sepolia test USDC behind: your own commitments, the dares you sent, and the ones aimed at you."
+        pose="greet"
+        poseAlt="SPOTTER waving hello"
         spotterLine="Dare a friend, or stake on yourself. I hold the pot either way."
       />
       {DYNAMIC_CONFIGURED ? (
         <MyChallengesContent />
       ) : (
         <EmptyState
-          title="Sign-in is off on this build"
-          detail="This part is not switched on for this build yet. Nothing is wrong on your side."
+          title="Sign-in is not switched on for this build"
+          detail="Dares need a signed-in wallet, and this build has sign-in off. Nothing is wrong on your side. The open runs are still there to look at."
+          line="No door, no dares. The lobby's open."
           action={
-            <Link
-              href="/pools"
-              className="inline-block rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-foreground hover:bg-accent-hover"
-            >
-              Browse pools instead
+            <Link href="/pools" className={PRIMARY_LINK}>
+              See the open runs
             </Link>
           }
         />
