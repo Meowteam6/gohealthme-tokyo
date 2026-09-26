@@ -557,10 +557,10 @@ export default function PoolDetail({ id }: { id: string }) {
         <div className="mt-3 max-w-xl">
           <ErrorNote
             title="That run does not exist"
-            detail={`"${id}" is not a run number. Pick one from the open runs.`}
+            detail={`"${id}" is not a run number. Pick one from the open challenges.`}
           />
           <ButtonLink href="/pools" variant="tertiary" className="mt-2">
-            See the open runs
+            See the open challenges
           </ButtonLink>
         </div>
       </div>
@@ -587,7 +587,7 @@ export default function PoolDetail({ id }: { id: string }) {
             retryLabel="Read the run again"
           />
           <ButtonLink href="/pools" variant="tertiary" className="mt-2">
-            See the open runs instead
+            See the open challenges instead
           </ButtonLink>
         </div>
       </div>
@@ -619,7 +619,7 @@ export default function PoolDetail({ id }: { id: string }) {
             pose="detective"
             title="This is a private challenge"
             detail="Open it from the invite link you were sent. That link carries the details this page keeps private."
-            action={<ButtonLink href="/pools">See the open runs</ButtonLink>}
+            action={<ButtonLink href="/pools">See the open challenges</ButtonLink>}
           />
         </div>
       </div>

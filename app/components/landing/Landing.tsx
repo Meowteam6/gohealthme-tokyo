@@ -91,10 +91,10 @@ function PersonIcon() {
 function HeroMore({ status, count, human, className }: { status: OpenRunsStatus; count: number; human: boolean; className: string }) {
   const label =
     status !== "ready" || count === 0
-      ? "See the open runs"
+      ? "See the open challenges"
       : count === 1
         ? "See the open run"
-        : `See all ${count} open runs`;
+        : `See all ${count} open challenges`;
   return (
     <div className={`flex-col items-start ${className}`}>
       <ChevronLink href="#runs" className="num">

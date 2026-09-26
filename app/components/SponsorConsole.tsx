@@ -369,7 +369,7 @@ export default function SponsorConsole() {
         <div className="mt-3 flex flex-wrap items-center gap-x-4">
           <Fine>Base Sepolia test USDC, beta.</Fine>
           <Link href="/pools" className={`${TEXT_LINK} text-sm`}>
-            See all open runs
+            See all open challenges
           </Link>
         </div>
       }

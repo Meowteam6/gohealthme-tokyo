@@ -7,7 +7,7 @@ import { FOCUS_RING } from "@/components/ui";
 // 420px and sticky under the header, while the hero and the cards below it
 // share the left. Server-safe; the page and the state gallery both use it.
 
-export function BackLink({ href = "/pools", label = "Open runs" }: { href?: string; label?: string }) {
+export function BackLink({ href = "/pools", label = "Open challenges" }: { href?: string; label?: string }) {
   return (
     <Link
       href={href}

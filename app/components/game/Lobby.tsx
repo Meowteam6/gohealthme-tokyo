@@ -248,7 +248,7 @@ export default function Lobby({
           />
           {lobby.open.length > 0 ? (
             <Section
-              title={lobby.highlighted !== null ? "Other runs" : "Open runs"}
+              title={lobby.highlighted !== null ? "Other challenges" : "Open challenges"}
               rows={lobby.open}
               returnTo={returnTo}
               onRetry={retryChecks}
@@ -261,7 +261,7 @@ export default function Lobby({
           {nothingOpen ? (
             <div className="grid gap-2">
               <EmptyState
-                title="No open runs right now"
+                title="No open challenges right now"
                 line="Nothing running. I'm on break."
                 detail="Nobody has put a goal on the board. Start one and I will read the wearables."
                 action={<ButtonLink href="/pools/create">Start a run</ButtonLink>}

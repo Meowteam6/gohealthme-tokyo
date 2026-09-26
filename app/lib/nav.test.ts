@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import { NAV_ITEMS, SIGNED_OUT_NAV_ITEMS } from "@/lib/nav";
 
 describe("SIGNED_OUT_NAV_ITEMS", () => {
-  it("is Runs and How it pays for a visitor with no player yet", () => {
-    expect(SIGNED_OUT_NAV_ITEMS.map((i) => i.label)).toEqual(["Runs", "How it pays"]);
+  it("is Challenges and How it pays for a visitor with no player yet (Nikki, 2026-09-27)", () => {
+    expect(SIGNED_OUT_NAV_ITEMS.map((i) => i.label)).toEqual(["Challenges", "How it pays"]);
     expect(SIGNED_OUT_NAV_ITEMS.map((i) => i.href)).toEqual(["/pools", "/#how"]);
   });
 });

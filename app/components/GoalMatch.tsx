@@ -117,7 +117,7 @@ export default function GoalMatch({ query }: { query: string }) {
     <div className={`${PAGE_COLUMN} [&>*+*]:mt-6`}>
       <div className="min-w-0">
         <p className="m-0 text-sm font-semibold text-haze">
-          {query === "" ? "Open runs" : "Money on this goal"}
+          {query === "" ? "Open challenges" : "Money on this goal"}
         </p>
         <h1 className={`${PAGE_TITLE} mt-1.5`}>
           {query === "" ? "Open goals with money behind them" : `"${query}"`}
@@ -131,7 +131,7 @@ export default function GoalMatch({ query }: { query: string }) {
         </div>
       ) : matches.isError ? (
         <ErrorNote
-          title="Could not load the open runs"
+          title="Could not load the open challenges"
           detail="Base Sepolia did not answer. Try again in a moment."
           onRetry={() => {
             void matches.refetch();
@@ -151,7 +151,7 @@ export default function GoalMatch({ query }: { query: string }) {
                   Create the run
                 </Link>
                 <Link href="/pools" className={buttonClasses({ variant: "secondary", size: "sm" })}>
-                  Browse open runs
+                  Browse open challenges
                 </Link>
               </div>
             }
@@ -159,7 +159,7 @@ export default function GoalMatch({ query }: { query: string }) {
           {others.length > 0 ? (
             <section className="[&>*+*]:mt-3" aria-labelledby="other-open-runs">
               <h2 id="other-open-runs" className={SECTION_TITLE}>
-                Other open runs
+                Other open challenges
               </h2>
               {others.map((match) => (
                 <MatchCard key={match.poolId} match={match} lead={false} />
@@ -179,7 +179,7 @@ export default function GoalMatch({ query }: { query: string }) {
           {others.length > 0 ? (
             <section className="pt-4 [&>*+*]:mt-3" aria-labelledby="other-open-runs">
               <h2 id="other-open-runs" className={SECTION_TITLE}>
-                Other open runs
+                Other open challenges
               </h2>
               {others.map((match) => (
                 <MatchCard key={match.poolId} match={match} lead={false} />

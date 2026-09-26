@@ -1188,7 +1188,7 @@ function CreateChallengeInner() {
             detail={createBlock.detail}
             action={
               <Link href="/pools" className={CANDY_LINK_PRIMARY}>
-                See the open runs
+                See the open challenges
               </Link>
             }
           />
@@ -1560,7 +1560,7 @@ export default function CreateChallenge() {
             detail="Challenges need a signed-in wallet, and this build has sign-in off. Nothing is wrong on your side."
             action={
               <Link href="/pools" className={CANDY_LINK_PRIMARY}>
-                See the open runs
+                See the open challenges
               </Link>
             }
           />

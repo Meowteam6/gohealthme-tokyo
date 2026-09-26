@@ -764,7 +764,7 @@ function RunsOff({ title, detail }: { title: string; detail: string }) {
           detail={detail}
           action={
             <Link href="/pools" className={buttonClasses({ size: "sm" })}>
-              See the open runs
+              See the open challenges
             </Link>
           }
         />

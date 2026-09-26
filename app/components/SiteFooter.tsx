@@ -7,7 +7,7 @@ import { BrandLockup, FOCUS_RING } from "@/components/ui";
 // inset and 1rem of air), so no link or disclaimer ever sits under it.
 
 const LINKS: readonly { href: string; label: string }[] = [
-  { href: "/pools", label: "Runs" },
+  { href: "/pools", label: "Challenges" },
   { href: "/#how", label: "How it pays" },
   { href: "/agent", label: "About SPOTTER" },
   { href: "/privacy", label: "Privacy" },
