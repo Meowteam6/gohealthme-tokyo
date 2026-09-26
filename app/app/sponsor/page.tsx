@@ -20,21 +20,22 @@ export default function SponsorPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+          <h1 className="font-display text-[2rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]">
             Sponsor console
           </h1>
-          <p className="mt-1 text-sm text-muted">
+          <p className="mt-2 text-base text-muted">
             Create and fund USDC health-goal pools, and see privacy-safe
             aggregate outcomes.
           </p>
         </div>
         <EmptyState
+          line="Nobody can sign in, so there is no pot to hold. I'm on break."
           title="Sign-in is off on this build"
           detail="This part is not switched on for this build yet. Nothing is wrong on your side."
           action={
             <Link
               href="/pools"
-              className="inline-block rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-foreground hover:bg-accent-hover"
+              className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-5 py-3 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
             >
               Browse pools instead
             </Link>
