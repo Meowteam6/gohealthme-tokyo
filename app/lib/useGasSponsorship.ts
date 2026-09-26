@@ -49,6 +49,11 @@ export interface GaslessStatus {
   willSponsor: boolean;
   /** One-line, honest explanation of the current mode for the UI. */
   reason: string;
+  /**
+   * Set while an unsponsored wallet is being sent test ETH for gas
+   * (lib/useEnsureGas.ts). GaslessBadge renders it as the one status line.
+   */
+  dripLine?: string | null;
 }
 
 /** A contract call to include in a sponsored EIP-5792 bundle. */

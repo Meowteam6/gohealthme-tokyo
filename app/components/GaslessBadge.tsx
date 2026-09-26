@@ -44,6 +44,20 @@ function PaymasterMissingNote() {
 }
 
 export default function GaslessBadge({ status }: { status: GaslessStatus }) {
+  // An unsponsored wallet being sent test ETH for gas before its first write.
+  // One plain line in place, no modal.
+  if (status.dripLine !== undefined && status.dripLine !== null) {
+    return (
+      <p
+        className="rounded-xl border border-edge bg-surface-raised px-3 py-2 text-xs font-medium text-muted"
+        role="status"
+        aria-live="polite"
+      >
+        {status.dripLine}
+      </p>
+    );
+  }
+
   if (status.willSponsor) {
     return (
       <p
