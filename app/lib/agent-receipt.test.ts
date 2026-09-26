@@ -174,6 +174,45 @@ describe("projectReceipt", () => {
     ]);
     expect(settled.paidUsd).toBe("50.00");
   });
+
+  it("carries a recorded miss and its closing row, and never a paid amount", () => {
+    const receipt = projectReceipt([
+      planEntry(),
+      spendEntry(),
+      {
+        kind: "record",
+        at: AT,
+        goalId: "0xg",
+        resultTx: "0xmiss",
+        registryStatus: "skipped",
+        verdict: false,
+        stakeUsd: "1.00",
+      },
+      { kind: "settle", at: AT, status: "closed", outcome: "forfeited", txHash: "0xs" },
+    ]);
+
+    expect(receipt.paidUsd).toBeNull();
+    expect(receipt.rows.find((r) => r.kind === "record")).toEqual({
+      kind: "record",
+      resultTx: "0xmiss",
+      registryTx: null,
+      verdict: false,
+      stakeUsd: "1.00",
+    });
+    expect(receipt.rows.find((r) => r.kind === "settle")).toMatchObject({
+      status: "closed",
+      outcome: "forfeited",
+      paidUsd: null,
+    });
+  });
+
+  it("reads a record row without a verdict field as a pass", () => {
+    const receipt = projectReceipt([
+      planEntry(),
+      { kind: "record", at: AT, goalId: "0xg", resultTx: "0xr", registryStatus: "skipped" },
+    ]);
+    expect(receipt.rows[1]).toMatchObject({ kind: "record", verdict: true, stakeUsd: null });
+  });
 });
 
 describe("failureModeOf", () => {
@@ -349,6 +388,32 @@ describe("runStatusFromLedger", () => {
     expect(
       runStatusFromLedger([...base(), verdictEntry(), reasonEntry("no-pay", "job-1")]),
     ).toBe("no-pay");
+  });
+
+  it("is missed once a miss is recorded, before and after the pool settles", () => {
+    const missed: LedgerEntry[] = [
+      ...base(),
+      verdictEntry({ confidence: "high" }),
+      reasonEntry("no-pay", "job-1"),
+      { kind: "record", at: AT, goalId: "0xg", registryStatus: "skipped", verdict: false, stakeUsd: "1.00" },
+    ];
+    expect(runStatusFromLedger(missed)).toBe("missed");
+    expect(
+      runStatusFromLedger([
+        ...missed,
+        { kind: "settle", at: AT, status: "closed", outcome: "forfeited", txHash: "0xs" },
+      ]),
+    ).toBe("missed");
+  });
+
+  it("never reads a recorded pass without a verdict field as a miss", () => {
+    expect(
+      runStatusFromLedger([
+        ...base(),
+        { kind: "record", at: AT, goalId: "0xg", registryStatus: "skipped" },
+        deferredEntry(),
+      ]),
+    ).toBe("recorded");
   });
 
   it("treats a mid-flight ledger as verifying (resumable)", () => {
