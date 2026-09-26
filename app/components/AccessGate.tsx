@@ -21,6 +21,7 @@
 import { useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Skeleton } from "@/components/ui";
+import Spotter from "@/components/spotter/Spotter";
 import CharacterCreation from "@/components/game/CharacterCreation";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useOnboarding } from "@/lib/game/onboarding-store";
@@ -33,9 +34,9 @@ function GateLoading() {
       <p className="sr-only" aria-live="polite">
         Loading your player
       </p>
-      <Skeleton className="h-14 w-2/3" />
-      <Skeleton className="h-5 w-full" />
-      <Skeleton className="h-64 w-full" />
+      <Spotter state="loading" size="sm" line="Looking up your player." decorative />
+      <Skeleton className="h-10 w-2/3" />
+      <Skeleton className="h-48 w-full rounded-3xl" />
     </div>
   );
 }
