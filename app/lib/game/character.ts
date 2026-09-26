@@ -2,7 +2,7 @@
 // the UX lane. Other lanes feed it through the APIs named in docs/LANES.md.
 //
 // Character creation happens once: sign in, prove you are one human, pick a
-// name, pair a sensor. Every later screen reads the result instead of asking
+// name, pair a wearable. Every later screen reads the result instead of asking
 // again, which is the whole point: the V3 flow interrogated the player at every
 // pool (five separate join refusals), and each refusal arrived as a new screen.
 //
@@ -11,16 +11,13 @@
 // Two of the four steps are HARD gates (the ones the server enforces anyway:
 // a wallet, and either World proof-of-human or the closed-beta allowlist). The
 // other two are soft: a player without a name plays under their short address,
-// and a player without a sensor can browse the lobby and sees every wearable
-// run locked with "pair your sensor" as the fix. Making them hard would be a new
+// and a player without a wearable can browse the lobby and sees every wearable
+// run locked with "pair your wearable" as the fix. Making them hard would be a new
 // wall, which is the thing this module exists to remove.
 
 import type { AccessStatus } from "@/lib/useAccess";
 import type { LaneAvailability } from "@/lib/game/lanes";
-import {
-  metricLabel,
-  type WearableMetric,
-} from "@/lib/wearable-goal";
+import { countsLineFor, launchGoalLabels } from "@/lib/game/sensor-copy";
 import {
   viewerMetricsOf,
   type ProviderOptions,
@@ -98,15 +95,16 @@ export function sensorFromOptions(
     kind: "paired",
     device: {
       provider: active?.id ?? "unknown",
-      label: active?.label ?? "Your sensor",
+      label: active?.label ?? "Your wearable",
       metrics: [...metrics],
     },
   };
 }
 
-/** The measurable goals a device can play, in words, for the character card. */
+/** The run goals a device can play, in words, for the character card. Only
+ *  launch goals: a metric no run is scored on (sleep score) is not a goal. */
 export function measurableGoalsOf(device: CharacterDevice): string[] {
-  return device.metrics.map((m) => metricLabel(m as WearableMetric));
+  return launchGoalLabels(device.metrics);
 }
 
 // ------------------------------------------------------------------- steps
@@ -234,7 +232,7 @@ function sensorStep(i: CharacterInputs): StepState {
     case "paired":
       return {
         status: "done",
-        summary: `${i.sensor.device.label}: ${measurableGoalsOf(i.sensor.device).join(", ")}`,
+        summary: `${i.sensor.device.label}. ${countsLineFor(i.sensor.device.metrics)}`,
       };
     case "none":
       return { status: "todo" };
@@ -248,7 +246,7 @@ function sensorStep(i: CharacterInputs): StepState {
     case "unavailable":
       return {
         status: "error",
-        note: "SPOTTER could not reach the sensor check just now.",
+        note: "SPOTTER could not reach the wearable check just now.",
       };
   }
 }

@@ -149,14 +149,14 @@ function SensorStepBody({
   const sensor = view.sensor;
 
   if (sensor.kind === "loading") {
-    return <p className="text-sm text-muted" aria-live="polite">Looking at your sensor</p>;
+    return <p className="text-sm text-muted" aria-live="polite">Looking at your wearable</p>;
   }
 
   if (sensor.kind === "unchecked") {
     return (
       <div className="space-y-3">
         <p className="text-sm text-foreground/80">
-          Sign once so I can see which sensor you have paired and what it
+          Sign once so I can see which wearable you have paired and what it
           measures. Free, no transaction, and it covers every run.
         </p>
         <Button
@@ -167,7 +167,7 @@ function SensorStepBody({
             void view.checkSensor().then((ok) => setDeclined(!ok));
           }}
         >
-          {view.checkingSensor ? "Waiting for your signature" : "Check my sensor"}
+          {view.checkingSensor ? "Waiting for your signature" : "Check my wearable"}
         </Button>
         {declined ? (
           <p className="text-sm text-muted" aria-live="polite">
@@ -187,11 +187,11 @@ function SensorStepBody({
     return (
       <div className="space-y-3">
         <p className="text-sm text-foreground/80">
-          The sensor check is not answering right now, so I cannot pair
+          The wearable check is not answering right now, so I cannot pair
           anything this minute. Your runs stay locked until it is back.
         </p>
         <Button type="button" variant="secondary" onClick={recheck}>
-          Try the sensor check again
+          Try the wearable check again
         </Button>
         {onSkip !== undefined ? (
           <button type="button" onClick={onSkip} className={`-ml-4 text-muted underline underline-offset-2 hover:text-foreground ${TAP_TARGET}`}>
@@ -210,7 +210,7 @@ function SensorStepBody({
   const hold = capabilityHoldOf(view.providers);
   const holdLabel =
     allOptions.find((p) => p.id === view.providers?.selected)?.label ??
-    "Your sensor";
+    "Your wearable";
   const paired = sensor.kind === "paired" ? sensor.device : null;
   const cannot =
     paired !== null

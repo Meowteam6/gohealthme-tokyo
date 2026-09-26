@@ -285,9 +285,9 @@ describe("sensorHoldCopy", () => {
     },
   );
 
-  it("falls back to 'your sensor' with no label", () => {
+  it("falls back to 'your wearable' with no label", () => {
     expect(sensorHoldCopy("awaiting-sync", null).detail).toMatch(
-      /^Your sensor is linked/,
+      /^Your wearable is linked/,
     );
   });
 });

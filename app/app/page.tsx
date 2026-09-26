@@ -39,11 +39,11 @@ function runSteps(human: boolean, confirm: boolean): { title: string; body: stri
     },
     {
       title: "Pick a run and stake on yourself",
-      body: "Sleep, steps, workouts. The lobby tells you which runs your sensor can actually measure before you put a cent down.",
+      body: "Sleep, steps, workouts. The lobby tells you which runs your wearable can actually measure before you put a cent down.",
     },
     {
       title: "Bank your nights",
-      body: "Your sensor syncs, the board counts. 3 of 5 banked, tonight still counts, and you can see who else is still in.",
+      body: "Your wearable syncs, the board counts. 3 of 5 banked, tonight still counts, and you can see who else is still in.",
     },
     {
       title: "The Verdict",
@@ -126,7 +126,7 @@ export default function Home() {
           <p className="max-w-xl text-lg text-chalk/85">
             USDC can pay her when she does, with no bank and no border in the
             way. Dare a friend, back your parents, and the money lands when
-            the sensor says it happened. Today it runs on test money while we
+            the wearable says it happened. Today it runs on test money while we
             build; real payouts are the road ahead, not a claim.
           </p>
         </div>

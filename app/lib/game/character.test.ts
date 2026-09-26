@@ -7,6 +7,7 @@ import {
   gatePassed,
   hardGateClosed,
   isReadyToPlay,
+  measurableGoalsOf,
   NAME_LOCKED_NOTE,
   sensorFromOptions,
   type CharacterInputs,
@@ -192,11 +193,25 @@ describe("characterSteps and currentStep", () => {
       ens: { lane: "on", name: "dre.gohealthme.eth" },
       sensor: {
         kind: "paired",
-        device: { provider: "junction", label: "Junction", metrics: ["sleep_score"] },
+        device: {
+          provider: "whoop",
+          label: "WHOOP",
+          metrics: ["sleep_score", "sleep_efficiency", "sleep_hours", "workouts"],
+        },
       },
     });
     const steps = characterSteps(i);
-    expect(steps.sensor).toEqual({ status: "done", summary: "Junction: sleep score" });
+    // Says what counts, like the pairing card: sleep score is not a launch goal.
+    expect(steps.sensor).toEqual({
+      status: "done",
+      summary: "WHOOP. Counts sleep efficiency, hours of sleep and workouts.",
+    });
+    expect(characterOf(i)?.device).not.toBeNull();
+    expect(measurableGoalsOf(characterOf(i)!.device!)).toEqual([
+      "sleep efficiency",
+      "hours of sleep",
+      "workouts",
+    ]);
     expect(currentStep(steps, true, none, false)).toBeNull();
   });
 

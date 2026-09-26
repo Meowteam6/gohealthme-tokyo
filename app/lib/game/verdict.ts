@@ -383,7 +383,7 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
     case "bad-read":
       return {
         headline: "I could not get a clean read",
-        body: "That is the data, not you. Make sure your sensor synced the run, then have me check again.",
+        body: "That is the data, not you. Make sure your wearable synced the run, then have me check again.",
         pose: "facepalm",
       };
     case "stopped":

@@ -776,7 +776,7 @@ export default function PoolDetail({ id }: { id: string }) {
             <Badge tone="warning">Wearable checks down</Badge>
           ) : null}
           {(unsupportedForViewer || unsupportedAfterJoin) && phase === "live" ? (
-            <Badge tone="warning">Your sensor cannot measure this</Badge>
+            <Badge tone="warning">Your wearable cannot measure this</Badge>
           ) : null}
         </div>
         <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight text-balance sm:text-6xl">

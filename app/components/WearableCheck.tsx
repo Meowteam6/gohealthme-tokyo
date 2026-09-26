@@ -1061,7 +1061,7 @@ export default function WearableCheck({
     return (
       <p className="rounded-xl border border-edge bg-surface-raised p-4 text-sm text-foreground/80">
         Sign-in is not switched on for this build, so SPOTTER has no wallet to
-        check a sensor for.
+        check a wearable for.
       </p>
     );
   }

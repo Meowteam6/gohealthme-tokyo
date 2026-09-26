@@ -163,7 +163,7 @@ export default function RunBoard({
       <div className="rounded-xl border-2 border-foreground/15 bg-surface p-4 sm:p-5">
         {!wearable ? (
           <p className="text-sm text-foreground/80">
-            This run is proven with a document, not a sensor, so there is no
+            This run is proven with a document, not a wearable, so there is no
             nightly tally. Hand SPOTTER the proof on the run page.
           </p>
         ) : progressQuery.isLoading ? (
@@ -195,13 +195,13 @@ export default function RunBoard({
           </div>
         ) : providerMetricUnavailable(state) ? (
           <p className="text-sm text-warning">
-            Your sensor syncs, and it does not report what this run is scored
+            Your wearable syncs, and it does not report what this run is scored
             on. That is the hardware. Your result settles on what the run can
             read.
           </p>
         ) : providerAwaitingFirstSync(state) ? (
           <p className="text-sm text-foreground/80">
-            Your sensor is paired and has not sent a night yet. The first sync
+            Your wearable is paired and has not sent a night yet. The first sync
             usually lands within minutes. Nothing is counted against you while
             you wait.
           </p>

@@ -313,7 +313,7 @@ function CreatePoolInner() {
             >
               <span className="block font-semibold">Wearable data</span>
               <span className="block text-xs font-normal">
-                Verified from any connected sensor: sleep efficiency, hours of sleep or workouts.
+                Verified from any connected wearable: sleep efficiency, hours of sleep or workouts.
               </span>
             </button>
             <button

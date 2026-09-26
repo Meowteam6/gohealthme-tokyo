@@ -231,12 +231,12 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
       };
     case "no-sensor":
       return {
-        title: "Pair a sensor to enter",
+        title: "Pair a wearable to enter",
         detail:
-          "I pay on what your wearable reports, so no sensor means nothing for me to check.",
+          "I pay on what your wearable reports, so no wearable means nothing for me to check.",
         fix: {
           kind: "link",
-          label: "Pair my sensor",
+          label: "Pair my wearable",
           href: `/character?step=sensor&next=${next}`,
         },
         tone: "fixable",
@@ -245,21 +245,21 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
       return sensorHoldCopy(lock.hold, lock.deviceLabel);
     case "sensor-unchecked":
       return {
-        title: "I have not looked at your sensor this visit",
+        title: "I have not looked at your wearable this visit",
         detail:
           "Sign once so I can read what it measures. Free, no transaction, and it unlocks every run at once.",
-        fix: { kind: "check-sensor", label: "Check my sensor" },
+        fix: { kind: "check-sensor", label: "Check my wearable" },
         tone: "fixable",
       };
     case "cannot-measure": {
       const metric = metricLabel(lock.metric);
-      const device = lock.deviceLabel ?? "Your sensor";
+      const device = lock.deviceLabel ?? "Your wearable";
       return {
         title: `${device} cannot measure this one`,
-        detail: `This run is scored on ${metric}, and ${device} does not report it. That is the hardware, so waiting will not change it. Pair a sensor that tracks ${metric} to play it.`,
+        detail: `This run is scored on ${metric}, and ${device} does not report it. That is the hardware, so waiting will not change it. Pair a wearable that tracks ${metric} to play it.`,
         fix: {
           kind: "link",
-          label: "Change my sensor",
+          label: "Change my wearable",
           href: `/character?step=sensor&next=${next}`,
         },
         tone: "hardware",
@@ -269,7 +269,7 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
       return {
         title: "Wearable checks are down for a bit",
         detail:
-          "The wearable service is not answering me right now. Nothing is wrong with your sensor. This run opens again when it is back.",
+          "The wearable service is not answering me right now. Nothing is wrong with your wearable. This run opens again when it is back.",
         fix: { kind: "none" },
         tone: "wait",
       };

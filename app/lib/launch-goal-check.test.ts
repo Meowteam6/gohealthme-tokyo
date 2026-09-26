@@ -15,7 +15,7 @@ describe("launch goal check", () => {
 
   it("blocks a steps goal and names what is offered", () => {
     const issue = launchGoalIssue("Walk at least 8,000 steps for 1 day");
-    expect(issue).toMatch(/every sensor/);
+    expect(issue).toMatch(/every wearable/);
     expect(issue).toMatch(/sleep efficiency, hours of sleep or workouts/);
   });
 
