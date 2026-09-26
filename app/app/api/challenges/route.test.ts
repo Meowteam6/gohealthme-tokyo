@@ -84,7 +84,7 @@ describe("POST /api/challenges", () => {
       const res = await post();
       expect(res.status).toBe(422);
       const body = (await res.json()) as { error: string };
-      expect(body.error).toMatch(/^Runs have to work with every wearable/);
+      expect(body.error).toMatch(/^Challenges have to work with every wearable/);
       expect(createChallenge).not.toHaveBeenCalled();
     });
 

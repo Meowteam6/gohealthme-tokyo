@@ -68,31 +68,22 @@ export interface InvitedChallenge {
 }
 
 
-/** The reward stats for a challenge card. pool.balance includes every
- *  player's own stake, so the reward is balance minus stakes (darePot). A
- *  settled or cancelled pool's balance is payouts and refunds, not a reward,
- *  so it gets a state word instead of a number. */
+/** The money stats for a challenge card: the stake every player puts in and
+ *  the one Pot figure, which is all the money in the challenge (every stake
+ *  plus any extra, pool.balance while live). A settled or cancelled pool's
+ *  balance is payouts and refunds, so it gets a state word instead. */
 export function rewardStats(pool: PoolInfo, participantCount: number | null): ReactNode[] {
   if (pool.cancelled) {
     return [<Stat key="state" label="Status" value="Cancelled, stakes refundable" />];
   }
   if (pool.settled) return [<Stat key="state" label="Status" value="Settled" />];
-  const { prize } = darePot({
-    balance: pool.balance,
-    entryFee: pool.entryFee,
-    participantCount,
-    settled: pool.settled,
-    cancelled: pool.cancelled,
-  });
-  const stats: ReactNode[] = [];
-  if (prize !== null) {
-    stats.push(
-      <Stat key="reward" label="Reward" value={formatUsdc(prize)} unit="USDC" tone="money" />,
-    );
+  const stats: ReactNode[] = [
+    <Stat key="stake" label="Stake" value={formatUsdc(pool.entryFee)} unit="USDC" tone="money" />,
+  ];
+  // A count that did not read leaves the Pot unstated rather than guessed.
+  if (participantCount !== null) {
+    stats.push(<Stat key="pot" label="Pot" value={formatUsdc(pool.balance)} unit="USDC" tone="money" />);
   }
-  stats.push(
-    <Stat key="lock" label="Lock-in" value={formatUsdc(pool.entryFee)} unit="USDC" tone="money" />,
-  );
   return stats;
 }
 
@@ -197,7 +188,7 @@ export function InChallengeCard({
         href={`/pools/${id}`}
         className={`mt-4 ${needsProof ? PRIMARY_LINK : GHOST_LINK}`}
       >
-        {needsProof ? "Open your run" : "View challenge"}
+        {needsProof ? "Open your challenge" : "View challenge"}
       </Link>
     </Card>
   );
@@ -206,16 +197,16 @@ export function InChallengeCard({
 export function SentChallengeCard({ entry }: { entry: SentChallenge }) {
   const { pool, participantCount, selfStaked } = entry;
   const id = pool.id.toString();
-  // A commitment you started reads as one when you have staked into it, or when
-  // it holds no reward yet and you have not (a challenge always seeds a reward
-  // above zero at creation, so a zero-balance pool you made is an unlocked
-  // commitment waiting for your stake). Best-effort display only; the money
-  // reads honestly either way - your own stake, never a "reward" that is not
-  // there.
+  // Whether you are in reads from your own stake. A challenge with no money
+  // beyond the stakes and no stake of yours is waiting for you to lock in.
+  // With money beyond the stakes and no stake of yours it is either an older
+  // reward challenge or a new one whose extra went in at create; the card says
+  // only what is true of both. The money stats are the same either way: the
+  // stake and the one Pot.
   //
-  // "No reward" is balance net of every player's stake, not a raw zero
-  // balance: friends who staked on a commitment before its creator did put
-  // their own money in, and that money is never a reward you put up.
+  // "Beyond the stakes" is balance net of every player's stake, not a raw
+  // zero balance: friends who staked before the creator did put their own
+  // money in.
   const netReward = darePot({
     balance: pool.balance,
     entryFee: pool.entryFee,
@@ -227,19 +218,18 @@ export function SentChallengeCard({ entry }: { entry: SentChallenge }) {
     selfStaked ||
     (!pool.settled &&
       (netReward !== null ? netReward === 0n : pool.balance === 0n));
-  const stakerWord = commitment ? "staked" : "accepted";
   const countLabel =
     participantCount === null
       ? null
       : participantCount === 0
         ? commitment
+          ? "Stake to lock it in"
+          : "No one has staked yet"
+        : participantCount === 1
           ? selfStaked
             ? "Just you so far"
-            : "Stake to lock it in"
-          : "No one has accepted yet"
-        : participantCount === 1
-          ? `1 person ${stakerWord}`
-          : `${participantCount} people ${stakerWord}`;
+            : "1 person staked"
+          : `${participantCount} people staked`;
 
   return (
     <Card as="article">
@@ -247,27 +237,27 @@ export function SentChallengeCard({ entry }: { entry: SentChallenge }) {
         pool={pool}
         tag={
           <Tag tone="muted" dot={false}>
-            {commitment ? "Commitment" : "Challenge"}
+            Challenge
           </Tag>
         }
       />
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <p className="m-0 text-[0.9375rem] text-muted">
+          {/* Money in and no stake of yours is either an older reward
+              challenge or a new one you have not locked in yet; the chain
+              cannot tell them apart, so the line says only what is true of
+              both. */}
           {selfStaked
-            ? "You staked on your own goal"
+            ? "You are in. Friends match your stake"
             : commitment
-              ? "Your commitment. Lock in your stake"
-              : "A reward you put up for a friend"}
+              ? "Lock in your stake to start"
+              : "You put money in and have not staked yet"}
         </p>
         {pool.settled ? <Badge tone="muted">Settled</Badge> : null}
       </div>
       <h3 className={GOAL_TITLE}>{displayGoalSpec(pool.goalSpec)}</h3>
       <StatRow className="mt-3 border-t border-edge pt-3">
-        {commitment ? (
-          <Stat label="Your stake" value={formatUsdc(pool.entryFee)} unit="USDC" tone="money" />
-        ) : (
-          rewardStats(pool, participantCount)
-        )}
+        {rewardStats(pool, participantCount)}
       </StatRow>
       {countLabel !== null ? (
         <p className="m-0 mt-3 text-[0.9375rem] text-muted">{countLabel}</p>
@@ -287,7 +277,7 @@ export const PAUSED_TITLE = "Challenges are paused for now";
 export function StartAction({ paused }: { paused: boolean }) {
   return paused ? (
     <Link href="/pools" className={PRIMARY_LINK}>
-      See the open runs
+      See the open challenges
     </Link>
   ) : (
     <Link href="/challenge/new" className={PRIMARY_LINK}>
@@ -297,7 +287,7 @@ export function StartAction({ paused }: { paused: boolean }) {
 }
 
 export const PAGE_LEAD =
-  "Your own commitments, the challenges you sent, and the ones aimed at you. Base Sepolia test USDC.";
+  "Challenges you started and the ones friends sent you. Base Sepolia test USDC.";
 
 /** The page frame: the title, and SPOTTER standing on the first card in the
  *  pose that fits the page's state (one pose on the screen). */
@@ -336,7 +326,7 @@ export function StartCard({ pause }: { pause: { detail: string } | null }) {
         <>
           <h2 className={CARD_TITLE}>Start another</h2>
           <p className="m-0 mt-1.5 text-[0.9375rem] leading-[1.5] text-muted">
-            Stake on your own goal, or put up a reward and challenge a friend. Your
+            Put money on your own goal and challenge a friend to match it. Your
             wearable decides.
           </p>
         </>

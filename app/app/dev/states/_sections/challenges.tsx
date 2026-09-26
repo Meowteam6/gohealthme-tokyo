@@ -27,6 +27,7 @@ import ChipInWarning from "@/components/ChipInWarning";
 import { PAGE_COLUMN } from "@/components/night/kit";
 import { Card, ErrorNote, Skeleton } from "@/components/ui";
 import type { PoolInfo } from "@/lib/contract";
+import { potLineOf } from "@/lib/game/money-flow";
 import { inviteShareOf } from "@/lib/game/money-sharing";
 
 const SELF_SHARE = inviteShareOf("self");
@@ -97,8 +98,9 @@ export default function ChallengeStates({ meta }: SectionProps) {
     participantCount: 0,
     selfStaked: false,
   };
+  // The one challenge flow: 10.00 staked by the creator plus 2.00 extra.
   const sentSelf = {
-    pool: pool({ id: 45n, balance: 1n * USDC, goalSpec: "Sleep at least 7 hours for 1 night" }),
+    pool: pool({ id: 45n, entryFee: 10n * USDC, balance: 12n * USDC, goalSpec: "Sleep at least 7 hours for 1 night" }),
     participantCount: 1,
     selfStaked: true,
   };
@@ -123,7 +125,7 @@ export default function ChallengeStates({ meta }: SectionProps) {
           first={
             <EmptyCard
               title="No challenges yet"
-              detail="Stake on your own goal, or put up a reward and challenge a friend. Your wearable decides. When someone challenges you, it shows up here too."
+              detail="Put money on your own goal and challenge a friend to match it. Your wearable decides. When someone challenges you, it shows up here too."
               action={<StartAction paused={false} />}
             />
           }
@@ -142,14 +144,14 @@ export default function ChallengeStates({ meta }: SectionProps) {
           <section className="[&>*+*]:mt-4">
             <SectionHead
               title="Invited to you"
-              lead="Challenges aimed at your name. Accept one and stake the small lock-in. Hit the goal and your lock-in comes back plus the reward when the run settles."
+              lead="Challenges aimed at your name. Match the stake to join. Hit the goal and your stake comes back plus the stake of whoever misses."
             />
             <InvitedChallengeCard entry={invited} challengerName="mika.gohealthme.eth" acceptUrl="#challenge-accept" />
           </section>
           <section className="[&>*+*]:mt-4">
             <SectionHead
               title="Challenges you're in"
-              lead="Challenges a friend aimed at you that you accepted with a lock-in stake. Your wearable decides; hit it and your stake comes back plus the reward."
+              lead="Challenges you staked in. Your wearable decides; hit it and your stake comes back plus your share of the pot."
             />
             <InChallengeCard entry={inEntry} challengerName="mika.gohealthme.eth" />
             <InChallengeCard entry={paidEntry} challengerName="0x8a39...6141" />
@@ -157,7 +159,7 @@ export default function ChallengeStates({ meta }: SectionProps) {
           <section className="[&>*+*]:mt-4">
             <SectionHead
               title="Challenges you started"
-              lead="Commitments you staked on your own goal, and rewards you put up for a friend. You never keep another player's stake."
+              lead="Challenges you put money on. You never keep another player's stake."
             />
             <SentChallengeCard entry={sentReward} />
             <SentChallengeCard entry={sentSelf} />
@@ -213,7 +215,23 @@ export default function ChallengeStates({ meta }: SectionProps) {
         </div>
       </StateFrame>
 
-      <StateFrame name="challenge-accept-match" note="the Match my stake link: the creator staked on themselves">
+      <StateFrame name="challenge-accept-match" note="the Match my stake link: 10.00 each, 2.00 extra in the pot">
+        <div className={PAGE_COLUMN}>
+          <ChallengeIntro
+            kind="self"
+            challengerName="mika.gohealthme.eth"
+            seed={2n * USDC}
+            targetHandle="andre"
+            message={null}
+            terms={{ entryFee: 10n * USDC, players: 1, sponsorPot: 2n * USDC, recordsMisses: true }}
+            backers={["nikki.gohealthme.eth"]}
+            stake={10n * USDC}
+            potLine={potLineOf({ stake: 10n * USDC, stakers: ["mika.gohealthme.eth"], extra: 2n * USDC })}
+          />
+        </div>
+      </StateFrame>
+
+      <StateFrame name="challenge-accept-match-no-miss" note="Match my stake on a goal that cannot record a miss: a miss comes back">
         <div className={PAGE_COLUMN}>
           <ChallengeIntro
             kind="self"
@@ -221,8 +239,26 @@ export default function ChallengeStates({ meta }: SectionProps) {
             seed={0n}
             targetHandle={null}
             message={null}
-            terms={{ entryFee: 1n * USDC, players: 1, sponsorPot: 0n, recordsMisses: true }}
-            backers={["nikki.gohealthme.eth"]}
+            terms={{ entryFee: 5n * USDC, players: 1, sponsorPot: 0n, recordsMisses: false }}
+            backers={[]}
+            stake={5n * USDC}
+            potLine={potLineOf({ stake: 5n * USDC, stakers: ["mika.gohealthme.eth"], extra: 0n })}
+          />
+        </div>
+      </StateFrame>
+
+      <StateFrame name="challenge-accept-before-lock-in" note="the friend opens the link before the creator locked in">
+        <div className={PAGE_COLUMN}>
+          <ChallengeIntro
+            kind="unstaked"
+            challengerName="mika.gohealthme.eth"
+            seed={0n}
+            targetHandle="andre"
+            message={null}
+            terms={{ entryFee: 10n * USDC, players: 0, sponsorPot: 0n, recordsMisses: true }}
+            backers={[]}
+            stake={10n * USDC}
+            potLine={potLineOf({ stake: 10n * USDC, stakers: 0, extra: 0n })}
           />
         </div>
       </StateFrame>
@@ -363,10 +399,10 @@ export default function ChallengeStates({ meta }: SectionProps) {
           first={
             <EmptyCard
               title="Sign-in is off on this build"
-              detail="Challenges need a signed-in wallet, and this build has sign-in off. Nothing is wrong on your side. The open runs are still there to look at."
+              detail="Challenges need a signed-in wallet, and this build has sign-in off. Nothing is wrong on your side. The open challenges are still there to look at."
               action={
                 <Link href="/pools" className={PRIMARY_LINK}>
-                  See the open runs
+                  See the open challenges
                 </Link>
               }
             />

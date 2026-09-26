@@ -234,7 +234,7 @@ describe("challengeGoalIssue", () => {
       "[doc] Sleep at least 7 hours for 1 night",
       "[proof=doc+self] Complete at least 1 workout for 1 day",
     ]) {
-      expect(challengeGoalIssue(goal)).toMatch(/^Runs have to work with every wearable/);
+      expect(challengeGoalIssue(goal)).toMatch(/^Challenges have to work with every wearable/);
     }
   });
 });
