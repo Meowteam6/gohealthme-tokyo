@@ -118,6 +118,7 @@ import {
   wearableGoalNotice,
 } from "@/lib/launch-goal-check";
 import { COMING_LINE } from "@/lib/provider-capabilities";
+import { lockInHint } from "@/lib/game/money-sharing";
 
 const DURATION_OPTIONS: { label: string; days: number }[] = [
   { label: "1 week", days: 7 },
@@ -1242,10 +1243,7 @@ function CreateChallengeInner() {
                     onChange={setStake}
                     ariaLabel="Their lock-in in USDC"
                   />
-                  <p className={FIELD_HINT}>
-                    The small amount they put up to lock in. Real money keeps the goal
-                    honest. They get it back when they hit it, and you never keep it.
-                  </p>
+                  <p className={FIELD_HINT}>{lockInHint(selfRecordsMisses(goal))}</p>
                 </FormSection>
 
                 <FormSection label="Who's it for">
