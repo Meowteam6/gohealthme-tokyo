@@ -184,7 +184,7 @@ export default function Home() {
           </h2>
           <p className="max-w-xl text-lg text-foreground/85">
             USDC can pay her when she does, with no bank and no border in the
-            way. Dare a friend, back your parents, and the money lands when
+            way. Challenge a friend, back your parents, and the money lands when
             the wearable says it happened. Today it runs on test money while we
             build; real payouts are the road ahead, not a claim.
           </p>
@@ -194,7 +194,7 @@ export default function Home() {
             href="/challenge/new"
             className="inline-flex min-h-12 items-center justify-center rounded-[18px] border-2 border-foreground px-5 py-3 text-base font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
-            Dare a friend
+            Challenge a friend
           </Link>
           <Link
             href="/feed"

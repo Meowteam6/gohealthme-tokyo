@@ -5,7 +5,7 @@ Adopted 2026-09-26 through a design consultation with Andre (research on commitm
 ## Product context
 
 - **What this is:** put your own (test) money on a health goal, your wearable decides, and the players who follow through split the stakes of the ones who do not (commitment model, carried from V3). SPOTTER, the settlement agent, checks and pays.
-- **Who it is for:** people who want a reason to sleep and train, and friends who dare each other. Mobile first.
+- **Who it is for:** people who want a reason to sleep and train, and friends who challenge each other. Mobile first.
 - **Memorable thing:** **put money on yourself.** Every decision below serves it.
 - **Project type:** consumer web app with game feel. Beta on Base Sepolia test money.
 
@@ -91,11 +91,11 @@ Intentional, never ambient. Coin pocketed (about 300ms), a pebble turning gold (
 SPOTTER is deadpan and dry, first person, with fixed lines per state (`lib/spotter-lines.ts`) so a judge sees the same sentence twice. The dry joke is aimed at the night or the situation, never at the player.
 
 - Money, verdict and health-data copy is plain and exact. "The goal was 7 hours, so this run pays nothing. Your 1.00 USDC stays in the pot for the people who slept."
-- **Stake on yourself, put money on yourself, a run, a dare, the pot.** Never bet, wager, odds or gamble (hard rule).
+- **Stake on yourself, put money on yourself, a run, a challenge, the pot.** Never bet, wager, odds or gamble (hard rule).
 - No plumbing reaches the player: no env var names, raw provider strings or internal errors. A lane that is off says "not switched on for this build" and keeps going.
 - Players see "wearable", never "sensor".
 - Testnet stays visible ("Base Sepolia test money · beta"); V4 is beta on testnet, never "production".
-- No emojis, no exclamation marks. Buttons are verbs with objects: "Put money on yourself", "Pair my wearable", "Run it back", "See the receipt", "Claim my USDC".
+- No emojis, no exclamation marks. Buttons are verbs with objects: "Put money on yourself", "Pair my wearable", "Challenge a friend", "Run it back", "See the receipt", "Claim my USDC".
 
 ## States
 
@@ -109,3 +109,4 @@ Every game component renders default, loading, empty, error, success and disable
 | 2026-09-26 | Memorable thing: put money on yourself, commitment model | Andre. Worded as stake, never bet (hard rule). |
 | 2026-09-26 | Cut Big Shoulders, Barlow, cobalt, concrete paper, slip shadows, 8px radii | Scoreboard lettering fights a plush 3D otter. |
 | 2026-09-26 | Foundation contrast pass: gold-deep `#8A6200` to `#7F5A00`, danger `#C8283A` to `#B82234`, added `--dusk-ink` and `--accent-hover`; accent text and focus rings moved to pond and ink | The approved values failed AA on `--surface-raised` (locked lobby rows) or as text; coral is 2.5:1 on cream, so it is a fill with ink text only. Foundation components: `components/spotter/Spotter.tsx`, `components/spotter/HoldCoin.tsx`, `lib/spotter-poses.ts`. |
+| 2026-09-26 | "Dare" renamed to "challenge" everywhere players see it (nav tab Challenges, "Challenge a friend", "Add to the pot") | Andre: dare read too aggressive. Routes and identifiers keep the old names (/challenges, /c/[token], CreateChallenge, lib/challenges.ts). |

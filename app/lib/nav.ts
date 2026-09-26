@@ -18,6 +18,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/pools", label: "Lobby" },
   { href: "/dashboard", label: "My runs" },
   { href: "/agent", label: "History" },
-  { href: "/challenges", label: "Dares" },
+  { href: "/challenges", label: "Challenges" },
   { href: "/settings", label: "Settings" },
 ];
