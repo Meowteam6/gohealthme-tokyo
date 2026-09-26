@@ -285,7 +285,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
     return (
       <div
         data-lane="ens"
-        className="space-y-3 rounded-2xl border border-accent/40 bg-accent/20 p-5"
+        className="space-y-3 rounded-3xl border-2 border-accent-deep/40 bg-surface p-5"
       >
         <p className="text-base font-semibold text-accent-deep">You are {name}</p>
         {isOwnSubname(name) ? (
@@ -305,7 +305,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
               href={ensAppUrl(name)}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-edge px-4 py-2 font-medium text-foreground hover:bg-surface-raised"
+              className="inline-flex min-h-11 items-center rounded-[18px] border-2 border-edge px-4 py-2 font-bold text-foreground hover:bg-surface-raised"
             >
               View on the ENS app
             </a>
@@ -315,7 +315,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
               href={sepoliaTxUrl(tx)}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-edge px-4 py-2 font-medium text-muted hover:text-foreground"
+              className="inline-flex min-h-11 items-center rounded-[18px] border-2 border-edge px-4 py-2 font-bold text-muted hover:text-foreground"
             >
               Sepolia transaction
             </a>
@@ -328,7 +328,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
               setLabel("");
               if (outOfPicks) setMode("link");
             }}
-            className="rounded-xl border border-edge px-4 py-2 font-medium text-muted hover:text-foreground"
+            className="inline-flex min-h-11 items-center rounded-[18px] border-2 border-edge px-4 py-2 font-bold text-muted hover:text-foreground"
           >
             {outOfPicks
               ? "Use a name I already own"
@@ -368,9 +368,9 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
             setMode(id);
             setStatus({ kind: "idle" });
           }}
-          className={`min-h-11 rounded-xl border px-3 py-2 font-medium ${
+          className={`min-h-11 rounded-full border-2 px-4 py-2 font-bold ${
             mode === id
-              ? "border-accent bg-accent/15 text-foreground"
+              ? "border-foreground bg-foreground text-background"
               : "border-edge text-muted hover:text-foreground"
           }`}
         >
@@ -404,7 +404,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
             autoCorrect="off"
             spellCheck={false}
             disabled={busy}
-            className="mt-1 w-full rounded-xl border border-edge bg-surface-raised px-4 py-3 text-base outline-none"
+            className="mt-1 min-h-12 w-full rounded-2xl border-2 border-edge bg-surface px-4 py-3 text-base outline-none focus:border-foreground"
           />
           <span className="mt-1 block text-xs text-muted">
             It must resolve to this wallet ({address.slice(0, 6)}...{address.slice(-4)}) on
@@ -423,7 +423,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
                 }
                 void submitLink();
               }}
-              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-12 w-full rounded-[18px] font-bold shadow-[var(--shadow-pop)] active:translate-y-1 active:shadow-none disabled:translate-y-0 disabled:shadow-none bg-accent px-5 py-3.5 text-base text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               {status.kind === "signing"
                 ? "Waiting for your signature..."
@@ -449,7 +449,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
       {modeSwitch}
       <label className="block text-sm font-medium">
         Your name
-        <div className="mt-1 flex items-center rounded-xl border border-edge bg-surface-raised px-3">
+        <div className="mt-1 flex min-h-12 items-center rounded-2xl border-2 border-edge bg-surface px-3 focus-within:border-foreground">
           <input
             type="text"
             value={label}
@@ -494,7 +494,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
               }
               void submit();
             }}
-            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-12 w-full rounded-[18px] font-bold shadow-[var(--shadow-pop)] active:translate-y-1 active:shadow-none disabled:translate-y-0 disabled:shadow-none bg-accent px-5 py-3.5 text-base text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {status.kind === "signing"
               ? "Waiting for your signature..."

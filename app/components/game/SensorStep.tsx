@@ -220,7 +220,7 @@ function SensorStepBody({
   return (
     <div className="space-y-4">
       {paired !== null ? (
-        <div className="rounded-lg border-2 border-accent bg-accent/5 p-4" aria-live="polite">
+        <div className="rounded-2xl border-2 border-accent-deep bg-surface p-4" aria-live="polite">
           <p className="font-semibold">{paired.label} is paired</p>
           <p className="mt-1 text-sm">
             Measures: {paired.metrics.map((m) => metricLabel(m as WearableMetric)).join(", ")}.
@@ -233,7 +233,7 @@ function SensorStepBody({
           ) : null}
         </div>
       ) : hold === "awaiting-sync" ? (
-        <div className="rounded-lg border-2 border-warning/60 bg-warning/5 p-4" aria-live="polite">
+        <div className="rounded-2xl border border-warning/50 bg-warning/5 p-4" aria-live="polite">
           <p className="font-semibold text-warning">
             {holdLabel} is linked. Waiting on its first sync
           </p>
@@ -245,7 +245,7 @@ function SensorStepBody({
           </p>
         </div>
       ) : sensor.kind === "unreadable" ? (
-        <div className="rounded-lg border-2 border-warning/60 bg-warning/5 p-4">
+        <div className="rounded-2xl border border-warning/50 bg-warning/5 p-4">
           <p className="font-semibold text-warning">
             {sensor.label} is linked and I cannot read it right now
           </p>
@@ -262,14 +262,14 @@ function SensorStepBody({
       )}
 
       {offered.length === 0 ? (
-        <p className="rounded-lg border-2 border-edge bg-surface-raised p-4 text-sm text-foreground/80">
+        <p className="rounded-2xl border border-edge bg-surface-raised p-4 text-sm text-foreground/80">
           No wearable pairing is switched on for this build yet, so wearable
           runs stay locked. You can still browse the lobby.
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {offered.map((option) => (
-            <li key={option.id} className="rounded-lg border-2 border-edge bg-surface p-4">
+            <li key={option.id} className="rounded-2xl border border-edge bg-surface p-4">
               <p className="font-semibold">
                 {option.label}
                 {option.connected ? (
@@ -308,7 +308,7 @@ function SensorStepBody({
       <p className="text-sm text-muted">{COMING_LINE}</p>
 
       {phoneSteps !== null ? (
-        <p role="status" className="rounded-lg border-2 border-accent/40 bg-accent/5 p-4 text-sm">
+        <p role="status" className="rounded-2xl border border-accent-deep/40 bg-surface p-4 text-sm">
           {phoneSteps}
         </p>
       ) : null}
@@ -318,13 +318,13 @@ function SensorStepBody({
           target="_blank"
           rel="noopener noreferrer"
           onClick={() => setBlockedUrl(null)}
-          className={`rounded-lg border-2 border-foreground font-semibold ${TAP_TARGET}`}
+          className={`rounded-[18px] border-2 border-foreground font-bold ${TAP_TARGET}`}
         >
           Your browser blocked the pairing window. Open it here
         </a>
       ) : null}
       {failed ? (
-        <p role="alert" className="rounded-lg border-2 border-danger/40 bg-danger/5 p-4 text-sm">
+        <p role="alert" className="rounded-2xl border border-danger/40 bg-danger/5 p-4 text-sm">
           The pairing page would not open. Nothing was linked and nothing was
           charged. Try again in a moment.
         </p>
