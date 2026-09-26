@@ -858,7 +858,7 @@ export default function PoolDetail({ id }: { id: string }) {
     ) : (
       <StakeTermsPlain>
         {recordsMisses
-          ? "Hit it and your stake comes back with a share of the missed stakes and the pot. Miss it and your stake goes to the players who hit. If nobody hits, every stake comes back."
+          ? "Hit it and your stake comes back with a share of the missed stakes and the pot. Miss it and, if anyone else hits, your stake goes to them. If nobody hits, every stake comes back."
           : "Hit it and your stake comes back with a share of any sponsor pot. This run cannot record a miss, so a miss comes back at settle too. If nobody hits, every stake comes back."}
       </StakeTermsPlain>
     )

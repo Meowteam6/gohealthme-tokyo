@@ -475,7 +475,8 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
               ? "Your wearable shows the goal was not met, but nobody hit, so every stake came back, yours included. Claim it below."
               : screen.outcome === "cancelled"
                 ? "Your wearable shows the goal was not met, but the creator cancelled the run before it settled, so every stake can be claimed back, yours included."
-                : `Your wearable covered the whole run and shows the goal was not met, so the miss is recorded on chain. ${stake} goes to the players who hit. If nobody hit, every stake comes back, yours included, and so does a run the creator cancels before it settles.`,
+                : // Pending until settle, so conditional (docs/MONEY-FLOWS.md section 3).
+                  `Your wearable covered the whole run and shows the goal was not met, so the miss is recorded on chain. At settle ${stake.charAt(0).toLowerCase()}${stake.slice(1)} goes to who hits, or comes back if nobody does. A run the creator cancels before it settles gives every stake back too.`,
         pose: "standing",
       };
     }
