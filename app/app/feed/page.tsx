@@ -26,7 +26,7 @@ export default function FeedPage() {
         </div>
         {/* SPOTTER on payday - eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/spotter/spotter-payday.png"
+          src="/spotter/spotter-payday.webp"
           alt=""
           aria-hidden="true"
           className="hidden h-24 w-auto shrink-0 drop-shadow-sm sm:block"

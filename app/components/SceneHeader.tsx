@@ -16,7 +16,7 @@ export default function SceneHeader({
 }: {
   title: string;
   subtitle?: string;
-  /** Transparent otter file under /spotter, e.g. "spotter-lounging.png". */
+  /** Transparent otter file under /spotter, e.g. "spotter-lounging.webp". */
   pose: string;
   poseAlt: string;
   eyebrow?: string;
@@ -28,7 +28,7 @@ export default function SceneHeader({
     <section className="relative overflow-hidden rounded-3xl border border-edge bg-surface-raised">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/spotter/backdrop.png"
+        src="/spotter/backdrop.webp"
         alt=""
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom"

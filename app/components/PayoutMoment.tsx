@@ -70,7 +70,7 @@ export default function PayoutMoment({
     <div className="flex items-center gap-4 rounded-2xl border border-edge bg-surface p-5 shadow-sm sm:gap-5 sm:p-6">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/spotter/spotter-payday.png"
+        src="/spotter/spotter-payday.webp"
         alt="SPOTTER the otter with your coin"
         className="h-20 w-auto shrink-0 sm:h-24"
       />
@@ -131,7 +131,7 @@ export default function PayoutMoment({
               <video
                 className="absolute inset-0 h-full w-full object-cover"
                 src="/spotter/spotter-thedrop.mp4"
-                poster="/spotter/spotter-payday.png"
+                poster="/spotter/spotter-payday.webp"
                 autoPlay
                 muted
                 loop
@@ -142,7 +142,7 @@ export default function PayoutMoment({
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/spotter/backdrop.png"
+                  src="/spotter/backdrop.webp"
                   alt=""
                   aria-hidden="true"
                   className="absolute inset-0 h-full w-full object-cover object-bottom"
@@ -150,7 +150,7 @@ export default function PayoutMoment({
                 <Confetti />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/spotter/spotter-payday.png"
+                  src="/spotter/spotter-payday.webp"
                   alt="SPOTTER the otter holding up a gold coin"
                   className="otter-float absolute bottom-0 left-1/2 h-40 w-auto -translate-x-1/2 drop-shadow-xl"
                 />

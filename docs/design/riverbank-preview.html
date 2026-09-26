@@ -150,7 +150,7 @@
       <h1>SPOTTER's Riverbank</h1>
       <p>SPOTTER holds your stake. You put a coin on yourself, he tucks it in his pouch, and your wearable decides whether he hands it back with the pot. Warm, painterly, a little smug. Money and verdicts stay plain and exact.</p>
     </div>
-    <img src="../../../../../../../Users/andrechuabio/Desktop/eth/gohealthme-tokyo/app/public/spotter/spotter-wallet.png" alt="SPOTTER holding a wallet" data-pose="spotter-wallet">
+    <img src="../../../../../../../Users/andrechuabio/Desktop/eth/gohealthme-tokyo/app/public/spotter/spotter-wallet.webp" alt="SPOTTER holding a wallet" data-pose="spotter-wallet">
   </div>
 
   <section>
@@ -294,7 +294,7 @@
 <script>
   // Resolve pose images from the repo's public folder, relative to this file's real location.
   const ART = "file:///Users/andrechuabio/Desktop/eth/gohealthme-tokyo/app/public/spotter/";
-  document.querySelectorAll("[data-pose]").forEach((img) => { img.src = ART + img.dataset.pose + ".png"; });
+  document.querySelectorAll("[data-pose]").forEach((img) => { img.src = ART + img.dataset.pose + ".webp"; });
 
   // Hold to commit: 1.2s press fills the ring, then SPOTTER pockets the coin.
   const hold = document.getElementById("hold");

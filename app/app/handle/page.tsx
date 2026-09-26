@@ -24,7 +24,7 @@ export default function HandlePage() {
         </div>
         {/* SPOTTER waving hello - eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/spotter/spotter-wave.png"
+          src="/spotter/spotter-wave.webp"
           alt=""
           aria-hidden="true"
           className="hidden h-24 w-auto shrink-0 drop-shadow-sm sm:block"

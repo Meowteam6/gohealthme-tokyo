@@ -132,7 +132,7 @@ export default function RequestAccess({
   if (status === "pending") {
     return (
       <Shell>
-        <Otter pose="spotter-watching.png" alt="SPOTTER the otter keeping watch" />
+        <Otter pose="spotter-watching.webp" alt="SPOTTER the otter keeping watch" />
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             You&apos;re on the list.
@@ -150,7 +150,7 @@ export default function RequestAccess({
   if (status === "denied" && !reopen) {
     return (
       <Shell>
-        <Otter pose="spotter-neutral.png" alt="SPOTTER the otter, unimpressed" />
+        <Otter pose="spotter-neutral.webp" alt="SPOTTER the otter, unimpressed" />
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Not this round.</h1>
           <p className="mx-auto mt-3 max-w-sm text-muted">
@@ -227,7 +227,7 @@ export default function RequestAccess({
 
   return (
     <Shell>
-      <Otter pose="spotter-greet.png" alt="SPOTTER the otter waving hello" />
+      <Otter pose="spotter-greet.webp" alt="SPOTTER the otter waving hello" />
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Ask for a spot.</h1>
         <p className="mx-auto mt-3 max-w-sm text-muted">

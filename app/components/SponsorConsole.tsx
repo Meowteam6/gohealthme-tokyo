@@ -362,7 +362,7 @@ export default function SponsorConsole() {
       title="Sponsor console"
       subtitle="Put USDC on a health goal, top it up as it fills, and watch exactly what it buys. Every outcome below is aggregate only, and nobody ever sees a participant's health data."
       eyebrow="Fund the goal"
-      pose="spotter-detective.png"
+      pose="spotter-detective.webp"
       poseAlt="SPOTTER the otter, inspecting the ledger through a magnifying glass"
       spotterLine="I hold the bag, not your business. I check each goal and hand out one word: paid, or not yet."
     >

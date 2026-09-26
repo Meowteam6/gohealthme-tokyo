@@ -315,7 +315,7 @@ function SpotterBubble({ mood }: { mood: SpotterMood }) {
       <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-secondary p-1 sm:h-20 sm:w-20">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={`/spotter/spotter-${mood.pose}.png`}
+          src={`/spotter/spotter-${mood.pose}.webp`}
           alt={mood.alt}
           className="h-full w-full object-contain"
         />
@@ -558,7 +558,7 @@ function PreviewCard({
             <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-accent/10">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/spotter/spotter-watching.png"
+                src="/spotter/spotter-watching.webp"
                 alt=""
                 aria-hidden="true"
                 className="h-full w-full object-contain"
@@ -1270,7 +1270,7 @@ function CreateChallengeInner() {
         <div className="otter-float mb-2 h-28 w-28 sm:h-32 sm:w-32">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/spotter/spotter-lounging.png"
+            src="/spotter/spotter-lounging.webp"
             alt="SPOTTER, GoHealthMe's otter, floating on its back holding a coin"
             className="h-full w-full object-contain drop-shadow-md"
           />

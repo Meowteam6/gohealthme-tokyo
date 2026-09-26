@@ -58,7 +58,7 @@ export default function ClaimPayout({
         <div className="flex items-center gap-4 sm:gap-5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/spotter/spotter-payday.png"
+            src="/spotter/spotter-payday.webp"
             alt="SPOTTER the otter with your coin"
             className="h-16 w-auto shrink-0 sm:h-20"
           />
@@ -109,7 +109,7 @@ export default function ClaimPayout({
       <div className="flex items-start gap-4 sm:gap-5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/spotter/spotter-payday.png"
+          src="/spotter/spotter-payday.webp"
           alt="SPOTTER the otter holding your coin"
           className="h-16 w-auto shrink-0 sm:h-20"
         />

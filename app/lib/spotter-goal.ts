@@ -36,7 +36,7 @@ const RULES: ReadonlyArray<readonly [GoalPose, RegExp]> = [
  * Resolve a pool's public goal text to a SPOTTER pose asset key.
  * @param initiative the pool's short public label/tag
  * @param goalSpec the pool's public goal spec string
- * @returns a pose key; assets live at /spotter/spotter-<pose>.png
+ * @returns a pose key; assets live at /spotter/spotter-<pose>.webp
  */
 export function otterPoseForGoal(initiative: string, goalSpec: string): GoalPose {
   const haystack = `${initiative} ${goalSpec}`;

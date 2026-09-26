@@ -113,7 +113,7 @@ export default function JoinMoment({
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/spotter/spotter-cheer.png"
+        src="/spotter/spotter-cheer.webp"
         alt="SPOTTER the otter cheering"
         className="h-20 w-auto shrink-0 sm:h-24"
       />
@@ -161,7 +161,7 @@ export default function JoinMoment({
           <div className="relative aspect-video overflow-hidden bg-surface-raised">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/spotter/backdrop.png"
+              src="/spotter/backdrop.webp"
               alt=""
               aria-hidden="true"
               className="absolute inset-0 h-full w-full object-cover object-bottom"
@@ -169,7 +169,7 @@ export default function JoinMoment({
             <Confetti />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/spotter/spotter-cheer.png"
+              src="/spotter/spotter-cheer.webp"
               alt="SPOTTER the otter cheering you on"
               className="otter-float absolute bottom-0 left-1/2 h-40 w-auto -translate-x-1/2 drop-shadow-xl"
             />

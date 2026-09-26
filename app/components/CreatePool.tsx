@@ -291,7 +291,7 @@ function CreatePoolInner() {
         </div>
         {/* SPOTTER pointing at the board. eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/spotter/spotter-point.png"
+          src="/spotter/spotter-point.webp"
           alt=""
           aria-hidden="true"
           className="hidden h-24 w-auto shrink-0 drop-shadow-sm sm:block"

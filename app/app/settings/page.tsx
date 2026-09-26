@@ -28,7 +28,7 @@ export default function SettingsPage() {
         {/* SPOTTER holding your wallet - the mascot on the money page.
             eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/spotter/spotter-wallet.png"
+          src="/spotter/spotter-wallet.webp"
           alt=""
           aria-hidden="true"
           className="hidden h-28 w-auto shrink-0 drop-shadow-sm sm:block"

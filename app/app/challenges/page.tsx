@@ -717,7 +717,7 @@ export default function ChallengesPage() {
       <SceneHeader
         title="My challenges"
         subtitle="The goals you have put testnet USDC behind - your own commitments, the dares you sent, and the ones aimed at you."
-        pose="spotter-greet.png"
+        pose="spotter-greet.webp"
         poseAlt="SPOTTER the otter waving hello, ready to introduce your dares"
         spotterLine="Dare a friend, or stake on yourself. I hold the pot either way."
       />
