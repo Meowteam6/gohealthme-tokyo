@@ -13,12 +13,14 @@ import { ttlCache } from "@/lib/server/arc-client";
 import {
   createLinkToken,
   getMetricProgress as junctionGetMetricProgress,
+  getMissEvidence as junctionGetMissEvidence,
   getProgress as junctionGetProgress,
   getRecent as junctionGetRecent,
   isConnected as junctionIsConnected,
 } from "@/lib/server/junction";
 import type {
   MetricProgress,
+  MissEvidence,
   ObservedCapability,
   WearableLink,
   WearableMetric,
@@ -182,6 +184,15 @@ export const junctionProvider: WearableProvider = {
       windowStartISO,
       windowEndISO,
     );
+  },
+
+  /** The miss rule's read: Junction's calendar_date is already local. */
+  getMissEvidence(
+    address: string,
+    metric: WearableMetric,
+    fromISO: string,
+  ): Promise<MissEvidence> {
+    return junctionGetMissEvidence(address, metric, fromISO);
   },
 
   async getProgress(

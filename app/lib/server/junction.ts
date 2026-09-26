@@ -21,6 +21,7 @@
 
 import { requireEnv, optionalEnv } from "@/lib/server/env";
 import type { WearableMetric } from "@/lib/wearable-goal";
+import type { MissEvidence } from "@/lib/server/wearable/types";
 import { ttlCache } from "@/lib/server/arc-client";
 import { isRetryableExternalError, withRetry } from "@/lib/server/retry";
 
@@ -283,6 +284,8 @@ interface SleepRecord {
   score?: number | null;
   efficiency?: number | null;
   sleep_efficiency?: number | null;
+  /** The wearer's UTC offset in seconds (Junction documents it on sleep). */
+  timezone_offset?: number | null;
 }
 
 interface SleepResponse {
@@ -314,6 +317,24 @@ function recScore(rec: SleepRecord): number | null {
 function recEfficiency(rec: SleepRecord): number | null {
   const v = rec.efficiency ?? rec.sleep_efficiency;
   return typeof v === "number" ? v : null;
+}
+
+/** One night's value for a sleep metric: score, efficiency, or hours asleep. */
+function sleepMetricValue(
+  rec: SleepRecord,
+  metric: "sleep_score" | "sleep_efficiency" | "sleep_hours",
+): number | null {
+  if (metric === "sleep_score") return recScore(rec);
+  if (metric === "sleep_efficiency") return recEfficiency(rec);
+  const r = rec as SleepRecord & {
+    total_sleep_seconds?: number;
+    total?: number;
+    duration?: number;
+  };
+  // Junction reports actual asleep time as `total` (seconds) and time in
+  // bed as `duration`; prefer asleep so "sleep 7 hours" means 7 asleep.
+  const secs = r.total_sleep_seconds ?? r.total ?? r.duration ?? null;
+  return typeof secs === "number" ? secs / 3600 : null;
 }
 
 function isoDate(d: Date): string {
@@ -508,6 +529,7 @@ interface ActivityFields {
   calories?: number | null;
   distance?: number | null;
   distance_meters?: number | null;
+  timezone_offset?: number | null;
 }
 interface ActivitySummaryResponse {
   activity?: ActivityFields[];
@@ -519,6 +541,7 @@ interface WorkoutRecord {
   time_start?: string;
   distance?: number | null;
   distance_meters?: number | null;
+  timezone_offset?: number | null;
 }
 interface WorkoutResponse {
   workouts?: WorkoutRecord[];
@@ -580,22 +603,7 @@ async function fetchMetricByDay(
   ) {
     const resp = await jx<SleepResponse>(`/v2/summary/sleep/${userId}?${range}`);
     for (const rec of resp.sleep ?? resp.data ?? []) {
-      const day = dayKey(rec);
-      if (metric === "sleep_score") {
-        keepMax(day, recScore(rec));
-      } else if (metric === "sleep_efficiency") {
-        keepMax(day, recEfficiency(rec));
-      } else {
-        const r = rec as SleepRecord & {
-          total_sleep_seconds?: number;
-          total?: number;
-          duration?: number;
-        };
-        // Junction reports actual asleep time as `total` (seconds) and time in
-        // bed as `duration`; prefer asleep so "sleep 7 hours" means 7 asleep.
-        const secs = r.total_sleep_seconds ?? r.total ?? r.duration ?? null;
-        keepMax(day, typeof secs === "number" ? secs / 3600 : null);
-      }
+      keepMax(dayKey(rec), sleepMetricValue(rec, metric));
     }
     return { byDay, sourceDays, everyDaySourced: false };
   }
@@ -670,6 +678,95 @@ export async function getMetricProgress(
     sourceDays,
     everyDaySourced,
   );
+}
+
+// ------------------------------------------------------- miss-rule evidence
+
+/**
+ * Per-local-day evidence for the miss rule (lib/server/agent/miss.ts), from
+ * `fromISO` to today. Junction's calendar_date is the wearer's own calendar
+ * day (for sleep, "generally the sleep end date"), so nothing is re-keyed.
+ *
+ * Every record of any kind is a heartbeat: sleep (scored or not), a daily
+ * activity summary, a workout. Values: the best sleep value per night for a
+ * sleep metric, or the session count per day for workouts. The offset is the
+ * newest record's timezone_offset (seconds), sleep first; none means null.
+ *
+ * Throws on any upstream failure, like every read here; the miss rule turns a
+ * throw into "record nothing".
+ */
+export async function getMissEvidence(
+  address: string,
+  metric: WearableMetric,
+  fromISO: string,
+): Promise<MissEvidence> {
+  const sleepMetric =
+    metric === "sleep_score" ||
+    metric === "sleep_efficiency" ||
+    metric === "sleep_hours";
+  if (!sleepMetric && metric !== "workouts") {
+    throw new Error(
+      `miss evidence covers sleep and workouts only, not ${metric}: a zero there is ambiguous`,
+    );
+  }
+  const userId = await getOrCreateUser(address);
+  const range = `start_date=${fromISO}&end_date=${isoDate(new Date())}`;
+  const sleepResp = await jx<SleepResponse>(`/v2/summary/sleep/${userId}?${range}`);
+  const sleeps = sleepResp.sleep ?? sleepResp.data ?? [];
+  let activity: ActivityFields[] = [];
+  let workouts: WorkoutRecord[] = [];
+  if (!sleepMetric) {
+    const [actResp, workResp] = await Promise.all([
+      jx<ActivitySummaryResponse>(`/v2/summary/activity/${userId}?${range}`),
+      jx<WorkoutResponse>(`/v2/summary/workouts/${userId}?${range}`),
+    ]);
+    activity = actResp.activity ?? actResp.data ?? [];
+    workouts = workResp.workouts ?? workResp.data ?? [];
+  }
+
+  const heartbeat = new Set<string>();
+  const beat = (day: string | null): void => {
+    if (day !== null) heartbeat.add(day);
+  };
+  sleeps.forEach((rec) => beat(dayKey(rec)));
+  activity.forEach((rec) => beat(activityDay(rec)));
+  workouts.forEach((rec) => beat(workoutDay(rec)));
+
+  const values: Record<string, number> = {};
+  if (sleepMetric) {
+    for (const rec of sleeps) {
+      const day = dayKey(rec);
+      const value = sleepMetricValue(rec, metric);
+      if (day === null || value === null || !Number.isFinite(value)) continue;
+      if (values[day] === undefined || value > values[day]) values[day] = value;
+    }
+  } else {
+    for (const rec of workouts) {
+      const day = workoutDay(rec);
+      if (day !== null) values[day] = (values[day] ?? 0) + 1;
+    }
+  }
+
+  const tzOffsetSec =
+    newestOffset(sleeps, dayKey) ??
+    newestOffset(activity, activityDay) ??
+    newestOffset(workouts, workoutDay);
+
+  return { values, heartbeatDays: [...heartbeat], tzOffsetSec };
+}
+
+/** The timezone_offset of the newest record that carries one, or null. */
+function newestOffset<T extends { timezone_offset?: number | null }>(
+  records: T[],
+  dayOf: (rec: T) => string | null,
+): number | null {
+  let best: { day: string; offset: number } | null = null;
+  for (const rec of records) {
+    if (typeof rec.timezone_offset !== "number") continue;
+    const day = dayOf(rec) ?? "";
+    if (best === null || day > best.day) best = { day, offset: rec.timezone_offset };
+  }
+  return best?.offset ?? null;
 }
 
 // ------------------------------------------------------------- recent data

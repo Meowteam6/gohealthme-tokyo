@@ -26,7 +26,7 @@ export interface PublicFeedSpend {
 
 export interface PublicFeedSettle {
   at: string;
-  status: "deferred" | "settled" | "already-settled";
+  status: "deferred" | "settled" | "already-settled" | "closed";
   paidUsd: string | null;
   txHash: string | null;
   periodEndIso: string | null;

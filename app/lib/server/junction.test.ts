@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo, Socket } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getOrCreateUser } from "@/lib/server/junction";
+import { getMissEvidence, getOrCreateUser } from "@/lib/server/junction";
 
 // Two defects pinned here:
 //   1. getOrCreateUser re-resolved the wallet -> Junction user_id mapping on
@@ -133,5 +133,123 @@ describe("junction request timeouts", () => {
         server.close((err) => (err ? reject(err) : resolve())),
       );
     }
+  });
+});
+
+describe("getMissEvidence", () => {
+  /** A Junction that answers the resolve plus the three summaries. */
+  function summaries(body: {
+    sleep?: unknown[];
+    activity?: unknown[];
+    workouts?: unknown[];
+  }) {
+    return vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v2/user/resolve/")) {
+        return Promise.resolve(Response.json({ user_id: "vital-miss" }));
+      }
+      if (url.includes("/v2/summary/sleep/")) {
+        return Promise.resolve(Response.json({ sleep: body.sleep ?? [] }));
+      }
+      if (url.includes("/v2/summary/activity/")) {
+        return Promise.resolve(Response.json({ activity: body.activity ?? [] }));
+      }
+      if (url.includes("/v2/summary/workouts/")) {
+        return Promise.resolve(Response.json({ workouts: body.workouts ?? [] }));
+      }
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    });
+  }
+
+  it("keys each night to Junction's local calendar_date and reports the wearer's offset", async () => {
+    vi.stubEnv("JUNCTION_API_KEY", "test-key");
+    const fetchMock = summaries({
+      sleep: [
+        { calendar_date: "2026-09-26", bedtime_stop: "2026-09-25T21:50:00Z", total: 6 * 3600, timezone_offset: 32400 },
+        { calendar_date: "2026-09-27", bedtime_stop: "2026-09-26T22:10:00Z", total: 5.5 * 3600, timezone_offset: 32400 },
+        // Tracked, never scored: a heartbeat with no hours.
+        { calendar_date: "2026-09-25", bedtime_stop: "2026-09-24T21:00:00Z", timezone_offset: 32400 },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const evidence = await getMissEvidence(
+      "0x6666666666666666666666666666666666666661",
+      "sleep_hours",
+      "2026-09-24",
+    );
+
+    expect(evidence.values).toEqual({ "2026-09-26": 6, "2026-09-27": 5.5 });
+    expect([...evidence.heartbeatDays].sort()).toEqual(["2026-09-25", "2026-09-26", "2026-09-27"]);
+    expect(evidence.tzOffsetSec).toBe(32400);
+    const sleepCall = fetchMock.mock.calls
+      .map((call) => String(call[0]))
+      .find((url) => url.includes("/v2/summary/sleep/"));
+    expect(sleepCall).toContain("start_date=2026-09-24");
+  });
+
+  it("counts workouts per day with sleep and activity days as the heartbeat", async () => {
+    vi.stubEnv("JUNCTION_API_KEY", "test-key");
+    vi.stubGlobal(
+      "fetch",
+      summaries({
+        sleep: [{ calendar_date: "2026-09-27", bedtime_stop: "2026-09-26T22:10:00Z", total: 25_000, timezone_offset: 32400 }],
+        activity: [{ calendar_date: "2026-09-26", steps: 0, timezone_offset: 32400 }],
+        workouts: [
+          { calendar_date: "2026-09-27", time_start: "2026-09-27T00:30:00Z" },
+          { calendar_date: "2026-09-27", time_start: "2026-09-27T03:30:00Z" },
+        ],
+      }),
+    );
+
+    const evidence = await getMissEvidence(
+      "0x6666666666666666666666666666666666666662",
+      "workouts",
+      "2026-09-24",
+    );
+
+    expect(evidence.values).toEqual({ "2026-09-27": 2 });
+    expect([...evidence.heartbeatDays].sort()).toEqual(["2026-09-26", "2026-09-27"]);
+    expect(evidence.tzOffsetSec).toBe(32400);
+  });
+
+  it("reports an unknown offset when no record carries one", async () => {
+    vi.stubEnv("JUNCTION_API_KEY", "test-key");
+    vi.stubGlobal(
+      "fetch",
+      summaries({ sleep: [{ calendar_date: "2026-09-27", total: 25_000 }] }),
+    );
+
+    const evidence = await getMissEvidence(
+      "0x6666666666666666666666666666666666666663",
+      "sleep_hours",
+      "2026-09-24",
+    );
+
+    expect(evidence.tzOffsetSec).toBeNull();
+  });
+
+  it("refuses a metric whose day is never final", async () => {
+    vi.stubEnv("JUNCTION_API_KEY", "test-key");
+    vi.stubGlobal("fetch", summaries({}));
+    await expect(
+      getMissEvidence("0x6666666666666666666666666666666666666664", "steps", "2026-09-24"),
+    ).rejects.toThrow(/sleep and workouts only/);
+  });
+
+  it("an outage throws, so the miss rule records nothing", async () => {
+    vi.stubEnv("JUNCTION_API_KEY", "test-key");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        String(input).includes("/v2/user/resolve/")
+          ? Promise.resolve(Response.json({ user_id: "vital-miss-5" }))
+          : Promise.resolve(new Response("down", { status: 503 })),
+      ),
+    );
+    await expect(
+      getMissEvidence("0x6666666666666666666666666666666666666665", "sleep_hours", "2026-09-24"),
+    ).rejects.toThrow(/503/);
   });
 });

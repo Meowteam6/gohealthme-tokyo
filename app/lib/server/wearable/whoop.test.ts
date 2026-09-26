@@ -747,3 +747,110 @@ describe("exchangeCode validation", () => {
     await expect(exchangeCode("code")).rejects.toThrow(/offline scope/);
   });
 });
+
+describe("getMissEvidence", () => {
+  /** Answers each WHOOP collection by path, so one read can hit both. */
+  function byPath(routes: Record<string, unknown[]>) {
+    return vi.fn((input: RequestInfo | URL) => {
+      const path = new URL(String(input)).pathname;
+      const records =
+        Object.entries(routes).find(([suffix]) => path.endsWith(suffix))?.[1] ?? [];
+      return Promise.resolve(json({ records, next_token: null }));
+    });
+  }
+
+  it("keys sleep to the wearer's local wake day and reports their offset", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      byPath({
+        "/activity/sleep": [
+          // Woke 07:10 Sunday in Tokyo = 22:10 UTC Saturday.
+          { ...sleepRecord("2026-09-26T22:10:00.000Z", 70), timezone_offset: "+09:00" },
+          // Woke 06:50 Saturday in Tokyo.
+          { ...sleepRecord("2026-09-25T21:50:00.000Z", 60), timezone_offset: "+09:00" },
+        ],
+      }),
+    );
+
+    const evidence = await whoopProvider.getMissEvidence!(address, "sleep_hours", "2026-09-24");
+
+    expect(evidence.tzOffsetSec).toBe(9 * 3600);
+    // Light 3.5h + deep 2h + REM 1.5h = 7h asleep on the fixture record.
+    expect(evidence.values).toEqual({ "2026-09-26": 7, "2026-09-27": 7 });
+    expect([...evidence.heartbeatDays].sort()).toEqual(["2026-09-26", "2026-09-27"]);
+  });
+
+  it("an unscored night is a heartbeat, never a value", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      byPath({
+        "/activity/sleep": [
+          {
+            ...sleepRecord("2026-09-26T22:10:00.000Z", null),
+            score_state: "PENDING_SCORE",
+            timezone_offset: "+09:00",
+          },
+        ],
+      }),
+    );
+
+    const evidence = await whoopProvider.getMissEvidence!(address, "sleep_hours", "2026-09-24");
+
+    expect(evidence.values).toEqual({});
+    expect(evidence.heartbeatDays).toEqual(["2026-09-27"]);
+  });
+
+  it("counts workouts on the local day they ended, with sleep as the heartbeat", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      byPath({
+        "/activity/sleep": [
+          { ...sleepRecord("2026-09-25T21:50:00.000Z", 60), timezone_offset: "+09:00" },
+          { ...sleepRecord("2026-09-26T22:10:00.000Z", 70), timezone_offset: "+09:00" },
+        ],
+        // 16:30 UTC Saturday is 01:30 Sunday in Tokyo: Sunday's workout.
+        "/activity/workout": [
+          {
+            id: "w1",
+            end: "2026-09-26T16:30:00.000Z",
+            score_state: "SCORED",
+            timezone_offset: "+09:00",
+          },
+        ],
+      }),
+    );
+
+    const evidence = await whoopProvider.getMissEvidence!(address, "workouts", "2026-09-24");
+
+    expect(evidence.values).toEqual({ "2026-09-27": 1 });
+    expect([...evidence.heartbeatDays].sort()).toEqual(["2026-09-26", "2026-09-27"]);
+    expect(evidence.tzOffsetSec).toBe(9 * 3600);
+  });
+
+  it("reports an unknown offset when no record carries one", async () => {
+    const address = nextAddress();
+    await linked(address);
+    vi.stubGlobal(
+      "fetch",
+      byPath({ "/activity/sleep": [sleepRecord("2026-09-26T22:10:00.000Z", 70)] }),
+    );
+
+    const evidence = await whoopProvider.getMissEvidence!(address, "sleep_hours", "2026-09-24");
+
+    expect(evidence.tzOffsetSec).toBeNull();
+  });
+
+  it("refuses a metric the strap cannot measure", async () => {
+    const address = nextAddress();
+    await linked(address);
+    await expect(
+      whoopProvider.getMissEvidence!(address, "steps", "2026-09-24"),
+    ).rejects.toThrow(/cannot measure steps/);
+  });
+});

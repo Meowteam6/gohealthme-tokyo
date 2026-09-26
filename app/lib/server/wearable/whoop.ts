@@ -50,6 +50,7 @@ import {
 } from "@/lib/server/wearable/streak";
 import type {
   MetricProgress,
+  MissEvidence,
   ObservedCapability,
   WearableLink,
   WearableMetric,
@@ -614,7 +615,10 @@ function efficiencyOf(record: SleepRecord): number | null {
  * boundary would pay one user and not the other. WHOOP ships
  * `timezone_offset` on every record precisely so this can be got right.
  */
-function dayOf(record: SleepRecord): string | null {
+function dayOf(record: {
+  end?: string;
+  timezone_offset?: string | null;
+}): string | null {
   if (typeof record.end !== "string" || record.end.length < 10) return null;
   const ended = Date.parse(record.end);
   if (Number.isNaN(ended)) return record.end.slice(0, 10);
@@ -640,6 +644,19 @@ function parseOffsetMs(offset: string | null | undefined): number {
   if (match === null) return 0;
   const sign = match[1] === "-" ? -1 : 1;
   return sign * (Number(match[2]) * 3_600_000 + Number(match[3]) * 60_000);
+}
+
+/**
+ * WHOOP's `timezone_offset` in seconds, or null when the record does not say.
+ * Unlike parseOffsetMs, absence is NOT read as UTC: the miss rule must know
+ * the wearer's calendar, and guessing it is how a night lands on the wrong day.
+ */
+function offsetSecOrNull(offset: string | null | undefined): number | null {
+  if (typeof offset !== "string") return null;
+  const value = offset.trim();
+  if (value === "Z" || value === "z") return 0;
+  if (!/^([+-])(\d{2}):?(\d{2})$/.test(value)) return null;
+  return parseOffsetMs(value) / 1000;
 }
 
 /** Only a scored main sleep counts. Naps and pending scores are skipped. */
@@ -781,6 +798,8 @@ interface WorkoutRecord {
   start?: string;
   end?: string;
   score_state?: string;
+  /** Same "+hh:mm" shape as on sleep records. */
+  timezone_offset?: string | null;
 }
 
 interface WorkoutPage {
@@ -966,6 +985,74 @@ export const whoopProvider: WearableProvider = {
               now,
             ),
     };
+  },
+
+  /**
+   * Per-local-day evidence for the miss rule (lib/server/agent/miss.ts).
+   *
+   * Everything is keyed to the day it ENDED on the wearer's own calendar,
+   * workouts included (getMetricProgress still keys workouts by UTC, and the
+   * pass path is left exactly as it was). Every sleep record, scored or not,
+   * nap or not, is a heartbeat: the strap reported that day. Only a scored
+   * main sleep carries a value. The offset comes from the newest record that
+   * states one; none stated means null, never UTC.
+   */
+  async getMissEvidence(
+    address: string,
+    metric: WearableMetric,
+    fromISO: string,
+  ): Promise<MissEvidence> {
+    if (!WHOOP_METRICS.includes(metric)) {
+      throw new WhoopMetricUnsupported(
+        `WHOOP cannot measure ${metric}. A WHOOP strap reports sleep and ` +
+          "workouts, not step counts or daily distance.",
+      );
+    }
+    const from = rfc3339(startOfDayUTC(fromISO));
+    const to = rfc3339(new Date());
+    const sleeps = await fetchSleep(address, from, to);
+    const workouts =
+      metric === "workouts"
+        ? await fetchPaged<WorkoutRecord, WorkoutPage>(
+            address,
+            "/v2/activity/workout",
+            from,
+            to,
+          )
+        : [];
+
+    const heartbeat = new Set<string>();
+    for (const record of [...sleeps, ...workouts]) {
+      const day = dayOf(record);
+      if (day !== null) heartbeat.add(day);
+    }
+
+    const values: Record<string, number> = {};
+    if (metric === "workouts") {
+      for (const record of workouts) {
+        const day = dayOf(record);
+        if (day !== null) values[day] = (values[day] ?? 0) + 1;
+      }
+    } else {
+      const best = bestScorePerDay(
+        sleeps.filter(isCountable).map((record) => ({
+          day: dayOf(record),
+          value: sleepMetricValueOf(record, metric),
+        })),
+      );
+      for (const [day, value] of best) values[day] = value;
+    }
+
+    const newestFirst = [...sleeps, ...workouts]
+      .filter((record) => typeof record.end === "string")
+      .sort((a, b) => Date.parse(b.end as string) - Date.parse(a.end as string));
+    let tzOffsetSec: number | null = null;
+    for (const record of newestFirst) {
+      tzOffsetSec = offsetSecOrNull(record.timezone_offset);
+      if (tzOffsetSec !== null) break;
+    }
+
+    return { values, heartbeatDays: [...heartbeat], tzOffsetSec };
   },
 
   async getProgress(

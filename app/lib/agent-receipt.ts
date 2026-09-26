@@ -55,7 +55,7 @@ export type ReceiptRow =
   | { kind: "record"; resultTx: string | null; registryTx: string | null }
   | {
       kind: "settle";
-      status: "deferred" | "settled" | "already-settled";
+      status: "deferred" | "settled" | "already-settled" | "closed";
       txHash: string | null;
       paidUsd: string | null;
       note: string | null;

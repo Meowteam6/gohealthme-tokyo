@@ -8,6 +8,7 @@ import { randomUUID } from "crypto";
 // that discovery from after the money to before it.
 
 const getMetricProgress = vi.fn();
+const getMissEvidence = vi.fn();
 
 vi.mock("@/lib/server/junction", () => ({
   createLinkToken: vi.fn(),
@@ -15,6 +16,7 @@ vi.mock("@/lib/server/junction", () => ({
   getRecent: vi.fn(),
   isConnected: vi.fn(),
   getMetricProgress: (...args: unknown[]) => getMetricProgress(...args),
+  getMissEvidence: (...args: unknown[]) => getMissEvidence(...args),
 }));
 
 const { junctionProvider } = await import(
@@ -209,5 +211,18 @@ describe("junctionProvider.observedMetrics", () => {
     for (const call of getMetricProgress.mock.calls) {
       expect(call[2]).toBe(Number.MIN_VALUE);
     }
+  });
+});
+
+describe("junctionProvider.getMissEvidence", () => {
+  it("serves the miss rule's local-calendar read from the Junction module", async () => {
+    const evidence = { values: { "2026-09-27": 6 }, heartbeatDays: ["2026-09-27"], tzOffsetSec: 32400 };
+    getMissEvidence.mockResolvedValue(evidence);
+    const address = nextAddress();
+
+    await expect(
+      junctionProvider.getMissEvidence!(address, "sleep_hours", "2026-09-24"),
+    ).resolves.toEqual(evidence);
+    expect(getMissEvidence).toHaveBeenCalledWith(address, "sleep_hours", "2026-09-24");
   });
 });
