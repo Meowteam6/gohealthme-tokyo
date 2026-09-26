@@ -38,13 +38,13 @@ describe("runDareFlow, fresh dare", () => {
     const s = steps({
       checkHealth: vi.fn(async () => ({
         ok: false as const,
-        message: "Dares are not live on this build yet. Nothing was charged.",
+        message: "Challenges are not live on this build yet. Nothing was charged.",
       })),
     });
     const result = await runDareFlow(s, null);
     expect(result).toEqual({
       kind: "unavailable",
-      message: "Dares are not live on this build yet. Nothing was charged.",
+      message: "Challenges are not live on this build yet. Nothing was charged.",
     });
     expect(s.deposit).not.toHaveBeenCalled();
     expect(s.onFunded).not.toHaveBeenCalled();
@@ -149,13 +149,13 @@ describe("fetchChallengesHealth", () => {
   it("carries the server's player copy on a 503", async () => {
     const fetchImpl = vi.fn(
       async () =>
-        new Response(JSON.stringify({ ok: false, error: "Dares are off." }), {
+        new Response(JSON.stringify({ ok: false, error: "Challenges are off." }), {
           status: 503,
         }),
     );
     expect(await fetchChallengesHealth(fetchImpl as unknown as typeof fetch)).toEqual({
       ok: false,
-      message: "Dares are off.",
+      message: "Challenges are off.",
     });
   });
 

@@ -30,7 +30,7 @@ export default function ChallengeContribute({
     <div className="space-y-4 rounded-3xl border border-edge bg-surface p-5 sm:p-6">
       <div className="space-y-1">
         <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
-          Sweeten the dare
+          Add to the pot
         </h2>
         {prizeUsd !== null ? (
           <p className="text-lg font-bold leading-snug">

@@ -46,9 +46,7 @@ import { useApprovalProbe } from "@/components/game/ApprovalNote";
 import {
   challengeCreateBlock,
   payoutStateOf,
-  verifierStateOf,
 } from "@/lib/game/join-checks";
-import { useDocumentProofQuery } from "@/lib/useProofStatus";
 import {
   Badge,
   Card,
@@ -373,7 +371,7 @@ function InvitedChallengeCard({
         <Countdown periodStart={pool.periodStart} periodEnd={pool.periodEnd} />
       </div>
       <Link href={acceptUrl} className={`mt-4 ${PRIMARY_LINK}`}>
-        Accept the dare
+        Accept the challenge
       </Link>
     </Card>
   );
@@ -490,46 +488,39 @@ function SentChallengeCard({ entry }: { entry: SentChallenge }) {
   );
 }
 
-/** Whether a new dare can start on this build, from the same two probes the
- *  create page decides on (lib/game/join-checks). Read-only: /challenge/new
- *  still checks again before any money moves. Only a definite "paused" changes
- *  what this page offers; checking or a failed probe keeps the normal action. */
-function useDarePause(): { title: string; detail: string } | null {
-  const proof = useDocumentProofQuery();
+/** Whether a new challenge can start on this build. Every challenge is a
+ *  wearable run, so the document checker never gates it; the one thing that
+ *  can is a verified win that could not pay (the same approval probe
+ *  /challenge/new decides on, lib/game/join-checks). Read-only: the create
+ *  page checks again before any money moves. Checking or a failed probe keeps
+ *  the normal action. */
+function useChallengePause(): { detail: string } | null {
   const approval = useApprovalProbe();
-  const block = challengeCreateBlock(
-    verifierStateOf(proof),
-    payoutStateOf(approval.mode),
-  );
-  return block.kind === "paused"
-    ? { title: block.title, detail: block.detail }
-    : null;
+  const block = challengeCreateBlock("available", payoutStateOf(approval.mode));
+  return block.kind === "paused" ? { detail: block.detail } : null;
 }
 
-const PAUSED_LINE = "Checker's off. I don't hold money I can't check.";
+const PAUSED_TITLE = "Challenges are paused for now";
+const PAUSED_LINE =
+  "I can't pay a win out on this build. So I'm not holding money for one.";
 
-/** The one action that starts something. When dares are paused on this build
- *  it points at what still works (wearable runs) instead of a form that would
- *  refuse. */
+/** The one action that starts something. When challenges are paused on this
+ *  build it points at the open runs instead of a form that would refuse. */
 function StartAction({ paused }: { paused: boolean }) {
   return paused ? (
     <Link href="/pools" className={PRIMARY_LINK}>
-      Find a wearable run
+      See the open runs
     </Link>
   ) : (
     <Link href="/challenge/new" className={PRIMARY_LINK}>
-      Start a dare
+      Start a challenge
     </Link>
   );
 }
 
-/** Dares are paused on this build: SPOTTER says so plainly, with the one next
- *  action that works. Never hidden, never a dead box. */
-function DaresPausedNote({
-  pause,
-}: {
-  pause: { title: string; detail: string };
-}) {
+/** Challenges are paused on this build: SPOTTER says so plainly, with the one
+ *  next action. Never hidden, never a dead box. */
+function ChallengesPausedNote({ pause }: { pause: { detail: string } }) {
   return (
     <div
       role="status"
@@ -538,7 +529,7 @@ function DaresPausedNote({
       <Spotter state="error" size="sm" line={PAUSED_LINE} />
       <div className="space-y-2 sm:pb-2">
         <p className="font-display text-xl font-bold leading-display">
-          {pause.title}
+          {PAUSED_TITLE}
         </p>
         <p className="text-sm text-foreground/80">{pause.detail}</p>
         <StartAction paused />
@@ -583,7 +574,7 @@ function MyChallengesContent() {
     [query.data, invitedQuery.data],
   );
   const { displayName } = useDisplayNames(nameAddresses);
-  const pause = useDarePause();
+  const pause = useChallengePause();
 
   const origin =
     typeof window === "undefined" ? "" : window.location.origin;
@@ -605,10 +596,10 @@ function MyChallengesContent() {
         <div className="flex flex-col items-center text-center">
           <Spotter state="history-other" size="sm" decorative />
           <p className="mt-3 font-display text-[1.75rem] font-extrabold leading-display tracking-display">
-            Sign in to see your dares
+            Sign in to see your challenges
           </p>
           <p className="mx-auto mt-2 max-w-md text-base text-muted">
-            The dares aimed at you and the ones you have sent live here once you
+            The challenges aimed at you and the ones you have sent live here once you
             sign in.
           </p>
         </div>
@@ -629,8 +620,8 @@ function MyChallengesContent() {
   if (query.isError) {
     return (
       <ErrorNote
-        title="Could not load your dares"
-        detail="I could not read your dares from Base Sepolia. Nothing changed. Try again."
+        title="Could not load your challenges"
+        detail="I could not read your challenges from Base Sepolia. Nothing changed. Try again."
         raw={
           query.error instanceof Error &&
           !(query.error instanceof ContractNotConfiguredError)
@@ -666,15 +657,15 @@ function MyChallengesContent() {
     return pause !== null ? (
       <EmptyState
         pose="thinking"
-        title={pause.title}
+        title={PAUSED_TITLE}
         detail={pause.detail}
         line={PAUSED_LINE}
         action={<StartAction paused />}
       />
     ) : (
       <EmptyState
-        title="No dares yet"
-        detail="Stake on your own goal, or put up a reward and dare a friend. When someone dares you back, it shows up here too."
+        title="No challenges yet"
+        detail="Stake on your own goal, or put up a reward and challenge a friend. Your wearable decides. When someone challenges you back, it shows up here too."
         line="Nothing running. I'm on break."
         action={<StartAction paused={false} />}
       />
@@ -683,13 +674,13 @@ function MyChallengesContent() {
 
   return (
     <div className="space-y-10">
-      {pause !== null ? <DaresPausedNote pause={pause} /> : null}
+      {pause !== null ? <ChallengesPausedNote pause={pause} /> : null}
       {invited.length > 0 ? (
         <section className="space-y-4">
           <div>
             <h2 className={SECTION_TITLE}>Invited to you</h2>
             <p className="mt-1 text-sm text-muted">
-              Dares aimed straight at your handle. Accept one, stake the small
+              Challenges aimed straight at your handle. Accept one, stake the small
               lock-in, and go for the goal - hit it and you collect your lock-in
               back plus the reward, the second it is verified.
             </p>
@@ -707,9 +698,9 @@ function MyChallengesContent() {
 
       <section className="space-y-4">
         <div>
-          <h2 className={SECTION_TITLE}>Dares you&apos;re in</h2>
+          <h2 className={SECTION_TITLE}>Challenges you&apos;re in</h2>
           <p className="mt-1 text-sm text-muted">
-            Dares a friend aimed at you and you accepted with a lock-in stake.
+            Challenges a friend aimed at you and you accepted with a lock-in stake.
             Upload your proof and you collect your stake back plus the reward the
             second it is verified.
           </p>
@@ -717,8 +708,8 @@ function MyChallengesContent() {
         {data.inChallenges.length === 0 ? (
           <EmptyState
             pose={null}
-            title="No dares aimed at you yet"
-            detail="When a friend dares you and you open their link to accept, the dare shows up here."
+            title="No challenges aimed at you yet"
+            detail="When a friend challenges you and you open their link to accept, the challenge shows up here."
           />
         ) : (
           data.inChallenges.map((entry) => (
@@ -733,7 +724,7 @@ function MyChallengesContent() {
 
       <section className="space-y-4">
         <div>
-          <h2 className={SECTION_TITLE}>Dares you started</h2>
+          <h2 className={SECTION_TITLE}>Challenges you started</h2>
           <p className="mt-1 text-sm text-muted">
             Commitments you staked on your own goal, and rewards you put up for a
             friend. Either way you never keep a participant&apos;s stake.
@@ -742,8 +733,8 @@ function MyChallengesContent() {
         {data.sentChallenges.length === 0 ? (
           <EmptyState
             pose={null}
-            title="You have not started a dare yet"
-            detail="Stake on your own goal, or put up a reward and dare a friend to hit theirs."
+            title="You have not started a challenge yet"
+            detail="Stake on your own goal, or put up a reward and challenge a friend to hit theirs."
             action={pause !== null ? undefined : <StartAction paused={false} />}
           />
         ) : (
@@ -760,19 +751,19 @@ export default function ChallengesPage() {
   return (
     <div className="space-y-6">
       <SceneHeader
-        title="Your dares"
-        subtitle="The goals you have put Base Sepolia test USDC behind: your own commitments, the dares you sent, and the ones aimed at you."
+        title="Your challenges"
+        subtitle="The goals you have put Base Sepolia test USDC behind: your own commitments, the challenges you sent, and the ones aimed at you."
         pose="greet"
         poseAlt="SPOTTER waving hello"
-        spotterLine="Dare a friend, or stake on yourself. I hold the pot either way."
+        spotterLine="Challenge a friend, or stake on yourself. I hold the pot either way."
       />
       {DYNAMIC_CONFIGURED ? (
         <MyChallengesContent />
       ) : (
         <EmptyState
           title="Sign-in is not switched on for this build"
-          detail="Dares need a signed-in wallet, and this build has sign-in off. Nothing is wrong on your side. The open runs are still there to look at."
-          line="No door, no dares. The lobby's open."
+          detail="Challenges need a signed-in wallet, and this build has sign-in off. Nothing is wrong on your side. The open runs are still there to look at."
+          line="No door, no challenges. The lobby's open."
           action={
             <Link href="/pools" className={PRIMARY_LINK}>
               See the open runs

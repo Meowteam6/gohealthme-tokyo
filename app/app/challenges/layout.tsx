@@ -5,7 +5,7 @@ import { NOINDEX } from "@/lib/site";
 // /challenges is a client component; this layout carries its head tags. It
 // lists person-aimed dares for one wallet, so it is never indexed.
 export const metadata: Metadata = {
-  title: "Your dares",
+  title: "Your challenges",
   robots: NOINDEX,
 };
 
