@@ -6,6 +6,8 @@
 // lib/wearable-join-gate.ts uses. A WHOOP player learns "no step count" here,
 // not after a stake on a steps run.
 
+import { countsLine } from "@/lib/game/sensor-copy";
+import { COMING_LINE, LAUNCH_METRICS } from "@/lib/provider-capabilities";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, TAP_TARGET } from "@/components/ui";
@@ -47,16 +49,20 @@ const CTA: Record<WearableProviderId, string> = {
  * WHOOP wearer here was the promise the steps-run trap was built on.
  */
 function measuresLine(option: ProviderOption): string {
+  // Worded in terms of the runs on offer (lib/provider-capabilities), so the
+  // card never advertises a metric no run uses.
   if (option.capability === "observed" && option.observedMetrics !== null) {
-    return `Measures ${option.observedMetrics.map(metricLabel).join(", ")}`;
+    const seen = LAUNCH_METRICS.filter((m) => option.observedMetrics?.includes(m));
+    return seen.length === 0
+      ? "Your device has not reported sleep or workouts yet."
+      : `Counts ${seen.map(metricLabel).join(", ")}.`;
   }
-  const list = option.metrics.map(metricLabel).join(", ");
   if (option.id === "junction") {
     return option.connected
-      ? `Linked. I see what your device measures after its first sync. Junction can carry: ${list}`
-      : `Depends on your device. Junction can carry: ${list}`;
+      ? `Linked. I confirm what your device counts after its first sync. ${countsLine("junction")}`
+      : `${countsLine("junction")} Depends on your device.`;
   }
-  return `Measures ${list}`;
+  return countsLine(option.id);
 }
 
 function PairButton({
@@ -291,6 +297,8 @@ function SensorStepBody({
           WHOOP, Oura, Fitbit or Garmin, pair that instead.
         </p>
       ) : null}
+
+      <p className="text-sm text-muted">{COMING_LINE}</p>
 
       {phoneSteps !== null ? (
         <p role="status" className="rounded-lg border-2 border-accent/40 bg-accent/5 p-4 text-sm">
