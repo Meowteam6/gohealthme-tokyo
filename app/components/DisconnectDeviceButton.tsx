@@ -62,19 +62,19 @@ export default function DisconnectDeviceButton({
               setError(
                 err instanceof Error
                   ? err.message
-                  : "Could not disconnect the device.",
+                  : "Could not disconnect the wearable.",
               );
             })
             .finally(() => setBusy(false));
         }}
         className={className}
       >
-        {busy ? "Disconnecting" : "Disconnect this device"}
+        {busy ? "Disconnecting your wearable" : "Disconnect my wearable"}
       </Button>
       {note !== null ? (
         <p
           role="status"
-          className="mt-3 rounded-xl border border-edge bg-surface p-4 text-sm text-muted"
+          className="mt-3 rounded-xl border border-edge bg-surface p-4 text-base text-muted"
         >
           {note}
         </p>
@@ -82,7 +82,7 @@ export default function DisconnectDeviceButton({
       {error !== null ? (
         <div className="mt-3">
           <ErrorNote
-            title="Could not disconnect"
+            title="Could not disconnect your wearable"
             detail={error}
             onRetry={() => setError(null)}
           />
