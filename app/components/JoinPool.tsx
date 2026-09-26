@@ -285,8 +285,8 @@ function JoinPoolInner({
         size="lg"
         line={
           authenticated
-            ? "Hand it over. I hold it until your wearable says otherwise."
-            : "Sign in first. Then I hold your coin."
+            ? "The run's contract holds your stake. I only read your wearable."
+            : "Sign in first. I watch your wearable, not your wallet."
         }
         className="mx-auto"
       />
@@ -296,9 +296,9 @@ function JoinPoolInner({
             <HoldCoin
               key={coinKey}
               onCommit={commit}
-              face={coin.face}
               label={coin.label}
               hint={coin.hint}
+              confirmLabel={coin.confirmLabel}
               committedHint={
                 busy ? (coin.disabledReason ?? coin.committedHint) : coin.committedHint
               }

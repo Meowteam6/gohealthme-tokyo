@@ -1,14 +1,12 @@
 import type { ReactNode } from "react";
-import Spotter from "@/components/spotter/Spotter";
-import {
-  SPOTTER_BACKDROP_SRC,
-  asSpotterPose,
-  type SpotterPose,
-} from "@/lib/spotter-poses";
+import Perch from "@/components/spotter/Perch";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
+import { Card } from "@/components/ui";
+import { asSpotterPose, type SpotterPose } from "@/lib/spotter-poses";
 
-// SPOTTER's riverbank behind a screen title (docs/DESIGN.md). The otter stands
-// in the grass doing something relevant to the page; he shows on phones too,
-// smaller, because the mascot is the layout. The backdrop is decoration.
+// A screen title on the night field (docs/DESIGN.md): the title card, with
+// SPOTTER standing on its top edge doing something relevant to the page. His
+// optional line sits in his caption box inside the card.
 export default function SceneHeader({
   title,
   subtitle,
@@ -20,58 +18,33 @@ export default function SceneHeader({
 }: {
   title: string;
   subtitle?: string;
-  /** A pose name ("greet") or a legacy file name ("spotter-greet.webp"). */
+  /** A pose name ("wave") or a legacy file name ("spotter-greet.webp"). */
   pose: SpotterPose | string;
   poseAlt: string;
   /** A short sentence-case context line above the title. */
   eyebrow?: string;
-  /** A deadpan SPOTTER line, in his speech bubble beside the otter. */
+  /** One SPOTTER line, in his caption box. */
   spotterLine?: string;
   children?: ReactNode;
 }) {
-  const resolved: SpotterPose = asSpotterPose(pose) ?? "standing";
+  const resolved: SpotterPose = asSpotterPose(pose) ?? "wave";
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-edge bg-surface-raised">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={SPOTTER_BACKDROP_SRC}
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-surface-raised/90 via-surface-raised/55 to-transparent"
-      />
-
-      <div className="relative z-10 flex min-h-[13rem] items-end justify-between gap-3 px-5 pt-7 sm:min-h-[16rem] sm:px-9">
-        <div className="min-w-0 max-w-md pb-7 sm:pb-8">
-          {eyebrow !== undefined ? (
-            <p className="text-sm font-bold text-accent-deep">{eyebrow}</p>
-          ) : null}
-          <h1 className="mt-1 break-words font-display text-[2rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]">
-            {title}
-          </h1>
-          {subtitle !== undefined ? (
-            <p className="mt-2 text-base leading-relaxed text-foreground/80">
-              {subtitle}
-            </p>
-          ) : null}
-          {children}
-        </div>
-        <div className="-mb-1 shrink-0 self-end md:hidden">
-          <Spotter pose={resolved} size="xs" alt={poseAlt} />
-        </div>
-        <div className="-mb-1 hidden shrink-0 self-end md:block">
-          <Spotter
-            pose={resolved}
-            size="lg"
-            alt={poseAlt}
-            line={spotterLine}
-            linePlacement="side"
-          />
-        </div>
-      </div>
-    </section>
+    <Perch pose={resolved} width={[88, 132]} side="right" alt={poseAlt}>
+      <Card as="section">
+        {eyebrow !== undefined ? (
+          <p className="m-0 text-sm font-semibold text-haze">{eyebrow}</p>
+        ) : null}
+        <h1 className="type-title m-0 mt-1 break-words text-[2rem] min-[900px]:text-[2.75rem]">
+          {title}
+        </h1>
+        {subtitle !== undefined ? (
+          <p className="m-0 mt-2 max-w-[60ch] text-base leading-relaxed text-muted">{subtitle}</p>
+        ) : null}
+        {spotterLine !== undefined ? (
+          <SpotterCaption line={spotterLine} className="mt-4 max-w-md" />
+        ) : null}
+        {children}
+      </Card>
+    </Perch>
   );
 }

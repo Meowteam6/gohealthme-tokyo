@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import Spotter, { SpotterBubble } from "@/components/spotter/Spotter";
-import { Money } from "@/components/ui";
+import Spotter from "@/components/spotter/Spotter";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
+import { Card, Money } from "@/components/ui";
 import { commitmentOutcome, commitmentRange } from "@/lib/commitment";
 import { formatUsdc } from "@/lib/contract";
 import type { SpotterPose } from "@/lib/spotter-poses";
@@ -31,9 +32,9 @@ function exampleBeats(): Beat[] {
   const refund = none.kind === "refund-all" ? none.refundEach : EXAMPLE.entryFee;
   return [
     {
-      pose: "payday",
+      pose: "thumbsup",
       title: "You hit it",
-      line: "Told you. Here's your coin, and then some.",
+      line: "Told you. Your stake comes back, and then some.",
       body:
         paid !== null ? (
           <>
@@ -54,9 +55,9 @@ function exampleBeats(): Beat[] {
       body: "Your stake goes to the players who hit. Nothing else is taken from you.",
     },
     {
-      pose: "thumbsup",
+      pose: "meditate",
       title: "Nobody hits",
-      line: "Rough week for everyone. Nobody loses a coin.",
+      line: "Rough week for everyone. Nobody loses a cent.",
       body: (
         <>
           Everyone gets their stake back, <Money usd={formatUsdc(refund)} size="sm" /> each
@@ -72,23 +73,22 @@ export function CommitmentBeats() {
   const beats = exampleBeats();
   return (
     <div className="space-y-5">
-      <p className="max-w-2xl text-lg text-foreground/85">
+      <p className="m-0 max-w-2xl text-[1.0625rem] text-muted">
         Everyone in a run puts in the same stake. Your result depends only on
         your own effort, verified by your wearable. It is Base Sepolia test
         money while the app is in beta.
       </p>
-      <ul className="grid gap-3 md:grid-cols-3">
+      <ul className="m-0 grid gap-3 p-0 md:grid-cols-3">
         {beats.map((beat) => (
-          <li
-            key={beat.title}
-            className="flex flex-col gap-3 rounded-3xl border border-edge bg-surface p-5"
-          >
-            <div className="flex items-end gap-2">
-              <Spotter pose={beat.pose} size="xs" decorative />
-              <SpotterBubble line={beat.line} tail="side" />
-            </div>
-            <h3 className="font-display text-xl font-bold leading-tight">{beat.title}</h3>
-            <p className="text-base text-foreground/85">{beat.body}</p>
+          <li key={beat.title} className="list-none">
+            <Card className="flex h-full flex-col gap-3">
+              <div className="flex items-end gap-3">
+                <Spotter pose={beat.pose} size="xs" decorative />
+                <SpotterCaption line={beat.line} />
+              </div>
+              <h3 className="m-0 text-[1.1875rem] font-semibold leading-snug">{beat.title}</h3>
+              <p className="m-0 text-[0.9375rem] leading-normal text-muted">{beat.body}</p>
+            </Card>
           </li>
         ))}
       </ul>

@@ -16,12 +16,10 @@ import ProveHuman from "@/components/world/ProveHuman";
 import EnsNameClaim from "@/components/ens/EnsNameClaim";
 import ClaimHandle from "@/components/ClaimHandle";
 import RequestAccess from "@/components/RequestAccess";
-import Spotter from "@/components/spotter/Spotter";
-import { Button, TAP_TARGET } from "@/components/ui";
-import {
-  SPOTTER_BACKDROP_SRC,
-  type SpotterScreenState,
-} from "@/lib/spotter-poses";
+import Perch from "@/components/spotter/Perch";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
+import { Button, Card, TAP_TARGET } from "@/components/ui";
+import type { SpotterScreenState } from "@/lib/spotter-poses";
 import CharacterCard from "@/components/game/CharacterCard";
 import SignInStep from "@/components/game/SignInStep";
 import SensorStep from "@/components/game/SensorStep";
@@ -67,35 +65,21 @@ function Scene({ step, title }: { step: StepId | null; title: string }) {
     step !== null ? SCENE[step] : "onboarding-welcome";
   const line = step !== null ? SPOTTER_LINE[step] : DONE_LINE;
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-edge bg-surface-raised lg:sticky lg:top-32">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={SPOTTER_BACKDROP_SRC}
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-surface-raised/90 via-surface-raised/40 to-transparent"
-      />
-      <div className="relative z-10 px-5 pt-6 sm:px-7">
-        <h1 className="break-words font-display text-[2.5rem] font-extrabold leading-display tracking-display">
-          {title}
-        </h1>
-        <p className="mt-2 max-w-md text-base text-foreground/85">
-          Four steps, once. Then every run reads this card. Base Sepolia test
-          money only.
-        </p>
-        {/* Phone: SPOTTER beside his line, small enough to keep the step in view. */}
-        <div className="-mb-1 mt-3 flex justify-end lg:hidden">
-          <Spotter state={state} size="sm" line={line} linePlacement="side" live />
-        </div>
-        {/* Desktop: hero size, a new pose per step. */}
-        <div className="-mb-1 mt-4 hidden justify-center lg:flex">
-          <Spotter state={state} line={line} live priority />
-        </div>
-      </div>
+    <section className="relative lg:sticky lg:top-24">
+      {/* SPOTTER stands on the card's top edge, a new pose per step; small on
+          a phone so the open step's action stays in view. */}
+      <Perch state={state} width={[88, 156]} side="right" priority decorative>
+        <Card>
+          <h1 className="type-title m-0 break-words text-[2.25rem] min-[900px]:text-[2.75rem]">
+            {title}
+          </h1>
+          <p className="m-0 mt-2 max-w-md text-base text-muted">
+            Four steps, once. Then every run reads this card. Base Sepolia test
+            money only.
+          </p>
+          <SpotterCaption line={line} live className="mt-4" />
+        </Card>
+      </Perch>
     </section>
   );
 }
@@ -345,11 +329,11 @@ export default function CharacterCreation({
             <>
               <span
                 aria-hidden="true"
-                className={`flex size-10 shrink-0 items-center justify-center rounded-full border-2 font-display text-lg font-extrabold tabular-nums ${
+                className={`num flex size-10 shrink-0 items-center justify-center rounded-full border-2 text-base font-bold ${
                   state.status === "done"
-                    ? "border-foreground bg-foreground text-background"
+                    ? "border-moonlight/40 bg-moonlight/10 text-moonlight"
                     : isOpen
-                      ? "border-foreground bg-accent text-foreground"
+                      ? "border-transparent bg-accent text-accent-foreground"
                       : "border-edge bg-surface-raised text-muted"
                 }`}
               >

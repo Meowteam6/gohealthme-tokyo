@@ -4,12 +4,21 @@ import { joinCoinCopy } from "./join-coin";
 const ONE_USDC = 1_000_000n;
 
 describe("joinCoinCopy", () => {
-  it("puts the stake on the coin and names it in the label", () => {
+  it("names the stake on the hold button and in its confirm", () => {
     const copy = joinCoinCopy(ONE_USDC, "idle");
     expect(copy.face).toBe("1.00");
-    expect(copy.label).toBe("Put 1.00 USDC on yourself");
-    expect(copy.hint).toContain("1.00 USDC");
+    expect(copy.label).toBe("Hold to stake 1.00 USDC");
+    expect(copy.confirmLabel).toBe("Stake 1.00 USDC");
+    expect(copy.hint).toBe("About a second. Let go to cancel.");
+    expect(copy.committedHint).toContain("1.00 USDC");
     expect(copy.disabledReason).toBeNull();
+  });
+
+  it("never says coin now that the stake is a hold button", () => {
+    for (const phase of ["idle", "wallet-loading", "checking", "joining", "retry"] as const) {
+      const text = Object.values(joinCoinCopy(ONE_USDC, phase)).join(" ");
+      expect(text).not.toMatch(/\bcoin\b/i);
+    }
   });
 
   it("never offers the coin while a join is in flight, and says why", () => {
@@ -30,6 +39,7 @@ describe("joinCoinCopy", () => {
     const copy = joinCoinCopy(0n, "idle");
     expect(copy.face).toBe("Free");
     expect(copy.label).not.toMatch(/USDC/);
+    expect(copy.confirmLabel).not.toMatch(/USDC/);
     expect(copy.hint).toMatch(/costs nothing/);
   });
 

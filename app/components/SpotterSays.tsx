@@ -14,7 +14,8 @@
 
 
 import { useSyncExternalStore } from "react";
-import Spotter, { SpotterBubble } from "@/components/spotter/Spotter";
+import Spotter from "@/components/spotter/Spotter";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
 import { spotterSays, type SpotterPick } from "@/lib/spotter-says";
 import type { Locale, Surface, SpotterState } from "@/lib/spotter-lines";
 import type { SpotterPose } from "@/lib/spotter-poses";
@@ -75,14 +76,14 @@ export default function SpotterSays({
 
   return (
     <div
-      className={`flex items-end gap-2 ${align === "right" ? "flex-row-reverse" : ""}`}
+      className={`flex items-end gap-3 ${align === "right" ? "flex-row-reverse" : ""}`}
     >
       <Spotter
         pose={pose ?? POSE_BY_STATE[state]}
         size={size === "md" ? "sm" : "xs"}
         decorative
       />
-      <SpotterBubble line={text} tail="side" />
+      <SpotterCaption line={text} className="max-w-xs" />
     </div>
   );
 }

@@ -12,10 +12,10 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import EnsName from "@/components/ens/EnsName";
-import Spotter, { SpotterBubble } from "@/components/spotter/Spotter";
-import { Money, Skeleton } from "@/components/ui";
+import Spotter from "@/components/spotter/Spotter";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
+import { Money, Skeleton, buttonClasses, TEXT_LINK } from "@/components/ui";
 import NightTally from "@/components/game/NightTally";
-import { PRIMARY_LINK, TEXT_LINK } from "@/components/game/link-styles";
 import {
   displayGoalSpec,
   evidenceTypeOf,
@@ -148,7 +148,7 @@ export default function RunBoard({
   // The nights, in whichever state the wearable read is in. Every branch
   // says what is true and what, if anything, the player can do.
   let nights: ReactNode;
-  const note = night ? "text-background/85" : "text-foreground/80";
+  const note = "text-muted";
   if (!wearable) {
     nights = (
       <p className={`text-sm ${note}`}>
@@ -183,7 +183,7 @@ export default function RunBoard({
           onClick={() => {
             void requestAuth({ refresh: true }).then(() => progressQuery.refetch());
           }}
-          className={PRIMARY_LINK}
+          className={buttonClasses()}
         >
           Show my nights
         </button>
@@ -191,7 +191,7 @@ export default function RunBoard({
     );
   } else if (providerMetricUnavailable(state)) {
     nights = (
-      <p className={`text-sm font-bold ${night ? "text-gold" : "text-warning"}`}>
+      <p className="text-sm font-semibold text-warning">
         Your wearable syncs, and it does not report what this run is scored on.
         That is the hardware. Your result settles on what the run can read.
       </p>
@@ -207,7 +207,7 @@ export default function RunBoard({
   } else if (tally !== null) {
     nights = <NightTally tally={tally} onDark={night} />;
   } else {
-    nights = <p className={`text-sm ${night ? "text-background/85" : "text-muted"}`}>No nights counted yet.</p>;
+    nights = <p className="text-sm text-muted">No nights counted yet.</p>;
   }
 
   const line = tally !== null ? STANDING_LINE[tally.standing] : undefined;
@@ -232,15 +232,15 @@ export default function RunBoard({
       {night ? (
         <section
           aria-label="Tonight"
-          className="overflow-hidden rounded-3xl bg-foreground p-4 text-background sm:p-5"
+          className="overflow-hidden rounded-card bg-surface-raised p-4 text-foreground shadow-[inset_0_0_0_1px_var(--border)] sm:p-5"
         >
-          <p className="text-sm text-background/80">Time left in the run</p>
+          <p className="text-sm text-haze">Time left in the run</p>
           <p className="font-display text-[clamp(2.75rem,15vw,4rem)] font-extrabold leading-[0.9] tracking-[-0.03em] tabular-nums">
             {figure.figure}
           </p>
           <div className="mt-4">{nights}</div>
           <div className="mt-3 flex items-end justify-between gap-2">
-            {line !== undefined ? <SpotterBubble line={line} tail="side" /> : <span />}
+            {line !== undefined ? <SpotterCaption line={line} className="max-w-xs" /> : <span />}
             <Spotter state="run-night-sleep" size="sm" className="-mb-5 -mr-5 shrink-0" />
           </div>
         </section>
@@ -259,7 +259,7 @@ export default function RunBoard({
           <div className="mt-4">{nights}</div>
           {line !== undefined ? (
             <div className="mt-4">
-              <SpotterBubble line={line} tail="down" />
+              <SpotterCaption line={line} className="max-w-md" />
             </div>
           ) : null}
         </section>
@@ -330,7 +330,7 @@ export default function RunBoard({
                       <span
                         aria-hidden="true"
                         className={`h-3.5 w-5 border-2 ${
-                          p.hit ? "border-foreground bg-gold" : "border-foreground bg-surface"
+                          p.hit ? "border-moonlight bg-moonlight" : "border-muted/50 bg-transparent"
                         }`}
                         style={{ borderRadius: "50% 50% 46% 54% / 60% 60% 40% 40%" }}
                       />

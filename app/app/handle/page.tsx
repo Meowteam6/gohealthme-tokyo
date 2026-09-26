@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import ClaimHandle from "@/components/ClaimHandle";
+import Spotter from "@/components/spotter/Spotter";
 import { NOINDEX } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -22,13 +23,8 @@ export default function HandlePage() {
             health category behind them.
           </p>
         </div>
-        {/* SPOTTER waving hello - eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/spotter/spotter-wave.webp"
-          alt=""
-          aria-hidden="true"
-          className="hidden h-24 w-auto shrink-0 drop-shadow-sm sm:block"
-        />
+        {/* SPOTTER waving hello, the relit night art. */}
+        <Spotter pose="wave" width={64} decorative className="hidden shrink-0 sm:inline-flex" />
       </div>
       <ClaimHandle />
     </div>

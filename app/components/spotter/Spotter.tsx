@@ -1,41 +1,50 @@
+import type { CSSProperties } from "react";
 import Image from "next/image";
 import {
-  POSE_META,
   poseFor,
+  poseMeta,
   spotterSrc,
+  toNightPose,
   type SpotterPose,
   type SpotterScreenState,
   type SpotterSize,
+  type StageWidth,
 } from "@/lib/spotter-poses";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
 
-// SPOTTER, drawn once. Every otter in the product renders through here so the
-// art, the alt text and the speech bubble read as one character (docs/DESIGN.md).
-// Screens pass a `state` (lib/spotter-poses.ts picks pose and size) or, for a
-// one-off, a `pose`. Server-safe: no client state.
+// SPOTTER, drawn once (docs/DESIGN.md, "SPOTTER on a night field"). Every otter
+// in the product renders through here: the relit night art, the alt text and
+// the contact shadow read as one character. Screens pass a `state` (lib/
+// spotter-poses.ts picks pose and staged width) or a `pose`. To stand him on a
+// card's top edge, wrap the card in <Perch>. Server-safe: no client state.
 
-/** Width in px for the width-driven sizes; `hero` is height-driven. */
-const WIDTH_PX: Record<Exclude<SpotterSize, "hero">, number> = {
+/** Fixed widths in px for the older `size` names. */
+const SIZE_PX: Record<Exclude<SpotterSize, "hero">, number> = {
   row: 40,
   inline: 48,
   xs: 72,
-  sm: 120,
-  md: 160,
-  lg: 200,
+  sm: 96,
+  md: 132,
+  lg: 176,
 };
 
-const HERO_SIZES = "(max-width: 640px) 80vw, 480px";
+/** `size="hero"` is the landing sleeper: 176px on a phone, 280px from 900px. */
+const HERO_WIDTH: StageWidth = [176, 280];
 
 type PoseOrState =
   | { pose: SpotterPose; state?: never }
   | { state: SpotterScreenState; pose?: never };
 
 export type SpotterProps = PoseOrState & {
-  /** Overrides the state's size. Default "md" for a bare pose. */
+  /** A fixed older size. Ignored when `width` is given. */
   size?: SpotterSize;
-  /** One deadpan line, drawn in Patrick Hand in a speech bubble. */
+  /** Width in px: one number, or [phone, from 900px]. Overrides `size` and the
+   *  state's staged width. */
+  width?: number | StageWidth;
+  /** One line from SPOTTER, in his caption box beside or under him. */
   line?: string;
-  /** Bubble above the otter (default) or beside it. */
-  linePlacement?: "above" | "side";
+  /** Where the caption sits: under him (default), or beside him. */
+  linePlacement?: "below" | "side" | "above";
   /** Announce a line that changes after an action. */
   live?: boolean;
   /** Pure decoration: empty alt, hidden from the accessibility tree. */
@@ -44,94 +53,101 @@ export type SpotterProps = PoseOrState & {
   alt?: string;
   /** Preload: pass for the hero otter that is the page's largest image. */
   priority?: boolean;
+  /** The soft shadow under his feet. On by default. */
+  contact?: boolean;
+  /** The slow sleeping breath. On by default for the sleep pose only. */
+  breathe?: boolean;
   className?: string;
 };
 
-export default function Spotter(props: SpotterProps) {
-  const resolved =
-    props.state !== undefined
-      ? poseFor(props.state)
-      : { pose: props.pose, size: "md" as SpotterSize };
-  const pose = resolved.pose;
-  const size = props.size ?? resolved.size;
-  const meta = POSE_META[pose];
-  const alt = props.decorative === true ? "" : (props.alt ?? meta.alt);
-  const placement = props.linePlacement ?? "above";
+export function stageWidth(
+  width: number | StageWidth | undefined,
+  size: SpotterSize | undefined,
+  staged: StageWidth | undefined,
+): StageWidth {
+  if (typeof width === "number") return [width, width];
+  if (width !== undefined) return width;
+  if (size === "hero") return HERO_WIDTH;
+  if (size !== undefined) return [SIZE_PX[size], SIZE_PX[size]];
+  if (staged !== undefined) return staged;
+  return [SIZE_PX.md, SIZE_PX.md];
+}
 
-  const isHero = size === "hero";
-  const px = isHero ? null : WIDTH_PX[size];
-  const imageClass = isHero
-    ? "h-[min(60vh,34rem)] w-auto max-w-full object-contain"
-    : "h-auto w-full";
-  const frame = meta.opaque
-    ? "overflow-hidden rounded-2xl border border-edge bg-surface-raised"
-    : "";
+/** The CSS variables a staged figure reads (see .night-figure in globals.css). */
+export function stageVars([phone, wide]: StageWidth): CSSProperties {
+  return { "--sw-sm": `${phone}px`, "--sw-lg": `${wide}px` } as CSSProperties;
+}
 
-  const figure = (
-    <div
-      className={`shrink-0 ${frame}`}
-      style={px !== null ? { width: px } : undefined}
-    >
+/** Just the figure: the art and its contact shadow, sized by the stage vars. */
+export function SpotterFigure({
+  pose,
+  width,
+  decorative = false,
+  alt,
+  priority = false,
+  contact = true,
+  breathe,
+  className = "",
+}: {
+  pose: SpotterPose;
+  width: StageWidth;
+  decorative?: boolean;
+  alt?: string;
+  priority?: boolean;
+  contact?: boolean;
+  breathe?: boolean;
+  className?: string;
+}) {
+  const meta = poseMeta(pose);
+  const sleeping = breathe ?? toNightPose(pose) === "sleep";
+  return (
+    <span className={`night-figure block ${className}`} style={stageVars(width)}>
       <Image
         src={spotterSrc(pose)}
         width={meta.width}
         height={meta.height}
-        alt={alt}
-        aria-hidden={props.decorative === true ? true : undefined}
-        sizes={px !== null ? `${px}px` : HERO_SIZES}
-        priority={props.priority}
-        className={imageClass}
+        alt={decorative ? "" : (alt ?? meta.alt)}
+        aria-hidden={decorative ? true : undefined}
+        sizes={`${Math.max(width[0], width[1])}px`}
+        priority={priority}
+        className={`block h-auto w-full ${sleeping ? "animate-breathe" : ""}`}
       />
-    </div>
-  );
-
-  if (props.line === undefined || props.line === "") {
-    return <div className={`inline-flex ${props.className ?? ""}`}>{figure}</div>;
-  }
-
-  return (
-    <div
-      className={`flex ${
-        placement === "side"
-          ? "flex-row-reverse items-end gap-2"
-          : "flex-col items-center gap-3"
-      } ${props.className ?? ""}`}
-    >
-      <SpotterBubble
-        line={props.line}
-        live={props.live === true}
-        tail={placement === "side" ? "side" : "down"}
-      />
-      {figure}
-    </div>
+      {contact ? <span aria-hidden="true" className="night-contact" /> : null}
+    </span>
   );
 }
 
-/** SPOTTER's speech bubble. Patrick Hand lives here and nowhere else. */
-export function SpotterBubble({
-  line,
-  live = false,
-  tail = "down",
-}: {
-  line: string;
-  live?: boolean;
-  tail?: "down" | "side";
-}) {
+export default function Spotter(props: SpotterProps) {
+  const resolved =
+    props.state !== undefined ? poseFor(props.state) : { pose: props.pose, width: undefined };
+  const width = stageWidth(props.width, props.size, resolved.width);
+  const figure = (
+    <SpotterFigure
+      pose={resolved.pose}
+      width={width}
+      decorative={props.decorative}
+      alt={props.alt}
+      priority={props.priority}
+      contact={props.contact}
+      breathe={props.breathe}
+    />
+  );
+
+  if (props.line === undefined || props.line === "") {
+    return <span className={`inline-flex ${props.className ?? ""}`}>{figure}</span>;
+  }
+
+  const placement = props.linePlacement ?? "below";
+  const layout =
+    placement === "side"
+      ? "flex-row items-end gap-3"
+      : placement === "above"
+        ? "flex-col-reverse items-start gap-3"
+        : "flex-col items-start gap-3";
   return (
-    <p
-      aria-live={live ? "polite" : undefined}
-      className="relative max-w-[16rem] rounded-[18px] border-2 border-foreground bg-surface px-3.5 py-2 font-hand text-xl leading-tight text-foreground"
-    >
-      <span className="sr-only">SPOTTER says: </span>
-      {line}
-      <span
-        aria-hidden="true"
-        className={`absolute h-3.5 w-3.5 rotate-45 border-foreground bg-surface ${
-          tail === "down"
-            ? "-bottom-[9px] left-7 border-b-2 border-r-2"
-            : "-left-[9px] bottom-4 border-b-2 border-l-2"
-        }`}
-      />
-    </p>
+    <div className={`flex ${layout} ${props.className ?? ""}`}>
+      {figure}
+      <SpotterCaption line={props.line} live={props.live === true} className="max-w-xs" />
+    </div>
   );
 }
