@@ -131,26 +131,32 @@ export default function RootLayout({
           <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
             <AccessGate>{children}</AccessGate>
           </main>
-          <footer className="border-t border-edge px-4 py-6 text-center text-xs text-muted">
-            <p>
-              GoHealthMe V4 is in beta on Base Sepolia test money, built at
-              ETHGlobal Tokyo 2026 and settled by SPOTTER. Your health data
-              never touches the chain.
-            </p>
-            <nav className="mt-2 flex items-center justify-center gap-4">
-              <Link
-                href="/privacy"
-                className="inline-flex min-h-11 items-center hover:text-foreground hover:underline"
-              >
-                Privacy
-              </Link>
-              <Link
-                href="/terms"
-                className="inline-flex min-h-11 items-center hover:text-foreground hover:underline"
-              >
-                Terms
-              </Link>
-            </nav>
+          <footer className="border-t border-edge bg-surface-raised/60 px-4 pb-24 pt-6 text-sm text-muted sm:pb-6">
+            <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-2">
+                <p className="inline-flex items-center gap-2 rounded-full border border-edge bg-surface px-3 py-1 text-[0.8125rem] font-bold text-foreground">
+                  Base Sepolia test money, beta
+                </p>
+                <p className="max-w-xl">
+                  Built at ETHGlobal Tokyo 2026 and settled by SPOTTER. Your
+                  health data never touches the chain.
+                </p>
+              </div>
+              <nav aria-label="Legal" className="flex items-center gap-5">
+                <Link
+                  href="/privacy"
+                  className="inline-flex min-h-11 items-center font-bold text-accent-deep underline-offset-4 hover:underline"
+                >
+                  Privacy
+                </Link>
+                <Link
+                  href="/terms"
+                  className="inline-flex min-h-11 items-center font-bold text-accent-deep underline-offset-4 hover:underline"
+                >
+                  Terms
+                </Link>
+              </nav>
+            </div>
           </footer>
           <HelperWidget />
         </Providers>
