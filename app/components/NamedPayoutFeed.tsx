@@ -10,7 +10,10 @@
 // time only, and this component renders exactly those. There is no goal text,
 // no initiative, no service label on this surface.
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import Spotter from "@/components/spotter/Spotter";
+import { EmptyState, Money, TAP_TARGET } from "@/components/ui";
 import { arcTxUrl } from "@/lib/chains";
 import { shortAddress } from "@/lib/social";
 
@@ -81,18 +84,24 @@ async function fetchFeed(): Promise<FeedResponse> {
 function PayoutRow({ payout, index }: { payout: NamedPayout; index: number }) {
   return (
     <li
-      className="ghm-rise-in flex items-center gap-3 rounded-2xl border border-edge bg-surface p-4"
+      className="ghm-rise-in flex items-center gap-3 rounded-[20px] border border-edge bg-surface p-4"
       style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
     >
+      {/* A wearable-settled payout gets the verified pose; a photo-backed one
+          gets the magnifier, so the tier never reads as verified. */}
+      <Spotter
+        state={payout.selfReported === true ? "history-other" : "history-verified"}
+        decorative
+      />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-sm text-foreground">
-          <span className="font-semibold">{nameOf(payout)}</span>
+        <span className="truncate text-base text-foreground">
+          <span className="font-bold">{nameOf(payout)}</span>
           <span className="text-muted"> got paid</span>
         </span>
-        <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
+        <span className="flex flex-wrap items-center gap-2 text-sm text-muted">
           {payout.selfReported === true ? (
-            <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">
-              self-reported
+            <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-bold text-warning">
+              Self-reported
             </span>
           ) : null}
           <span>{relativeTime(payout.at)}</span>
@@ -101,15 +110,14 @@ function PayoutRow({ payout, index }: { payout: NamedPayout; index: number }) {
             href={arcTxUrl(payout.txHash)}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-accent-deep underline underline-offset-2 hover:text-accent-deep"
+            className="font-bold text-accent-deep underline underline-offset-2"
           >
             Basescan
           </a>
         </span>
       </div>
-      <span className="shrink-0 font-mono tabular-nums text-base text-gold-deep">
-        {payout.amountUsd}
-        <span className="text-gold-deep/80"> USDC</span>
+      <span className="shrink-0">
+        <Money usd={payout.amountUsd} size="md" />
       </span>
     </li>
   );
@@ -127,10 +135,10 @@ export default function NamedPayoutFeed() {
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium uppercase tracking-wider text-muted">
+        <h2 className="font-display text-xl font-bold leading-display tracking-display">
           Payout feed
         </h2>
-        <p className="flex items-center gap-1.5 text-xs text-accent-deep">
+        <p className="flex items-center gap-1.5 text-sm text-accent-deep">
           <ShieldLockIcon className="h-3.5 w-3.5 shrink-0" />
           <span>{PRIVACY_COPY}</span>
         </p>
@@ -144,24 +152,36 @@ export default function NamedPayoutFeed() {
       ) : query.isError ? (
         <div
           role="status"
-          className="rounded-2xl border border-warning/40 bg-surface p-5 text-sm text-muted"
+          className="flex items-center gap-4 rounded-[20px] border border-warning/40 bg-surface p-5 text-base"
         >
-          <p>Could not read the payout feed right now.</p>
-          <button
-            type="button"
-            onClick={() => {
-              void query.refetch();
-            }}
-            className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent-deep underline underline-offset-4"
-          >
-            Try again
-          </button>
+          <Spotter state="error" size="xs" decorative />
+          <div>
+            <p>Could not read the payout feed right now.</p>
+            <button
+              type="button"
+              onClick={() => {
+                void query.refetch();
+              }}
+              className={`-ml-4 font-bold text-accent-deep underline underline-offset-4 ${TAP_TARGET}`}
+            >
+              Try again
+            </button>
+          </div>
         </div>
       ) : payouts.length === 0 ? (
-        <p className="rounded-2xl border border-edge bg-surface p-5 text-sm text-muted">
-          No recent payouts to show. Runs pay when they settle, and the next
-          one lands here.
-        </p>
+        <EmptyState
+          title="Nobody paid yet."
+          detail="Runs pay when they settle, and the next one lands here."
+          line="Nothing to hand out. I'm on break."
+          action={
+            <Link
+              href="/pools"
+              className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-6 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
+            >
+              Find a run
+            </Link>
+          }
+        />
       ) : (
         <ul className="flex flex-col gap-3">
           {payouts.map((payout, index) => (

@@ -14,6 +14,8 @@ import {
   challengeBackerUrl,
   isBackerView,
   darePot,
+  challengeGoalIssue,
+  challengePauseReason,
 } from "@/lib/challenges";
 
 const USDC = (n: number): bigint => BigInt(n) * 1_000_000n;
@@ -216,5 +218,55 @@ describe("challengeShareUrl", () => {
     expect(challengeShareUrl("https://gohealthme.app/", "tok_abc")).toBe(
       "https://gohealthme.app/c/tok_abc",
     );
+  });
+});
+
+describe("challengeGoalIssue", () => {
+  it("accepts every launch goal as a plain wearable goal", () => {
+    expect(challengeGoalIssue("Sleep at least 7 hours for 1 night")).toBeNull();
+    expect(challengeGoalIssue("Sleep efficiency 85% or better for 1 night")).toBeNull();
+    expect(challengeGoalIssue("Complete at least 1 workout for 1 day")).toBeNull();
+  });
+
+  it("refuses steps and any document or photo goal with the launch sentence", () => {
+    for (const goal of [
+      "Walk 8000 steps a day for 7 days",
+      "[doc] Sleep at least 7 hours for 1 night",
+      "[proof=doc+self] Complete at least 1 workout for 1 day",
+    ]) {
+      expect(challengeGoalIssue(goal)).toMatch(/^Runs have to work with every wearable/);
+    }
+  });
+});
+
+describe("challengePauseReason", () => {
+  it("never pauses a wearable challenge because the document checker is off", () => {
+    expect(
+      challengePauseReason({
+        goalSpec: "Sleep at least 7 hours for 1 night",
+        documentCheckerAvailable: false,
+        payoutsMisconfigured: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("pauses an older document challenge while the checker is off", () => {
+    expect(
+      challengePauseReason({
+        goalSpec: "[doc] Upload a flu shot record",
+        documentCheckerAvailable: false,
+        payoutsMisconfigured: false,
+      }),
+    ).toBe("checker");
+  });
+
+  it("pauses any challenge whose win could not pay", () => {
+    expect(
+      challengePauseReason({
+        goalSpec: "Complete at least 1 workout for 1 day",
+        documentCheckerAvailable: false,
+        payoutsMisconfigured: true,
+      }),
+    ).toBe("payouts");
   });
 });

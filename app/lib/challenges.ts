@@ -21,6 +21,9 @@
 // message is the challenger's own framing text; target_handle is a display
 // label the challenger typed. Neither is a copy of the goal.
 
+import { proofPolicyOf } from "@/lib/contract";
+import { launchGoalIssue } from "@/lib/launch-goal-check";
+
 // ---------------------------------------------------------------- invite token
 
 /** URL-safe base64url alphabet, 32-64 chars. Must match the DB CHECK exactly. */
@@ -198,4 +201,37 @@ export function darePot(input: DarePotInput): DarePot {
   const contributed = input.contributed ?? null;
   const seed = contributed === null ? null : clampZero(prize - contributed);
   return { prize, stakes, seed };
+}
+
+// ------------------------------------------------------------ wearable goals
+
+/**
+ * Why a goal cannot be a challenge, or null when it can. Every challenge is a
+ * wearable run on a launch goal (lib/provider-capabilities LAUNCH_METRICS), so
+ * whoever accepts can be checked by their own wearable. A proof marker
+ * (document or photo) is refused: document proof is not offered for
+ * challenges yet. The refusal is the same launch-goal sentence the create
+ * forms show, so the server and the form never word it differently.
+ */
+export function challengeGoalIssue(goalSpec: string): string | null {
+  if (proofPolicyOf(goalSpec).floor !== "wearable") return launchGoalIssue("");
+  return launchGoalIssue(goalSpec);
+}
+
+/** What stops a live challenge from taking money on this build, or null.
+ *  "checker": the goal needs the document checker and it is off. "payouts": a
+ *  verified win could not pay. A wearable challenge never waits on the
+ *  document checker. */
+export function challengePauseReason(input: {
+  goalSpec: string;
+  documentCheckerAvailable: boolean;
+  payoutsMisconfigured: boolean;
+}): "checker" | "payouts" | null {
+  if (
+    proofPolicyOf(input.goalSpec).floor !== "wearable" &&
+    !input.documentCheckerAvailable
+  ) {
+    return "checker";
+  }
+  return input.payoutsMisconfigured ? "payouts" : null;
 }

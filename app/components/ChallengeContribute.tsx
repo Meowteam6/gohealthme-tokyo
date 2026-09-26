@@ -27,14 +27,14 @@ export default function ChallengeContribute({
   prizeUsd: string | null;
 }) {
   return (
-    <div className="space-y-4 rounded-2xl border border-edge bg-surface p-5">
+    <div className="space-y-4 rounded-3xl border border-edge bg-surface p-5 sm:p-6">
       <div className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Sweeten the dare
-        </p>
+        <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
+          Add to the pot
+        </h2>
         {prizeUsd !== null ? (
-          <p className="text-lg font-semibold leading-snug">
-            The prize is <Money usd={prizeUsd} />
+          <p className="text-lg font-bold leading-snug">
+            In the pot now: <Money usd={prizeUsd} />
           </p>
         ) : null}
         <p className="text-sm text-muted">
@@ -43,11 +43,11 @@ export default function ChallengeContribute({
         </p>
       </div>
 
-      <div className="rounded-xl border border-warning/40 bg-warning/10 p-3">
+      <div className="rounded-2xl border border-edge bg-surface-raised p-4">
         <p className="text-sm text-foreground/80">
           Before you add: if they miss the goal, the whole pot returns to the
-          challenger who created it, not to contributors. You are growing the
-          reward, not placing a refundable bet.
+          challenger who created it, not to contributors. What you add grows
+          the reward and is not refunded to you.
         </p>
       </div>
 

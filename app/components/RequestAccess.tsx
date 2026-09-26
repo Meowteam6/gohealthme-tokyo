@@ -22,7 +22,9 @@ import { useState } from "react";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { fetchWithWalletAuth, authBlockReason } from "@/lib/client-auth";
-import { TAP_TARGET } from "@/components/ui";
+import { Button } from "@/components/ui";
+import Spotter from "@/components/spotter/Spotter";
+import type { SpotterPose } from "@/lib/spotter-poses";
 import { stateBlockReason } from "@/lib/geo-blocklist";
 import type { AccessStatus } from "@/lib/useAccess";
 
@@ -83,33 +85,28 @@ const US_STATES: ReadonlyArray<{ code: string; name: string }> = [
   { code: "WY", name: "Wyoming" },
 ];
 
+// Lives inside character creation's step 2, under the riverbank scene, so it
+// is a left-aligned step body with SPOTTER at row size, not a second hero.
 function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-auto flex max-w-lg flex-col items-center gap-6 py-10 text-center">
-      {children}
-    </div>
-  );
+  return <div className="flex w-full flex-col gap-4">{children}</div>;
 }
 
-function Otter({ pose, alt }: { pose: string; alt: string }) {
+function Otter({ pose, alt }: { pose: SpotterPose; alt: string }) {
+  return <Spotter pose={pose} size="xs" alt={alt} />;
+}
+
+function Heading({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative w-full max-w-xs">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-6 -z-10 rounded-full bg-accent/20 blur-3xl"
-      />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`/spotter/${pose}`}
-        alt={alt}
-        className="mx-auto aspect-square w-56 rounded-3xl border border-edge bg-surface object-cover shadow-sm"
-      />
-    </div>
+    <h2 className="break-words font-display text-[1.75rem] font-extrabold leading-display tracking-display">
+      {children}
+    </h2>
   );
 }
 
 const inputClass =
-  "w-full rounded-xl border border-edge bg-surface px-4 py-3 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30";
+  "min-h-12 w-full rounded-2xl border-2 border-edge bg-surface px-4 py-3 text-base text-foreground placeholder:text-muted focus:border-foreground focus:outline-none";
+
+const labelClass = "text-sm font-bold text-foreground";
 
 export default function RequestAccess({
   status,
@@ -132,16 +129,14 @@ export default function RequestAccess({
   if (status === "pending") {
     return (
       <Shell>
-        <Otter pose="spotter-watching.webp" alt="SPOTTER the otter keeping watch" />
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            You&apos;re on the list.
-          </h1>
-          <p className="mx-auto mt-3 max-w-sm text-muted">
-            Andre reviews requests himself. Once you&apos;re approved this page
-            turns into the app — no need to ask twice.
-          </p>
+        <div className="flex items-end gap-3">
+          <Otter pose="watching" alt="SPOTTER keeping watch" />
+          <Heading>You&apos;re on the list.</Heading>
         </div>
+        <p className="text-base text-foreground/85">
+          Andre reviews requests himself. Once you&apos;re approved this page
+          turns into the app. No need to ask twice.
+        </p>
         <p className="text-sm text-muted">Watching the door so you don&apos;t have to.</p>
       </Shell>
     );
@@ -150,24 +145,25 @@ export default function RequestAccess({
   if (status === "denied" && !reopen) {
     return (
       <Shell>
-        <Otter pose="spotter-neutral.webp" alt="SPOTTER the otter, unimpressed" />
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Not this round.</h1>
-          <p className="mx-auto mt-3 max-w-sm text-muted">
-            The beta is small on purpose. If you think this is a mistake, ask
-            again with a line on how you know Andre or Nikki.
-          </p>
+        <div className="flex items-end gap-3">
+          <Otter pose="neutral" alt="SPOTTER, unimpressed" />
+          <Heading>Not this round.</Heading>
         </div>
-        <button
+        <p className="text-base text-foreground/85">
+          The beta is small on purpose. If you think this is a mistake, ask
+          again with a line on how you know Andre or Nikki.
+        </p>
+        <Button
           type="button"
+          variant="ghost"
+          className="self-start"
           onClick={() => {
             setError(null);
             setReopen(true);
           }}
-          className={`rounded-xl border border-edge bg-surface font-semibold text-foreground hover:bg-surface-raised ${TAP_TARGET}`}
         >
           Ask again
-        </button>
+        </Button>
       </Shell>
     );
   }
@@ -206,7 +202,7 @@ export default function RequestAccess({
       if (auth.kind !== "ok") {
         setError(
           authBlockReason(auth) ??
-            "This just confirms it's really you — nothing is charged.",
+            "This just confirms it's really you. Nothing is charged.",
         );
         return;
       }
@@ -227,18 +223,18 @@ export default function RequestAccess({
 
   return (
     <Shell>
-      <Otter pose="spotter-greet.webp" alt="SPOTTER the otter waving hello" />
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Ask for a spot.</h1>
-        <p className="mx-auto mt-3 max-w-sm text-muted">
-          GoHealthMe is in a closed family-and-friends beta. Tell Andre who you
-          are and he&apos;ll let you in. Play-money testnet — nothing here can
-          cost you anything.
-        </p>
+      <div className="flex items-end gap-3">
+        <Otter pose="greet" alt="SPOTTER waving hello" />
+        <Heading>Ask for a spot.</Heading>
       </div>
-      <form onSubmit={submit} className="flex w-full flex-col gap-3 text-left">
+      <p className="text-base text-foreground/85">
+        GoHealthMe is in a closed family-and-friends beta. Tell Andre who you
+        are and he&apos;ll let you in. Base Sepolia test money, so nothing here
+        can cost you anything.
+      </p>
+      <form onSubmit={submit} className="flex w-full flex-col gap-4 text-left">
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
+          <span className={labelClass}>
             Your name
           </span>
           <input
@@ -251,8 +247,8 @@ export default function RequestAccess({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
-            Email <span className="normal-case text-muted/70">(so Andre can reach you)</span>
+          <span className={labelClass}>
+            Email <span className="font-normal text-muted">(so Andre can reach you)</span>
           </span>
           <input
             className={inputClass}
@@ -265,8 +261,8 @@ export default function RequestAccess({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
-            US state <span className="normal-case text-muted/70">(where you live)</span>
+          <span className={labelClass}>
+            US state <span className="font-normal text-muted">(where you live)</span>
           </span>
           <select
             className={inputClass}
@@ -287,7 +283,7 @@ export default function RequestAccess({
           </span>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">
+          <span className={labelClass}>
             How do you know Andre or Nikki?
           </span>
           <textarea
@@ -299,19 +295,15 @@ export default function RequestAccess({
           />
         </label>
         {error !== null ? (
-          <p role="alert" className="text-sm font-medium text-danger">
+          <p role="alert" className="rounded-2xl border border-danger/40 bg-danger/5 p-3 text-sm font-medium text-danger">
             {error}
           </p>
         ) : null}
-        <button
-          type="submit"
-          disabled={submitting}
-          className={`rounded-xl border border-accent/40 bg-accent/10 font-semibold text-accent-deep hover:bg-accent/15 disabled:opacity-60 ${TAP_TARGET}`}
-        >
-          {submitting ? "Sending…" : "Request access"}
-        </button>
-        <p className="text-center text-xs text-muted">
-          This just confirms it&apos;s really you — nothing is charged.
+        <Button type="submit" disabled={submitting} className="w-full">
+          {submitting ? "Sending your request" : "Ask for my spot"}
+        </Button>
+        <p className="text-sm text-muted">
+          You sign once to prove the wallet is yours. Nothing is charged.
         </p>
       </form>
     </Shell>

@@ -1,9 +1,10 @@
 "use client";
 
 // Character creation: sign in, prove you are one human, pick your name, pair
-// your sensor. Replaces the closed-beta wall. The steps are a real sequence,
+// your wearable. Replaces the closed-beta wall. The steps are a real sequence,
 // so they are numbered; the current one is open and the rest collapse to one
-// line each with their result.
+// line each with their result. SPOTTER stands on the riverbank above the
+// steps in a new pose per step (docs/DESIGN.md, onboarding 1 to 4).
 //
 // The World, ENS and sensor steps mount the other lanes' components through
 // their contracts (docs/LANES.md) and never assume the lane is on: a lane that
@@ -15,8 +16,12 @@ import ProveHuman from "@/components/world/ProveHuman";
 import EnsNameClaim from "@/components/ens/EnsNameClaim";
 import ClaimHandle from "@/components/ClaimHandle";
 import RequestAccess from "@/components/RequestAccess";
-import SpotterSays from "@/components/SpotterSays";
+import Spotter from "@/components/spotter/Spotter";
 import { Button, TAP_TARGET } from "@/components/ui";
+import {
+  SPOTTER_BACKDROP_SRC,
+  type SpotterScreenState,
+} from "@/lib/spotter-poses";
 import CharacterCard from "@/components/game/CharacterCard";
 import SignInStep from "@/components/game/SignInStep";
 import SensorStep from "@/components/game/SensorStep";
@@ -42,6 +47,58 @@ const SPOTTER_LINE: Record<StepId, string> = {
   name: "Your boys should see a name on the board, not 0x-something.",
   sensor: "I only pay on what the wearable says. Show me what yours can see.",
 };
+
+const SCENE: Record<StepId, SpotterScreenState> = {
+  "sign-in": "onboarding-welcome",
+  human: "onboarding-world-id",
+  name: "onboarding-name",
+  sensor: "onboarding-wearable",
+};
+
+const DONE_LINE = "That is your player. Every run reads this card.";
+
+/**
+ * The riverbank over the steps. Phones get a compact scene (SPOTTER at 120px
+ * beside his line) so the open step's action stays above the fold at 390x844;
+ * from lg up he stands at hero size beside the steps.
+ */
+function Scene({ step, title }: { step: StepId | null; title: string }) {
+  const state: SpotterScreenState =
+    step !== null ? SCENE[step] : "onboarding-welcome";
+  const line = step !== null ? SPOTTER_LINE[step] : DONE_LINE;
+  return (
+    <section className="relative overflow-hidden rounded-3xl border border-edge bg-surface-raised lg:sticky lg:top-32">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={SPOTTER_BACKDROP_SRC}
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-surface-raised/90 via-surface-raised/40 to-transparent"
+      />
+      <div className="relative z-10 px-5 pt-6 sm:px-7">
+        <h1 className="break-words font-display text-[2.5rem] font-extrabold leading-display tracking-display">
+          {title}
+        </h1>
+        <p className="mt-2 max-w-md text-base text-foreground/85">
+          Four steps, once. Then every run reads this card. Base Sepolia test
+          money only.
+        </p>
+        {/* Phone: SPOTTER beside his line, small enough to keep the step in view. */}
+        <div className="-mb-1 mt-3 flex justify-end lg:hidden">
+          <Spotter state={state} size="sm" line={line} linePlacement="side" live />
+        </div>
+        {/* Desktop: hero size, a new pose per step. */}
+        <div className="-mb-1 mt-4 hidden justify-center lg:flex">
+          <Spotter state={state} line={line} live priority />
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function StatusText({
   state,
@@ -116,7 +173,7 @@ function HumanBody({
           onFailed={(reason) => setFailure(reason)}
         />
         {failure !== null ? (
-          <p role="alert" className="rounded-lg border-2 border-warning/60 bg-warning/5 p-3 text-sm">
+          <p role="alert" className="rounded-2xl border border-warning/50 bg-warning/5 p-3 text-sm">
             {failure} Nothing was recorded. You can try the scan again.
           </p>
         ) : null}
@@ -275,23 +332,11 @@ export default function CharacterCreation({
   const signedIn = view.steps["sign-in"].status === "done";
 
   return (
-    <div className="mx-auto w-full max-w-xl space-y-6 py-2">
-      <header>
-        <h1 className="font-display text-5xl font-extrabold leading-[0.95] tracking-tight sm:text-6xl">
-          {mode === "page" ? "Your player" : "Make your player"}
-        </h1>
-        <p className="mt-3 max-w-md text-base text-foreground/80">
-          Stake on yourself, your wearable decides, SPOTTER pays or it does not.
-          Four steps, once, then every run reads this card. Base Sepolia test
-          money only.
-        </p>
-      </header>
+    <div className="mx-auto grid w-full max-w-5xl gap-6 py-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] lg:items-start lg:gap-10">
+      <Scene step={open} title={mode === "page" ? "Your player" : "Make your player"} />
 
-      {open !== null ? (
-        <SpotterSays surface="join" state="joined" pose="point" say={SPOTTER_LINE[open]} />
-      ) : null}
-
-      <ol className="divide-y-2 divide-foreground/10 rounded-xl border-2 border-foreground bg-surface">
+      <div className="min-w-0 space-y-6">
+      <ol className="divide-y divide-edge overflow-hidden rounded-3xl border border-edge bg-surface">
         {STEP_ORDER.map((id, index) => {
           const state = view.steps[id];
           const isOpen = open === id;
@@ -300,16 +345,18 @@ export default function CharacterCreation({
             <>
               <span
                 aria-hidden="true"
-                className={`flex size-9 shrink-0 items-center justify-center rounded-md border-2 font-display text-lg font-extrabold ${
+                className={`flex size-10 shrink-0 items-center justify-center rounded-full border-2 font-display text-lg font-extrabold tabular-nums ${
                   state.status === "done"
-                    ? "border-accent bg-accent text-foreground"
-                    : "border-foreground"
+                    ? "border-foreground bg-foreground text-background"
+                    : isOpen
+                      ? "border-foreground bg-accent text-foreground"
+                      : "border-edge bg-surface-raised text-muted"
                 }`}
               >
                 {index + 1}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block font-display text-2xl font-extrabold leading-tight">
+                <span className="block break-words font-display text-xl font-bold leading-tight tracking-display">
                   {TITLE[id]}
                 </span>
                 <span className="block truncate text-sm">
@@ -362,6 +409,7 @@ export default function CharacterCreation({
         </div>
       ) : null}
       {signedIn && view.gate && mode === "page" ? <CharacterCard view={view} /> : null}
+      </div>
     </div>
   );
 }

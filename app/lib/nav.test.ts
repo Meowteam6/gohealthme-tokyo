@@ -6,12 +6,12 @@ import { NAV_ITEMS } from "@/lib/nav";
 // The header nav, named for the game loop. Every tab points at a real page.
 
 describe("NAV_ITEMS", () => {
-  it("is Lobby, My runs, History, Dares, Settings, in that order", () => {
+  it("is Lobby, My runs, History, Challenges, Settings, in that order", () => {
     expect(NAV_ITEMS.map((i) => i.label)).toEqual([
       "Lobby",
       "My runs",
       "History",
-      "Dares",
+      "Challenges",
       "Settings",
     ]);
   });

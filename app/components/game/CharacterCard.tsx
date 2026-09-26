@@ -15,7 +15,7 @@ import type { CharacterView } from "@/lib/game/useCharacter";
 function HumanStamp({ verified, mode }: { verified: boolean; mode: "world" | "allowlist" }) {
   if (verified) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border-2 border-accent px-2 py-0.5 text-xs font-bold text-accent-deep">
+      <span className="inline-flex items-center gap-1 rounded-full border-2 border-accent-deep px-2.5 py-0.5 text-xs font-bold text-accent-deep">
         <svg aria-hidden="true" viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
           <path d="M5 12.5l4.5 4.5L19 7.5" />
         </svg>
@@ -24,7 +24,7 @@ function HumanStamp({ verified, mode }: { verified: boolean; mode: "world" | "al
     );
   }
   return (
-    <span className="inline-flex items-center rounded-md border-2 border-dashed border-muted px-2 py-0.5 text-xs font-bold text-muted">
+    <span className="inline-flex items-center rounded-full border-2 border-dashed border-muted px-2.5 py-0.5 text-xs font-bold text-muted">
       Human not proven
     </span>
   );
@@ -102,10 +102,10 @@ export default function CharacterCard({
     return (
       <section
         aria-label="Your character"
-        className="flex flex-col gap-2 rounded-lg border-2 border-foreground bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        className="flex flex-col gap-2 rounded-3xl border border-edge bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="truncate font-display text-xl font-extrabold">{nameNode}</span>
+          <span className="truncate font-display text-xl font-extrabold tracking-display">{nameNode}</span>
           <HumanStamp verified={verified} mode={view.humanMode} />
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -121,11 +121,11 @@ export default function CharacterCard({
   return (
     <section
       aria-label="Your character"
-      className="overflow-hidden rounded-xl border-2 border-foreground bg-surface"
+      className="overflow-hidden rounded-3xl border border-edge bg-surface"
     >
       <div className="bg-board px-5 py-4 text-chalk">
         <p className="text-xs font-semibold text-chalk/70">Player</p>
-        <p className="mt-1 break-all font-display text-4xl font-extrabold leading-none">
+        <p className="mt-1 break-all font-display text-[2rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]">
           {nameNode}
         </p>
       </div>
