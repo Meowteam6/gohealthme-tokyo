@@ -16,7 +16,7 @@ export type { SyncResult };
  * screen can report the truth instead of assuming the post landed.
  */
 export async function syncNow(
-  address: string,
+  deviceToken: string,
   days = 30,
 ): Promise<{ sent: number; result: SyncResult }> {
   const aggregates: Aggregates[] = await collectAggregates(days);
@@ -31,6 +31,6 @@ export async function syncNow(
     return { sent: 0, result: { stored: 0 } };
   }
 
-  const result = await postAggregates(address, rows);
+  const result = await postAggregates(deviceToken, rows);
   return { sent: rows.length, result };
 }
