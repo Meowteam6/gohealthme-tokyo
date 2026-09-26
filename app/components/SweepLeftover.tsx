@@ -53,7 +53,7 @@ export default function SweepLeftover({
           <Money usd={formatUsdc(status.amount)} tone="gold" sign="+" size="xl" />
         </p>
         <p className="mt-1 text-sm font-semibold text-foreground">
-          The leftover is in your wallet now. This run is empty.
+          The leftover is in your wallet now. This challenge is empty.
         </p>
         <p className="mt-2">
           <ArcTxLink txHash={status.txHash} label="See the public receipt" />
@@ -66,7 +66,7 @@ export default function SweepLeftover({
     return (
       <div className={className}>
         <ErrorNote
-          title="Could not check the refunds on this run"
+          title="Could not check the refunds on this challenge"
           detail="I could not read how many stakes are still waiting to be taken back. Nothing moved."
           onRetry={() => {
             void liabilityQuery.refetch();
@@ -89,7 +89,7 @@ export default function SweepLeftover({
   if (state.kind === "empty") {
     return (
       <p className={`rounded-xl border-2 border-edge bg-surface p-4 text-sm text-muted ${className}`}>
-        You started this run. Nothing is left in it to take back.
+        You started this challenge. Nothing is left in it to take back.
       </p>
     );
   }
@@ -103,7 +103,7 @@ export default function SweepLeftover({
             ? "1 player has not taken their stake back yet"
             : `${state.pendingStakes} players have not taken their stakes back yet`}{" "}
           ({formatUsdc(state.pendingAmount)} test USDC). The contract keeps the
-          rest of the pool locked until every stake is claimed, and nobody can
+          rest of the pot locked until every stake is claimed, and nobody can
           claim a stake for them. It unlocks here the moment the last one does.
         </p>
       </div>
@@ -129,7 +129,7 @@ export default function SweepLeftover({
       <p className="mt-1 text-sm text-muted">
         {cancelled
           ? "Every player has their stake back. What is left is yours; one tap sends it to your wallet."
-          : "Winners were credited at settle. What is left in the pool is yours; one tap sends it to your wallet."}
+          : "Winners were credited at settle. What is left in the pot is yours; one tap sends it to your wallet."}
       </p>
       <div className="mt-4 space-y-3">
         <Button type="button" pop disabled={busy} onClick={onSweep} className="w-full sm:w-auto">

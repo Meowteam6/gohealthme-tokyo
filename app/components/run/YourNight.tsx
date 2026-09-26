@@ -86,7 +86,7 @@ export default function YourNight({
               </span>
             ) : null}
             <span className="absolute right-0 top-0 whitespace-nowrap text-right">
-              <b>{endLabel}</b>run closes
+              <b>{endLabel}</b>challenge closes
             </span>
           </div>
         </>

@@ -53,7 +53,7 @@ export default function RefundClaim({
   return (
     <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
       <p className="num m-0 text-[0.9375rem] font-semibold text-foreground">
-        This run was called off. Your <Money usd={formatUsdc(entryFee)} size="sm" /> stake is
+        This challenge was called off. Your <Money usd={formatUsdc(entryFee)} size="sm" /> stake is
         yours to take back.
       </p>
       <div className="mt-3 grid gap-3">

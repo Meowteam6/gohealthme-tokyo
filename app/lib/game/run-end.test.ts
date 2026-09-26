@@ -46,7 +46,7 @@ describe("runEndCopy", () => {
 
   it("says a recorded miss stayed in the pool on a sponsor pool", () => {
     const copy = runEndCopy({ ...base, tally: tally(0, 1, 2) });
-    expect(copy.body).toContain("2 recorded misses stayed in the pool");
+    expect(copy.body).toContain("2 recorded misses stayed in the pot");
   });
 
   it("refunds every staker on a self-staked pool nobody hit", () => {
@@ -83,9 +83,25 @@ describe("runEndCopy", () => {
   it("never says a cancelled run paid anyone", () => {
     for (const joined of [true, false]) {
       const copy = runEndCopy({ phase: "cancelled", bountyModel: 0, joined, tally: tally(3, 0) });
-      expect(copy.headline).toBe("Run cancelled");
+      expect(copy.headline).toBe("Challenge cancelled");
       expect(copy.body).toContain("nobody was paid a prize");
       expect(copy.body).toContain("stake back");
+    }
+  });
+});
+
+describe("runEndCopy vocabulary", () => {
+  it("calls it a challenge and its money the pot, never a run or a pool", () => {
+    const tallies = [null, tally(0, 0), tally(0, 3), tally(0, 1, 2), tally(2, 1), tally(1, 1, 2)];
+    for (const bountyModel of [0, 1, 2]) {
+      for (const joined of [true, false]) {
+        for (const t of tallies) {
+          const copy = runEndCopy({ phase: "settled", bountyModel, joined, tally: t });
+          expect(`${copy.headline} ${copy.body}`).not.toMatch(/\b(runs?|pools?|dares?|sponsor pot)\b/i);
+        }
+        const cancelled = runEndCopy({ phase: "cancelled", bountyModel, joined, tally: null });
+        expect(`${cancelled.headline} ${cancelled.body}`).not.toMatch(/\b(runs?|pools?|dares?|sponsor pot)\b/i);
+      }
     }
   });
 });

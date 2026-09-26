@@ -118,11 +118,20 @@ describe("money lines", () => {
   it("states the three outcomes with the run's own stake and sponsor pot", () => {
     const terms = stakeTermsOf({ entryFee: USDC, sponsorPot: 2n * USDC, goalShort: "7 hours", feeBps: 0, recordsMisses: true });
     expect(terms.hitLabel).toBe("Hit 7 hours:");
-    expect(terms.hit).toBe("your 1.00 back, plus an equal share of the missed stakes and the 2.00 sponsor pot.");
+    expect(terms.hit).toBe("your 1.00 back, plus an equal share of the missed stakes and the 2.00 extra in the pot.");
     expect(terms.miss).toBe(
-      "if your wearable shows it, your 1.00 goes to the players who hit. If your wearable sends nothing for the run, it comes back.",
+      "if your wearable shows it, your 1.00 goes to the players who hit. If your wearable sends nothing for the challenge, it comes back.",
     );
     expect(terms.nobody).toBe("everyone's stake comes back. No cut on this build.");
+  });
+
+  it("names the extra as part of the pot and the game a challenge, never a run or a pool", () => {
+    for (const recordsMisses of [true, false]) {
+      for (const sponsorPot of [0n, 2n * USDC]) {
+        const terms = stakeTermsOf({ entryFee: USDC, sponsorPot, goalShort: "7 hours", feeBps: 0, recordsMisses });
+        expect(`${terms.hit} ${terms.miss} ${terms.nobody}`).not.toMatch(/\b(runs?|pools?|dares?|sponsor pot)\b/i);
+      }
+    }
   });
 
   it("drops the fee sentence when the fee did not read", () => {
@@ -133,8 +142,8 @@ describe("money lines", () => {
 
   it("never promises a missed stake on a run that cannot record a miss", () => {
     const terms = stakeTermsOf({ entryFee: USDC, sponsorPot: 2n * USDC, goalShort: "7 hours", feeBps: 0, recordsMisses: false });
-    expect(terms.hit).toBe("your 1.00 back, plus an equal share of the 2.00 sponsor pot.");
-    expect(terms.miss).toBe("this run cannot record a miss, so your 1.00 comes back when it settles.");
+    expect(terms.hit).toBe("your 1.00 back, plus an equal share of the 2.00 extra in the pot.");
+    expect(terms.miss).toBe("this challenge cannot record a miss, so your 1.00 comes back when it settles.");
     const bare = stakeTermsOf({ entryFee: USDC, sponsorPot: 0n, goalShort: "7 hours", feeBps: 0, recordsMisses: false });
     expect(bare.hit).toBe("your 1.00 back.");
     const two = { entryFee: USDC, players: 2, balance: 2n * USDC, feeBps: 0, recordsMisses: false };

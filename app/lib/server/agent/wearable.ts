@@ -132,7 +132,7 @@ export function wearableEvidenceSource(
             confidence: "low",
             reason:
               "No wearable is connected for this wallet. Connect one from the " +
-              "dashboard and run the check again.",
+              "dashboard and check again.",
           },
         };
       }
@@ -162,7 +162,7 @@ export function wearableEvidenceSource(
             reason:
               `Your wearable is connected but has not synced any ${spec.label} ` +
               "data for this period yet. Give it a few minutes to sync, then " +
-              "run the check again.",
+              "check again.",
           },
         };
       }
@@ -204,8 +204,8 @@ export function wearableEvidenceSource(
           confidence: "high",
           reason:
             `Your wearable shows ${progress.qualifyingDays} of ${spec.goalDays} ` +
-            `qualifying days (${spec.threshold}+ ${spec.unit}) inside this pool ` +
-            "period. The goal is not met yet.",
+            `qualifying days (${spec.threshold}+ ${spec.unit}) inside this ` +
+            "challenge. The goal is not met yet.",
         },
       };
     } catch (err) {
@@ -220,7 +220,7 @@ export function wearableEvidenceSource(
           confidence: "low",
           reason:
             "The wearable data provider could not be reached, so nothing was " +
-            "verified. Run the check again once it recovers.",
+            "verified. Check again once it recovers.",
         },
       };
     }

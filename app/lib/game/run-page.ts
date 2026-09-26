@@ -197,7 +197,7 @@ export function stakeTermsOf(input: {
   recordsMisses: boolean;
 }): StakeTermsCopy {
   const stake = formatUsdc(input.entryFee);
-  const pot = input.sponsorPot > 0n ? ` and the ${formatUsdc(input.sponsorPot)} sponsor pot` : "";
+  const pot = input.sponsorPot > 0n ? ` and the ${formatUsdc(input.sponsorPot)} extra in the pot` : "";
   const fee =
     input.feeBps === null
       ? ""
@@ -210,9 +210,9 @@ export function stakeTermsOf(input: {
       hitLabel,
       hit:
         input.sponsorPot > 0n
-          ? `your ${stake} back, plus an equal share of the ${formatUsdc(input.sponsorPot)} sponsor pot.`
+          ? `your ${stake} back, plus an equal share of the ${formatUsdc(input.sponsorPot)} extra in the pot.`
           : `your ${stake} back.`,
-      miss: `this run cannot record a miss, so your ${stake} comes back when it settles.`,
+      miss: `this challenge cannot record a miss, so your ${stake} comes back when it settles.`,
       nobody: "everyone's stake comes back.",
     };
   }
@@ -221,7 +221,7 @@ export function stakeTermsOf(input: {
     hit: `your ${stake} back, plus an equal share of the missed stakes${pot}.`,
     // Both halves of the rule, at the moment of commitment: only a miss the
     // wearable shows costs the stake; no data for the run is not a miss.
-    miss: `if your wearable shows it, your ${stake} goes to the players who hit. If your wearable sends nothing for the run, it comes back.`,
+    miss: `if your wearable shows it, your ${stake} goes to the players who hit. If your wearable sends nothing for the challenge, it comes back.`,
     nobody: `everyone's stake comes back.${fee}`,
   };
 }

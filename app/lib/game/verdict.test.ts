@@ -428,6 +428,18 @@ describe("verdictCopy", () => {
     }
   });
 
+  it("calls it a challenge on every screen, never a run, a pool or a dare", () => {
+    for (const screen of screens) {
+      const copy = verdictCopy(screen);
+      expect(`${copy?.headline} ${copy?.body}`).not.toMatch(/\b(runs?|pools?|dares?|sponsor pot)\b/i);
+    }
+    const open = { settled: false, cancelled: false, resultRecorded: false };
+    for (const status of ["pending", "declined", "expired", "approved", "unknown"] as const) {
+      expect(runApprovalLine(status, open)?.text).not.toMatch(/\b(runs?|pools?|dares?|sponsor pot)\b/i);
+    }
+    expect(runApprovalLine("none", open, { confirmByMs: null })?.text).not.toMatch(/\b(runs?|pools?|dares?|sponsor pot)\b/i);
+  });
+
   it("offers no retry once the run settled before the confirmation", () => {
     for (const outcome of ["declined", "expired", "cancelled"] as const) {
       const copy = verdictCopy({ kind: "approval-failed", outcome, settled: true });
@@ -451,12 +463,12 @@ describe("verdictCopy", () => {
   });
 
   it("says a settled loss got the stake back unless a miss was recorded", () => {
-    expect(verdictCopy({ kind: "lost", stakeBack: true })?.headline).toBe("Run lost");
+    expect(verdictCopy({ kind: "lost", stakeBack: true })?.headline).toBe("Challenge lost");
     expect(verdictCopy({ kind: "lost", stakeBack: true })?.body).toContain(
       "credited your stake back",
     );
     expect(verdictCopy({ kind: "lost", stakeBack: false })?.body).toContain(
-      "stake stayed in the pool",
+      "stake stayed in the pot",
     );
   });
 
@@ -492,7 +504,7 @@ describe("verdictCopy", () => {
 
   it("uses the words the game loop promised", () => {
     expect(verdictCopy({ kind: "cancelled", refunded: false })?.headline).toBe(
-      "Run cancelled, take your stake back",
+      "Challenge cancelled, take your stake back",
     );
   });
 
@@ -550,7 +562,7 @@ describe("F10: a hit the sweep read but the player has not confirmed", () => {
       confirmByMs: 1_790_494_200_000,
     });
     const body = verdictCopy(screen)?.body ?? "";
-    expect(body).toMatch(/open the run and confirm/i);
+    expect(body).toMatch(/open the challenge and confirm/i);
     expect(body).toContain(
       new Date(1_790_494_200_000).toLocaleString([], {
         month: "short",

@@ -151,7 +151,7 @@ const CLEARED: StakeCheck[] = [
     glyph: "ok",
     children: (
       <>
-        <b>Your WHOOP</b> tracks hours of sleep, so it can check this run
+        <b>Your WHOOP</b> tracks hours of sleep, so it can check this challenge
       </>
     ),
   },
@@ -282,7 +282,7 @@ function Page({
       <Night caption={caption} joined={joined} device={device} />
       {children}
       <Roster rows={joined ? [me] : []} joined={joined} />
-      {also ? <AlsoOpen rows={ALSO} sub={`Other runs your ${device} can check`} /> : null}
+      {also ? <AlsoOpen rows={ALSO} sub={`Other challenges your ${device} can check`} /> : null}
     </RunLayout>
   );
 }
@@ -298,7 +298,7 @@ export default function RunStates({ meta }: SectionProps) {
             <StakeCard>
               <Terms t={OPEN} id="gallery-terms-1" />
               <StakeAction
-                fine="Sign in with Base or email, no seed phrase. You make your player once, then land back on this run."
+                fine="Sign in with Base or email, no seed phrase. You make your player once, then land back on this challenge."
               >
                 <ButtonLink href="/character?next=%2Fpools%2F5" block>
                   Sign in to stake {STAKE} USDC
@@ -376,7 +376,7 @@ export default function RunStates({ meta }: SectionProps) {
       <StateFrame name="run-locked-apple" note="Apple Watch linked, nothing synced yet: locked before any stake, one tap to check again">
         <Page
           device="Apple Watch"
-          caption="Your Apple Watch has not sent me a night yet. Open its app so it syncs, and I'll check this run."
+          caption="Your Apple Watch has not sent me a night yet. Open its app so it syncs, and I'll check this challenge."
           stake={
             <StakeCard>
               <Terms t={OPEN} id="gallery-terms-4" />
@@ -393,7 +393,7 @@ export default function RunStates({ meta }: SectionProps) {
 
       <StateFrame name="run-locked-hardware" note="WHOOP on a step run: no pedometer, said plainly, with the fix">
         <Page
-          caption="WHOOP can't send me a step count. Pair a wearable that tracks it and I'll check this run."
+          caption="WHOOP can't send me a step count. Pair a wearable that tracks it and I'll check this challenge."
           stake={
             <StakeCard>
               <Terms t={OPEN} id="gallery-terms-5" />

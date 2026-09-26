@@ -73,7 +73,7 @@ export const MISS_RECORDS_PER_SWEEP = 3;
 
 /** The decision row's note: plain, deterministic, no health data. */
 export const MISS_DECISION_NOTE =
-  "not met, and the run is over. your wearable covered every day of it, so the miss goes on chain.";
+  "not met, and the challenge is over. your wearable covered every day of it, so the miss goes on chain.";
 
 export interface MissRecordDeps {
   spotter: SpotterDeps;
@@ -234,7 +234,7 @@ async function writeMetRows(
     ...input,
     ref,
     providerId: met.providerId,
-    note: "read once after the run ended; your wearable shows the goal met",
+    note: "read once after the challenge ended; your wearable shows the goal met",
   });
   let latest: Extract<LedgerEntry, { kind: "verdict" }> | undefined;
   for (const entry of ledger) {
@@ -271,7 +271,7 @@ async function writeMissRows(
     address: input.address,
     ref,
     providerId: input.decision === null ? null : input.decision.providerId,
-    note: "read once after the run ended, to check the whole run for a miss",
+    note: "read once after the challenge ended, to check the whole challenge for a miss",
   });
   if (input.decision !== null) {
     await appendLedger(goalId, {
@@ -537,7 +537,7 @@ async function closeCancelledMisses(
       kind: "settle",
       status: "closed",
       outcome: "cancelled",
-      note: "the creator cancelled the run before it settled, so every stake, this one included, can be claimed back",
+      note: "the creator cancelled the challenge before it settled, so every stake, this one included, can be claimed back",
     });
     count += 1;
   }

@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 const CACHE = { "cache-control": "public, s-maxage=60, stale-while-revalidate=300" };
 // The same plain line the sponsor console gets: no env var name, and nothing
 // about a send, since this is a read.
-const NOT_CONFIGURED = "Runs are not open on this build yet.";
+const NOT_CONFIGURED = "Challenges are not open on this build yet.";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -42,7 +42,7 @@ export async function GET(_request: Request, ctx: Ctx) {
   const cid = newCorrelationId("pool-funding");
   const { id } = await ctx.params;
   const poolId = poolIdOf(id);
-  if (poolId === null) return jsonError(400, "That is not a run number.");
+  if (poolId === null) return jsonError(400, "That is not a challenge number.");
   try {
     const funding = await fetchPoolFunding(poolId);
     return Response.json(

@@ -87,21 +87,21 @@ describe("humanizeTxError", () => {
     const result = humanizeTxError(viemError(REVERT_FIXTURE("PERIOD_ENDED")));
     expect(result.title).toBe("Joining is closed");
     expect(result.detail).toBe(
-      "This pool's period has ended - joining is closed.",
+      "This challenge has ended - joining is closed.",
     );
   });
 
   it("maps ALREADY_JOINED to the already-joined message", () => {
     const result = humanizeTxError(viemError(REVERT_FIXTURE("ALREADY_JOINED")));
     expect(result.title).toBe("Already in");
-    expect(result.detail).toBe("This wallet already joined this pool.");
+    expect(result.detail).toBe("This wallet already joined this challenge.");
   });
 
   it("maps NULLIFIER_USED to the entry-used message", () => {
     const result = humanizeTxError(viemError(REVERT_FIXTURE("NULLIFIER_USED")));
     expect(result.title).toBe("Entry already used");
     expect(result.detail).toBe(
-      "This entry was already used to join this pool - one wallet, one entry.",
+      "This entry was already used to join this challenge - one wallet, one entry.",
     );
   });
 
@@ -234,12 +234,12 @@ describe("humanizeTxError", () => {
     const result = humanizeTxError(
       viemError(REVERT_FIXTURE("ALREADY_SETTLED")),
     );
-    expect(result.title).toBe("Pool already settled");
+    expect(result.title).toBe("Challenge already settled");
   });
 
   it("maps a bare SETTLED revert to the settled message", () => {
     const result = humanizeTxError(viemError(REVERT_FIXTURE("SETTLED")));
-    expect(result.title).toBe("Pool already settled");
+    expect(result.title).toBe("Challenge already settled");
   });
 
   it("keeps the first line of configuration errors as the detail", () => {
@@ -281,7 +281,7 @@ describe("humanizeTxError", () => {
 
   it("keeps a known revert reason ahead of the generic reverted rule", () => {
     const result = humanizeTxError(viemError(REVERT_FIXTURE("POOL_FULL")));
-    expect(result.title).toBe("Pool is full");
+    expect(result.title).toBe("Challenge is full");
   });
 
   it("maps a DEAD_CONFIG revert to the entry-fee message", () => {
@@ -289,7 +289,7 @@ describe("humanizeTxError", () => {
     // The create surfaces guard before sending, but a raw revert reaching
     // here (older client, direct contract call) must still say what to fix.
     const result = humanizeTxError(viemError(REVERT_FIXTURE("DEAD_CONFIG")));
-    expect(result.title).toBe("Pools need an entry fee");
+    expect(result.title).toBe("Challenges need an entry fee");
     expect(result.detail).toContain("entry fee above zero");
   });
 
@@ -332,12 +332,12 @@ describe("humanizeTxError", () => {
 
   it("maps NOT_CREATOR to the not-the-creator message", () => {
     const result = humanizeTxError(viemError(REVERT_FIXTURE("NOT_CREATOR")));
-    expect(result.title).toBe("Not the pool creator");
+    expect(result.title).toBe("Not the challenge's creator");
   });
 
   it("maps NOT_CANCELLED to the not-cancelled message", () => {
     const result = humanizeTxError(viemError(REVERT_FIXTURE("NOT_CANCELLED")));
-    expect(result.title).toBe("Pool is not cancelled");
+    expect(result.title).toBe("Challenge is not cancelled");
   });
 
   it("maps ALREADY_REFUNDED to the already-refunded message", () => {
@@ -350,7 +350,7 @@ describe("humanizeTxError", () => {
     // rule for "already settled" never matches it. sweep() before settlement
     // must read as "settle first", never as "already settled".
     const result = humanizeTxError(viemError(REVERT_FIXTURE("NOT_SETTLED")));
-    expect(result.title).toBe("Pool has not settled yet");
+    expect(result.title).toBe("Challenge has not settled yet");
   });
 
   it("maps a paymaster sponsorship failure to the gas-sponsorship message", () => {
@@ -365,6 +365,29 @@ describe("humanizeTxError", () => {
     expect(result.detail).toContain("never sent");
   });
 
+  it("calls it a challenge in every contract revert message, never a pool", () => {
+    const reasons = [
+      "PERIOD_ENDED",
+      "ALREADY_JOINED",
+      "NULLIFIER_USED",
+      "POOL_FULL",
+      "ALREADY_SETTLED",
+      "NOT_PARTICIPANT",
+      "NOTHING_OWED",
+      "NOTHING_TO_SWEEP",
+      "NOT_CREATOR",
+      "NOT_CANCELLED",
+      "ALREADY_REFUNDED",
+      "NOT_SETTLED",
+      "DEAD_CONFIG",
+      "BAD_PERIOD",
+    ];
+    for (const reason of reasons) {
+      const result = humanizeTxError(new Error(`execution reverted: ${reason}`));
+      expect(`${result.title} ${result.detail}`).not.toMatch(/\bpools?\b/i);
+    }
+  });
+
   it("maps an unconfirmed transaction to the still-waiting message, not the sponsorship one", () => {
     // useGasSponsorship throws this when waitForCallsStatus comes back with
     // no receipts. "Sponsored" must not trip the /sponsorship/ rule - the
@@ -373,7 +396,7 @@ describe("humanizeTxError", () => {
       new Error("Sponsored transaction did not confirm on Base Sepolia."),
     );
     expect(result.title).toBe("Still waiting on the network");
-    expect(result.detail).toContain("check your pools");
+    expect(result.detail).toContain("check your challenges");
   });
 
   it("maps a wait timeout to the still-waiting message", () => {

@@ -180,7 +180,7 @@ describe("wearableEvidenceSource", () => {
         verified: false,
         confidence: "low",
         reason:
-          "No wearable is connected for this wallet. Connect one from the dashboard and run the check again.",
+          "No wearable is connected for this wallet. Connect one from the dashboard and check again.",
       },
     });
     expect(getMetricProgress).not.toHaveBeenCalled();

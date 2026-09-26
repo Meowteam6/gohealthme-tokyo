@@ -73,23 +73,23 @@ function plural(n: number, one: string, many: string): string {
 export function runEndCopy(input: RunEndInput): RunEndCopy {
   if (input.phase === "cancelled") {
     return {
-      headline: "Run cancelled",
+      headline: "Challenge cancelled",
       body: input.joined
-        ? "The creator called this run off before it settled, so nobody was paid a prize. Every player takes their stake back; yours is below."
-        : "The creator called this run off before it settled, so nobody was paid a prize and every player takes their stake back.",
+        ? "The creator called this challenge off before it settled, so nobody was paid a prize. Every player takes their stake back; yours is below."
+        : "The creator called this challenge off before it settled, so nobody was paid a prize and every player takes their stake back.",
     };
   }
 
   const tally = input.tally;
   if (tally === null) {
     return {
-      headline: "This run has settled",
+      headline: "This challenge has settled",
       body: "Every result on it is final on chain.",
     };
   }
   if (tally.total === 0) {
     return {
-      headline: "This run has settled",
+      headline: "This challenge has settled",
       body: "Nobody entered it, so there was nobody to pay.",
     };
   }
@@ -98,13 +98,13 @@ export function runEndCopy(input: RunEndInput): RunEndCopy {
     return {
       headline: "Settled. No hit was recorded",
       body: stakesStayed
-        ? `No prize went out. ${plural(tally.refunded, "player with no recorded result was", "players with no recorded result were")} credited their stake back; ${plural(tally.missed, "recorded miss", "recorded misses")} stayed in the pool.`
+        ? `No prize went out. ${plural(tally.refunded, "player with no recorded result was", "players with no recorded result were")} credited their stake back; ${plural(tally.missed, "recorded miss", "recorded misses")} stayed in the pot.`
         : "No prize went out. Every player's stake was credited back to them at settle.",
     };
   }
   return {
-    headline: "This run has settled",
-    body: `${tally.achievers} of ${tally.total} hit it and were credited from the pool.${
+    headline: "This challenge has settled",
+    body: `${tally.achievers} of ${tally.total} hit it and were credited from the pot.${
       input.bountyModel === 2 && tally.missed > 0
         ? ` The stakes of ${plural(tally.missed, "recorded miss", "recorded misses")} went to the players who hit.`
         : ""

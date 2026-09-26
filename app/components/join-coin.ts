@@ -37,7 +37,7 @@ export function joinCoinCopy(entryFee: bigint, phase: JoinCoinPhase): JoinCoinCo
     phase === "retry"
       ? "Your stake did not move. Hold again to try."
       : free
-        ? "About a second. This run costs nothing."
+        ? "About a second. This challenge costs nothing."
         : "About a second. Let go to cancel.";
   const disabledReason =
     phase === "wallet-loading"

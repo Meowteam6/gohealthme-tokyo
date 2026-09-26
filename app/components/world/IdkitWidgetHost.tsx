@@ -51,7 +51,7 @@ export default function IdkitWidgetHost(props: IdkitWidgetHostProps) {
     onOpenChange: props.onOpenChange,
     app_id: props.appId,
     action: props.action,
-    action_description: "Prove you're one human to play a GoHealthMe pool",
+    action_description: "Prove you're one human to play a GoHealthMe challenge",
     rp_context: props.rpContext,
     environment: props.environment,
     handleVerify: props.handleVerify,

@@ -112,7 +112,7 @@ export default function StakeLock({
     <>
       {row}
       <p className="m-0 mt-4 rounded-control bg-fill-quiet px-3.5 py-3 text-sm text-muted shadow-[inset_0_0_0_1px_var(--border)]">
-        Nothing is staked. Open this run again once it clears and the hold is here.
+        Nothing is staked. Open this challenge again once it clears and the hold is here.
       </p>
     </>
   );

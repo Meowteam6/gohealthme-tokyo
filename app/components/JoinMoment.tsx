@@ -60,7 +60,7 @@ export default function JoinMoment({
       <h3 className="type-heading m-0 text-[1.75rem]">{night ? "You're in. Goodnight." : "You're in."}</h3>
       <p className="num m-0 mt-2 text-base text-muted">
         When you wake, open {app} so the {night ? "night" : "day"} syncs, then have SPOTTER check it here.
-        Hit {goalShort} and the contract pays after the run closes
+        Hit {goalShort} and the contract pays after the challenge closes
         {closeLabel !== undefined ? ` at ${closeLabel}` : ""}.
       </p>
       <div className="mt-1.5 flex flex-col items-start">

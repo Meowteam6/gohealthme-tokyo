@@ -330,8 +330,8 @@ export function runApprovalLine(
     return {
       text:
         hit.confirmByMs !== null
-          ? `Your wearable shows the goal met. Open the run and confirm it with World ID before ${formatMoment(hit.confirmByMs)}, or your stake comes back without a share.`
-          : "Your wearable shows the goal met. Open the run and confirm it with World ID before it settles, or your stake comes back without a share.",
+          ? `Your wearable shows the goal met. Open the challenge and confirm it with World ID before ${formatMoment(hit.confirmByMs)}, or your stake comes back without a share.`
+          : "Your wearable shows the goal met. Open the challenge and confirm it with World ID before it settles, or your stake comes back without a share.",
       tone: "warning",
       openRun: true,
     };
@@ -339,19 +339,19 @@ export function runApprovalLine(
   switch (status) {
     case "pending":
       return {
-        text: "SPOTTER decided to pay this run and is waiting on your OK. Open it and confirm before the window closes.",
+        text: "SPOTTER decided to pay you on this challenge and is waiting on your OK. Open it and confirm before the window closes.",
         tone: "warning",
         openRun: true,
       };
     case "declined":
       return {
-        text: "You said no to this payout, so nothing moved. Open the run to ask again before it settles.",
+        text: "You said no to this payout, so nothing moved. Open the challenge to ask again before it settles.",
         tone: "warning",
         openRun: true,
       };
     case "expired":
       return {
-        text: "Your payout confirmation timed out, so nothing moved. Open the run to ask again before it settles.",
+        text: "Your payout confirmation timed out, so nothing moved. Open the challenge to ask again before it settles.",
         tone: "warning",
         openRun: true,
       };
@@ -363,7 +363,7 @@ export function runApprovalLine(
       };
     case "unknown":
       return {
-        text: "I could not check whether this run is waiting on your OK. Open it to see.",
+        text: "I could not check whether this challenge is waiting on your OK. Open it to see.",
         tone: "muted",
         openRun: true,
       };
@@ -416,7 +416,7 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
     case "confirmed":
       return {
         headline: "Confirmed",
-        body: "You confirmed it is you. SPOTTER is recording your result on chain now, and the payout follows when the run allows.",
+        body: "You confirmed it is you. SPOTTER is recording your result on chain now, and the payout follows when the challenge allows.",
         pose: "thumbsup",
       };
     case "approval-failed":
@@ -426,12 +426,12 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
         headline: "Payout not confirmed",
         body: screen.settled
           ? screen.outcome === "declined"
-            ? "You hit the goal, then said no to the payout, and the run settled after that. No prize went out. The settle credited your stake back to you; claim it below."
-            : "You hit the goal, but the run settled before you confirmed the payout. No prize went out and there is nothing left to ask. The settle credited your stake back to you; claim it below."
+            ? "You hit the goal, then said no to the payout, and the challenge settled after that. No prize went out. The settle credited your stake back to you; claim it below."
+            : "You hit the goal, but the challenge settled before you confirmed the payout. No prize went out and there is nothing left to ask. The settle credited your stake back to you; claim it below."
           : screen.outcome === "expired"
-            ? "You hit the goal. The confirmation window closed before you answered, so nothing moved yet. Ask again below and finish it before the run settles."
+            ? "You hit the goal. The confirmation window closed before you answered, so nothing moved yet. Ask again below and finish it before the challenge settles."
             : screen.outcome === "declined"
-              ? "You hit the goal and said no to the payout, so nothing moved. If that was a mistake, ask again below before the run settles."
+              ? "You hit the goal and said no to the payout, so nothing moved. If that was a mistake, ask again below before the challenge settles."
               : "The confirmation was withdrawn before you answered, so nothing moved.",
         pose: "facepalm",
       };
@@ -439,17 +439,17 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
       return screen.selfReported
         ? {
             headline: "Logged on your word",
-            body: "This rests on a self-reported photo, so it is not verified. It pays when the run closes, and the receipt says self-reported.",
+            body: "This rests on a self-reported photo, so it is not verified. It pays when the challenge closes, and the receipt says self-reported.",
             pose: "standing",
           }
         : {
             headline: "Banked",
-            body: "Verified and recorded on chain. The contract pays out when the run settles. Nothing for you to do but come back.",
+            body: "Verified and recorded on chain. The contract pays out when the challenge settles. Nothing for you to do but come back.",
             pose: "cheer",
           };
     case "won":
       return {
-        headline: "You won the run",
+        headline: "You won the challenge",
         body: screen.selfReported
           ? "Settled on a self-reported claim. It is credited to you on chain; one tap pulls it into your wallet."
           : "Settled. It is credited to you on chain; one tap pulls it into your wallet.",
@@ -460,8 +460,8 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
         headline: "Not there yet",
         body:
           screen.lastCheckMs !== undefined
-            ? `Your data read fine and the goal is not met so far. Nights inside the run still count if your wearable syncs them by ${formatMoment(screen.lastCheckMs)}. After that, SPOTTER records a miss on its own when your wearable covered the whole run and shows it; if it did not sync the whole run, nothing is recorded and your stake comes back. A hit is different: it only counts once you open the run and confirm it${screen.confirmByMs !== undefined ? `, by ${formatMoment(screen.confirmByMs)} at the latest` : " before it settles"}.`
-            : "Your data read fine and the goal is not met so far. Nights inside the run still count if they sync before it settles.",
+            ? `Your data read fine and the goal is not met so far. Nights inside the challenge still count if your wearable syncs them by ${formatMoment(screen.lastCheckMs)}. After that, SPOTTER records a miss on its own when your wearable covered the whole challenge and shows it; if it did not sync the whole challenge, nothing is recorded and your stake comes back. A hit is different: it only counts once you open the challenge and confirm it${screen.confirmByMs !== undefined ? `, by ${formatMoment(screen.confirmByMs)} at the latest` : " before it settles"}.`
+            : "Your data read fine and the goal is not met so far. Nights inside the challenge still count if they sync before it settles.",
         pose: "flex",
       };
     case "missed": {
@@ -470,20 +470,20 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
         headline: "Missed",
         body:
           screen.outcome === "forfeited"
-            ? `Your wearable covered the whole run and shows the goal was not met. ${stake} went to the players who hit.`
+            ? `Your wearable covered the whole challenge and shows the goal was not met. ${stake} went to the players who hit.`
             : screen.outcome === "refunded"
               ? "Your wearable shows the goal was not met, but nobody hit, so every stake came back, yours included. Claim it below."
               : screen.outcome === "cancelled"
-                ? "Your wearable shows the goal was not met, but the creator cancelled the run before it settled, so every stake can be claimed back, yours included."
+                ? "Your wearable shows the goal was not met, but the creator cancelled the challenge before it settled, so every stake can be claimed back, yours included."
                 : // Pending until settle, so conditional (docs/MONEY-FLOWS.md section 3).
-                  `Your wearable covered the whole run and shows the goal was not met, so the miss is recorded on chain. At settle ${stake.charAt(0).toLowerCase()}${stake.slice(1)} goes to who hits, or comes back if nobody does. A run the creator cancels before it settles gives every stake back too.`,
+                  `Your wearable covered the whole challenge and shows the goal was not met, so the miss is recorded on chain. At settle ${stake.charAt(0).toLowerCase()}${stake.slice(1)} goes to who hits, or comes back if nobody does. A challenge the creator cancels before it settles gives every stake back too.`,
         pose: "standing",
       };
     }
     case "hit-unconfirmed":
       return {
         headline: "Hit, not confirmed",
-        body: "Your wearable showed the goal met, but the hit was not confirmed with World ID before the run settled, so nothing was recorded. The settle credited your stake back to you without a share; claim it below.",
+        body: "Your wearable showed the goal met, but the hit was not confirmed with World ID before the challenge settled, so nothing was recorded. The settle credited your stake back to you without a share; claim it below.",
         pose: "facepalm",
       };
     case "lost":
@@ -492,22 +492,22 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
       // whole run (lib/server/agent/miss.ts); a recorded miss shows as
       // "missed", so "lost" with a recorded result is a legacy chain state.
       return {
-        headline: "Run lost",
+        headline: "Challenge lost",
         body: screen.stakeBack
-          ? "The goal was not met, so this run pays no prize. No miss was written on chain, so the settle credited your stake back to you; claim it below."
-          : "The goal was not met and the miss was recorded on chain, so this run pays you no prize and your stake stayed in the pool.",
+          ? "The goal was not met, so this challenge pays no prize. No miss was written on chain, so the settle credited your stake back to you; claim it below."
+          : "The goal was not met and the miss was recorded on chain, so this challenge pays you no prize and your stake stayed in the pot.",
         pose: "standing",
       };
     case "settled-final":
       return {
-        headline: "Run settled",
-        body: "Every result on this run is final on chain. Whatever the settle credited to you is below, ready to pull into your wallet.",
+        headline: "Challenge settled",
+        body: "Every result on this challenge is final on chain. Whatever the settle credited to you is below, ready to pull into your wallet.",
         pose: "standing",
       };
     case "bad-read":
       return {
         headline: "I could not get a clean read",
-        body: "That is the data, not you. Make sure your wearable synced the run, then have me check again.",
+        body: "That is the data, not you. Make sure your wearable has synced, then have me check again.",
         pose: "facepalm",
       };
     case "stopped":
@@ -516,15 +516,15 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
           screen.reason === "budget"
             ? "I ran out of check money"
             : screen.reason === "not-in-run"
-              ? "This wallet is not in the run"
+              ? "This wallet is not in the challenge"
               : screen.reason === "service"
                 ? "The verifier is down"
                 : "The check hit a problem",
         body:
           screen.reason === "budget"
-            ? "Every claim runs under a hard budget and this one hit it before a verdict. Nothing was paid that the receipt does not show. Not your fault."
+            ? "Every claim has a hard budget and this one hit it before a verdict. Nothing was paid that the receipt does not show. Not your fault."
             : screen.reason === "not-in-run"
-              ? "The chain does not have this wallet as a player, so nothing can be recorded for it. Enter the run first."
+              ? "The chain does not have this wallet as a player, so nothing can be recorded for it. Join the challenge first."
               : screen.reason === "service"
                 ? "The verification service never answered, so nothing was judged and nothing was paid. Not your fault. Try again later."
                 : "The receipt shows where it stopped. Nothing was paid that the receipt does not show.",
@@ -533,13 +533,13 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
     case "cancelled":
       return screen.refunded
         ? {
-            headline: "Run cancelled, stake returned",
-            body: "Your stake is credited back. Claim it into your wallet from your run board.",
+            headline: "Challenge cancelled, stake returned",
+            body: "Your stake is credited back. Claim it into your wallet from My challenges.",
             pose: "standing",
           }
         : {
-            headline: "Run cancelled, take your stake back",
-            body: "The creator called this run off before it settled, so nobody was paid a prize. Your stake is yours; one tap credits it back.",
+            headline: "Challenge cancelled, take your stake back",
+            body: "The creator called this challenge off before it settled, so nobody was paid a prize. Your stake is yours; one tap credits it back.",
             pose: "standing",
           };
   }

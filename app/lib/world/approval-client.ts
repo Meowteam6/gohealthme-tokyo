@@ -168,14 +168,14 @@ export function outcomeCopy(outcome: ApprovalOutcome): {
       return {
         headline: "confirmed.",
         detail:
-          "SPOTTER is recording the result on-chain and settles after the run ends. Your data stayed off-chain; only your consent and the verdict travel.",
+          "SPOTTER is recording the result on-chain and settles after the challenge ends. Your data stayed off-chain; only your consent and the verdict travel.",
         askAgain: false,
       };
     case "declined":
       return {
         headline: "you said no. nothing moved.",
         detail:
-          "SPOTTER wrote nothing on-chain and will not pay this claim. Your stake comes back when the run settles.",
+          "SPOTTER wrote nothing on-chain and will not pay this claim. Your stake comes back when the challenge settles.",
         askAgain: true,
       };
     case "expired":
@@ -187,9 +187,9 @@ export function outcomeCopy(outcome: ApprovalOutcome): {
       };
     case "cancelled":
       return {
-        headline: "the pool settled before you confirmed. nothing moved.",
+        headline: "the challenge settled before you confirmed. nothing moved.",
         detail:
-          "This payout can no longer happen: settle is one-shot. Your stake comes back with the pool's refund of everyone the oracle never adjudicated.",
+          "This payout can no longer happen: settle is one-shot. Your stake comes back with the challenge's refund of everyone the oracle never adjudicated.",
         askAgain: false,
       };
   }

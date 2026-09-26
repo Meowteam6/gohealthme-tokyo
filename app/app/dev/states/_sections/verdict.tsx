@@ -86,7 +86,7 @@ function GoAgain({ share }: { share?: string }) {
           variant="secondary"
         />
       ) : (
-        <Fine>Tonight counts on its own. One night never follows you into the next run.</Fine>
+        <Fine>Tonight counts on its own. One night never follows you into the next challenge.</Fine>
       )}
     </>
   );
