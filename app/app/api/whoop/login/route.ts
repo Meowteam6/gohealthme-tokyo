@@ -27,7 +27,7 @@
 // that authorizes address binding, and `state` reaches WHOOP's request logs
 // and any referrer along the way.
 
-import { whoopAllowedFor } from "@/lib/server/wearable/whoop-allowlist";
+import { whoopSeatStatus } from "@/lib/server/wearable/whoop-seats";
 import { randomBytes } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { providerConfigured } from "@/lib/server/wearable";
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
       // nothing: their fix is the same either way.
       return backToDashboard(request, "expired", returnPath);
     }
-    if (!whoopAllowedFor(address)) {
+    if (!(await whoopSeatStatus(address)).allowed) {
       return backToDashboard(request, "not-allowed", returnPath);
     }
 

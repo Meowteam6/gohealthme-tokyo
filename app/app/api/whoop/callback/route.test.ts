@@ -13,6 +13,10 @@ import { NextRequest } from "next/server";
 
 const exchangeCode = vi.fn();
 const writeTokens = vi.fn();
+const claimWhoopSeat = vi.fn();
+vi.mock("@/lib/server/wearable/whoop-seats", () => ({
+  claimWhoopSeat: (...args: unknown[]) => claimWhoopSeat(...args),
+}));
 const setProviderId = vi.fn();
 
 vi.mock("@/lib/server/wearable/whoop", () => ({
@@ -89,6 +93,8 @@ describe("GET /api/whoop/callback", () => {
     expect(outcomeOf(res)).toBe("connected");
     expect(writeTokens).toHaveBeenCalledWith("whoop", OWNER, TOKENS);
     expect(setProviderId).toHaveBeenCalledWith(OWNER, "whoop");
+    // A WHOOP seat is taken only once tokens are stored.
+    expect(claimWhoopSeat).toHaveBeenCalledWith(OWNER);
   });
 
   it("refuses the exact shape the old code accepted", async () => {
@@ -153,6 +159,7 @@ describe("GET /api/whoop/callback", () => {
     expect(outcomeOf(res)).toBe("failed");
     expect(writeTokens).not.toHaveBeenCalled();
     expect(setProviderId).not.toHaveBeenCalled();
+    expect(claimWhoopSeat).not.toHaveBeenCalled();
   });
 
   it("clears the cookie on every exit, so a nonce is never reusable", async () => {

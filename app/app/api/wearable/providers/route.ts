@@ -26,7 +26,10 @@
 // is using. Null narrows nothing, so an upstream hiccup can never take pools
 // off somebody's board.
 
-import { whoopAllowedFor } from "@/lib/server/wearable/whoop-allowlist";
+import { whoopSeatStatus } from "@/lib/server/wearable/whoop-seats";
+
+const WHOOP_FULL_NOTE =
+  "WHOOP's direct seats are full. Pair through Junction instead; it covers WHOOP straps too.";
 import { type NextRequest } from "next/server";
 import { isAddress } from "viem";
 import { jsonError } from "@/lib/server/http";
@@ -45,17 +48,24 @@ export async function GET(request: NextRequest) {
 
     if (address === null) {
       return Response.json({
-        providers: PROVIDER_IDS.map((id) => ({
+        providers: await Promise.all(PROVIDER_IDS.map(async (id) => ({
           id,
           label: providerById(id).label,
           // WHOOP pairing is allowlisted per wallet; with no address, nobody
           // is on the list, so it is not offered.
-          configured: id === "whoop" ? false : providerConfigured(id),
+          configured:
+            id === "whoop"
+              ? providerConfigured(id) && (await whoopSeatStatus(null)).seatsLeft > 0
+              : providerConfigured(id),
+          note:
+            id === "whoop" && providerConfigured(id) && (await whoopSeatStatus(null)).seatsLeft === 0
+              ? WHOOP_FULL_NOTE
+              : null,
           connected: false,
           metrics: providerById(id).metrics,
           capability: "declared",
           observedMetrics: null,
-        })),
+        }))),
         selected: null,
       });
     }
@@ -105,12 +115,15 @@ export async function GET(request: NextRequest) {
         // WHOOP is offered only to allowlisted wallets (10-member sandbox cap);
         // a wallet already linked keeps its link and reads either way.
         const offered =
-          id === "whoop" ? configured && (whoopAllowedFor(address) || connected) : configured;
+          id === "whoop"
+            ? configured && ((await whoopSeatStatus(address)).allowed || connected)
+            : configured;
 
         return {
           id,
           label: provider.label,
           configured: offered,
+          note: id === "whoop" && configured && !offered ? WHOOP_FULL_NOTE : null,
           connected,
           metrics: provider.metrics,
           capability: capability.kind,

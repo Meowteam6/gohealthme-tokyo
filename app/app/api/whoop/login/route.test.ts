@@ -25,6 +25,13 @@ vi.mock("@/lib/server/wearable/whoop", () => ({
   buildAuthorizeUrl: (...args: unknown[]) => buildAuthorizeUrl(...args),
 }));
 
+
+const seat = { allowed: true, seatsLeft: 5 };
+vi.mock("@/lib/server/wearable/whoop-seats", () => ({
+  whoopSeatStatus: async () => ({ ...seat }),
+  claimWhoopSeat: async () => undefined,
+}));
+
 const { GET } = await import("@/app/api/whoop/login/route");
 const { WHOOP_NONCE_COOKIE, WHOOP_RETURN_COOKIE } = await import(
   "@/lib/server/wearable/whoop-cookies"
@@ -49,7 +56,7 @@ function outcomeOf(res: Response): string | null {
 }
 
 beforeEach(() => {
-  vi.stubEnv("WHOOP_ALLOWED_WALLETS", OWNER);
+  seat.allowed = true;
   vi.clearAllMocks();
   providerConfigured.mockReturnValue(true);
   readLinkTicket.mockReturnValue(OWNER);
@@ -185,8 +192,8 @@ describe("GET /api/whoop/login", () => {
     expect(first).not.toBe(second);
   });
 
-  it("sends a wallet not on the WHOOP allowlist back without going to WHOOP", async () => {
-    vi.stubEnv("WHOOP_ALLOWED_WALLETS", VICTIM);
+  it("sends a wallet back without going to WHOOP when WHOOP's seats are full", async () => {
+    seat.allowed = false;
     const res = await GET(new NextRequest("https://app.test/api/whoop/login?ticket=t"));
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("whoop=not-allowed");

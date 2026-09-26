@@ -238,6 +238,9 @@ export interface ProviderOption {
    * What this WALLET's actual hardware has produced, when we know it.
    */
   observedMetrics: WearableMetric[] | null;
+  /** Why this provider is not offered right now, in player copy (for example
+   *  WHOOP's direct seats are full), or null. */
+  note?: string | null;
   /**
    * How much the server could establish about this wallet's hardware.
    *
@@ -300,7 +303,7 @@ function metricList(value: unknown): WearableMetric[] | null {
   return value.filter((m): m is WearableMetric => typeof m === "string");
 }
 
-function parseOptions(payload: unknown): ProviderOptions {
+export function parseOptions(payload: unknown): ProviderOptions {
   const record =
     typeof payload === "object" && payload !== null
       ? (payload as Record<string, unknown>)
@@ -319,6 +322,7 @@ function parseOptions(payload: unknown): ProviderOptions {
         metrics: metricList(item.metrics) ?? [],
         observedMetrics: metricList(item.observedMetrics),
         capability: capabilityOf(item.capability),
+        note: typeof item.note === "string" && item.note !== "" ? item.note : null,
       },
     ];
   });
@@ -413,7 +417,7 @@ export function whoopReturnMessage(
       return {
         tone: "info",
         message:
-          "WHOOP pairing is in private beta. Pair through Junction instead; it covers WHOOP straps too.",
+          "WHOOP's direct seats are full. Pair through Junction instead; it covers WHOOP straps too.",
       };
     case "failed":
       return {

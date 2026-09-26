@@ -23,6 +23,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isAddress } from "viem";
 import { setProviderId } from "@/lib/server/wearable";
 import { writeTokens } from "@/lib/server/wearable/tokens";
+import { claimWhoopSeat } from "@/lib/server/wearable/whoop-seats";
 import { exchangeCode } from "@/lib/server/wearable/whoop";
 import {
   WHOOP_NONCE_COOKIE,
@@ -95,6 +96,8 @@ export async function GET(request: NextRequest) {
 
     const tokens = await exchangeCode(code);
     await writeTokens("whoop", address, tokens);
+    // The seat is taken only once tokens are stored (lib/server/wearable/whoop-seats).
+    await claimWhoopSeat(address);
     // The link route already recorded the choice; re-asserting it here covers
     // a user who reached WHOOP's screen through some other entry point.
     await setProviderId(address, "whoop");

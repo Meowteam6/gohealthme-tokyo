@@ -298,6 +298,13 @@ function SensorStepBody({
         </p>
       ) : null}
 
+      {allOptions
+        .filter((p) => !p.configured && p.note)
+        .map((p) => (
+          <p key={`note-${p.id}`} className="text-sm text-muted">
+            {p.note}
+          </p>
+        ))}
       <p className="text-sm text-muted">{COMING_LINE}</p>
 
       {phoneSteps !== null ? (

@@ -25,6 +25,13 @@ vi.mock("@/lib/server/wallet-auth", () => ({
   requireAddressSignature: (...a: unknown[]) => requireAddressSignature(...a),
 }));
 
+
+const seat = { allowed: true, seatsLeft: 5 };
+vi.mock("@/lib/server/wearable/whoop-seats", () => ({
+  whoopSeatStatus: async () => ({ ...seat }),
+  claimWhoopSeat: async () => undefined,
+}));
+
 const { GET } = await import("@/app/api/wearable/providers/route");
 
 const USER = "0x1111111111111111111111111111111111111111";
@@ -42,25 +49,28 @@ beforeEach(() => {
   providerIdFor.mockResolvedValue("junction");
   isConnected.mockResolvedValue(false);
   requireAddressSignature.mockResolvedValue({ ok: true, address: USER });
+  seat.allowed = true;
+  seat.seatsLeft = 5;
 });
 
-describe("GET /api/wearable/providers WHOOP allowlist", () => {
-  it("does not offer WHOOP without an address", async () => {
-    expect((await whoopEntry(""))?.configured).toBe(false);
-  });
-
-  it("does not offer WHOOP to a wallet off the list", async () => {
-    vi.stubEnv("WHOOP_ALLOWED_WALLETS", "0x2222222222222222222222222222222222222222");
-    expect((await whoopEntry(`?address=${USER}`))?.configured).toBe(false);
-  });
-
-  it("offers WHOOP to a listed wallet, any casing", async () => {
-    vi.stubEnv("WHOOP_ALLOWED_WALLETS", USER.toUpperCase().replace("0X", "0x"));
+describe("GET /api/wearable/providers WHOOP seats", () => {
+  it("offers WHOOP to anyone while seats remain, with or without an address", async () => {
+    expect((await whoopEntry(""))?.configured).toBe(true);
     expect((await whoopEntry(`?address=${USER}`))?.configured).toBe(true);
   });
 
+  it("stops offering WHOOP once the seats are full, and says why", async () => {
+    seat.allowed = false;
+    seat.seatsLeft = 0;
+    expect((await whoopEntry(""))?.configured).toBe(false);
+    const whoop = await whoopEntry(`?address=${USER}`);
+    expect(whoop?.configured).toBe(false);
+    expect((whoop as unknown as { note: string | null }).note).toMatch(/seats are full/);
+  });
+
   it("keeps an existing WHOOP link visible after the wallet leaves the list", async () => {
-    vi.stubEnv("WHOOP_ALLOWED_WALLETS", "");
+    seat.allowed = false;
+    seat.seatsLeft = 0;
     isConnected.mockImplementation(async (id: string) => id === "whoop");
     const whoop = await whoopEntry(`?address=${USER}`);
     expect(whoop?.connected).toBe(true);
