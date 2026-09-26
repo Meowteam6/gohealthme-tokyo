@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { displayGoalSpec, formatUsdc } from "@/lib/contract";
+import { commitmentShortCopy } from "@/lib/commitment-copy";
 import { Badge, EmptyState, ErrorNote, Money, Skeleton } from "@/components/ui";
 
 interface Match {
@@ -58,17 +59,18 @@ function MatchCard({ match, lead }: { match: Match; lead: boolean }) {
       {/* A self-staked commitment pool (model 2) is funded by the participants'
           own stakes, so it must never claim a sponsor put the money up. Sponsor
           pools keep the existing framing. */}
-      {/* The commitment rule, short: a hit gets the stake back plus a share
-          of the missed stakes; a recorded miss goes to the players who hit;
-          no wearable data, or nobody hitting, gives the stake back
-          (lib/server/agent/miss.ts). */}
+      {/* The commitment rule, short, and only on a pool that can record a
+          miss; every other self-staked pool refunds a miss at settle
+          (lib/commitment-copy.ts). */}
       {match.bountyModel === 2 ? (
         entryFeeUsd !== null ? (
           <p className="mt-2 text-sm text-muted">
-            Stake <Money usd={entryFeeUsd} size="sm" /> USDC on yourself. Hit
-            it and it comes back with a share of the missed stakes. Miss it and
-            it goes to the players who hit; no wearable data for the run and it
-            comes back.
+            Stake <Money usd={entryFeeUsd} size="sm" /> USDC on yourself.{" "}
+            {commitmentShortCopy({
+              id: /^\d+$/.test(match.poolId) ? BigInt(match.poolId) : 0n,
+              bountyModel: match.bountyModel,
+              goalSpec: match.goalSpec,
+            })}
           </p>
         ) : null
       ) : balanceUsd !== null ? (

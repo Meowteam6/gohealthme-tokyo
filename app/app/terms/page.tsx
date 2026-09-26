@@ -108,11 +108,19 @@ export default function TermsPage() {
           <ul className="list-disc space-y-1 pl-5">
             <li>
               Hit the goal: you get your stake back plus an equal share of the
-              missed stakes and anything else in the pot.
+              missed stakes and anything else in the pot, once your hit is
+              recorded. SPOTTER records a hit only after you open the run and
+              confirm it with World ID, and only before the run settles. A hit
+              that is not confirmed by then gets its stake back without a
+              share.
             </li>
             <li>
               Miss it, with your wearable showing the miss: your stake goes to
-              the players who hit.
+              the players who hit. This applies only on runs that can record a
+              miss: proven by wearable alone, measuring sleep or workouts, with
+              a goal SPOTTER can read one way, and opened after this rule
+              started. The run page says before you stake whether it can. On
+              every other run a miss is refunded at settle.
             </li>
             <li>
               No wearable data for the run: SPOTTER records a miss only when
@@ -121,11 +129,17 @@ export default function TermsPage() {
               stake comes back.
             </li>
             <li>Nobody hits: every player&apos;s stake comes back.</li>
+            <li>
+              The run&apos;s creator can cancel it any time before it settles,
+              including after SPOTTER has recorded results. A cancelled run pays
+              no prize and every stake, a recorded miss included, can be
+              claimed back.
+            </li>
           </ul>
           <p>
-            SPOTTER takes its last look a few hours after the run ends, so a
-            late sync still counts until then. A missing result never counts as
-            a miss.
+            SPOTTER takes its last look a few hours after the run ends and then
+            records a miss on its own. A late sync still counts until that last
+            look. A missing result never counts as a miss.
           </p>
         </section>
 

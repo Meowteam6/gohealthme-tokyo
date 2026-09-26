@@ -70,6 +70,18 @@ describe("guardrail prompt", () => {
     expect(kb).not.toContain("your stake is credited back to you when the run settles");
   });
 
+  it("says which runs can record a miss, that a hit must be confirmed, and that a cancel refunds", () => {
+    const kb = HELP_KB.toLowerCase();
+    // F11: only wearable-only sleep and workout runs record a miss.
+    expect(kb).toContain("only on runs proven by wearable alone");
+    expect(kb).toContain("every other run refunds a miss");
+    // F10: SPOTTER records a miss on its own; a hit needs the player.
+    expect(kb).toContain("a hit only counts once you open the run and confirm it");
+    expect(kb).not.toContain("late syncs still count until then");
+    // F7: cancelPool works any time before settle.
+    expect(kb).toContain("cancel");
+  });
+
   it("buildAskPrompt appends only the user question", () => {
     const prompt = buildAskPrompt("what is a pool");
     expect(prompt.startsWith(HELP_SYSTEM_PROMPT)).toBe(true);

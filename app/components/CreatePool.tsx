@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createCommitmentCopy } from "@/lib/commitment-copy";
 import { useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import {
@@ -567,11 +568,20 @@ function CreatePoolInner() {
                   Self-staked commitment
                 </span>
                 <span className="block text-xs font-normal text-muted">
-                  Everyone stakes the same entry fee on their own goal. Hit it
-                  and your stake comes back plus an equal share of the missed
-                  stakes. A miss the wearable shows goes to the players who hit;
-                  no wearable data for the run, or nobody hitting, gives the
-                  stake back. No sponsor needed - initial funding can be zero.
+                  {/* Follows the chosen proof floor and the goal as typed: only
+                      a wearable-only sleep or workout goal can record a miss
+                      (lib/commitment-copy.ts). */}
+                  {createCommitmentCopy(
+                    withProofPolicy(goalSpec.trim(), {
+                      floor,
+                      accepted:
+                        floor === "self-reported"
+                          ? ["self-reported"]
+                          : acceptSelfReported
+                            ? [floor, "self-reported"]
+                            : [floor],
+                    }),
+                  )}
                 </span>
               </span>
             </label>

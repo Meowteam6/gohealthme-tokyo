@@ -90,7 +90,7 @@ export default function PayoutMoment({
         </p>
         {selfStaked ? (
           <p className="text-sm text-muted">
-            Your stake back, plus a cut of what the no-shows left on the table.
+            Your stake back, plus your share of the pot.
           </p>
         ) : null}
         <p className="text-sm text-muted">Absolute unit. Run it back.</p>
@@ -186,8 +186,7 @@ export default function PayoutMoment({
             </p>
             {selfStaked ? (
               <p className="mt-1 text-sm text-muted">
-                Your stake back, plus a cut of what the no-shows left on the
-                table.
+                Your stake back, plus your share of the pot.
               </p>
             ) : null}
             <p className="mt-1 text-sm text-muted">Absolute unit. Run it back.</p>
