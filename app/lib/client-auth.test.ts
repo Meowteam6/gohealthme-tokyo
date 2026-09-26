@@ -5,9 +5,16 @@
 // app's routes and nowhere else.
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import {
+  SignJWT,
+  UnsecuredJWT,
+  createLocalJWKSet,
+  exportJWK,
+  generateKeyPair,
+} from "jose";
 import { privateKeyToAccount } from "viem/accounts";
 import { walletAuthMessage } from "@/lib/server/wallet-auth";
-import { verifyWalletSignature } from "@/lib/server/wallet-auth";
+import { authenticateWallet, verifyWalletSignature } from "@/lib/server/wallet-auth";
 import {
   CLIENT_WALLET_AUTH_TTL_MS,
   WALLET_AUTH_ADDRESS_HEADER,
@@ -23,6 +30,7 @@ import {
   fetchWithWalletAuth,
   getWalletAuth,
   isUserRejection,
+  sessionTokenCoversAddress,
   shouldAttachWalletAuth,
   walletAuthFetch,
   type ClientAuth,
@@ -183,7 +191,7 @@ describe("getWalletAuth", () => {
       now: () => NOW,
     });
     expect(signMessage).toHaveBeenCalledTimes(2);
-    expect(auth.kind === "ok" && auth.credential.address).toBe(other);
+    expect(auth.kind === "ok" && auth.credential?.address).toBe(other);
   });
 
   it("reports a wallet that is not connected", async () => {
@@ -498,5 +506,301 @@ describe("fetchInputUrl", () => {
     expect(fetchInputUrl(new Request("https://x.example/api"))).toBe(
       "https://x.example/api",
     );
+  });
+});
+
+// ------------------------------------------------ Dynamic session token path
+//
+// A player Dynamic already authenticated holds a session token listing the
+// wallets they proved. When it covers the connected wallet the browser sends
+// it instead of asking the wallet to sign, which is the whole point: no prompt
+// on every per-wallet read. The client only DECODES the token to decide
+// whether to try it; the server is what verifies it.
+
+function sessionToken(
+  opts: { wallets?: string[]; scope?: string | null; expMs?: number } = {},
+): string {
+  const payload: Record<string, unknown> = {
+    verified_credentials: (opts.wallets ?? [ADDRESS.toLowerCase()]).map(
+      (address) => ({ format: "blockchain", address, chain: "eip155" }),
+    ),
+  };
+  if (opts.scope !== null) payload.scope = opts.scope ?? "user:basic";
+  return new UnsecuredJWT(payload)
+    .setExpirationTime(Math.floor((opts.expMs ?? NOW + 60 * 60 * 1000) / 1000))
+    .encode();
+}
+
+describe("sessionTokenCoversAddress", () => {
+  it("accepts a token that lists the wallet, in any casing", () => {
+    expect(sessionTokenCoversAddress(sessionToken(), ADDRESS, NOW)).toBe(true);
+    expect(
+      sessionTokenCoversAddress(sessionToken(), ADDRESS.toLowerCase(), NOW),
+    ).toBe(true);
+  });
+
+  it("refuses a token for a different wallet", () => {
+    expect(
+      sessionTokenCoversAddress(
+        sessionToken(),
+        "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it("refuses a token that has expired or is about to", () => {
+    expect(
+      sessionTokenCoversAddress(sessionToken({ expMs: NOW - 1_000 }), ADDRESS, NOW),
+    ).toBe(false);
+    expect(
+      sessionTokenCoversAddress(sessionToken({ expMs: NOW + 5_000 }), ADDRESS, NOW),
+    ).toBe(false);
+  });
+
+  it("refuses a token whose sign-in is incomplete (no user:basic)", () => {
+    expect(
+      sessionTokenCoversAddress(
+        sessionToken({ scope: "requiresAdditionalAuth" }),
+        ADDRESS,
+        NOW,
+      ),
+    ).toBe(false);
+    expect(
+      sessionTokenCoversAddress(sessionToken({ scope: null }), ADDRESS, NOW),
+    ).toBe(false);
+  });
+
+  it("refuses garbage without throwing", () => {
+    expect(sessionTokenCoversAddress("not-a-jwt", ADDRESS, NOW)).toBe(false);
+  });
+});
+
+describe("getWalletAuth with a Dynamic session token", () => {
+  it("sends the token without asking the wallet to sign when it covers the wallet", async () => {
+    const token = sessionToken();
+    const signMessage = vi.fn().mockResolvedValue(`0x${"11".repeat(65)}`);
+
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => token,
+      now: () => NOW,
+    });
+
+    expect(signMessage).not.toHaveBeenCalled();
+    expect(auth).toEqual({
+      kind: "ok",
+      credential: null,
+      headers: {
+        authorization: `Bearer ${token}`,
+        [WALLET_AUTH_ADDRESS_HEADER]: ADDRESS,
+      },
+    });
+  });
+
+  it("signs exactly as before when the token does not list the wallet", async () => {
+    const signMessage = vi.fn().mockResolvedValue(`0x${"12".repeat(65)}`);
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () =>
+        sessionToken({ wallets: ["0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc"] }),
+      now: () => NOW,
+    });
+    expect(signMessage).toHaveBeenCalledTimes(1);
+    expect(auth.kind === "ok" && auth.headers[WALLET_AUTH_SIGNATURE_HEADER]).toBe(
+      `0x${"12".repeat(65)}`,
+    );
+    expect(auth.kind === "ok" && auth.headers.authorization).toBeUndefined();
+  });
+
+  it("signs exactly as before when there is no token (connect-only wallet)", async () => {
+    const signMessage = vi.fn().mockResolvedValue(`0x${"13".repeat(65)}`);
+    await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      now: () => NOW,
+    });
+    expect(signMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to signing when reading the token throws", async () => {
+    const signMessage = vi.fn().mockResolvedValue(`0x${"14".repeat(65)}`);
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => {
+        throw new Error("no Dynamic client yet");
+      },
+      now: () => NOW,
+    });
+    expect(signMessage).toHaveBeenCalledTimes(1);
+    expect(auth.kind).toBe("ok");
+  });
+
+  it("counts the token as cached for cachedOnly readers", async () => {
+    const signMessage = vi.fn();
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      cachedOnly: true,
+      getSessionToken: () => sessionToken(),
+      now: () => NOW,
+    });
+    expect(signMessage).not.toHaveBeenCalled();
+    expect(auth.kind).toBe("ok");
+  });
+
+  it("keeps using a good token when a player taps to re-check (refresh)", async () => {
+    // "Check my wearable" asks for a refresh because the player tapped for it.
+    // With a token that covers the wallet that tap must not become a prompt.
+    const token = sessionToken();
+    const signMessage = vi.fn();
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      refresh: true,
+      getSessionToken: () => token,
+      now: () => NOW,
+    });
+    expect(signMessage).not.toHaveBeenCalled();
+    expect(auth.kind === "ok" && auth.headers.authorization).toBe(`Bearer ${token}`);
+  });
+
+  it("produces headers the server accepts", async () => {
+    const ENV_ID = "0f2d7c1e-5a4b-4c3d-9e8f-123456789abc";
+    const pair = await generateKeyPair("RS256", { extractable: true });
+    const jwk = await exportJWK(pair.publicKey);
+    const token = await new SignJWT({
+      environment_id: ENV_ID,
+      scope: "user:basic",
+      verified_credentials: [{ format: "blockchain", address: ADDRESS.toLowerCase() }],
+    })
+      .setProtectedHeader({ alg: "RS256", kid: "k" })
+      .setExpirationTime(Math.floor(NOW / 1000) + 3600)
+      .sign(pair.privateKey);
+
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage: vi.fn(),
+      getSessionToken: () => token,
+      now: () => NOW,
+    });
+    expect(auth.kind).toBe("ok");
+    if (auth.kind !== "ok") return;
+
+    const verified = await authenticateWallet(
+      new Request("https://x/api/t", { headers: auth.headers }),
+      NOW,
+      {
+        environmentId: ENV_ID,
+        jwks: createLocalJWKSet({ keys: [{ ...jwk, kid: "k", alg: "RS256" }] }),
+      },
+    );
+    expect(verified.ok).toBe(true);
+  });
+});
+
+describe("fetchWithWalletAuth with a Dynamic session token", () => {
+  it("falls back to one signature when the server refuses the token", async () => {
+    const token = sessionToken();
+    const signMessage = vi.fn().mockResolvedValue(`0x${"17".repeat(65)}`);
+    const requestAuth = (options?: { refresh?: boolean; cachedOnly?: boolean }) =>
+      getWalletAuth({
+        address: ADDRESS,
+        signMessage,
+        getSessionToken: () => token,
+        now: () => NOW,
+        ...options,
+      });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+
+    const result = await fetchWithWalletAuth("/api/x", undefined, requestAuth, fetchImpl);
+
+    expect(result.response.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(signMessage).toHaveBeenCalledTimes(1);
+    const first = fetchImpl.mock.calls[0][1] as { headers: Headers };
+    const second = fetchImpl.mock.calls[1][1] as { headers: Headers };
+    expect(first.headers.get("authorization")).toBe(`Bearer ${token}`);
+    expect(second.headers.get("authorization")).toBeNull();
+    expect(second.headers.get(WALLET_AUTH_SIGNATURE_HEADER)).toBe(`0x${"17".repeat(65)}`);
+
+    // The refused token is not sent again; later reads ride the signature.
+    const later = await requestAuth();
+    expect(later.kind === "ok" && later.headers.authorization).toBeUndefined();
+    expect(signMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives a fresh token its own try after an earlier one was refused", async () => {
+    let token = sessionToken();
+    const signMessage = vi.fn().mockResolvedValue(`0x${"19".repeat(65)}`);
+    const requestAuth = (options?: { refresh?: boolean; cachedOnly?: boolean }) =>
+      getWalletAuth({
+        address: ADDRESS,
+        signMessage,
+        getSessionToken: () => token,
+        now: () => NOW,
+        ...options,
+      });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    await fetchWithWalletAuth("/api/x", undefined, requestAuth, fetchImpl);
+
+    token = sessionToken({ expMs: NOW + 2 * 60 * 60 * 1000 });
+    const auth = await requestAuth();
+    expect(auth.kind === "ok" && auth.headers.authorization).toBe(`Bearer ${token}`);
+  });
+
+  it("stops a third-party client re-sending a refused token", async () => {
+    // walletAuthFetch cannot retry (the SDK owns the body), but the next call
+    // must not carry the same refused token again.
+    const token = sessionToken();
+    const signMessage = vi.fn().mockResolvedValue(`0x${"1a".repeat(65)}`);
+    const requestAuth = (options?: { refresh?: boolean; cachedOnly?: boolean }) =>
+      getWalletAuth({
+        address: ADDRESS,
+        signMessage,
+        getSessionToken: () => token,
+        now: () => NOW,
+        ...options,
+      });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("{}", { status: 401 }));
+    const wrapped = walletAuthFetch(requestAuth, "https://app.example", fetchImpl);
+
+    await wrapped("/api/unlink/x");
+    await wrapped("/api/unlink/x");
+
+    const first = fetchImpl.mock.calls[0][1] as { headers: Headers };
+    const second = fetchImpl.mock.calls[1][1] as { headers: Headers };
+    expect(first.headers.get("authorization")).toBe(`Bearer ${token}`);
+    expect(second.headers.get("authorization")).toBeNull();
+    expect(second.headers.get(WALLET_AUTH_SIGNATURE_HEADER)).toBe(`0x${"1a".repeat(65)}`);
+  });
+
+  it("does not loop when the signature is refused as well", async () => {
+    const signMessage = vi.fn().mockResolvedValue(`0x${"18".repeat(65)}`);
+    const requestAuth = (options?: { refresh?: boolean; cachedOnly?: boolean }) =>
+      getWalletAuth({
+        address: ADDRESS,
+        signMessage,
+        getSessionToken: () => sessionToken(),
+        now: () => NOW,
+        ...options,
+      });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("{}", { status: 401 }));
+
+    const result = await fetchWithWalletAuth("/api/x", undefined, requestAuth, fetchImpl);
+
+    expect(result.response.status).toBe(401);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(signMessage).toHaveBeenCalledTimes(1);
   });
 });
