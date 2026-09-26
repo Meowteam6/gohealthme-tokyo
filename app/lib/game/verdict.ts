@@ -49,8 +49,19 @@ export type VerdictScreen =
   /** Verified, and the payout waits on the period end or on settlement. */
   | { kind: "banked"; selfReported: boolean }
   | { kind: "won"; paidUsd: string; txHash: string | null; selfReported: boolean }
-  /** Read fine, goal not met yet, and later nights can still count. */
-  | { kind: "not-yet" }
+  /** Read fine, goal not met yet, and later nights can still count.
+   *  lastCheckMs: on a run that can record a miss, the moment SPOTTER takes
+   *  its last look (periodEnd + MISS_GRACE_HOURS); nights synced after it no
+   *  longer count. Absent on runs that can never record a miss. */
+  | { kind: "not-yet"; lastCheckMs?: number }
+  /** The run is over, the wearable covered it, the goal was not met, and the
+   *  miss is on chain. pending until the pool settles; then forfeited (the
+   *  stake went to the players who hit) or refunded (nobody hit). */
+  | {
+      kind: "missed";
+      outcome: "pending" | "forfeited" | "refunded";
+      stakeUsd: string | null;
+    }
   /** Read fine, goal not met, and the run is over. `stakeBack` is true when no
    *  miss was recorded on chain, so settle() credited the stake back (B-2). */
   | { kind: "lost"; stakeBack: boolean }
@@ -74,6 +85,25 @@ export interface VerdictInput {
   /** The participant's on-chain resultRecorded flag, when read. Decides
    *  whether a settled loss got its stake back (unrecorded, B-2). */
   resultRecorded?: boolean;
+  /** On a run that can record a miss: periodEnd + MISS_GRACE_HOURS, in epoch
+   *  ms (lib/miss-grace.ts). Null or absent on every other run. */
+  missDeadlineMs?: number | null;
+}
+
+/** The miss screen a ledger encodes, or null when it holds no recorded miss.
+ *  Shared with the wearable check so both say the same thing. */
+export function missedScreenOf(
+  ledger: LedgerEntry[] | null,
+): Extract<VerdictScreen, { kind: "missed" }> | null {
+  if (ledger === null) return null;
+  const record = ledger.find((e) => e.kind === "record" && e.verdict === false);
+  if (record === undefined || record.kind !== "record") return null;
+  const closed = ledger.find((e) => e.kind === "settle" && e.status === "closed");
+  const outcome =
+    closed !== undefined && closed.kind === "settle" && closed.outcome !== undefined
+      ? closed.outcome
+      : "pending";
+  return { kind: "missed", outcome, stakeUsd: record.stakeUsd ?? null };
 }
 
 /** True when SPOTTER's current attempt decided to pay. */
@@ -117,6 +147,13 @@ export function verdictScreenOf(input: VerdictInput): VerdictScreen {
     return input.poolSettled ? { kind: "settled-final" } : { kind: "banked", selfReported };
   }
 
+  // A recorded miss is final whether or not the pool has settled yet.
+  if (input.runStatus === "missed") {
+    return (
+      missedScreenOf(ledger) ?? { kind: "missed", outcome: "pending", stakeUsd: null }
+    );
+  }
+
   if (input.poolSettled) return settledScreenOf(input, ledger, local);
 
   switch (input.runStatus) {
@@ -146,7 +183,9 @@ export function verdictScreenOf(input: VerdictInput): VerdictScreen {
       const mode = ledger !== null ? failureModeOf(ledger) : null;
       if (mode === "attester-offline") return { kind: "stopped", reason: "service" };
       if (mode === "evidence") return { kind: "bad-read" };
-      return { kind: "not-yet" };
+      return typeof input.missDeadlineMs === "number"
+        ? { kind: "not-yet", lastCheckMs: input.missDeadlineMs }
+        : { kind: "not-yet" };
     }
     case "cap-exceeded":
       return { kind: "stopped", reason: "budget" };
@@ -205,6 +244,9 @@ export function verdictShowsClaim(screen: VerdictScreen): boolean {
     case "settled-final":
     case "lost":
       return true;
+    case "missed":
+      // Only a refunded miss has anything to claim.
+      return screen.outcome === "refunded";
     case "approval-failed":
       return screen.settled;
     default:
@@ -288,6 +330,16 @@ export function runApprovalLine(
   }
 }
 
+/** A local moment for the not-yet deadline, date and time. */
+function formatMoment(ms: number): string {
+  return new Date(ms).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export interface VerdictCopy {
   headline: string;
   body: string;
@@ -361,12 +413,30 @@ export function verdictCopy(screen: VerdictScreen): VerdictCopy | null {
     case "not-yet":
       return {
         headline: "Not there yet",
-        body: "Your data read fine and the goal is not met so far. Nights inside the run still count if they sync before it settles.",
+        body:
+          screen.lastCheckMs !== undefined
+            ? `Your data read fine and the goal is not met so far. Nights inside the run still count if your wearable syncs them by ${formatMoment(screen.lastCheckMs)}. After that, SPOTTER records what your wearable shows. If it did not sync the whole run, nothing is recorded and your stake comes back.`
+            : "Your data read fine and the goal is not met so far. Nights inside the run still count if they sync before it settles.",
         pose: "flex",
       };
+    case "missed": {
+      const stake = screen.stakeUsd !== null ? `Your ${screen.stakeUsd} stake` : "Your stake";
+      return {
+        headline: "Missed",
+        body:
+          screen.outcome === "forfeited"
+            ? `Your wearable covered the whole run and shows the goal was not met. ${stake} went to the players who hit.`
+            : screen.outcome === "refunded"
+              ? "Your wearable shows the goal was not met, but nobody hit, so every stake came back, yours included. Claim it below."
+              : `Your wearable covered the whole run and shows the goal was not met, so the miss is recorded on chain. ${stake} goes to the players who hit. If nobody hit, every stake comes back, yours included.`,
+        pose: "standing",
+      };
+    }
     case "lost":
       // HealthPoolsV3 B-2: a participant with no recorded result is refunded
-      // at settle. SPOTTER never records a miss, so that is the normal case.
+      // at settle. SPOTTER records a miss only when the wearable covered the
+      // whole run (lib/server/agent/miss.ts); a recorded miss shows as
+      // "missed", so "lost" with a recorded result is a legacy chain state.
       return {
         headline: "Run lost",
         body: screen.stakeBack

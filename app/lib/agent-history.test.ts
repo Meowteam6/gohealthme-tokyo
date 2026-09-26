@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { historyItems, defaultHistoryView } from "@/lib/agent-history";
+import { historyItems, defaultHistoryView, missLineOf } from "@/lib/agent-history";
 
 // History leads with the player's own entries; "Everyone" shows the whole
 // public feed. Signed out there is no "own", so the public feed is the page.
@@ -21,5 +21,41 @@ describe("history view", () => {
 
   it("never shows another player's entries as own when mine is missing", () => {
     expect(historyItems({ claims: feed.claims }, "mine")).toEqual([]);
+  });
+});
+
+describe("the History line for a recorded miss", () => {
+  const miss = (settle: { status: string; outcome?: "forfeited" | "refunded" } | null) => ({
+    missed: true as const,
+    stakeUsd: "1.00",
+    settle,
+  });
+
+  it("says plainly where the stake goes, in the player's own history", () => {
+    expect(missLineOf(miss(null), true)).toBe(
+      "Missed. Your 1.00 stake goes to the players who hit.",
+    );
+    expect(missLineOf(miss({ status: "closed", outcome: "forfeited" }), true)).toBe(
+      "Missed. Your 1.00 stake went to the players who hit.",
+    );
+    expect(missLineOf(miss({ status: "closed", outcome: "refunded" }), true)).toBe(
+      "Missed, but nobody hit, so your 1.00 stake came back.",
+    );
+  });
+
+  it("speaks in the third person on everyone's feed", () => {
+    expect(missLineOf(miss(null), false)).toBe(
+      "Missed. The 1.00 stake goes to the players who hit.",
+    );
+  });
+
+  it("is silent on every claim that is not a recorded miss", () => {
+    expect(missLineOf({ settle: null }, true)).toBeNull();
+  });
+
+  it("never calls a miss a lost bet", () => {
+    for (const settle of [null, { status: "closed", outcome: "forfeited" as const }]) {
+      expect(missLineOf(miss(settle), true)).not.toMatch(/\bbet\b|lost|wager/i);
+    }
   });
 });

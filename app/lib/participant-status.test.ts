@@ -75,4 +75,13 @@ describe("resultLabel", () => {
       tone: "muted",
     });
   });
+
+  it("never says forfeited on a self-staked run, where nobody hitting refunds every miss", () => {
+    // Model 2: a recorded miss goes to the players who hit, or comes back
+    // when nobody hit. This label cannot see the tally, so it says neither.
+    expect(resultLabel({ settled: true, bountyModel: 2 }, p({ resultRecorded: true }))).toEqual({
+      text: "Goal missed - see the run for your stake",
+      tone: "muted",
+    });
+  });
 });

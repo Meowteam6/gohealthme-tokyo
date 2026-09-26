@@ -16,7 +16,7 @@ export interface StatusLabel {
 }
 
 export function resultLabel(
-  pool: { settled: boolean; cancelled?: boolean },
+  pool: { settled: boolean; cancelled?: boolean; bountyModel?: number },
   p: {
     resultRecorded: boolean;
     verdict: boolean;
@@ -49,7 +49,11 @@ export function resultLabel(
     const multiplier = (p.multiplierBps / 10_000).toFixed(2);
     return { text: `Achieved at ${multiplier}x`, tone: "accent" };
   }
-  return pool.settled
-    ? { text: "Goal missed - stake forfeited", tone: "muted" }
-    : { text: "Goal missed", tone: "muted" };
+  if (!pool.settled) return { text: "Goal missed", tone: "muted" };
+  // Self-staked (model 2): a recorded miss goes to the players who hit, or
+  // comes back when nobody hit. Which one needs the pool's tally, which this
+  // label does not have; the run page says it.
+  return pool.bountyModel === 2
+    ? { text: "Goal missed - see the run for your stake", tone: "muted" }
+    : { text: "Goal missed - stake forfeited", tone: "muted" };
 }

@@ -5,8 +5,11 @@
 // (contracts/src/HealthPoolsV3.sol):
 //   - settle() refunds every participant with no recorded result (B-2),
 //     credits each recorded achiever, and leaves a recorded miss's stake in
-//     the pot. SPOTTER never records a miss, so in practice everyone who did
-//     not hit is refunded.
+//     the pot. On a self-staked pool (model 2) that pot is split among the
+//     players who hit, so a recorded miss's stake goes to them. SPOTTER
+//     records a miss only when the wearable covered the whole run
+//     (lib/server/agent/miss.ts); without that data nothing is recorded and
+//     the stake is refunded.
 //   - Model 2 (self-staked) with nobody hitting refunds every recorded staker
 //     too, so no stake stays behind.
 //   - cancelPool() pays nobody; every joiner takes their stake back through
@@ -102,6 +105,10 @@ export function runEndCopy(input: RunEndInput): RunEndCopy {
   return {
     headline: "This run has settled",
     body: `${tally.achievers} of ${tally.total} hit it and were credited from the pool.${
+      input.bountyModel === 2 && tally.missed > 0
+        ? ` The stakes of ${plural(tally.missed, "recorded miss", "recorded misses")} went to the players who hit.`
+        : ""
+    }${
       tally.refunded > 0
         ? ` ${plural(tally.refunded, "player", "players")} with no recorded result got their stake back.`
         : ""

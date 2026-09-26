@@ -29,26 +29,16 @@
 // skip, and a skip records nothing.
 
 import type { Address } from "viem";
-import { proofPolicyOf } from "@/lib/contract";
 import type { LedgerEntry } from "@/lib/server/agent/ledger";
 import type {
   MissEvidence,
   ProviderId,
   WearableProvider,
 } from "@/lib/server/wearable/types";
-import {
-  classifyWearableGoal,
-  type WearableMetric,
-  type WearableSpec,
-} from "@/lib/wearable-goal";
+import type { WearableMetric } from "@/lib/wearable-goal";
+import { missRulePool, type MissSpec } from "@/lib/miss-rule";
 
-/** Metrics whose day is final once it has synced, so a shortfall is real. */
-export const MISS_METRICS: readonly WearableMetric[] = [
-  "sleep_score",
-  "sleep_efficiency",
-  "sleep_hours",
-  "workouts",
-];
+export { MISS_METRICS, missRulePool, type MissSpec } from "@/lib/miss-rule";
 
 const SLEEP_METRICS: readonly WearableMetric[] = [
   "sleep_score",
@@ -74,8 +64,6 @@ export interface MissPool {
   periodEnd: bigint;
 }
 
-export type MissSpec = WearableSpec & { metric: WearableMetric };
-
 export type MissSkipBasis =
   | "pool-closed"
   | "not-commitment"
@@ -95,23 +83,6 @@ export type MissSkipBasis =
   | "met"
   | "met-at-boundary"
   | "read-error";
-
-/** Gate 1: can this pool ever record a miss? */
-export function missRulePool(pool: {
-  bountyModel: number;
-  goalSpec: string;
-}): { ok: true; spec: MissSpec } | { ok: false; basis: MissSkipBasis } {
-  if (pool.bountyModel !== 2) return { ok: false, basis: "not-commitment" };
-  const accepted = proofPolicyOf(pool.goalSpec).accepted;
-  if (accepted.length !== 1 || accepted[0] !== "wearable") {
-    return { ok: false, basis: "not-wearable-only" };
-  }
-  const spec = classifyWearableGoal(pool.goalSpec);
-  if (spec.metric === null || !MISS_METRICS.includes(spec.metric)) {
-    return { ok: false, basis: "metric-not-final" };
-  }
-  return { ok: true, spec: { ...spec, metric: spec.metric } };
-}
 
 /**
  * When a pool that can record a miss may settle: not before periodEnd + grace

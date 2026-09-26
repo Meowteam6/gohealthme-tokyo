@@ -21,6 +21,7 @@ import {
 import { ArcTxLink, Money, Verdict } from "@/components/ui";
 import PayoutScreening from "@/components/intercepta/PayoutScreening";
 import { credentialLabel } from "@/lib/world/credentials";
+import { missStakeLine } from "@/lib/agent-history";
 
 type SpendReceiptRow = Extract<ReceiptRow, { kind: "spend" }>;
 
@@ -77,7 +78,7 @@ export function settleMomentLine(date: Date): string | null {
   if (when === null) return null;
   return date.getTime() > Date.now()
     ? `SPOTTER settles this automatically at ${when}`
-    : `the pool period ended at ${when}; SPOTTER settles this on its next pass`;
+    : `settling opened at ${when}; SPOTTER settles this on its next pass`;
 }
 
 /** What a deferred settle row says. Prefers the entry's periodEndIso, then a
@@ -107,6 +108,12 @@ export function deferredSettleCopy(
     );
   }
   return note ?? "settlement pending";
+}
+
+/** The record row's label: a recorded miss says so, never "recorded" alone,
+ *  which reads like a pass. */
+export function recordRowLabel(row: Extract<ReceiptRow, { kind: "record" }>): string {
+  return row.verdict ? "recorded on-chain" : "miss recorded on chain";
 }
 
 /** Calm per-stage label for an error row. Transient conditions (the chain not
@@ -329,6 +336,10 @@ export default function AgentReceipt({
   const deferredEntry = ledger.find(
     (e) => e.kind === "settle" && e.status === "deferred",
   ) as SettleLedgerEntry | undefined;
+  const missRow = receipt.rows.find(
+    (r): r is Extract<ReceiptRow, { kind: "record" }> => r.kind === "record" && !r.verdict,
+  );
+  const missStakeUsd = missRow?.stakeUsd ?? null;
 
   return (
     <div className="rounded-xl border border-edge bg-surface-raised p-4 font-mono">
@@ -385,8 +396,14 @@ export default function AgentReceipt({
               return (
                 <li key={item.key} className="animate-rise-in pl-7 text-sm">
                   <span className="text-xs uppercase tracking-wide text-muted">
-                    recorded on-chain
+                    {recordRowLabel(row)}
                   </span>
+                  {!row.verdict ? (
+                    <p className="mt-1 text-foreground/80">
+                      {missStakeLine("pending", row.stakeUsd, true)} If nobody
+                      hit, every stake comes back, yours included.
+                    </p>
+                  ) : null}
                   {row.resultTx !== null ? (
                     <p className="mt-1">
                       <ArcTxLink txHash={row.resultTx} label="result tx" />
@@ -422,6 +439,11 @@ export default function AgentReceipt({
                         deferredEntry?.periodEndIso,
                         row.note,
                       )}
+                    </span>
+                  ) : row.status === "closed" && row.outcome !== null ? (
+                    <span>
+                      run settled:{" "}
+                      {missStakeLine(row.outcome, missStakeUsd, true)}
                     </span>
                   ) : (
                     <span className="text-muted">

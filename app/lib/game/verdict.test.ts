@@ -238,6 +238,56 @@ describe("verdictScreenOf", () => {
     ).toEqual({ kind: "lost", stakeBack: false });
   });
 
+  it("gives a player with a sync deadline the moment their last nights must land by", () => {
+    const ledger = [spend, verdict(false), reason("no-pay")];
+    expect(screenFor(ledger, { missDeadlineMs: 1_790_487_000_000 })).toEqual({
+      kind: "not-yet",
+      lastCheckMs: 1_790_487_000_000,
+    });
+  });
+
+  it("shows a recorded miss as missed, pending until the pool settles", () => {
+    const missRecord: LedgerEntry = {
+      kind: "record",
+      at: AT,
+      goalId: "0x01",
+      registryStatus: "skipped",
+      verdict: false,
+      stakeUsd: "1.00",
+    };
+    const ledger = [spend, verdict(false), reason("no-pay"), missRecord];
+    expect(screenFor(ledger)).toEqual({ kind: "missed", outcome: "pending", stakeUsd: "1.00" });
+    // Settled but not closed yet: still pending, never "lost" or "settled-final".
+    expect(screenFor(ledger, { poolSettled: true, resultRecorded: true })).toEqual({
+      kind: "missed",
+      outcome: "pending",
+      stakeUsd: "1.00",
+    });
+    const closed = (outcome: "forfeited" | "refunded"): LedgerEntry => ({
+      kind: "settle",
+      at: AT,
+      status: "closed",
+      outcome,
+      txHash: "0xs",
+    });
+    expect(screenFor([...ledger, closed("forfeited")], { poolSettled: true })).toEqual({
+      kind: "missed",
+      outcome: "forfeited",
+      stakeUsd: "1.00",
+    });
+    expect(screenFor([...ledger, closed("refunded")], { poolSettled: true })).toEqual({
+      kind: "missed",
+      outcome: "refunded",
+      stakeUsd: "1.00",
+    });
+  });
+
+  it("carries the claim tap only on a miss whose stake came back", () => {
+    expect(verdictShowsClaim({ kind: "missed", outcome: "refunded", stakeUsd: "1.00" })).toBe(true);
+    expect(verdictShowsClaim({ kind: "missed", outcome: "forfeited", stakeUsd: "1.00" })).toBe(false);
+    expect(verdictShowsClaim({ kind: "missed", outcome: "pending", stakeUsd: "1.00" })).toBe(false);
+  });
+
   it("never calls a bad read or a down verifier a loss", () => {
     const lowConfidence = [
       spend,
@@ -331,6 +381,11 @@ describe("verdictCopy", () => {
     { kind: "banked", selfReported: true },
     { kind: "won", paidUsd: "1.00", txHash: null, selfReported: false },
     { kind: "not-yet" },
+    { kind: "not-yet", lastCheckMs: 1_790_487_000_000 },
+    { kind: "missed", outcome: "pending", stakeUsd: "1.00" },
+    { kind: "missed", outcome: "forfeited", stakeUsd: "1.00" },
+    { kind: "missed", outcome: "refunded", stakeUsd: "1.00" },
+    { kind: "missed", outcome: "pending", stakeUsd: null },
     { kind: "lost", stakeBack: true },
     { kind: "lost", stakeBack: false },
     { kind: "settled-final" },
@@ -384,6 +439,36 @@ describe("verdictCopy", () => {
     expect(verdictCopy({ kind: "lost", stakeBack: false })?.body).toContain(
       "stake stayed in the pool",
     );
+  });
+
+  it("says a miss plainly: what it costs and where the stake goes, never a lost bet", () => {
+    const pending = verdictCopy({ kind: "missed", outcome: "pending", stakeUsd: "1.00" });
+    expect(pending?.headline).toBe("Missed");
+    expect(pending?.body).toContain("Your 1.00 stake goes to the players who hit");
+    expect(pending?.body).toContain("If nobody hit, every stake comes back");
+    const forfeited = verdictCopy({ kind: "missed", outcome: "forfeited", stakeUsd: "1.00" });
+    expect(forfeited?.body).toContain("Your 1.00 stake went to the players who hit");
+    const refunded = verdictCopy({ kind: "missed", outcome: "refunded", stakeUsd: "1.00" });
+    expect(refunded?.body).toContain("nobody hit");
+    expect(refunded?.body).toContain("came back");
+    for (const copy of [pending, forfeited, refunded]) {
+      expect(`${copy?.headline} ${copy?.body}`).not.toMatch(/\bbet\b|lost a|lose|wager/i);
+    }
+  });
+
+  it("tells a player still short of the goal when their last nights must sync by", () => {
+    const withDeadline = verdictCopy({ kind: "not-yet", lastCheckMs: 1_790_487_000_000 });
+    expect(withDeadline?.body).toContain(
+      new Date(1_790_487_000_000).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    );
+    expect(withDeadline?.body).toMatch(/records what your wearable shows/);
+    // Without a deadline (a run that can never record a miss) it stays general.
+    expect(verdictCopy({ kind: "not-yet" })?.body).toContain("before it settles");
   });
 
   it("uses the words the game loop promised", () => {

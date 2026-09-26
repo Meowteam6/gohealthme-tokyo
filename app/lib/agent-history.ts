@@ -21,3 +21,44 @@ export function historyItems<T>(
 ): T[] {
   return view === "mine" ? (feed.mine ?? []) : feed.claims;
 }
+
+/**
+ * What a recorded miss did with the stake, in plain words: goes (before the
+ * pool settles), went (settle paid the players who hit), or came back
+ * (nobody hit). `own` picks "Your" on the player's own history and "The" on
+ * everyone's. Never "lost", never a bet.
+ */
+export function missStakeLine(
+  outcome: "pending" | "forfeited" | "refunded",
+  stakeUsd: string | null,
+  own: boolean,
+): string {
+  const whose = own ? "your" : "the";
+  const stake = stakeUsd !== null ? `${whose} ${stakeUsd} stake` : `${whose} stake`;
+  const Stake = stake.charAt(0).toUpperCase() + stake.slice(1);
+  switch (outcome) {
+    case "forfeited":
+      return `Missed. ${Stake} went to the players who hit.`;
+    case "refunded":
+      return `Missed, but nobody hit, so ${stake} came back.`;
+    default:
+      return `Missed. ${Stake} goes to the players who hit.`;
+  }
+}
+
+/** The History card's miss line, or null when the claim is not a miss. */
+export function missLineOf(
+  claim: {
+    missed?: true;
+    stakeUsd?: string;
+    settle: { status: string; outcome?: "forfeited" | "refunded" } | null;
+  },
+  own: boolean,
+): string | null {
+  if (claim.missed !== true) return null;
+  const outcome =
+    claim.settle?.status === "closed" && claim.settle.outcome !== undefined
+      ? claim.settle.outcome
+      : "pending";
+  return missStakeLine(outcome, claim.stakeUsd ?? null, own);
+}
