@@ -27,6 +27,7 @@ import {
   type GaslessStatus,
   type SponsoredCall,
 } from "@/lib/useGasSponsorship";
+import { useEnsureGas, withDripLine } from "@/lib/useEnsureGas";
 
 export type ClaimRefundStatus =
   | { kind: "idle" }
@@ -65,7 +66,9 @@ export function refundCreditedAmount(
 export function useClaimRefund(): UseClaimRefundResult {
   const { getArcWalletClient } = useEmbeddedWallet();
   const { address: connectedAddress } = useAccount();
-  const { status: gasless, sendSponsored } = useGasSponsorship();
+  const { status: sponsorship, sendSponsored } = useGasSponsorship();
+  const { dripLine, ensureGas } = useEnsureGas();
+  const gasless = withDripLine(sponsorship, dripLine);
   const [status, setStatus] = useState<ClaimRefundStatus>({ kind: "idle" });
 
   const reset = useCallback(() => {
@@ -113,6 +116,9 @@ export function useClaimRefund(): UseClaimRefundResult {
         const publicClient = getArcPublicClient();
         const owner = walletClient.account.address;
         setStatus({ kind: "claiming" });
+        // An unsponsored wallet (the email EOA) pays its own gas: make sure it
+        // has some, or this write fails with "gas required exceeds allowance (0)".
+        await ensureGas(walletClient);
         const txHash = await walletClient.writeContract({
           address: poolsAddress,
           abi: healthPoolsAbi,
@@ -141,7 +147,7 @@ export function useClaimRefund(): UseClaimRefundResult {
         throw err instanceof Error ? err : new Error(human.detail);
       }
     },
-    [getArcWalletClient, gasless.willSponsor, sendSponsored, connectedAddress],
+    [getArcWalletClient, gasless.willSponsor, sendSponsored, connectedAddress, ensureGas],
   );
 
   return { status, busy: status.kind === "claiming", reset, gasless, claimRefund };

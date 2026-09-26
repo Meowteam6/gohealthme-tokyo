@@ -63,12 +63,12 @@ function isNativeGasShortfall(chain: string): boolean {
 
 // ------------------------------------------------------------ funding preflight
 
-// TODO(base-gas): the preflight below (JOIN_GAS_MARGIN, canCoverUsdcCosts)
-// still encodes the Arc-era "gas is paid in USDC" margin. Base gas is ETH and
-// the CDP paymaster sponsors smart-wallet users, so an EOA with USDC but no
-// ETH passes this check and fails at approve. The real fix is an ETH balance
-// check for non-sponsored wallets in JoinPool and useWithdraw. The user-facing
-// copy (FUNDING_STEPS, FUNDING_HELP_DETAIL) is already Base-correct.
+// The preflight below (JOIN_GAS_MARGIN, canCoverUsdcCosts) still carries the
+// Arc-era USDC gas margin; it only makes the USDC check slightly stricter.
+// Base gas is ETH: sponsored smart wallets pay none, and every non-sponsored
+// money path runs ensureGas (lib/ensure-gas.ts) before its first write, which
+// drips test ETH to a wallet that has none. The user-facing copy
+// (FUNDING_STEPS, FUNDING_HELP_DETAIL) is already Base-correct.
 
 /**
  * Gas headroom for a two-transaction flow (approve + write) on Arc testnet,

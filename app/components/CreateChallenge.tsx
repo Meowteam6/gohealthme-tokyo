@@ -53,6 +53,7 @@ import { parseUsdc, withDocMarker, withProofPolicy } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useDisplayNames } from "@/lib/use-display-names";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
+import GaslessBadge from "@/components/GaslessBadge";
 import ShareChallenge from "@/components/ShareChallenge";
 import SignInGate from "@/components/SignInGate";
 import { resolveNewPoolId } from "@/lib/resolve-pool-id";
@@ -693,7 +694,7 @@ function DoneSpotter({ pose, alt, line }: SpotterMood) {
 function CreateChallengeInner() {
   const { ready, authenticated, address } = useEmbeddedWallet();
   const requestAuth = useWalletAuth();
-  const { status, busy, reset, runUsdcDeposit } = useUsdcDeposit();
+  const { status, busy, reset, runUsdcDeposit, gasless } = useUsdcDeposit();
   // The challenger's own name, for the "from @you" line on the done screen.
   const { displayName } = useDisplayNames(address !== null ? [address] : []);
 
@@ -1234,7 +1235,9 @@ function CreateChallengeInner() {
   const fundedPoolId =
     funded !== null && funded.poolId !== null ? funded.poolId.toString() : null;
   const primaryLabel =
-    status.kind === "approving"
+    status.kind === "fueling"
+      ? "One moment..."
+      : status.kind === "approving"
       ? "Approving USDC..."
       : status.kind === "depositing"
         ? isDare
@@ -1561,6 +1564,8 @@ function CreateChallengeInner() {
               </p>
             </div>
           ) : null}
+
+          {authenticated ? <GaslessBadge status={gasless} /> : null}
 
           {linking ? (
             <div className="rounded-xl border border-edge bg-surface-raised p-4 text-sm">

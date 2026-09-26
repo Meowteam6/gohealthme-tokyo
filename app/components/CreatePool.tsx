@@ -255,7 +255,9 @@ function CreatePoolInner() {
   };
 
   const primaryLabel =
-    status.kind === "approving"
+    status.kind === "fueling"
+      ? "One moment..."
+      : status.kind === "approving"
       ? "Approving USDC..."
       : status.kind === "depositing"
         ? "Creating pool..."
