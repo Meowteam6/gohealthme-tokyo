@@ -186,7 +186,7 @@ export default function Lobby({
               <EmptyState
                 title="No open runs right now"
                 line="Nothing running. I'm on break."
-                detail="Nobody has put a goal on the board. Start one and I will hold the coin."
+                detail="Nobody has put a goal on the board. Start one and I will read the wearables."
                 action={
                   <Link href="/pools/create" className={buttonClasses()}>
                     Start a run

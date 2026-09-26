@@ -56,9 +56,9 @@ const SCENE: Record<StepId, SpotterScreenState> = {
 const DONE_LINE = "That is your player. Every run reads this card.";
 
 /**
- * The riverbank over the steps. Phones get a compact scene (SPOTTER at 120px
- * beside his line) so the open step's action stays above the fold at 390x844;
- * from lg up he stands at hero size beside the steps.
+ * The title card over the steps, SPOTTER standing on its top edge in a new
+ * pose per step. 88px on a phone so the open step's action stays near the
+ * fold at 390x844; 156px from 900px up. His line sits in his caption box.
  */
 function Scene({ step, title }: { step: StepId | null; title: string }) {
   const state: SpotterScreenState =

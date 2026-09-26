@@ -166,7 +166,7 @@ export default function Home() {
           id="whats-happening"
           className="font-display text-[1.75rem] font-extrabold leading-display tracking-display"
         >
-          On the riverbank right now
+          Happening right now
         </h2>
         <HeroActivityTicker />
       </section>

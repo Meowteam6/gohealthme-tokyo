@@ -82,7 +82,7 @@ export default function PayoutMoment({
       <div className="relative mx-auto w-fit [perspective:600px]">
         <Spotter
           state="verdict-paid"
-          alt="SPOTTER holding up your coin"
+          alt="SPOTTER giving a thumbs up"
           line={
             selfReported
               ? "Paid on your word. Still not stamped."

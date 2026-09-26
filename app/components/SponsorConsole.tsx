@@ -367,7 +367,7 @@ export default function SponsorConsole() {
       subtitle="Put USDC on a health goal, top it up as it fills, and watch exactly what it buys. Every outcome below is aggregate only, and nobody ever sees a participant's health data."
       pose="detective"
       poseAlt="SPOTTER the otter, inspecting the ledger through a magnifying glass"
-      spotterLine="I hold the bag, not your business. I check each goal and hand out one word: paid, or not yet."
+      spotterLine="I read the wearables, not your business. I check each goal and give one word: paid, or not yet."
     >
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <Badge tone="muted">Base Sepolia test money, beta</Badge>
@@ -437,7 +437,7 @@ export default function SponsorConsole() {
         {hero}
         <EmptyState
           pose="wallet"
-          line="No wallet, no pot. Sign in and I'll hold it."
+          line="No wallet, no pot. Sign in and the contract holds it."
           title="Sign in to run a pool"
           detail="Creating and funding a bounty pulls USDC from your wallet, so the console opens once you sign in. Your pools and their aggregate outcomes live here."
           action={

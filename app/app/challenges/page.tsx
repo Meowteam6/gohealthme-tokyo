@@ -745,9 +745,9 @@ export default function ChallengesPage() {
       <SceneHeader
         title="Your challenges"
         subtitle="The goals you have put Base Sepolia test USDC behind: your own commitments, the challenges you sent, and the ones aimed at you."
-        pose="greet"
+        pose="wave"
         poseAlt="SPOTTER waving hello"
-        spotterLine="Challenge a friend, or stake on yourself. I hold the pot either way."
+        spotterLine="Challenge a friend, or stake on yourself. The contract holds the pot either way."
       />
       {DYNAMIC_CONFIGURED ? (
         <MyChallengesContent />

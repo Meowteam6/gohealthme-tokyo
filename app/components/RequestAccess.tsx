@@ -130,7 +130,7 @@ export default function RequestAccess({
     return (
       <Shell>
         <div className="flex items-end gap-3">
-          <Otter pose="watching" alt="SPOTTER keeping watch" />
+          <Otter pose="detective" alt="SPOTTER checking with a magnifier" />
           <Heading>You&apos;re on the list.</Heading>
         </div>
         <p className="text-base text-foreground/85">
@@ -146,7 +146,7 @@ export default function RequestAccess({
     return (
       <Shell>
         <div className="flex items-end gap-3">
-          <Otter pose="neutral" alt="SPOTTER, unimpressed" />
+          <Otter pose="thinking" alt="SPOTTER thinking it over" />
           <Heading>Not this round.</Heading>
         </div>
         <p className="text-base text-foreground/85">
@@ -224,7 +224,7 @@ export default function RequestAccess({
   return (
     <Shell>
       <div className="flex items-end gap-3">
-        <Otter pose="greet" alt="SPOTTER waving hello" />
+        <Otter pose="wave" alt="SPOTTER waving hello" />
         <Heading>Ask for a spot.</Heading>
       </div>
       <p className="text-base text-foreground/85">

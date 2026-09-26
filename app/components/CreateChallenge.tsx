@@ -121,7 +121,7 @@ const SECONDS_PER_DAY = 86_400;
 // Longer copy lives as constants so the JSX stays clean and the apostrophes /
 // quotes / dashes render exactly, without escaping.
 const SPOTTER_INTRO =
-  "I'm SPOTTER. I hold the money, I check your proof, I pay you the second you hit it. No vibes, no chasing anyone for cash. Let's set one up.";
+  "I'm SPOTTER. The contract holds the money, I check the wearable, and it pays when you hit it. No vibes, no chasing anyone for cash. Let's set one up.";
 const HONESTY_NOTE =
   "Base Sepolia test USDC, not real money. The wearable decides, and only the yes or no verdict goes on chain, never the health data.";
 const FOOTER_NOTE =
@@ -1084,9 +1084,9 @@ function CreateChallengeInner() {
         </Card>
 
         <DoneSpotter
-          pose="cheer"
-          alt="SPOTTER cheering that your commitment is live"
-          line="Locked and loaded. Go stake in and I'll hold it - no funny business."
+          pose="thumbsup"
+          alt="SPOTTER giving a thumbs up"
+          line="Locked in. The contract holds the stakes; I just read the wearables."
         />
 
         <div className="flex flex-wrap gap-3">
@@ -1130,9 +1130,9 @@ function CreateChallengeInner() {
         </Card>
 
         <DoneSpotter
-          pose="payday"
-          alt="SPOTTER guarding the reward you just put up"
-          line="Reward's in the vault. Send them the link - I'll pay the second they prove it."
+          pose="thumbsup"
+          alt="SPOTTER giving a thumbs up"
+          line="The reward is in the contract. Send them the link. It pays once their wearable proves it."
         />
 
         <div className="space-y-3">

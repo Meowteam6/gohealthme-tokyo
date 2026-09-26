@@ -152,7 +152,7 @@ export function CommitmentTermsList({
       <Spotter
         pose="payday"
         size="xs"
-        line="Your coin, your effort. Nobody else's night counts for you."
+        line="Your stake, your effort. Nobody else's night counts for you."
         linePlacement="side"
       />
       <ul className="space-y-2 text-base">

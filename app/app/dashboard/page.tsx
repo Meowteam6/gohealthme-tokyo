@@ -19,8 +19,8 @@ export default function DashboardPage() {
         <SpotterSays
           surface="dashboard-header"
           state="idle"
-          pose="wallet"
-          say="I hold the wallet. You hold the streak. The board below is the truth."
+          pose="wearable"
+          say="I read the wearable. You keep the streak. The board below is the truth."
         />
       </header>
       {DYNAMIC_CONFIGURED ? (

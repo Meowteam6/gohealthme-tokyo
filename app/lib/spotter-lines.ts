@@ -59,7 +59,7 @@ export interface SpotterLine {
 
 export const SPOTTER_LINES: SpotterLine[] = [
   // ── Headers (deadpan, one-liners beside the scenic otter) ────────────────
-  { id: "dash-h1", surface: "dashboard-header", state: "idle", tone: "deadpan", text: { en: "I hold the wallet. You hold the streak." } },
+  { id: "dash-h1", surface: "dashboard-header", state: "idle", tone: "deadpan", text: { en: "I read the wearable. You keep the streak." } },
   { id: "dash-h2", surface: "dashboard-header", state: "idle", tone: "deadpan", text: { en: "Watching the money so you don't have to." } },
   { id: "dash-h3", surface: "dashboard-header", state: "idle", tone: "deadpan", text: { en: "Your goals. My problem now." } },
 

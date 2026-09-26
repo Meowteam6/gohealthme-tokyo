@@ -61,7 +61,7 @@ export default function ClaimPayout({
       <Card className={`border-gold/40 ${className}`}>
         <div className="flex items-center gap-4 sm:gap-5">
           {quiet ? null : (
-            <Spotter pose="payday" size="xs" alt="SPOTTER handing you your coin" />
+            <Spotter pose="thumbsup" size="xs" alt="SPOTTER giving a thumbs up" />
           )}
           <div className="min-w-0">
             <Stamp tone="gold">Claimed</Stamp>
@@ -148,7 +148,7 @@ export default function ClaimPayout({
   return (
     <Card className={`border-gold/40 ${className}`}>
       <div className="flex items-start gap-4 sm:gap-5">
-        <Spotter pose="payday" size="xs" alt="SPOTTER holding your coin" />
+        <Spotter pose="thumbsup" size="xs" alt="SPOTTER giving a thumbs up" />
         <div className="min-w-0 flex-1">
           <Stamp tone="gold">Ready to claim</Stamp>
           <p className="mt-2">
