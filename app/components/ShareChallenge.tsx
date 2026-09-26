@@ -19,7 +19,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { challengeBackerUrl, challengeShareUrl } from "@/lib/challenges";
-import { TAP_TARGET, buttonClasses } from "@/components/ui";
+import { buttonClasses } from "@/components/ui";
 
 type CopyState = "idle" | "copied" | "failed";
 
@@ -126,7 +126,7 @@ export default function ShareChallenge({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="[&>*+*]:mt-2">
       <div className="flex flex-wrap gap-2">
         {canNativeShare ? (
           <button
@@ -153,7 +153,7 @@ export default function ShareChallenge({
           <button
             type="button"
             onClick={runCopy}
-            className={`flex-1 rounded-[18px] border border-edge bg-surface-raised font-bold text-foreground hover:border-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
+            className={`${buttonClasses({ variant: "secondary", size: "sm" })} flex-1`}
           >
             <span aria-live="polite">
               {copy === "copied"
@@ -166,8 +166,8 @@ export default function ShareChallenge({
         ) : null}
       </div>
       {copy === "failed" ? (
-        <p aria-live="polite" className="text-xs text-muted">
-          Copying is blocked in this browser - use Text or Email, or select the
+        <p aria-live="polite" className="m-0 text-[0.8125rem] leading-[1.45] text-haze">
+          Copying is blocked in this browser. Use Text or Email, or select the
           link by hand.
         </p>
       ) : null}

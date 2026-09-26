@@ -16,6 +16,8 @@
 
 import { arcTxUrl } from "@/lib/chains";
 import { profileWinPresentation, type ProofTier } from "@/lib/proof-tier";
+import { Card, FOCUS_RING, Fine, Money, Stat, StatRow } from "@/components/ui";
+import { CARD_TITLE, Notice, PAGE_COLUMN, PerchedHeader } from "@/components/night/kit";
 
 export interface Win {
   id: string;
@@ -84,23 +86,6 @@ function CheckBadgeIcon({ className }: { className?: string }) {
   );
 }
 
-function FlameIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M12 3c.5 3-1.5 4.5-3 6.5C7.4 11.7 7 13.3 7 15a5 5 0 0010 0c0-2-1-3.8-2.5-5 .3 1.4-.4 2.4-1.3 2.8.6-2.6-.6-5-1.2-6.3-.3-.7-.7-1.6 0-3.5z" />
-    </svg>
-  );
-}
-
 function AlertIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -139,31 +124,12 @@ function ExternalLinkIcon({ className }: { className?: string }) {
   );
 }
 
-/* ---------- money primitive ---------- */
-// Warm gold, monospace, tabular-nums, " USDC" suffix, NO adjective. The value
-// string is rendered exactly as the ledger recorded it.
-
-function Money({
-  amount,
-  className = "",
-}: {
-  amount: string;
-  className?: string;
-}) {
-  return (
-    <span className={`font-mono tabular-nums text-gold-deep ${className}`}>
-      {amount}
-      <span className="text-gold-deep/80"> USDC</span>
-    </span>
-  );
-}
-
 /* ---------- privacy line ---------- */
 
 function PrivacyLine({ className = "" }: { className?: string }) {
   return (
-    <p className={`flex items-center gap-1.5 text-xs text-accent-deep ${className}`}>
-      <ShieldLockIcon className="h-3.5 w-3.5 shrink-0" />
+    <p className={`flex items-center gap-1.5 text-[0.8125rem] text-haze ${className}`}>
+      <ShieldLockIcon className="size-3.5 shrink-0" />
       <span className="text-pretty">{PRIVACY_COPY}</span>
     </p>
   );
@@ -197,60 +163,52 @@ function relativeTime(iso: string): string {
 
 /* ---------- win row ---------- */
 
-// Icon container tones per trust tier. Self-reported and unknown wins carry NO
-// check badge — a self-reported photo cannot be presented as verified.
+// Icon tones per trust tier. Self-reported and unknown wins carry NO check
+// badge: a self-reported photo cannot be presented as verified.
 const WIN_ICON_TONE: Record<"accent" | "warning" | "muted", string> = {
-  accent: "bg-accent/10 text-accent-deep",
-  warning: "bg-warning/10 text-warning",
-  muted: "bg-surface-raised text-muted",
+  accent: "bg-moonlight/10 text-moonlight",
+  warning: "bg-fill-quiet text-warning shadow-[inset_0_0_0_1px_var(--border-strong)]",
+  muted: "bg-fill-quiet text-haze",
 };
 
-function WinRow({ win, index }: { win: Win; index: number }) {
-  const { label, tone, showCheck, sublabel } = profileWinPresentation(
-    win.tier,
-  );
+function WinRow({ win }: { win: Win }) {
+  const { label, tone, showCheck, sublabel } = profileWinPresentation(win.tier);
   return (
-    <li
-      className="ghm-rise-in flex items-center gap-3 rounded-2xl border border-edge bg-surface p-4"
-      style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
-    >
+    <li className="flex items-center gap-3 border-t border-edge py-3.5 first:border-t-0 first:pt-0 last:pb-0">
       <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${WIN_ICON_TONE[tone]}`}
+        className={`flex size-9 shrink-0 items-center justify-center rounded-full ${WIN_ICON_TONE[tone]}`}
       >
         {showCheck ? (
-          <CheckBadgeIcon className="h-5 w-5" />
+          <CheckBadgeIcon className="size-5" />
         ) : tone === "warning" ? (
-          <AlertIcon className="h-5 w-5" />
+          <AlertIcon className="size-5" />
         ) : (
-          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-current" />
+          <span aria-hidden="true" className="size-2 rounded-full bg-current" />
         )}
       </span>
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-foreground">{label}</span>
+          <span className="text-[0.9375rem] font-semibold text-foreground">{label}</span>
           {sublabel !== null ? (
-            <span className="text-xs uppercase tracking-wide text-warning">
-              {sublabel}
-            </span>
+            <span className="text-[0.8125rem] text-warning">{sublabel}</span>
           ) : null}
         </span>
-        <span className="flex items-center gap-2 text-xs text-muted">
+        <span className="flex flex-wrap items-center gap-x-3 text-[0.8125rem] text-haze">
           <span>{relativeTime(win.at)}</span>
-          <span aria-hidden="true">&middot;</span>
           <a
             href={arcTxUrl(win.txHash)}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-accent-deep underline underline-offset-2 hover:text-accent-deep"
+            className={`inline-flex min-h-11 items-center gap-1 text-muted underline decoration-muted/35 underline-offset-4 hover:text-foreground ${FOCUS_RING}`}
           >
             Basescan
-            <ExternalLinkIcon className="h-3 w-3" />
+            <ExternalLinkIcon className="size-3" />
           </a>
         </span>
       </div>
 
-      <Money amount={win.amountUsd} className="shrink-0 text-right text-base" />
+      <Money usd={win.amountUsd} size="md" />
     </li>
   );
 }
@@ -258,126 +216,98 @@ function WinRow({ win, index }: { win: Win; index: number }) {
 /* ---------- main component ---------- */
 
 export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
+  // One pose, on the stat card: pleased when there are runs hit, calm when
+  // there are none yet, thinking when the chain did not answer.
+  const pose = !profile.readOk ? "thinking" : profile.goalsHit > 0 ? "thumbsup" : "meditate";
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 text-foreground">
-      {/* 1. Identity header */}
-        <header className="flex items-center gap-4">
-          <span
-            aria-hidden="true"
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-edge bg-surface-raised text-3xl leading-none"
-          >
-            {profile.emoji}
-          </span>
-          <div className="flex min-w-0 flex-col gap-1">
-            <h1 className="truncate text-2xl font-bold tracking-tight text-foreground">
-              @{profile.handle}
-            </h1>
-            <p
-              className="truncate font-mono text-sm text-muted"
-              title={profile.address}
+    <div className={`${PAGE_COLUMN} [&>*+*]:mt-8`}>
+      <PerchedHeader
+        above={
+          <span className="flex items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="flex size-12 shrink-0 items-center justify-center rounded-full bg-surface-raised text-2xl leading-none text-moonlight shadow-[inset_0_0_0_1px_var(--border-strong)]"
             >
+              {profile.emoji}
+            </span>
+            <span className="truncate font-mono text-[0.8125rem] text-haze" title={profile.address}>
               {truncateAddress(profile.address)}
-            </p>
-          </div>
-        </header>
-
-        {/* 2. Hero stat rail. A failed chain read replaces the figures with
-            a plain note: zeros here would be a false statement. */}
+            </span>
+          </span>
+        }
+        title={`@${profile.handle}`}
+        lead="Runs hit and what they paid, in test USDC on Base Sepolia."
+        pose={pose}
+      >
+        {/* A failed chain read replaces the figures with a plain note: zeros
+            here would be a false statement. */}
         {!profile.readOk ? (
-          <section
-            role="status"
-            className="rounded-2xl border border-warning/40 bg-surface p-5 text-sm text-muted"
-          >
-            <p className="font-semibold text-foreground">
-              Could not read this player&apos;s wins from the chain right now.
-            </p>
-            <p className="mt-1">Refresh in a minute to try again.</p>
-          </section>
+          <Card>
+            <Notice tone="limit" role="status" title="Could not read this player's runs from the chain right now">
+              Refresh in a minute to try again.
+            </Notice>
+          </Card>
         ) : (
-        <section className="rounded-2xl border border-edge bg-surface p-5">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="col-span-3 flex flex-col gap-1 sm:col-span-1 sm:border-r sm:border-edge sm:pr-4">
-              <span className="text-xs uppercase tracking-wider text-muted">
-                USDC earned
-              </span>
-              <Money
-                amount={profile.usdcEarned}
-                className="text-2xl font-semibold sm:text-3xl"
+          <Card>
+            <StatRow>
+              <Stat
+                label="USDC earned"
+                value={profile.usdcEarned}
+                tone={Number(profile.usdcEarned) > 0 ? "money" : "dusk"}
+                size="lg"
               />
+              <Stat label="Runs hit" value={profile.goalsHit} size="lg" />
+              <Stat label="Hit streak" value={profile.winStreak} size="lg" />
+            </StatRow>
+            {/* The tier split. Only wins proven verified carry the check;
+                self-reported wins are counted separately and never folded in. */}
+            <div className="mt-4 border-t border-edge pt-3 [&>*+*]:mt-2">
+              {profile.verifiedWins > 0 ? (
+                <p className="flex items-center gap-1.5 text-[0.8125rem] text-moonlight">
+                  <CheckBadgeIcon className="size-3.5 shrink-0" />
+                  <span>{profile.verifiedWins} verified by a wearable or a record</span>
+                </p>
+              ) : null}
+              {profile.selfReportedWins > 0 ? (
+                <p className="flex items-center gap-1.5 text-[0.8125rem] text-warning">
+                  <AlertIcon className="size-3.5 shrink-0" />
+                  <span>
+                    Plus {profile.selfReportedWins} self-reported{" "}
+                    {profile.selfReportedWins === 1 ? "win" : "wins"}, not verified
+                  </span>
+                </p>
+              ) : null}
+              <PrivacyLine />
             </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs uppercase tracking-wider text-muted">
-                Wins
-              </span>
-              <span className="text-2xl font-semibold text-foreground">
-                {profile.goalsHit}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs uppercase tracking-wider text-muted">
-                Win streak
-              </span>
-              <span className="flex items-center gap-1.5 text-2xl font-semibold text-accent-deep">
-                <FlameIcon className="h-5 w-5" />
-                {profile.winStreak}
-              </span>
-            </div>
-          </div>
-          {/* The tier split. Only wins proven verified carry the check;
-              self-reported wins are counted separately and never folded in. */}
-          {profile.verifiedWins > 0 ? (
-            <p className="mt-3 flex items-center gap-1.5 text-xs text-accent-deep">
-              <CheckBadgeIcon className="h-3.5 w-3.5 shrink-0" />
-              <span>
-                {profile.verifiedWins} verified by a wearable or a record
-              </span>
-            </p>
-          ) : null}
-          {profile.selfReportedWins > 0 ? (
-            <p className="mt-3 flex items-center gap-1.5 text-xs text-warning">
-              <AlertIcon className="h-3.5 w-3.5 shrink-0" />
-              <span>
-                + {profile.selfReportedWins} self-reported{" "}
-                {profile.selfReportedWins === 1 ? "win" : "wins"} &mdash; not
-                verified
-              </span>
-            </p>
-          ) : null}
-          <PrivacyLine className="mt-4" />
-        </section>
+          </Card>
         )}
+      </PerchedHeader>
 
-        {/* 3. Wins feed - each row carries its own trust tier, so a
-            self-reported win reads as self-reported, never verified. */}
-        <section className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium uppercase tracking-wider text-muted">
-              Wins
-            </h2>
-            <PrivacyLine />
-          </div>
+      {/* Each row carries its own trust tier, so a self-reported win reads as
+          self-reported, never verified. */}
+      <Card as="section" aria-labelledby="wins-heading">
+        <h2 id="wins-heading" className={CARD_TITLE}>
+          Runs hit
+        </h2>
+        <div className="mt-4">
           {!profile.readOk ? (
-            <p className="rounded-2xl border border-dashed border-warning/50 bg-surface p-5 text-sm text-muted">
-              Wins will show here once the chain answers.
-            </p>
+            <p className="text-[0.9375rem] text-muted">They show here once the chain answers.</p>
           ) : profile.wins.length === 0 ? (
-            <p className="rounded-2xl border border-edge bg-surface p-5 text-sm text-muted">
-              No wins yet
-            </p>
+            <p className="text-[0.9375rem] text-muted">No runs hit yet.</p>
           ) : (
-            <ul className="flex flex-col gap-3">
-              {profile.wins.map((win, index) => (
-                <WinRow key={win.id} win={win} index={index} />
+            <ul className="list-none">
+              {profile.wins.map((win) => (
+                <WinRow key={win.id} win={win} />
               ))}
             </ul>
           )}
-        </section>
+        </div>
+      </Card>
 
-        {/* 4. Footer */}
-      <footer className="pt-2 text-center text-xs text-muted">
-        GoHealthMe: stake on your health goal, get paid in test USDC when the
+      <Fine className="text-center">
+        GoHealthMe: stake on your own health goal and get paid in test USDC when the
         run settles.
-      </footer>
+      </Fine>
     </div>
   );
 }

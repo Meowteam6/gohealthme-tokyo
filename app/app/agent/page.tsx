@@ -10,9 +10,9 @@ import {
   getSpotterWallet,
 } from "@/lib/server/agent/wallet";
 import { NOINDEX } from "@/lib/site";
-import { Card, Money } from "@/components/ui";
-import SpotterMascot from "@/components/SpotterMascot";
+import { Card, Fine, Stat, StatRow, Tag, TEXT_LINK } from "@/components/ui";
 import SpotterSays from "@/components/SpotterSays";
+import { CARD_TITLE, Notice, PAGE_COLUMN, PerchedHeader } from "@/components/night/kit";
 import AgentFeed from "./AgentFeed";
 
 export const metadata: Metadata = {
@@ -90,9 +90,9 @@ function readApproval(): ApprovalMode | "misconfigured" {
 function approvalLine(mode: ApprovalMode | "misconfigured"): string {
   switch (mode) {
     case "world":
-      return "Before SPOTTER records a win, it asks the winner to confirm with World ID. No confirmation, no payout.";
+      return "Before SPOTTER records a win, he asks the player who hit to confirm with World ID. No confirmation, no payout.";
     case "mock":
-      return "Before SPOTTER records a win, it asks the winner to confirm with World ID. On this build that confirmation is mocked, not a real World ID check. No confirmation, no payout.";
+      return "Before SPOTTER records a win, he asks the player who hit to confirm with World ID. On this build that confirmation is mocked, not a real World ID check. No confirmation, no payout.";
     case "misconfigured":
       return "Payout confirmation is not set up correctly on this deployment, so SPOTTER is holding every payout until it is fixed.";
     case "off":
@@ -109,97 +109,84 @@ export default async function AgentPage() {
   const onTheClock = settler.kind === "ok" && sweepOn && !broke;
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-2">
-        <h1 className="break-words font-display text-[1.75rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]">
-          History
-        </h1>
-        <p className="text-base text-muted">
-          Every verdict SPOTTER reached on your runs, your World ID
-          confirmations, and what it paid.
+    <div className={`${PAGE_COLUMN} [&>*+*]:mt-8`}>
+      <PerchedHeader
+        title="History"
+        lead="Every verdict SPOTTER reached on your runs, your World ID confirmations, and what each run paid."
+        pose="detective"
+      >
+        <AgentFeed />
+      </PerchedHeader>
+
+      <Card as="section" aria-labelledby="settler" className="[&>*+*]:mt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="settler" className={CARD_TITLE}>
+            The wallet SPOTTER settles from
+          </h2>
+          {settler.kind === "ok" ? (
+            onTheClock ? <Tag>On the clock</Tag> : <Tag tone="muted">Standing by</Tag>
+          ) : null}
+        </div>
+        <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
+          SPOTTER reads each run&apos;s result and signs the settle. The run&apos;s
+          contract holds the stakes and pays the players who hit; this wallet only
+          covers the network fee and buys the checks. {approvalLine(approval)}
         </p>
-      </header>
-
-      <AgentFeed />
-
-      <Card>
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 flex-1 space-y-4">
-            <p className="text-sm font-bold text-accent-deep">
-              SPOTTER, the settlement agent
-            </p>
-            <h2 className="break-words font-display text-[1.75rem] font-extrabold leading-display tracking-display">
-              The otter runs the money.
-            </h2>
-            {settler.kind === "ok" ? (
-              <div className="space-y-2">
-                <p className="text-sm font-bold text-muted">
-                  SPOTTER&apos;s wallet, the one that signs every settle
-                </p>
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="inline-flex max-w-full items-center break-all rounded-full border-2 border-edge bg-secondary px-3 py-1 font-mono text-xs text-secondary-foreground">
-                    {settler.address}
-                  </span>
-                  <a
-                    href={baseAddressUrl(settler.address)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-11 items-center text-sm font-bold text-accent-deep underline underline-offset-2"
-                  >
-                    View on Basescan
-                  </a>
-                </div>
-                <p className="flex flex-wrap items-baseline gap-2 text-base text-muted">
-                  Budget for buying verifications
-                  <Money usd={toUsd2(settler.balanceUsd)} size="sm" />
-                  <span>test USDC</span>
-                </p>
-                <p className="inline-flex items-center rounded-full bg-secondary px-3 py-1 text-sm font-medium text-secondary-foreground">
-                  Base Sepolia, test USDC, not real money
-                </p>
-              </div>
-            ) : settler.kind === "unreachable" ? (
-              <p
-                role="status"
-                className="rounded-2xl border border-warning/40 bg-warning/10 p-3 text-base text-foreground"
+        {settler.kind === "ok" ? (
+          <>
+            <div>
+              <p className="m-0 mb-1.5 text-[0.8125rem] text-haze">Address</p>
+              <p className="m-0 break-all rounded-control bg-surface-deep px-3.5 py-3 font-mono text-xs text-muted shadow-[inset_0_0_0_1px_var(--border-strong)]">
+                {settler.address}
+              </p>
+              <a
+                href={baseAddressUrl(settler.address)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${TEXT_LINK} text-sm`}
               >
-                Could not reach SPOTTER&apos;s wallet right now, so its address
-                and budget are not shown. Refresh in a minute.
-              </p>
-            ) : (
-              <p className="text-base leading-relaxed text-muted">
-                Automatic payouts are not switched on for this deployment yet.
-                Runs can still be joined; nobody gets paid until SPOTTER&apos;s
-                wallet is connected.
-              </p>
-            )}
-            <p className="text-base leading-relaxed text-muted">
-              When a run settles, SPOTTER releases each pool&apos;s USDC to the
-              people who hit the goal. The reward is the pool&apos;s money, not
-              this wallet&apos;s; SPOTTER covers the network fee.{" "}
-              {approvalLine(approval)}
-            </p>
-            {settler.kind === "ok" && !sweepOn ? (
-              <p className="text-sm text-muted">
-                Scheduled settling is not switched on for this deployment yet.
-              </p>
+                View on Basescan
+              </a>
+            </div>
+            <StatRow className="border-t border-edge pt-3">
+              <Stat
+                label="Budget for buying checks"
+                value={toUsd2(settler.balanceUsd)}
+                unit="USDC"
+                tone="money"
+              />
+            </StatRow>
+            <Fine>Base Sepolia test USDC, not real money.</Fine>
+            {!sweepOn ? (
+              <Notice tone="limit">Scheduled settling is not switched on for this deployment yet.</Notice>
             ) : null}
-          </div>
-          <SpotterMascot
-            pose="watching"
-            caption="SPOTTER"
-            sublabel={onTheClock ? "on the clock" : "standing by"}
-            size="md"
-            className="self-center sm:self-start"
+          </>
+        ) : settler.kind === "unreachable" ? (
+          <Notice tone="limit" role="status">
+            Could not reach SPOTTER&apos;s wallet right now, so its address and budget are
+            not shown. Refresh in a minute.
+          </Notice>
+        ) : (
+          <Notice tone="limit">
+            Automatic payouts are not switched on for this deployment yet. Runs can
+            still be joined; nobody gets paid until SPOTTER&apos;s wallet is connected.
+          </Notice>
+        )}
+        {broke ? (
+          <SpotterSays
+            surface="agent-header"
+            state="broke"
+            bare
+            say="I am out of money for checks, so checks wait until I am topped up. Your stake stays in the run's contract."
           />
-        </div>
-        <div className="mt-6">
-          {broke ? (
-            <SpotterSays surface="agent-header" state="broke" size="md" />
-          ) : (
-            <SpotterSays surface="agent-header" state="idle" size="md" />
-          )}
-        </div>
+        ) : (
+          <SpotterSays
+            surface="agent-header"
+            state="idle"
+            bare
+            say="I buy the check, I read the result, I sign the settle. The contract pays."
+          />
+        )}
       </Card>
     </div>
   );

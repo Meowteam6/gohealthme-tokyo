@@ -17,6 +17,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, ErrorNote } from "@/components/ui";
+import { Notice } from "@/components/night/kit";
 import { disconnectWearable } from "@/lib/wearable-connect";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 
@@ -38,6 +39,8 @@ export default function DisconnectDeviceButton({
       <Button
         type="button"
         variant="secondary"
+        size="sm"
+        aria-busy={busy}
         disabled={busy}
         onClick={() => {
           setNote(null);
@@ -72,18 +75,16 @@ export default function DisconnectDeviceButton({
         {busy ? "Disconnecting your wearable" : "Disconnect my wearable"}
       </Button>
       {note !== null ? (
-        <p
-          role="status"
-          className="mt-3 rounded-xl border border-edge bg-surface p-4 text-base text-muted"
-        >
+        <Notice tone="info" role="status" live className="mt-3">
           {note}
-        </p>
+        </Notice>
       ) : null}
       {error !== null ? (
         <div className="mt-3">
           <ErrorNote
             title="Could not disconnect your wearable"
             detail={error}
+            retryLabel="Dismiss"
             onRetry={() => setError(null)}
           />
         </div>

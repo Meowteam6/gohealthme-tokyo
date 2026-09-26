@@ -20,8 +20,9 @@
 
 import { useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { Skeleton } from "@/components/ui";
-import Spotter from "@/components/spotter/Spotter";
+import { Card, Skeleton } from "@/components/ui";
+import Perch from "@/components/spotter/Perch";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
 import CharacterCreation from "@/components/game/CharacterCreation";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useOnboarding } from "@/lib/game/onboarding-store";
@@ -29,15 +30,21 @@ import { creationBlocks, hardGateClosed } from "@/lib/game/character";
 import { rendersWithoutGate } from "@/lib/public-paths";
 import { useEmbeddedWallet } from "@/lib/wallet";
 
-function GateLoading() {
+export function GateLoading() {
   return (
-    <div className="mx-auto w-full max-w-xl space-y-4 py-2" aria-busy="true">
+    <div className="mx-auto w-full max-w-xl py-2" aria-busy="true">
       <p className="sr-only" aria-live="polite">
         Loading your player
       </p>
-      <Spotter state="loading" size="sm" line="Looking up your player." decorative />
-      <Skeleton className="h-10 w-2/3" />
-      <Skeleton className="h-48 w-full rounded-3xl" />
+      {/* The same shape as the character card it resolves into, so nothing
+          jumps when the player loads. */}
+      <Perch state="loading" width={[84, 120]} side="right" inset={[16, 28]} decorative>
+        <Card>
+          <Skeleton className="h-10 w-2/3" />
+          <SpotterCaption line="Looking up your player." className="mt-4" />
+          <Skeleton className="mt-4 h-40 w-full rounded-control" />
+        </Card>
+      </Perch>
     </div>
   );
 }

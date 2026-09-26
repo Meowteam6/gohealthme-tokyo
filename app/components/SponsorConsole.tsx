@@ -26,19 +26,27 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import CreatePool from "@/components/CreatePool";
 import SponsorPoolOutcome from "@/components/SponsorPoolOutcome";
-import SignInGate from "@/components/SignInGate";
-import SceneHeader from "@/components/SceneHeader";
-import Spotter from "@/components/spotter/Spotter";
+import SignInPanel from "@/components/SignInPanel";
 import { Icon, type IconName } from "@/components/SponsorIcons";
 import {
   Badge,
   Button,
   Card,
-  EmptyState,
   ErrorNote,
+  Fine,
   Money,
   PoolCardSkeleton,
+  TEXT_LINK,
 } from "@/components/ui";
+import {
+  CARD_TITLE,
+  EmptyCard,
+  Notice,
+  PerchedHeader,
+  QUIET_ACTION,
+  SECTION_TITLE,
+} from "@/components/night/kit";
+import type { NightPose } from "@/lib/spotter-poses";
 import {
   ContractNotConfiguredError,
   fetchPools,
@@ -92,26 +100,19 @@ async function fetchOutcomeTotals(): Promise<Record<string, PoolEventTotals> | n
 
 function OutcomesUnavailable({ onRetry }: { onRetry: () => void }) {
   return (
-    <div
+    <Notice
+      tone="limit"
       role="status"
-      className="flex items-start gap-3 rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-foreground/85"
+      title="Outcomes could not be read right now"
+      action={
+        <button type="button" onClick={onRetry} className={QUIET_ACTION}>
+          Read the outcomes again
+        </button>
+      }
     >
-      <Spotter state="error" size="inline" decorative />
-      <div className="min-w-0">
-      <p className="font-bold">Outcomes could not be read right now.</p>
-      <p className="mt-1 text-muted">
-        Your pools and their balances are below. Joins, completions and payouts
-        show again once the chain answers.
-      </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-2 inline-flex min-h-11 items-center font-semibold text-accent-deep underline underline-offset-4"
-      >
-        Try again
-      </button>
-      </div>
-    </div>
+      Your runs and their balances are below. Joins, completions and payouts show
+      again once the chain answers.
+    </Notice>
   );
 }
 
@@ -125,35 +126,32 @@ function MoneyValue({ usd }: { usd: string | null }) {
   return usd !== null ? (
     <Money usd={usd} />
   ) : (
-    <span className="text-muted">Held</span>
+    <span className="text-haze">Held</span>
   );
 }
 
-// A single candy stat tile. The icon chip carries the only tone; the figure
-// itself renders through Money/CountValue with no colour adjective, per the
-// honest-core rule. Gold is never used here — these are static, at-rest totals,
-// and gold is reserved for money in motion.
+// One stat tile: a quiet icon, the label, and the figure in Figtree. Money
+// renders through Money (gold, the only colour money gets); counts stay in
+// the foreground with no colour adjective, per the honest-core rule.
 function StatTile({
   icon,
-  chip,
   label,
   children,
 }: {
   icon: IconName;
-  chip: string;
+  /** Retired: the icon chip no longer carries a tone. */
+  chip?: string;
   label: string;
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-3 rounded-3xl border border-edge bg-surface p-4">
-      <span
-        className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${chip}`}
-      >
-        <Icon name={icon} className="h-5 w-5" />
+    <div className="flex min-w-0 flex-col gap-3 rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
+      <span className="inline-flex size-9 items-center justify-center rounded-control bg-surface-raised text-muted">
+        <Icon name={icon} className="size-5" />
       </span>
       <div>
-        <p className="text-xs font-medium text-muted">{label}</p>
-        <p className="mt-0.5 break-words font-display text-lg font-extrabold leading-display tracking-display sm:text-xl">
+        <p className="text-[0.8125rem] text-haze">{label}</p>
+        <p className="num mt-1 break-words text-[1.125rem] font-semibold leading-tight text-foreground sm:text-[1.25rem]">
           {children}
         </p>
       </div>
@@ -174,23 +172,21 @@ function PortfolioSummary({
   const d = useMemo(() => portfolioDisplay(totals), [totals]);
 
   return (
-    <section className="space-y-5">
+    <section className="[&>*+*]:mt-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
-          Your pools at a glance
-        </h2>
+        <h2 className={SECTION_TITLE}>Your runs at a glance</h2>
         <Badge tone="muted">
-          {d.poolCount} {d.poolCount === 1 ? "pool" : "pools"}
+          {d.poolCount} {d.poolCount === 1 ? "run" : "runs"}
         </Badge>
       </div>
 
       {!outcomesOk ? (
-        <div className="space-y-3">
+        <div className="[&>*+*]:mt-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <StatTile
               icon="vault"
               chip="bg-accent/12 text-accent-deep"
-              label="In your pools"
+              label="In your runs"
             >
               <Money usd={formatUsdc(d.totalBalanceUsdc)} />
             </StatTile>
@@ -202,7 +198,7 @@ function PortfolioSummary({
         <StatTile
           icon="vault"
           chip="bg-accent/12 text-accent-deep"
-          label="In your pools"
+          label="In your runs"
         >
           <Money usd={formatUsdc(d.totalBalanceUsdc)} />
         </StatTile>
@@ -219,7 +215,7 @@ function PortfolioSummary({
         <StatTile
           icon="payout"
           chip="bg-accent/12 text-accent-deep"
-          label="Paid to achievers"
+          label="Paid to players who hit"
         >
           <MoneyValue
             usd={d.totalPaidUsdc !== null ? formatUsdc(d.totalPaidUsdc) : null}
@@ -228,7 +224,7 @@ function PortfolioSummary({
         <StatTile
           icon="users"
           chip="bg-secondary text-secondary-foreground"
-          label="Participants"
+          label="Players"
         >
           <CountValue value={d.totalJoined} />
         </StatTile>
@@ -263,27 +259,27 @@ const PRIVACY_POINTS: { icon: IconName; title: string; body: string }[] = [
   {
     icon: "fingerprint",
     title: "k-anonymous, always",
-    body: "Cohort numbers read as “Fewer than 5” until a pool is big enough that no figure can point at one person.",
+    body: "Cohort numbers read as “Fewer than 5” until a run is big enough that no figure can point at one person.",
   },
 ];
 
 function PrivacyFeature() {
   return (
-    <section className="overflow-hidden rounded-card bg-surface-raised px-5 py-8 text-foreground shadow-[inset_0_0_0_1px_var(--border)] sm:px-9 sm:py-10">
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+    <Card as="section" aria-labelledby="sponsor-promise" className="sm:px-8 sm:py-9">
+      <div className="grid grid-cols-1 gap-8">
         <div>
-          <span className="inline-flex items-center gap-2 rounded-tag bg-moonlight/10 px-3 py-1.5 text-sm font-semibold text-moonlight">
-            <Icon name="shield" className="h-4 w-4" />
+          <span className="inline-flex items-center gap-2 rounded-tag bg-moonlight/10 px-3 py-1.5 text-[0.8125rem] font-semibold text-moonlight">
+            <Icon name="shield" className="size-4" />
             The promise, not the fine print
           </span>
-          <h2 className="mt-4 font-display text-[1.75rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]">
+          <h2 id="sponsor-promise" className={`${SECTION_TITLE} mt-4`}>
             Your money is public.
             <br />
             Their health data never is.
           </h2>
-          <p className="mt-3 max-w-md text-base leading-relaxed text-muted">
+          <p className="mt-3 max-w-xl text-[0.9375rem] leading-[1.5] text-muted">
             You always see what you funded and what got paid, in aggregate,
-            never a participant&apos;s actual steps, sleep, or vitals. That line
+            never a player&apos;s actual steps, sleep or vitals. That line
             does not move for anyone.
           </p>
         </div>
@@ -292,24 +288,24 @@ function PrivacyFeature() {
           {PRIVACY_POINTS.map((point) => (
             <div
               key={point.title}
-              className="rounded-2xl border border-edge bg-fill-quiet p-4"
+              className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]"
             >
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-fill-quiet-hover">
-                <Icon name={point.icon} className="h-4 w-4" />
+              <span className="inline-flex size-9 items-center justify-center rounded-control bg-surface-raised text-muted">
+                <Icon name={point.icon} className="size-4" />
               </span>
-              <p className="mt-3 font-display text-base font-bold">
-                {point.title}
-              </p>
-              <p className="mt-1 text-sm leading-relaxed text-muted">
-                {point.body}
-              </p>
+              <p className="mt-3 text-base font-semibold text-foreground">{point.title}</p>
+              <p className="mt-1 text-[0.875rem] leading-[1.5] text-muted">{point.body}</p>
             </div>
           ))}
         </div>
       </div>
-    </section>
+    </Card>
   );
 }
+
+/** The console column: wide enough for the five-stat row, narrow enough that
+ *  a form never runs the width of the screen. */
+const CONSOLE_COLUMN = "mx-auto w-full max-w-[56rem]";
 
 export default function SponsorConsole() {
   const { ready, authenticated, address } = useEmbeddedWallet();
@@ -361,105 +357,88 @@ export default function SponsorConsole() {
     [myPools, consoleQuery.data],
   );
 
-  const hero = (
-    <SceneHeader
+  // The page frame: SPOTTER stands on the first card, whichever card leads
+  // the page in its current state (docs/DESIGN.md, one pose per viewport).
+  const frame = (pose: NightPose, first: ReactNode) => (
+    <PerchedHeader
       title="Sponsor console"
-      subtitle="Put USDC on a health goal, top it up as it fills, and watch exactly what it buys. Every outcome below is aggregate only, and nobody ever sees a participant's health data."
-      pose="detective"
-      poseAlt="SPOTTER the otter, inspecting the ledger through a magnifying glass"
-      spotterLine="I read the wearables, not your business. I check each goal and give one word: paid, or not yet."
+      lead="Put USDC on a health goal, top it up as it fills, and watch what it buys. Every outcome here is aggregate only, and nobody ever sees a player's health data."
+      pose={pose}
+      below={
+        <div className="mt-3 flex flex-wrap items-center gap-x-4">
+          <Fine>Base Sepolia test USDC, beta.</Fine>
+          <Link href="/pools" className={`${TEXT_LINK} text-sm`}>
+            See all open runs
+          </Link>
+        </div>
+      }
     >
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Badge tone="muted">Base Sepolia test money, beta</Badge>
-        <Link
-          href="/pools"
-          className="inline-flex min-h-11 items-center text-sm font-bold text-accent-deep underline underline-offset-4"
-        >
-          Browse all pools
-        </Link>
-      </div>
-    </SceneHeader>
+      {first}
+    </PerchedHeader>
   );
 
   // The big candy "create a pool" call to action. Collapsed it is a proud
   // invitation; expanded it hands off to the unchanged CreatePool form.
   const createPanel = showCreate ? (
-    <Card>
-      <CreatePool />
-      <button
-        type="button"
-        onClick={() => setShowCreate(false)}
-        className="mt-4 min-h-11 text-sm font-medium text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      >
+    <div className="[&>*+*]:mt-3">
+      <CreatePool embedded />
+      <button type="button" onClick={() => setShowCreate(false)} className={QUIET_ACTION}>
         Hide the form
       </button>
-    </Card>
+    </div>
   ) : (
     <Card className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 items-end gap-3">
-      <Spotter pose="point" size="xs" decorative />
       <div className="min-w-0">
-        <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
-          Fund a new goal
-        </h2>
-        <p className="mt-1 max-w-md text-sm leading-relaxed text-muted">
-          Name the behavior, set the reward, and drop in testnet USDC. The
-          pool holds it, and SPOTTER pays the people who hit the goal when the
-          run settles.
+        <h2 className={CARD_TITLE}>Fund a new goal</h2>
+        <p className="mt-1.5 max-w-md text-[0.9375rem] leading-[1.5] text-muted">
+          Name the goal, set the reward and put in test USDC. The run&apos;s
+          contract holds it and pays the players who hit the goal when the run
+          settles.
         </p>
       </div>
-      </div>
-      <Button
-        variant="primary"
-        onClick={() => setShowCreate(true)}
-        className="w-full shrink-0 sm:w-auto"
-      >
-        Create a pool
+      <Button onClick={() => setShowCreate(true)} className="w-full shrink-0 sm:w-auto">
+        Create a run
       </Button>
     </Card>
   );
 
   if (!ready) {
     return (
-      <div className="space-y-8">
-        {hero}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <PoolCardSkeleton />
-          <PoolCardSkeleton />
-        </div>
+      <div className={`${CONSOLE_COLUMN} [&>*+*]:mt-8`}>
+        {frame(
+          "detective",
+          <Card aria-busy="true">
+            <p className="sr-only" role="status">
+              Loading the sponsor console
+            </p>
+            <PoolCardSkeleton />
+          </Card>,
+        )}
       </div>
     );
   }
 
   if (!authenticated || address === null) {
     return (
-      <div className="space-y-8">
-        {hero}
-        <EmptyState
-          pose="wallet"
-          line="No wallet, no pot. Sign in and the contract holds it."
-          title="Sign in to run a pool"
-          detail="Creating and funding a bounty pulls USDC from your wallet, so the console opens once you sign in. Your pools and their aggregate outcomes live here."
-          action={
-            <SignInGate note="Sign in to run a pool.">
-              {(openSignIn) => (
-                <Button variant="primary" onClick={openSignIn}>
-                  Sign in
-                </Button>
-              )}
-            </SignInGate>
-          }
-        />
+      <div className={`${CONSOLE_COLUMN} [&>*+*]:mt-8`}>
+        {frame(
+          "wave",
+          <div className="[&>*+*]:mt-3">
+            <SignInPanel surface="card" />
+            <Fine>
+              Creating and funding a run pulls USDC from your wallet, so the console
+              opens once you sign in. Your runs and their aggregate outcomes live here.
+            </Fine>
+          </div>,
+        )}
         <PrivacyFeature />
       </div>
     );
   }
 
   return (
-    <div className="space-y-10">
-      {hero}
-
-      {createPanel}
+    <div className={`${CONSOLE_COLUMN} [&>*+*]:mt-10`}>
+      {frame("detective", createPanel)}
 
       <PrivacyFeature />
 
@@ -470,25 +449,25 @@ export default function SponsorConsole() {
         </div>
       ) : consoleQuery.isError ? (
         <ErrorNote
-          title="Could not load your pools"
+          title="Could not load your runs"
           detail={
             consoleQuery.error instanceof ContractNotConfiguredError
-              ? "Runs are off on this build, so there are no pools to show."
-              : "Base Sepolia did not answer. Your pools are safe on chain; try again in a moment."
+              ? "Runs are off on this build, so there are no runs to show."
+              : "Base Sepolia did not answer. Your runs are safe on chain; try again in a moment."
           }
+          retryLabel="Read my runs again"
           onRetry={() => {
             void consoleQuery.refetch();
           }}
         />
       ) : myPools.length === 0 ? (
         showCreate ? null : (
-          <EmptyState
-            line="Nothing funded. I'm on break."
-            title="You have not funded a pool yet"
-            detail="Create your first bounty pool and it will show up here with its aggregate outcomes as people join and get verified."
+          <EmptyCard
+            title="You have not funded a run yet"
+            detail="Create your first funded run and it shows up here with its aggregate outcomes as players join and get verified."
             action={
-              <Button variant="primary" onClick={() => setShowCreate(true)}>
-                Create a pool
+              <Button size="sm" onClick={() => setShowCreate(true)}>
+                Create a run
               </Button>
             }
           />
@@ -502,10 +481,8 @@ export default function SponsorConsole() {
               void consoleQuery.refetch();
             }}
           />
-          <section id="pools" className="space-y-5">
-            <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
-              Your pools
-            </h2>
+          <section id="pools" className="[&>*+*]:mt-5">
+            <h2 className={SECTION_TITLE}>Your runs</h2>
             <div className="grid gap-4 lg:grid-cols-2">
               {myPools.map((pool, i) => (
                 <SponsorPoolOutcome

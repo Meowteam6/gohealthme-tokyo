@@ -33,9 +33,9 @@ export default function SignInGate({
 
   if (open && !authenticated) {
     return (
-      <div className="space-y-2">
+      <div className="[&>*+*]:mt-3">
         {note !== undefined ? (
-          <p className="text-sm text-muted">{note}</p>
+          <p className="m-0 text-[0.9375rem] text-muted">{note}</p>
         ) : null}
         <SignInPanel />
       </div>

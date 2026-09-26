@@ -5,7 +5,7 @@ import { NOINDEX } from "@/lib/site";
 // /dashboard is a client component; this layout carries its head tags. A
 // per-wallet page has no business in a search result.
 export const metadata: Metadata = {
-  title: "My goals",
+  title: "My runs",
   robots: NOINDEX,
 };
 

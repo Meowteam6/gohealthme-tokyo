@@ -21,7 +21,7 @@ import {
 } from "@/lib/client-auth";
 import { checkEmoji, checkHandle, HANDLE_MAX, EMOJI_MAX } from "@/lib/social";
 import { Button, ErrorNote, buttonClasses } from "@/components/ui";
-import Spotter from "@/components/spotter/Spotter";
+import { FIELD, FIELD_HINT, FIELD_LABEL, Notice } from "@/components/night/kit";
 import SignInGate from "@/components/SignInGate";
 
 type Status =
@@ -124,26 +124,19 @@ function ClaimHandleInner() {
 
   if (status.kind === "done") {
     return (
-      <div
-        role="status"
-        className="flex flex-col gap-4 rounded-[20px] border border-edge bg-surface p-5 sm:flex-row sm:items-start"
-      >
-        <Spotter pose="thumbsup" size="xs" decorative />
-        <div className="min-w-0 space-y-3">
-          <p className="break-words font-display text-xl font-bold leading-display tracking-display">
-            Handle claimed as @{status.handle}
-          </p>
-          <p className="text-base text-muted">
-            Your public page is up. Share it: it shows your verified wins and
-            payouts, never the health category behind them.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Link href={`/u/${status.handle}`} className={`${buttonClasses()}`}>
+      <div role="status" className="[&>*+*]:mt-3">
+        <Notice tone="ok" title={<span className="break-all">Handle claimed as @{status.handle}</span>}>
+          Your public page is up. It shows the runs you hit and what they paid,
+          never the health goal behind them.
+        </Notice>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/u/${status.handle}`} className={buttonClasses({ size: "sm" })}>
               View your page
             </Link>
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
+              size="sm"
               onClick={() => {
                 setStatus({ kind: "idle" });
                 setHandle("");
@@ -153,7 +146,6 @@ function ClaimHandleInner() {
               Change it
             </Button>
           </div>
-        </div>
       </div>
     );
   }
@@ -161,11 +153,11 @@ function ClaimHandleInner() {
   const saving = status.kind === "saving";
 
   return (
-    <div className="space-y-4">
-      <label className="block text-base font-bold">
-        Handle
-        <div className="mt-1 flex items-center px-3 rounded-2xl border border-edge bg-surface focus-within:border-foreground focus-within:ring-2 focus-within:ring-foreground/20">
-          <span className="text-muted">@</span>
+    <div className="[&>*+*]:mt-4">
+      <label className="block">
+        <span className={FIELD_LABEL}>Handle</span>
+        <div className="flex min-h-[52px] items-center rounded-control bg-surface-deep px-3 shadow-[inset_0_0_0_1px_var(--border-strong)] transition-shadow duration-[120ms] focus-within:shadow-[inset_0_0_0_1.5px_var(--foreground)]">
+          <span className="text-haze">@</span>
           <input
             type="text"
             value={handle}
@@ -175,24 +167,26 @@ function ClaimHandleInner() {
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            className="w-full bg-transparent px-1 py-3 text-base font-normal outline-none"
+            className="w-full min-w-0 bg-transparent px-1 py-3 text-base text-foreground outline-none placeholder:text-haze"
           />
         </div>
-        <span className="mt-1 block text-sm font-normal text-muted">
+        <span className={`${FIELD_HINT} block`}>
           Lowercase letters, numbers, and underscores. 3 to {HANDLE_MAX}{" "}
           characters.
         </span>
       </label>
 
-      <label className="block text-base font-bold">
-        Avatar glyph (optional)
+      <label className="block">
+        <span className={FIELD_LABEL}>
+          Avatar letter <span className="font-normal text-haze">(optional)</span>
+        </span>
         <input
           type="text"
           value={emoji}
           maxLength={EMOJI_MAX}
           onChange={(e) => setEmoji(e.target.value)}
           placeholder="a single character"
-          className="mt-1 w-full px-3 py-3 text-base font-normal outline-none rounded-2xl border border-edge bg-surface focus-within:border-foreground focus-within:ring-2 focus-within:ring-foreground/20"
+          className={FIELD}
         />
       </label>
 
@@ -200,7 +194,7 @@ function ClaimHandleInner() {
         {(openSignIn) => (
           <Button
             type="button"
-            className="w-full"
+            block
             disabled={!ready || saving}
             onClick={() => {
               if (!authenticated) {
@@ -211,7 +205,7 @@ function ClaimHandleInner() {
             }}
           >
             {saving
-              ? "Signing and saving..."
+              ? "Signing and saving"
               : authenticated
                 ? "Claim handle"
                 : "Sign in to claim"}
@@ -219,7 +213,7 @@ function ClaimHandleInner() {
         )}
       </SignInGate>
 
-      <p className="text-sm text-muted">
+      <p className={FIELD_HINT}>
         Claiming signs a message to prove the wallet is yours. Nothing is
         charged and no transaction is sent.
       </p>

@@ -36,14 +36,12 @@
 // NEVER reaches the public feed. The row stores only the challenger's framing
 // message and an optional target label.
 //
-// PRESENTATION: this is the ported v0 "golden" design — a two-column composer
-// with a centered SPOTTER header, a candy type-picker, an amount picker whose
-// SPOTTER mood ladders with the number, and a live, screenshot-styled preview
-// card in the right column. The money logic below is untouched; only the layout,
-// copy, and mascot moments are the golden port. Honest-core is preserved: money
-// figures render through the mono Money primitive, the testnet sticker is tan
-// (never gold - gold is money in motion only), and self-reported evidence never
-// reads "verified".
+// PRESENTATION (docs/DESIGN.md, Night Shift): a two-column composer. The form
+// is one card with SPOTTER standing on its edge; the right column is the live
+// preview, drawn as the run card the other side will see, and the one action.
+// SPOTTER's amount reaction is a line in his caption box, never a second pose.
+// The money logic below is untouched. Money is gold, test money is small print,
+// and self-reported evidence never reads "verified".
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
@@ -73,9 +71,35 @@ import {
   MESSAGE_MAX,
   TARGET_HANDLE_MAX,
 } from "@/lib/challenges";
-import { ArcTxLink, Button, Card, Chip, ErrorNote, Money, Skeleton, buttonClasses } from "@/components/ui";
-import Spotter from "@/components/spotter/Spotter";
-import type { SpotterPose } from "@/lib/spotter-poses";
+import {
+  ArcTxLink,
+  Button,
+  Card,
+  Chip,
+  ErrorNote,
+  FOCUS_RING,
+  Fine,
+  RunCard,
+  Skeleton,
+  Stat,
+  StatRow,
+  Tag,
+  buttonClasses,
+} from "@/components/ui";
+import SpotterCaption from "@/components/spotter/SpotterCaption";
+import {
+  CARD_TITLE,
+  EmptyCard,
+  FIELD,
+  FIELD_HINT,
+  Notice,
+  OptionMark,
+  PAGE_COLUMN,
+  PerchedHeader,
+  QUIET_ACTION,
+  optionCard,
+} from "@/components/night/kit";
+import { COMMITMENT_FACTS } from "@/lib/game/commitment-copy";
 import { useApprovalProbe } from "@/components/game/ApprovalNote";
 import {
   challengeCreateBlock,
@@ -108,11 +132,11 @@ const DARE_LOCKIN_CHIPS = [3, 5, 10] as const;
 // format ("for 1 night" sets the qualifying days).
 const NAME_SUGGESTIONS = LAUNCH_GOAL_EXAMPLES;
 
-// Trash-talk one-liners for the dare message. Ported from the golden design.
+// Trash-talk one-liners for the challenge message.
 const TRASH_TALK_SUGGESTIONS = [
   "you won't. proving me wrong pays.",
-  "put your steps where your mouth is.",
-  "easy money for me. we'll see.",
+  "put your sleep where your mouth is.",
+  "you said Monday. it's Monday.",
   "i've seen you flake before. don't.",
 ];
 
@@ -120,12 +144,12 @@ const SECONDS_PER_DAY = 86_400;
 
 // Longer copy lives as constants so the JSX stays clean and the apostrophes /
 // quotes / dashes render exactly, without escaping.
-const SPOTTER_INTRO =
-  "I'm SPOTTER. The contract holds the money, I check the wearable, and it pays when you hit it. No vibes, no chasing anyone for cash. Let's set one up.";
+const PAGE_LEAD_COPY =
+  "Stake on your own goal, or put up a reward and challenge a friend. Your wearable decides; the run's contract holds the money.";
 const HONESTY_NOTE =
-  "Base Sepolia test USDC, not real money. The wearable decides, and only the yes or no verdict goes on chain, never the health data.";
+  "Test USDC during beta. Only the yes or no result goes on chain, never the health data.";
 const FOOTER_NOTE =
-  "Base Sepolia test money, beta. Your money, your word, and SPOTTER holding both.";
+  "Test USDC on Base Sepolia during beta. SPOTTER reads the wearable; the contract pays.";
 
 const CHALLENGE_INITIATIVE = "challenge";
 // Both variants are commitment pools (bountyModel 2). See the compliance-lane
@@ -167,12 +191,11 @@ interface DareInvite {
 }
 
 // ------------------------------------------------------------------ SPOTTER mood
-// The amount picker's live reaction. Ported from the golden design's
-// getSpotterMoodForAmount, but mapped to the REAL transparent poses in
-// public/spotter/ (the golden filenames were invented). SPOTTER never states a
-// number in its own speech - only the pose and the deadpan line react; the
-// amount lives in the input and the Money slot.
-type SpotterMood = { pose: SpotterPose; alt: string; line: string };
+// The amount picker's live reaction: SPOTTER's one deadpan line in his caption
+// box, keyed to the amount. He never states a number and never claims to hold
+// the money (the run's contract does); the amount lives in the field and the
+// preview card.
+type SpotterMood = { line: string };
 
 function getSpotterMoodForAmount(
   amount: number,
@@ -180,8 +203,6 @@ function getSpotterMoodForAmount(
 ): SpotterMood {
   if (amount < 10) {
     return {
-      pose: "peek",
-      alt: "SPOTTER peeking out, unimpressed",
       line:
         kind === "self"
           ? "That's it? I've seen bigger commitment in a gas station burrito."
@@ -190,31 +211,25 @@ function getSpotterMoodForAmount(
   }
   if (amount < 25) {
     return {
-      pose: "standing",
-      alt: "SPOTTER standing tall, nodding it over",
       line:
         kind === "self"
-          ? "Respectable. Enough to sting if you flake, not enough to cry about."
+          ? "Respectable. Enough to sting if you miss, not enough to cry about."
           : "Solid challenge. They'll feel this one.",
     };
   }
   if (amount < 50) {
     return {
-      pose: "cheer",
-      alt: "SPOTTER cheering you on",
       line:
         kind === "self"
           ? "Now we're talking. I love a person with something to lose."
-          : "Okay big spender. They better not flake on this.",
+          : "Okay big spender. They better not miss this one.",
     };
   }
   return {
-    pose: "payday",
-    alt: "SPOTTER holding a payday of coins",
     line:
       kind === "self"
-        ? "I'm holding THAT much? Fine by me. I'm an excellent banker."
-        : "That's a real challenge. I'm getting the vault ready.",
+        ? "That much? The contract holds it. I just read your wearable."
+        : "That's a real challenge. The contract holds it until their wearable decides.",
   };
 }
 
@@ -233,7 +248,7 @@ function Icon({
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
+      strokeWidth={1.8}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -244,59 +259,19 @@ function Icon({
   );
 }
 
-const IconPaw = ({ className }: { className?: string }) => (
+const IconSelf = ({ className }: { className?: string }) => (
   <Icon className={className}>
-    <circle cx="6.5" cy="9.5" r="1.6" fill="currentColor" stroke="none" />
-    <circle cx="10" cy="6.5" r="1.6" fill="currentColor" stroke="none" />
-    <circle cx="14" cy="6.5" r="1.6" fill="currentColor" stroke="none" />
-    <circle cx="17.5" cy="9.5" r="1.6" fill="currentColor" stroke="none" />
-    <path
-      d="M12 12c2.5 0 4.5 1.8 4.5 4 0 1.7-1.5 2.5-3 2.5-.8 0-1-.4-1.5-.4s-.7.4-1.5.4c-1.5 0-3-.8-3-2.5 0-2.2 2-4 4.5-4Z"
-      fill="currentColor"
-      stroke="none"
-    />
+    <circle cx="12" cy="8" r="3.5" />
+    <path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5" />
   </Icon>
 );
 
-const IconCoins = ({ className }: { className?: string }) => (
+const IconFriend = ({ className }: { className?: string }) => (
   <Icon className={className}>
-    <ellipse cx="9" cy="7" rx="6" ry="3" />
-    <path d="M3 7v4c0 1.7 2.7 3 6 3s6-1.3 6-3V7" />
-    <path d="M15 12.5c2.8-.3 6-1.5 6-3.5" />
-    <path d="M9 14v3c0 1.7 2.7 3 6 3s6-1.3 6-3v-4" />
-  </Icon>
-);
-
-const IconSwords = ({ className }: { className?: string }) => (
-  <Icon className={className}>
-    <path d="M14.5 17.5 4 6V3h3l11.5 11.5" />
-    <path d="m13 19 6-6" />
-    <path d="m16 16 4 4" />
-    <path d="m19 21 2-2" />
-    <path d="M9.5 17.5 20 6V3h-3L5.5 14.5" />
-    <path d="m5 19-2-2" />
-    <path d="m8 16-4 4" />
-    <path d="m3 21 2-2" />
-  </Icon>
-);
-
-const IconShield = ({ className }: { className?: string }) => (
-  <Icon className={className}>
-    <path d="M12 3 5 6v5c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z" />
-    <path d="m9 12 2 2 4-4" />
-  </Icon>
-);
-
-const IconSparkle = ({ className }: { className?: string }) => (
-  <Icon className={className}>
-    <path d="M12 3.5 13.6 9l5.5 1.6L13.6 12 12 17.5 10.4 12 4.9 10.6 10.4 9 12 3.5Z" />
-  </Icon>
-);
-
-const IconArrow = ({ className }: { className?: string }) => (
-  <Icon className={className}>
-    <path d="M5 12h14" />
-    <path d="m13 6 6 6-6 6" />
+    <circle cx="9" cy="8.5" r="3" />
+    <path d="M3.5 19c.7-3 2.8-4.6 5.5-4.6s4.8 1.6 5.5 4.6" />
+    <circle cx="16.5" cy="7.5" r="2.5" />
+    <path d="M15.5 13.2c2.6-.3 4.4 1.2 5 4" />
   </Icon>
 );
 
@@ -308,28 +283,10 @@ const IconLink = ({ className }: { className?: string }) => (
   </Icon>
 );
 
-// ----------------------------------------------------------------- SPOTTER mood
-// The mood reaction: SPOTTER's pose plus his line in the speech bubble, drawn
-// through the shared Spotter so the art, alt text and Patrick Hand stay one
-// character. Announced politely, since it changes with the amount.
-function MoodSpotter({ mood }: { mood: SpotterMood }) {
-  return (
-    <Spotter
-      pose={mood.pose}
-      size="xs"
-      alt={mood.alt}
-      line={mood.line}
-      linePlacement="side"
-      live
-      className="justify-end"
-    />
-  );
-}
-
 // -------------------------------------------------------------------- amount chips
-// A tactile chip row plus a Custom escape hatch. Values stay STRINGS so the
-// existing parseUsdc path is untouched (it throws on a half-typed amount, which
-// is why the number is only ever read loosely for the mood/preview).
+// A chip row plus a Custom escape hatch. Values stay STRINGS so the existing
+// parseUsdc path is untouched (it throws on a half-typed amount, which is why
+// the number is only ever read loosely for the mood and the preview).
 function AmountChips({
   chips,
   value,
@@ -347,21 +304,24 @@ function AmountChips({
   );
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+    <div className="[&>*+*]:mt-3">
+      <div role="radiogroup" aria-label={ariaLabel} className="flex flex-wrap gap-2">
         {chips.map((chip) => (
           <Chip
             key={chip}
+            role="radio"
             selected={!customOpen && value.trim() === String(chip)}
             onClick={() => {
               setCustomOpen(false);
               onChange(String(chip));
             }}
+            className="num"
           >
-            ${chip}
+            {chip} USDC
           </Chip>
         ))}
         <Chip
+          role="radio"
           selected={customOpen}
           onClick={() => {
             setCustomOpen(true);
@@ -372,8 +332,7 @@ function AmountChips({
         </Chip>
       </div>
       {customOpen ? (
-        <div className="flex items-center gap-2">
-          <span className="font-display text-lg font-semibold text-muted">$</span>
+        <div className="relative max-w-[220px]">
           <input
             type="text"
             inputMode="decimal"
@@ -381,9 +340,11 @@ function AmountChips({
             placeholder="Your call"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="min-h-11 max-w-[160px] rounded-xl border-2 border-edge bg-surface-raised px-3 py-2 font-display text-lg font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+            className={`${FIELD} num pr-16 font-semibold`}
           />
-          <span className="text-sm text-muted">USDC</span>
+          <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[0.9375rem] text-haze">
+            USDC
+          </span>
         </div>
       ) : null}
     </div>
@@ -393,31 +354,34 @@ function AmountChips({
 // ------------------------------------------------------------- suggestion chip row
 function SuggestionRow({
   items,
+  value,
   onPick,
+  label,
 }: {
   items: readonly string[];
+  value: string;
   onPick: (value: string) => void;
+  label: string;
 }) {
-  const hover = "hover:border-foreground/40";
   return (
-    <div className="flex flex-wrap gap-2">
+    <div role="group" aria-label={label} className="flex flex-wrap gap-2">
       {items.map((item) => (
-        <button
+        <Chip
           key={item}
-          type="button"
+          selected={value.trim() === item}
           onClick={() => onPick(item)}
-          className={`min-h-11 rounded-full border border-edge bg-surface px-4 py-1 text-sm font-medium text-foreground transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${hover}`}
+          className="max-w-full whitespace-normal py-2.5 text-left !leading-snug"
         >
           {item}
-        </button>
+        </Chip>
       ))}
     </div>
   );
 }
 
 // ----------------------------------------------------------------- the type picker
-// The one clear choice, as two tiles. The selected one takes the moon face
-// (the primary action colour stays on the submit button).
+// The one clear choice, as two option cards. Selected reads as a lit hairline
+// and a raised field; the moon face stays on the one submit button.
 function TypePicker({
   value,
   onChange,
@@ -425,80 +389,56 @@ function TypePicker({
   value: Variant;
   onChange: (v: Variant) => void;
 }) {
-  const isSelf = value === "self";
+  const options: { id: Variant; title: string; body: string; icon: ReactNode }[] = [
+    {
+      id: "self",
+      title: "Stake on yourself",
+      body: "Your own stake on your own goal. Hit it and your stake comes back plus an equal share of the missed stakes.",
+      icon: <IconSelf className="size-5" />,
+    },
+    {
+      id: "dare",
+      title: "Challenge a friend",
+      body: "You put up the reward, they lock in a small stake. They hit it, they get their stake back plus the reward. Nobody hits, every stake comes back and so does your reward.",
+      icon: <IconFriend className="size-5" />,
+    },
+  ];
   return (
-    <div
-      role="radiogroup"
-      aria-label="Challenge type"
-      className="grid grid-cols-1 gap-3 sm:grid-cols-2"
-    >
-      <button
-        type="button"
-        role="radio"
-        aria-checked={isSelf}
-        onClick={() => onChange("self")}
-        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-          isSelf ? "border-foreground bg-surface shadow-[0_4px_0_0_var(--foreground)]" : "border-edge bg-surface hover:border-foreground/40"
-        }`}
-      >
-        <span
-          className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-            isSelf ? "bg-foreground text-background" : "bg-surface-raised text-foreground"
-          }`}
-        >
-          <IconCoins className="h-5 w-5" />
-        </span>
-        <span className="font-display text-lg font-bold">Stake on yourself</span>
-        <span className="text-sm leading-snug text-muted">
-          Your own stake on your own goal. Hit it and you get your stake back
-          plus an equal share of the missed stakes.
-        </span>
-        {isSelf ? (
-          <span className="absolute right-3 top-3 rounded-full bg-foreground px-2.5 py-0.5 text-xs font-bold text-background">
-            Selected
-          </span>
-        ) : null}
-      </button>
-
-      <button
-        type="button"
-        role="radio"
-        aria-checked={!isSelf}
-        onClick={() => onChange("dare")}
-        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-          !isSelf ? "border-foreground bg-surface shadow-[0_4px_0_0_var(--foreground)]" : "border-edge bg-surface hover:border-foreground/40"
-        }`}
-      >
-        <span
-          className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-            !isSelf
-              ? "bg-foreground text-background"
-              : "bg-surface-raised text-foreground"
-          }`}
-        >
-          <IconSwords className="h-5 w-5" />
-        </span>
-        <span className="font-display text-lg font-bold">Challenge a friend</span>
-        {!isSelf ? (
-          <span className="absolute right-3 top-3 rounded-full bg-foreground px-2.5 py-0.5 text-xs font-bold text-background">
-            Selected
-          </span>
-        ) : null}
-        <span className="text-sm leading-snug text-muted">
-          You put up the reward, they lock in a small stake. They hit it, they
-          get their stake back plus the reward. Nobody hits, every stake comes
-          back and so does your reward.
-        </span>
-      </button>
+    <div role="radiogroup" aria-label="Whose goal is it" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {options.map((opt) => {
+        const selected = value === opt.id;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(opt.id)}
+            className={`${optionCard(selected)} flex flex-col gap-2`}
+          >
+            <span className="flex items-center justify-between gap-3">
+              <span
+                className={`flex size-10 items-center justify-center rounded-control ${
+                  selected ? "bg-moonlight/15 text-moonlight" : "bg-surface-raised text-muted"
+                }`}
+              >
+                {opt.icon}
+              </span>
+              <OptionMark selected={selected} />
+            </span>
+            <span className="text-[1.0625rem] font-semibold leading-tight">{opt.title}</span>
+            <span className="text-[0.9375rem] leading-[1.45] text-muted">{opt.body}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 // ------------------------------------------------------------- the live preview card
-// The emotional centerpiece: the screenshot-styled artifact the recipient will
-// see, updating live as the form changes. Honest-core: the amount renders through
-// the mono Money primitive (never a display-font dollar sign), the sticker is tan
-// (never gold), and the note keeps "verified" in scare-quotes for self-reports.
+// What the other side will see, drawn as the run card itself and updating live
+// as the form changes. Money in gold through the Stat primitive; the test-money
+// line is small print, never a sticker.
 function PreviewCard({
   variant,
   title,
@@ -506,6 +446,7 @@ function PreviewCard({
   lockIn,
   recipient,
   trashTalk,
+  days,
 }: {
   variant: Variant;
   title: string;
@@ -513,107 +454,64 @@ function PreviewCard({
   lockIn: string;
   recipient: string;
   trashTalk: string;
+  days: number;
 }) {
   const isSelf = variant === "self";
-  const displayTitle =
-    title.trim() !== "" ? title.trim() : "Pick a goal";
+  const displayTitle = title.trim() !== "" ? title.trim() : "Pick a goal";
   const displayAmount = amount.trim() !== "" ? amount.trim() : "0";
   const displayLockIn = lockIn.trim() !== "" ? lockIn.trim() : "0";
   const cleanRecipient = recipient.trim().replace(/^@/, "");
   const displayTrash =
-    trashTalk.trim() !== ""
-      ? trashTalk.trim()
-      : "you won't. proving me wrong pays.";
+    trashTalk.trim() !== "" ? trashTalk.trim() : "you won't. proving me wrong pays.";
 
   return (
-    <div className="relative overflow-visible">
-      {/* Tan testnet sticker, deliberately NOT gold (gold is money in motion
-          only). The tilt gives it the "made this to post" feel. */}
-      <div className="absolute -left-2 -top-3 z-10 -rotate-6 rounded-full border-2 border-foreground bg-surface-raised px-3 py-1 text-xs font-bold text-foreground">
-        Base Sepolia test USDC
-      </div>
-
-      <div className="relative rounded-3xl border-2 border-edge bg-surface p-5 sm:p-6">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 rounded-full bg-surface-raised px-3 py-1">
-            {isSelf ? (
-              <IconCoins className="h-3.5 w-3.5 text-foreground" />
-            ) : (
-              <IconSwords className="h-3.5 w-3.5 text-foreground" />
-            )}
-            <span className="text-sm font-bold text-foreground">
-              {isSelf ? "Stake on yourself" : "Challenge a friend"}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Spotter pose="watching" size="row" decorative />
-            <span className="text-sm text-muted">Held by SPOTTER</span>
-          </div>
-        </div>
-
-        <h3 className="mt-4 break-words font-display text-[1.75rem] font-extrabold leading-display tracking-display text-balance">
-          {displayTitle}
-        </h3>
-
-        <p className="mt-3 text-sm leading-snug text-muted">
+    <RunCard
+      id="challenge-preview"
+      titleAs="h3"
+      tag={<Tag>{isSelf ? "Stake on yourself" : "Challenge"}</Tag>}
+      ends={
+        <>
+          Runs <b>{days} days</b>
+        </>
+      }
+      title={displayTitle}
+      stats={
+        <StatRow>
           {isSelf ? (
-            <>
-              <span className="font-semibold text-foreground">You</span> vs.
-              yourself. Hit it, get your stake back plus a cut of the flakers&apos;
-              pot.
-            </>
+            <Stat label="Your stake" value={displayAmount} unit="USDC" tone="money" />
           ) : (
-            <>
-              For{" "}
-              <span className="font-semibold text-foreground">
-                {cleanRecipient !== ""
-                  ? `@${cleanRecipient}`
-                  : "whoever opens the link"}
-              </span>
-              . Hit it: their stake back plus the reward. Nobody hits: their
-              stake goes back to them and you take the reward back from the run
-              page once it settles.
-            </>
+            <Stat label="Reward if they hit" value={displayAmount} unit="USDC" tone="money" />
           )}
+          {isSelf ? (
+            <Stat label="Held by" value={<span className="text-base font-semibold">The run&apos;s contract</span>} />
+          ) : (
+            <Stat label="Their lock-in" value={displayLockIn} unit="USDC" tone="money" />
+          )}
+        </StatRow>
+      }
+      note={
+        isSelf ? (
+          <>
+            <b>You vs. yourself.</b> {COMMITMENT_FACTS.hit} {COMMITMENT_FACTS.miss}
+          </>
+        ) : (
+          <>
+            For{" "}
+            <b>{cleanRecipient !== "" ? `@${cleanRecipient}` : "whoever opens the link"}</b>.
+            Hit it: their stake back plus the reward. Nobody hits: their stake goes
+            back to them and you take the reward back from the run page once it
+            settles.
+          </>
+        )
+      }
+      fine={HONESTY_NOTE}
+    >
+      {!isSelf ? (
+        <p className="m-0 mt-3 border-l-2 border-moonlight/60 pl-3 text-[0.9375rem] leading-[1.45] text-foreground">
+          {displayTrash}
         </p>
-
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-3 rounded-2xl bg-surface-raised px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm text-muted">
-              {isSelf ? "On the line" : "Reward if they hit it"}
-            </p>
-            <div className="mt-0.5">
-              <Money usd={displayAmount} size="xl" />
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-muted">
-              {isSelf ? "If you flake" : "Their lock-in"}
-            </p>
-            {isSelf ? (
-              <p className="font-display text-lg font-bold text-dusk-ink">
-                You forfeit it
-              </p>
-            ) : (
-              <div className="mt-0.5">
-                <Money usd={displayLockIn} size="md" />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-4 rounded-2xl border border-dashed border-edge bg-background/60 px-4 py-3">
-          <p className="text-sm italic leading-snug text-foreground">
-            &ldquo;{displayTrash}&rdquo;
-          </p>
-        </div>
-
-        <div className="mt-4 flex items-start gap-1.5 text-[13px] leading-snug text-muted">
-          <IconShield className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>{HONESTY_NOTE}</span>
-        </div>
-      </div>
-    </div>
+      ) : null}
+    </RunCard>
   );
 }
 
@@ -646,35 +544,47 @@ function CopyLink({ url }: { url: string }) {
         type="button"
         onClick={copy}
         title="Tap to copy the challenge link"
-        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-edge bg-surface-raised px-3 py-3 text-left font-mono text-xs text-foreground/80 hover:border-accent/50 hover:text-foreground"
+        className={`flex min-h-[52px] w-full items-center justify-between gap-3 rounded-control bg-surface-deep px-4 py-3 text-left shadow-[inset_0_0_0_1px_var(--border-strong)] hover:shadow-[inset_0_0_0_1px_var(--foreground)] ${FOCUS_RING}`}
       >
-        <span className="break-all">{url}</span>
-        <span
-          aria-live="polite"
-          className="shrink-0 font-sans text-sm font-bold text-accent-deep"
-        >
-          {state === "copied"
-            ? "Copied"
-            : state === "failed"
-              ? "Copy failed"
-              : "Tap to copy"}
+        <span className="break-all font-mono text-xs text-muted">{url}</span>
+        <span aria-live="polite" className="shrink-0 text-[0.9375rem] font-semibold text-foreground">
+          {state === "copied" ? "Copied" : state === "failed" ? "Copy failed" : "Tap to copy"}
         </span>
       </button>
       {state === "failed" ? (
-        <p aria-live="polite" className="text-xs text-muted">
-          Copying is blocked in this browser - select the link above by hand.
+        <p aria-live="polite" className={FIELD_HINT}>
+          Copying is blocked in this browser. Select the link above by hand.
         </p>
       ) : null}
     </>
   );
 }
 
-// SPOTTER on the done screens: the pose large, his line above, one character.
-function DoneSpotter({ pose, alt, line }: SpotterMood) {
+/** A form section inside the composer card: its label, then its controls. */
+function FormSection({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  children: ReactNode;
+}) {
   return (
-    <Spotter pose={pose} size="lg" alt={alt} line={line} className="mx-auto" />
+    <section className="[&>*+*]:mt-3 border-t border-edge pt-5 first:border-t-0 first:pt-0">
+      {htmlFor !== undefined ? (
+        <label htmlFor={htmlFor} className={SECTION_LABEL}>
+          {label}
+        </label>
+      ) : (
+        <h2 className={SECTION_LABEL}>{label}</h2>
+      )}
+      {children}
+    </section>
   );
 }
+
+const SECTION_LABEL = "m-0 block text-[1.0625rem] font-semibold leading-tight text-foreground";
 
 function CreateChallengeInner() {
   const { ready, authenticated, address } = useEmbeddedWallet();
@@ -1070,155 +980,140 @@ function CreateChallengeInner() {
 
   if (phase.kind === "selfDone") {
     return (
-      <div className="mx-auto max-w-xl space-y-5">
-        <Card pop className="space-y-2 border-accent/40">
-          <p className="font-display text-lg font-bold text-accent-deep">
-            Your commitment is live. One tap to lock it in.
-          </p>
-          <p className="text-sm text-foreground/80">
-            Nothing left your wallet yet - you stake by joining your own pool.
-            Put up your <Money usd={stake.trim() === "" ? "0" : stake.trim()} />{" "}
-            and you are in: hit the goal and it comes back with a cut of what
-            everyone who flaked forfeited.
-          </p>
-        </Card>
-
-        <DoneSpotter
+      <div className={PAGE_COLUMN}>
+        <PerchedHeader
+          title="Your commitment is live"
+          lead="One step left: lock it in. Nothing has left your wallet yet; you stake by joining your own run."
           pose="thumbsup"
-          alt="SPOTTER giving a thumbs up"
-          line="Locked in. The contract holds the stakes; I just read the wearables."
-        />
-
-        <div className="flex flex-wrap gap-3">
-          <Link href={`/pools/${phase.poolId}`} className={CANDY_LINK_PRIMARY}>
-            Stake to lock in and invite friends
-          </Link>
-          <button
-            type="button"
-            onClick={clearForm}
-            className={CANDY_LINK_SECONDARY}
-          >
-            Start another
-          </button>
-        </div>
-        <p className="text-xs text-muted">
-          On the pool page you lock in your stake and can share the pool so
-          friends stake alongside you - everyone on their own goal.
-        </p>
+        >
+          <Card className="[&>*+*]:mt-4">
+            <p className="num m-0 text-[0.9375rem] leading-[1.5] text-muted">
+              Put up your{" "}
+              <b className="font-semibold text-gold">
+                {stake.trim() === "" ? "0" : stake.trim()} USDC
+              </b>{" "}
+              and you are in. {COMMITMENT_FACTS.hit} {COMMITMENT_FACTS.miss}
+            </p>
+            <SpotterCaption line="Locked in. The contract holds the stakes; I just read the wearables." />
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <Link href={`/pools/${phase.poolId}`} className={CANDY_LINK_PRIMARY}>
+                Stake to lock in and invite friends
+              </Link>
+              <button type="button" onClick={clearForm} className={CANDY_LINK_SECONDARY}>
+                Start another
+              </button>
+            </div>
+            <Fine>
+              On the run page you lock in your stake and can share the run so friends
+              stake alongside you, each on their own goal.
+            </Fine>
+          </Card>
+        </PerchedHeader>
       </div>
     );
   }
 
   if (phase.kind === "dareDone") {
     return (
-      <div className="mx-auto max-w-xl space-y-5">
-        <Card pop className="space-y-2 border-accent/40">
-          <p className="font-display text-lg font-bold text-accent-deep">
-            Challenge sent. The reward is on the line.
-          </p>
-          {address !== null ? (
-            <p className="text-xs font-medium text-foreground/70">
-              From {displayName(address)}
-            </p>
-          ) : null}
-          <p className="text-sm text-foreground/80">
-            Send this link to the one person it is for. Whoever opens it can
-            accept, stake their lock-in, and go for the goal - hit it and they
-            collect their lock-in back plus your reward, the moment it is
-            verified.
-          </p>
-        </Card>
-
-        <DoneSpotter
+      <div className={PAGE_COLUMN}>
+        <PerchedHeader
+          title="Challenge sent"
+          lead="The reward is in the run's contract. Send this link to the one person it is for."
           pose="thumbsup"
-          alt="SPOTTER giving a thumbs up"
-          line="The reward is in the contract. Send them the link. It pays once their wearable proves it."
-        />
-
-        <div className="space-y-3">
-          <h2 className="font-display text-xl font-bold leading-display">
-            Send it to them
-          </h2>
-          {/* Web Share / Text / Email, prefilled with the dare, reward and
-              link. CopyLink stays below as the desktop fallback. */}
-          <ShareChallenge
-            url={phase.url}
-            title="You've been challenged on GoHealthMe"
-            message={`I'm challenging you: ${goal.trim()}. Your wearable decides. Hit it and you get ${reward.trim()} test USDC from me.`}
-            emailSubject="I'm challenging you on GoHealthMe"
-            includeCopy={false}
-            shareLabel="Share the challenge"
-          />
-          <CopyLink url={phase.url} />
-          <p className="text-xs text-muted">
-            Anyone with this link can see the challenge and accept it, so send it
-            straight to them. It is not listed anywhere and cannot be guessed.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <Link href={`/pools/${phase.poolId}`} className={CANDY_LINK_SECONDARY}>
-            View the pool
-          </Link>
-          <button
-            type="button"
-            onClick={clearForm}
-            className={CANDY_LINK_SECONDARY}
-          >
-            Send another
-          </button>
-        </div>
+        >
+          <Card className="[&>*+*]:mt-4">
+            {address !== null ? (
+              <p className="m-0 text-[0.9375rem] text-haze">From {displayName(address)}</p>
+            ) : null}
+            <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
+              Whoever opens it can accept, stake their lock-in and go for the goal. Hit
+              it and they collect their lock-in back plus your reward when the run
+              settles.
+            </p>
+            <SpotterCaption line="Send them the link. It pays once their wearable proves it." />
+            <div className="[&>*+*]:mt-3 border-t border-edge pt-4">
+              <h2 className={CARD_TITLE}>Send it to them</h2>
+              {/* Web Share / Text / Email, prefilled with the challenge, reward and
+                  link. CopyLink stays below as the desktop fallback. */}
+              <ShareChallenge
+                url={phase.url}
+                title="You've been challenged on GoHealthMe"
+                message={`I'm challenging you: ${goal.trim()}. Your wearable decides. Hit it and you get ${reward.trim()} test USDC from me.`}
+                emailSubject="I'm challenging you on GoHealthMe"
+                includeCopy={false}
+                shareLabel="Share the challenge"
+              />
+              <CopyLink url={phase.url} />
+              <Fine>
+                Anyone with this link can see the challenge and accept it, so send it
+                straight to them. It is not listed anywhere and cannot be guessed.
+              </Fine>
+            </div>
+            <div className="flex flex-col gap-3 border-t border-edge pt-4 sm:flex-row sm:flex-wrap">
+              <Link href={`/pools/${phase.poolId}`} className={CANDY_LINK_SECONDARY}>
+                View the run
+              </Link>
+              <button type="button" onClick={clearForm} className={CANDY_LINK_SECONDARY}>
+                Send another
+              </button>
+            </div>
+          </Card>
+        </PerchedHeader>
       </div>
     );
   }
 
-  // A dare mid-creation (deposit or link step in flight) keeps its form: the
-  // block only stops a new one from starting.
+  // A challenge mid-creation (deposit or link step in flight) keeps its form:
+  // the block only stops a new one from starting.
   const inFlight = busy || phase.kind === "linking" || phase.kind === "error";
   if (!inFlight && createBlock.kind === "checking") {
     return (
-      <div className="mx-auto max-w-xl space-y-4" aria-busy="true">
-        <p className="sr-only" aria-live="polite">
-          Checking whether challenges can run
-        </p>
-        <Skeleton className="h-14 w-2/3" />
-        <Skeleton className="h-64 w-full" />
+      <div className={PAGE_COLUMN} aria-busy="true">
+        <PerchedHeader title="Start a challenge" lead={PAGE_LEAD_COPY} pose="detective">
+          <Card>
+            <p className="sr-only" aria-live="polite">
+              Checking whether challenges can run
+            </p>
+            <Skeleton className="h-6 w-1/2" />
+            <Skeleton className="mt-4 h-28 w-full" />
+            <Skeleton className="mt-4 h-11 w-2/3" />
+          </Card>
+        </PerchedHeader>
       </div>
     );
   }
   if (!inFlight && createBlock.kind === "retry") {
     return (
-      <div className="mx-auto max-w-xl">
-        <ErrorNote
-          title={createBlock.title}
-          detail="It did not answer, so I am not starting a challenge on a guess. Nothing has been charged."
-          onRetry={() => {
-            approvalProbe.refetch();
-          }}
-        />
+      <div className={PAGE_COLUMN}>
+        <PerchedHeader title="Start a challenge" lead={PAGE_LEAD_COPY} pose="thinking">
+          <Card>
+            <ErrorNote
+              title={createBlock.title}
+              detail="It did not answer, so no challenge starts on a guess. Nothing has been charged."
+              retryLabel="Check again"
+              onRetry={() => {
+                approvalProbe.refetch();
+              }}
+            />
+          </Card>
+        </PerchedHeader>
       </div>
     );
   }
   if (!inFlight && createBlock.kind === "paused") {
     return (
-      <div
-        role="status"
-        className="mx-auto flex max-w-xl flex-col items-center py-6 text-center"
-      >
-        <Spotter
-          state="error"
-          size="lg"
-          line="I can't pay a win out on this build. So I'm not holding money for one."
-        />
-        <h1 className="mt-6 break-words font-display text-[2.5rem] font-extrabold leading-display tracking-display">
-          Challenges are paused for now
-        </h1>
-        <p className="mt-3 max-w-md text-base text-foreground/80">
-          {createBlock.detail}
-        </p>
-        <Link href="/pools" className={`mt-6 ${CANDY_LINK_PRIMARY}`}>
-          See the open runs
-        </Link>
+      <div className={PAGE_COLUMN} role="status">
+        <PerchedHeader title="Challenges are paused for now" pose="thinking">
+          <EmptyCard
+            title="No new challenges on this build"
+            detail={createBlock.detail}
+            action={
+              <Link href="/pools" className={CANDY_LINK_PRIMARY}>
+                See the open runs
+              </Link>
+            }
+          />
+        </PerchedHeader>
       </div>
     );
   }
@@ -1226,276 +1121,215 @@ function CreateChallengeInner() {
   const linking = phase.kind === "linking";
   // The reward already landed: the button now only mints the link.
   const retryingLink = isDare && funded !== null;
-  // Dares are refused before any money moves when the link store is not ready.
+  // Challenges are refused before any money moves when the link store is not ready.
   const dareBlocked =
     isDare && !retryingLink && (daresOff !== null || checkingDares);
   const fundedPoolId =
     funded !== null && funded.poolId !== null ? funded.poolId.toString() : null;
   const primaryLabel =
     status.kind === "fueling"
-      ? "One moment..."
+      ? "One moment"
       : status.kind === "approving"
-      ? "Approving USDC..."
+      ? "Approving USDC"
       : status.kind === "depositing"
         ? isDare
-          ? "Putting up the reward..."
-          : "Creating your commitment..."
+          ? "Putting up the reward"
+          : "Creating your commitment"
         : linking
-          ? "Minting the link..."
+          ? "Minting the link"
           : !authenticated
             ? "Sign in to start"
             : retryingLink
               ? "Retry the link"
               : isDare
                 ? checkingDares
-                  ? "Checking challenges are live..."
+                  ? "Checking challenges are live"
                   : "Send the challenge"
                 : "Stake on it";
 
   return (
-    <div className="mx-auto max-w-5xl">
-      {/* Centered header: the play-money pill, the SPOTTER hero, the two-tone
-          headline, and SPOTTER's intro line. */}
-      <header className="mb-10 flex flex-col items-center text-center">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-edge bg-surface px-3 py-1.5">
-          <IconPaw className="h-3.5 w-3.5 text-foreground" />
-          <span className="text-sm text-muted">
-            Base Sepolia test money, beta
-          </span>
-        </div>
+    <div className="mx-auto w-full max-w-[68rem]">
+      {/* Two columns from 1024px: the title and the composer on the left with
+          SPOTTER standing on its edge, the live preview and the one action on
+          the right. Stacked on a phone, preview after the form. */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-10">
+        <PerchedHeader title="Start a challenge" lead={PAGE_LEAD_COPY} pose="wearable" width={[88, 132]}>
+          <Card className="[&>*+*]:mt-6">
+            <FormSection label="Whose goal is it">
+              <TypePicker value={variant} onChange={selectVariant} />
+            </FormSection>
 
-        <Spotter state="commit" size="lg" priority className="mb-4" />
+            <FormSection label={isDare ? "Pick their goal" : "Pick your goal"} htmlFor="challenge-goal">
+              <textarea
+                id="challenge-goal"
+                placeholder={
+                  isDare
+                    ? "Complete at least 1 workout for 1 day"
+                    : "Sleep at least 7 hours for 1 night"
+                }
+                value={goal}
+                onChange={(e) => setGoal(e.target.value)}
+                rows={2}
+                className={`${FIELD} resize-y`}
+              />
+              <SuggestionRow
+                items={NAME_SUGGESTIONS}
+                value={goal}
+                onPick={setGoal}
+                label="Goals every wearable can check"
+              />
+              {goalNotice.kind === "launch-issue" ? (
+                <Notice tone="limit" role="status">
+                  {goalNotice.text}
+                </Notice>
+              ) : goalNotice.kind === "device-check" ? (
+                <AuthorCapabilityNotice goalSpec={goal} noun="challenge" />
+              ) : null}
+              <p className={FIELD_HINT}>
+                {isDare
+                  ? "Their wearable proves it. SPOTTER reads the summary, never the raw data, and only the yes or no result goes on chain."
+                  : "Your wearable proves it. SPOTTER reads the summary, never the raw data, and only the yes or no result goes on chain."}{" "}
+                {COMING_LINE}
+              </p>
+            </FormSection>
 
-        <h1 className="break-words font-display text-[2.5rem] font-extrabold leading-display tracking-display text-balance sm:text-[4rem]">
-          Put money where your mouth is
-        </h1>
-        <p className="mt-3 max-w-md text-pretty text-base leading-relaxed text-muted">
-          {SPOTTER_INTRO}
-        </p>
-      </header>
-
-      {/* Two-column composer: the form on the left, the live preview on the
-          right. Stacks on mobile with the preview card still prominent. */}
-      <div className="grid gap-8 lg:grid-cols-[1fr_400px] lg:items-start lg:gap-10">
-        {/* form column */}
-        <div className="space-y-8">
-          <section className="space-y-3">
-            <h2 className="font-display text-xl font-bold">Whose goal is it</h2>
-            <TypePicker value={variant} onChange={selectVariant} />
-          </section>
-
-          <section className="space-y-3">
-            <label
-              htmlFor="challenge-goal"
-              className="font-display text-base font-semibold"
+            <FormSection
+              label={isDare ? "The reward you're putting up" : "Stake it. How much do you actually mean this?"}
             >
-              {isDare ? "Pick their goal" : "Pick your goal"}
-            </label>
-            <textarea
-              id="challenge-goal"
-              placeholder={
-                isDare
-                  ? "Complete at least 1 workout for 1 day"
-                  : "Sleep at least 7 hours for 1 night"
-              }
-              value={goal}
-              onChange={(e) => setGoal(e.target.value)}
-              rows={2}
-              className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
-            />
-            <SuggestionRow items={NAME_SUGGESTIONS} onPick={setGoal} />
-            {goalNotice.kind === "launch-issue" ? (
-              <p role="status" className="text-sm text-warning">
-                {goalNotice.text}
-              </p>
-            ) : goalNotice.kind === "device-check" ? (
-              <AuthorCapabilityNotice goalSpec={goal} noun="challenge" />
-            ) : null}
-            <p className="text-sm text-muted">
-              {isDare
-                ? "Their wearable proves it. SPOTTER reads the summary, never the raw data, and only the yes or no verdict goes on chain."
-                : "Your wearable proves it. SPOTTER reads the summary, never the raw data, and only the yes or no verdict goes on chain."}
-            </p>
-            <p className="text-sm text-muted">{COMING_LINE}</p>
-          </section>
-
-          <section className="space-y-3">
-            <label className="font-display text-base font-semibold">
-              {isDare
-                ? "The reward you're putting up"
-                : "Stake it. How much do you actually mean this?"}
-            </label>
-            <AmountChips
-              chips={AMOUNT_CHIPS}
-              value={headlineAmount}
-              onChange={setHeadlineAmount}
-              ariaLabel={
-                isDare
-                  ? "The reward you put up in USDC"
-                  : "Your stake in USDC"
-              }
-            />
-            <MoodSpotter mood={mood} />
-            {isDare ? (
-              <p className="text-sm text-muted">
-                Pulled from your wallet now and held in the pool. If nobody hits
-                the goal, you take it back once the run settles.
-              </p>
-            ) : selfStakeUnits !== null ? (
-              // Stake on yourself is a commitment pool (bountyModel 2) with no
-              // sponsor money at creation; the creator is the joiner. A friend
-              // challenge gets no range line: its creator does not stake, and
-              // the line speaks to the player who does.
-              <CommitmentRangeLine entryFee={selfStakeUnits} />
-            ) : (
-              <p className="text-sm text-muted">
-                Pulled from your wallet when you lock in.
-              </p>
-            )}
-          </section>
-
-          {isDare ? (
-            <>
-              <section className="space-y-3">
-                <label className="font-display text-base font-semibold">
-                  Their lock-in to accept
-                </label>
-                <AmountChips
-                  chips={DARE_LOCKIN_CHIPS}
-                  value={stake}
-                  onChange={setStake}
-                  ariaLabel="Their lock-in in USDC"
-                />
-                <p className="text-xs text-muted">
-                  The small amount they put up to lock in - real money keeps the
-                  goal honest. They get it back when they hit it, and you never
-                  pocket it.
+              <AmountChips
+                chips={AMOUNT_CHIPS}
+                value={headlineAmount}
+                onChange={setHeadlineAmount}
+                ariaLabel={isDare ? "The reward you put up in USDC" : "Your stake in USDC"}
+              />
+              <SpotterCaption line={mood.line} live />
+              {isDare ? (
+                <p className={FIELD_HINT}>
+                  Pulled from your wallet now and held in the run&apos;s contract. If
+                  nobody hits the goal, you take it back once the run settles.
                 </p>
-              </section>
+              ) : selfStakeUnits !== null ? (
+                // Stake on yourself is a commitment pool (bountyModel 2) with no
+                // sponsor money at creation; the creator is the joiner. A friend
+                // challenge gets no range line: its creator does not stake, and
+                // the line speaks to the player who does.
+                <CommitmentRangeLine entryFee={selfStakeUnits} />
+              ) : (
+                <p className={FIELD_HINT}>Pulled from your wallet when you lock in.</p>
+              )}
+            </FormSection>
 
-              <section className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-display text-base font-semibold">
-                    Who&apos;s it for
-                  </span>
-                  <div className="flex rounded-full border border-edge bg-surface-raised p-0.5">
-                    <button
-                      type="button"
+            {isDare ? (
+              <>
+                <FormSection label="Their lock-in to accept">
+                  <AmountChips
+                    chips={DARE_LOCKIN_CHIPS}
+                    value={stake}
+                    onChange={setStake}
+                    ariaLabel="Their lock-in in USDC"
+                  />
+                  <p className={FIELD_HINT}>
+                    The small amount they put up to lock in. Real money keeps the goal
+                    honest. They get it back when they hit it, and you never keep it.
+                  </p>
+                </FormSection>
+
+                <FormSection label="Who's it for">
+                  <div role="radiogroup" aria-label="How to send it" className="flex flex-wrap gap-2">
+                    <Chip
+                      role="radio"
+                      selected={recipientMode === "handle"}
                       onClick={() => setRecipientMode("handle")}
-                      className={`min-h-11 rounded-full px-4 text-sm font-bold transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${
-                        recipientMode === "handle"
-                          ? "bg-foreground text-background"
-                          : "text-foreground"
-                      }`}
                     >
-                      @handle
-                    </button>
-                    <button
-                      type="button"
+                      Their name
+                    </Chip>
+                    <Chip
+                      role="radio"
+                      selected={recipientMode === "link"}
                       onClick={() => {
                         setRecipientMode("link");
                         setTarget("");
                       }}
-                      className={`min-h-11 rounded-full px-4 text-sm font-bold transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${
-                        recipientMode === "link"
-                          ? "bg-foreground text-background"
-                          : "text-foreground"
-                      }`}
                     >
-                      Link
-                    </button>
+                      Just a link
+                    </Chip>
                   </div>
-                </div>
-                {recipientMode === "handle" ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="font-display text-lg font-semibold text-muted">
-                        @
+                  {recipientMode === "handle" ? (
+                    <>
+                      <div className="relative">
+                        <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-base text-haze">
+                          @
+                        </span>
+                        <input
+                          type="text"
+                          aria-label="Their handle"
+                          placeholder="theirhandle"
+                          value={target}
+                          maxLength={TARGET_HANDLE_MAX}
+                          onChange={(e) => setTarget(e.target.value)}
+                          className={`${FIELD} pl-9`}
+                        />
+                      </div>
+                      <p className={FIELD_HINT}>
+                        They see it under Invited to you in the app. Never made public.
+                      </p>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2.5 rounded-control bg-fill-quiet px-4 py-3 shadow-[inset_0_0_0_1px_var(--border)]">
+                      <IconLink className="size-4 shrink-0 text-haze" />
+                      <span className="text-[0.9375rem] text-muted">
+                        A private link is made when you send it.
                       </span>
-                      <input
-                        type="text"
-                        aria-label="Their handle"
-                        placeholder="theirhandle"
-                        value={target}
-                        maxLength={TARGET_HANDLE_MAX}
-                        onChange={(e) => setTarget(e.target.value)}
-                        className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-2.5 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
-                      />
                     </div>
-                    <p className="text-xs text-muted">
-                      They see this under Invited to you in the app. Never made
-                      public.
-                    </p>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-2 rounded-2xl border-2 border-dashed border-edge bg-surface px-4 py-3">
-                    <IconLink className="h-4 w-4 shrink-0 text-muted" />
-                    <span className="truncate text-sm text-muted">
-                      A private link is minted when you hit send.
-                    </span>
-                  </div>
-                )}
-              </section>
+                  )}
+                </FormSection>
 
-              <section className="space-y-3">
-                <label
-                  htmlFor="trash-talk"
-                  className="font-display text-base font-semibold"
-                >
-                  Trash talk (optional, but come on)
-                </label>
-                <textarea
-                  id="trash-talk"
-                  placeholder="you won't. proving me wrong pays."
-                  value={message}
-                  maxLength={MESSAGE_MAX}
-                  onChange={(e) => setMessage(e.target.value)}
-                  rows={2}
-                  className="min-h-11 w-full rounded-xl border-2 border-edge bg-surface-raised px-3 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
-                />
-                <SuggestionRow
-                  items={TRASH_TALK_SUGGESTIONS}
-                  onPick={setMessage}
-                />
-                <p className="text-xs text-muted">
-                  Shown on the challenge link only.
-                </p>
-              </section>
-            </>
-          ) : null}
+                <FormSection label="Trash talk (optional, but come on)" htmlFor="trash-talk">
+                  <textarea
+                    id="trash-talk"
+                    placeholder="you won't. proving me wrong pays."
+                    value={message}
+                    maxLength={MESSAGE_MAX}
+                    onChange={(e) => setMessage(e.target.value)}
+                    rows={2}
+                    className={`${FIELD} resize-y`}
+                  />
+                  <SuggestionRow
+                    items={TRASH_TALK_SUGGESTIONS}
+                    value={message}
+                    onPick={setMessage}
+                    label="Suggested lines"
+                  />
+                  <p className={FIELD_HINT}>Shown on the challenge link only.</p>
+                </FormSection>
+              </>
+            ) : null}
 
-          <section className="space-y-3">
-            <label className="font-display text-base font-semibold">
-              {isDare ? "How long they have" : "How long you have"}
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {DURATION_OPTIONS.map((opt) => (
-                <Chip
-                  key={opt.days}
-                  selected={durationDays === opt.days}
-                  onClick={() => setDurationDays(opt.days)}
-                >
-                  {opt.label}
-                </Chip>
-              ))}
-            </div>
-            <p className="text-xs text-muted">
-              {isDare
-                ? "Starts the moment you send it."
-                : "Starts the moment you lock in your stake."}
-            </p>
-          </section>
-
-        </div>
+            <FormSection label={isDare ? "How long they have" : "How long you have"}>
+              <div role="radiogroup" aria-label="How long it runs" className="flex flex-wrap gap-2">
+                {DURATION_OPTIONS.map((opt) => (
+                  <Chip
+                    key={opt.days}
+                    role="radio"
+                    selected={durationDays === opt.days}
+                    onClick={() => setDurationDays(opt.days)}
+                  >
+                    {opt.label}
+                  </Chip>
+                ))}
+              </div>
+              <p className={FIELD_HINT}>
+                {isDare
+                  ? "Starts the moment you send it."
+                  : "Starts the moment you lock in your stake."}
+              </p>
+            </FormSection>
+          </Card>
+        </PerchedHeader>
 
         {/* preview + submit column */}
-        <div className="space-y-4 lg:sticky lg:top-6">
-          <div className="flex items-center gap-1.5 px-1">
-            <IconSparkle className="h-3.5 w-3.5 text-accent-deep" />
-            <span className="text-sm font-bold text-muted">
-              What they&apos;ll see
-            </span>
-          </div>
+        <div className="[&>*+*]:mt-4 lg:sticky lg:top-24 lg:pt-3">
+          <h2 className="m-0 text-[0.9375rem] font-semibold text-muted">What they&apos;ll see</h2>
 
           <PreviewCard
             variant={variant}
@@ -1504,6 +1338,7 @@ function CreateChallengeInner() {
             lockIn={stake}
             recipient={target}
             trashTalk={message}
+            days={durationDays}
           />
 
           <SignInGate
@@ -1516,8 +1351,8 @@ function CreateChallengeInner() {
             {(openSignIn) => (
               <Button
                 type="button"
-                variant={isDare ? "coral" : "primary"}
-                pop
+                block
+                aria-busy={busy || linking}
                 disabled={!ready || busy || linking || dareBlocked}
                 onClick={() => {
                   if (!authenticated) {
@@ -1526,90 +1361,80 @@ function CreateChallengeInner() {
                   }
                   void submit();
                 }}
-                className="h-14 w-full text-lg"
               >
                 {primaryLabel}
-                {status.kind === "idle" &&
-                !linking &&
-                !dareBlocked &&
-                authenticated &&
-                !busy ? (
-                  <IconArrow className="h-5 w-5" />
-                ) : null}
               </Button>
             )}
           </SignInGate>
+          <Fine className="text-center">{FOOTER_NOTE}</Fine>
 
-          {status.kind === "approving" || status.kind === "depositing" ? (
-            <div className="rounded-xl border border-edge bg-surface-raised p-4 text-sm">
-              <p className="font-medium">
+          <div aria-live="polite" className="[&>*+*]:mt-3">
+            {status.kind === "approving" || status.kind === "depositing" ? (
+              <Notice tone="info">
                 {isDare ? (
                   <>
                     Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
                     {status.kind === "approving"
                       ? "approving USDC for the reward"
-                      : "putting the reward into the pool on Base"}
+                      : "putting the reward into the run's contract on Base"}
                   </>
                 ) : (
-                  "Creating your commitment pool on Base"
+                  "Creating your commitment on Base"
                 )}
-              </p>
-            </div>
-          ) : null}
+              </Notice>
+            ) : null}
+
+            {linking ? (
+              <Notice tone="info">Reward is in. Signing to make your challenge link.</Notice>
+            ) : null}
+
+            {isDare && status.kind === "done" ? (
+              <Notice tone="ok" title="The reward is in the run's contract">
+                <span className="num">
+                  Reward of{" "}
+                  <b className="font-semibold text-gold">
+                    {reward.trim() === "" ? "0" : reward.trim()} USDC
+                  </b>
+                  .
+                </span>
+                <div className="mt-1">
+                  <ArcTxLink txHash={status.depositHash} label="View the funding tx" />
+                </div>
+              </Notice>
+            ) : null}
+          </div>
 
           {authenticated ? <GaslessBadge status={gasless} /> : null}
 
-          {linking ? (
-            <div className="rounded-xl border border-edge bg-surface-raised p-4 text-sm">
-              <p className="font-medium">
-                Reward is in. Signing to mint your challenge link...
-              </p>
-            </div>
-          ) : null}
-
           {daresOff !== null && !retryingLink ? (
-            <div
+            <Notice
+              tone="limit"
               role="status"
-              className="space-y-2 rounded-xl border border-edge bg-surface-raised p-4 text-sm"
+              title="Challenges are not live here yet"
+              action={
+                <button type="button" onClick={() => selectVariant("self")} className={QUIET_ACTION}>
+                  Stake on yourself instead
+                </button>
+              }
             >
-              <p className="font-semibold">Challenges are not live here yet</p>
-              <p className="text-foreground/80">{daresOff}</p>
-              <button
-                type="button"
-                onClick={() => selectVariant("self")}
-                className="font-semibold text-accent-deep underline underline-offset-2"
-              >
-                Stake on yourself instead
-              </button>
-            </div>
-          ) : null}
-
-          {isDare && status.kind === "done" ? (
-            <div className="space-y-1 rounded-xl border border-accent/40 bg-accent/20 p-4">
-              <p className="text-sm font-semibold text-accent-deep">
-                Reward of <Money usd={reward.trim() === "" ? "0" : reward.trim()} />{" "}
-                is in the pool.
-              </p>
-              <ArcTxLink txHash={status.depositHash} label="View the funding tx" />
-            </div>
+              {daresOff}
+            </Notice>
           ) : null}
 
           {formError !== null ? (
             <ErrorNote
               title="Check the challenge"
               detail={formError}
+              retryLabel="Edit the challenge"
               onRetry={() => setFormError(null)}
             />
           ) : null}
 
           {status.kind === "error" && !retryingLink ? (
             <ErrorNote
-              title={
-                isDare
-                  ? "Could not put up the reward"
-                  : "Could not create your commitment"
-              }
+              title={isDare ? "Could not put up the reward" : "Could not create your commitment"}
               detail={status.message}
+              retryLabel="Try again"
               onRetry={reset}
             />
           ) : null}
@@ -1623,32 +1448,24 @@ function CreateChallengeInner() {
           ) : null}
 
           {phase.kind === "linkError" ? (
-            <div
-              role="alert"
-              className="space-y-2 rounded-xl border border-danger/40 bg-danger/10 p-4"
+            <Notice
+              tone="error"
+              title="The reward is up, but the link did not send"
+              action={
+                fundedPoolId !== null ? (
+                  <Link href={`/pools/${fundedPoolId}`} className={QUIET_ACTION}>
+                    See your run
+                  </Link>
+                ) : undefined
+              }
             >
-              <p className="text-base font-semibold text-danger">
-                The reward is up, but the link did not send
+              <p className="m-0">{phase.message}</p>
+              <p className="m-0 mt-1">
+                Your reward is safe in the run&apos;s contract. Tap Retry the link: it only
+                makes the link and will not charge you again.
               </p>
-              <p className="text-sm text-foreground/80">{phase.message}</p>
-              <p className="text-sm text-foreground/80">
-                Your reward is safe in the pool. Tap Retry the link - it only
-                mints the link and will not charge you again.
-              </p>
-              {fundedPoolId !== null ? (
-                <Link
-                  href={`/pools/${fundedPoolId}`}
-                  className="inline-block text-sm font-semibold text-accent-deep underline underline-offset-2"
-                >
-                  See your pool
-                </Link>
-              ) : null}
-            </div>
+            </Notice>
           ) : null}
-
-          <p className="px-1 text-center text-[13px] leading-snug text-muted">
-            {FOOTER_NOTE}
-          </p>
         </div>
       </div>
     </div>
@@ -1658,10 +1475,19 @@ function CreateChallengeInner() {
 export default function CreateChallenge() {
   if (!DYNAMIC_CONFIGURED) {
     return (
-      <ErrorNote
-        title="Sign-in is off on this build"
-        detail="This part is not switched on for this build yet. Nothing is wrong on your side."
-      />
+      <div className={PAGE_COLUMN}>
+        <PerchedHeader title="Start a challenge" lead={PAGE_LEAD_COPY} pose="meditate">
+          <EmptyCard
+            title="Sign-in is off on this build"
+            detail="Challenges need a signed-in wallet, and this build has sign-in off. Nothing is wrong on your side."
+            action={
+              <Link href="/pools" className={CANDY_LINK_PRIMARY}>
+                See the open runs
+              </Link>
+            }
+          />
+        </PerchedHeader>
+      </div>
     );
   }
   return <CreateChallengeInner />;
