@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { launchGoalIssue, LAUNCH_GOAL_EXAMPLES } from "@/lib/launch-goal-check";
+import { launchGoalIssue, LAUNCH_GOAL_EXAMPLES, wearableGoalNotice } from "@/lib/launch-goal-check";
 import { classifyWearableGoal } from "@/lib/wearable-goal";
 
 describe("launch goal check", () => {
@@ -28,5 +28,11 @@ describe("launch goal check", () => {
       expect(classifyWearableGoal(example).metric).not.toBeNull();
       expect(launchGoalIssue(example)).toBeNull();
     }
+  });
+
+  it("shows exactly one notice: the launch-goal message wins over the device check", () => {
+    expect(wearableGoalNotice("")).toEqual({ kind: "none" });
+    expect(wearableGoalNotice("Walk at least 8,000 steps for 1 day")).toMatchObject({ kind: "launch-issue" });
+    expect(wearableGoalNotice("Sleep at least 7 hours for 1 night")).toEqual({ kind: "device-check" });
   });
 });

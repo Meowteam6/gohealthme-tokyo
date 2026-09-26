@@ -347,4 +347,13 @@ describe("POST /api/wearable/link", () => {
     expect(((await res.json()) as { error: string }).error).toMatch(/private beta/);
     expect(mintLinkTicket).not.toHaveBeenCalled();
   });
+
+  it("falls back to Junction when the stored provider is WHOOP and this wallet may no longer pair WHOOP", async () => {
+    vi.stubEnv("WHOOP_ALLOWED_WALLETS", "");
+    providerIdFor.mockResolvedValue("whoop");
+    const res = await post({ address: USER });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { provider: string }).provider).toBe("junction");
+    expect(mintLinkTicket).not.toHaveBeenCalled();
+  });
 });

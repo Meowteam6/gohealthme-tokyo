@@ -13,7 +13,7 @@ import {
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useDocumentProofAvailable } from "@/lib/useProofStatus";
 import AuthorCapabilityNotice from "@/components/AuthorCapabilityNotice";
-import { launchGoalIssue, LAUNCH_GOAL_EXAMPLES } from "@/lib/launch-goal-check";
+import { launchGoalIssue, LAUNCH_GOAL_EXAMPLES, wearableGoalNotice } from "@/lib/launch-goal-check";
 import { COMING_LINE } from "@/lib/provider-capabilities";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import { isEconomicallyDeadConfig } from "@/lib/pool-lifecycle";
@@ -95,6 +95,7 @@ function CreatePoolInner() {
   const [acceptSelfReported, setAcceptSelfReported] = useState<boolean>(false);
   const [initiative, setInitiative] = useState<string>("");
   const [goalSpec, setGoalSpec] = useState<string>("");
+  const goalNotice = wearableGoalNotice(goalSpec);
   const [entryFee, setEntryFee] = useState<string>("");
   const [durationDays, setDurationDays] = useState<number>(7);
   const [bountyModel, setBountyModel] = useState<number>(0);
@@ -429,9 +430,10 @@ function CreatePoolInner() {
           />
           {floor === "wearable" ? (
             <>
-              <AuthorCapabilityNotice goalSpec={goalSpec} noun="pool" />
-              {goalSpec.trim() !== "" && launchGoalIssue(goalSpec) !== null ? (
-                <span className="mt-1 block text-xs text-warning">{launchGoalIssue(goalSpec)}</span>
+              {goalNotice.kind === "launch-issue" ? (
+                <span className="mt-1 block text-xs text-warning">{goalNotice.text}</span>
+              ) : goalNotice.kind === "device-check" ? (
+                <AuthorCapabilityNotice goalSpec={goalSpec} noun="pool" />
               ) : null}
               <span className="mt-1 block text-xs text-muted">{COMING_LINE}</span>
             </>

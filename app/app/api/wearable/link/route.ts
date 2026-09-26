@@ -58,9 +58,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const providerId = isProviderId(requested)
+    const storedOrRequested = isProviderId(requested)
       ? requested
       : await providerIdFor(address);
+    // A wallet whose stored choice is WHOOP but who may not pair WHOOP any
+    // more (removed from the allowlist, link since lost) must not loop on a
+    // 403 that says "use Junction": with no explicit choice, fall back to
+    // Junction. An explicit request for WHOOP still gets the plain 403 below.
+    const providerId =
+      !isProviderId(requested) && storedOrRequested === "whoop" && !whoopAllowedFor(address)
+        ? "junction"
+        : storedOrRequested;
 
     if (!providerConfigured(providerId)) {
       // A configuration gap, reported as one. Telling the user to try again

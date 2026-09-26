@@ -16,3 +16,17 @@ export function launchGoalIssue(goalSpec: string): string | null {
   if (metric !== null && isLaunchMetric(metric)) return null;
   return `Runs have to work with every sensor, so pick ${launchGoalsSentence()}.`;
 }
+
+/** Which single notice the create form shows under a wearable goal: the
+ *  launch-goal message when the goal is not offered, otherwise the per-device
+ *  check (AuthorCapabilityNotice). Never both for the same goal. */
+export type WearableGoalNotice =
+  | { kind: "none" }
+  | { kind: "launch-issue"; text: string }
+  | { kind: "device-check" };
+
+export function wearableGoalNotice(goalSpec: string): WearableGoalNotice {
+  if (goalSpec.trim() === "") return { kind: "none" };
+  const issue = launchGoalIssue(goalSpec);
+  return issue === null ? { kind: "device-check" } : { kind: "launch-issue", text: issue };
+}
