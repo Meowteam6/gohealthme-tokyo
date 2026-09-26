@@ -183,9 +183,13 @@ export function groupRunCopy(input: MoneyInput): MoneyCopy {
       { key: "hit", text: sharedHitTerm(input, stake) },
       {
         key: "miss",
-        text: input.recordable
-          ? `Miss: if anyone hits, your ${stake} goes to them; if nobody hits, it comes back.`
-          : `Miss: your ${stake} comes back. This run cannot record a miss.`,
+        text: !input.recordable
+          ? `Miss: your ${stake} comes back. This run cannot record a miss.`
+          : stakersAfter(input.players, input.includeJoiner) < 2
+            ? // The chip says "stake back" while one staker is in; anyone can
+              // still join, so the change that follows is said before the stake.
+              `Miss: your ${stake} comes back while you are the only one in; once others stake, it goes to whoever hits.`
+            : `Miss: if anyone hits, your ${stake} goes to them; if nobody hits, it comes back.`,
       },
       confirmTerm(input, stake),
     ],

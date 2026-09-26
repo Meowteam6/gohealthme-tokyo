@@ -97,7 +97,9 @@ describe("F1 group run", () => {
     expect(texts(copy.terms)).toEqual([
       "Same stake: 1.00, nobody in yet.",
       "Hit: 1.00 back + a share, 3.00 right now.",
-      "Miss: if anyone hits, your 1.00 goes to them; if nobody hits, it comes back.",
+      // The first staker's chip reads "stake back"; the term says what changes
+      // once others join, before the stake.
+      "Miss: your 1.00 comes back while you are the only one in; once others stake, it goes to whoever hits.",
       "Confirm your hit by Sep 27, 16:30, or you only get 1.00 back. Test money, beta.",
     ]);
   });

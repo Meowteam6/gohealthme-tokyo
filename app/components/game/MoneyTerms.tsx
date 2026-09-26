@@ -41,12 +41,25 @@ export function MissTag({ miss }: { miss: MissChip }) {
 export function MoneyChips({
   kind,
   miss,
+  inline = false,
   className = "",
 }: {
   kind: string;
   miss: MissChip | null;
+  /** Inside a <label> (a radio option): spans, since a list is not allowed there. */
+  inline?: boolean;
   className?: string;
 }) {
+  if (inline) {
+    return (
+      <span className={`flex flex-wrap gap-1.5 ${className}`}>
+        <span className={`${CHIP} bg-fill-quiet text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)]`}>
+          {kind}
+        </span>
+        {miss !== null ? <MissTag miss={miss} /> : null}
+      </span>
+    );
+  }
   return (
     <ul aria-label="How the money works" className={`m-0 flex list-none flex-wrap gap-1.5 p-0 ${className}`}>
       <li>
