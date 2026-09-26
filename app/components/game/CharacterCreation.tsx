@@ -56,7 +56,7 @@ const SCENE: Record<StepId, SpotterScreenState> = {
   sensor: "onboarding-wearable",
 };
 
-const DONE_LINE = "That is your player. Every run reads this card.";
+const DONE_LINE = "That is your player. Every challenge reads this card.";
 
 /** SPOTTER's height beside the lead, [phone, from 900px]. Each pose gets the
  *  width that gives it this height, so the steps card never moves when the
@@ -123,7 +123,7 @@ function HumanBody({
     if (state.status === "done") {
       return (
         <Notice tone="ok" title={state.summary}>
-          It covers every run you enter.
+          It covers every challenge you enter.
         </Notice>
       );
     }
@@ -319,7 +319,7 @@ export default function CharacterCreation({
     <div className={`${PAGE_COLUMN} py-2 min-[960px]:py-4`}>
       <PerchedHeader
         title={mode === "page" ? "Your player" : "Make your player"}
-        lead="Four steps, once. Every run reads this card after that."
+        lead="Four steps, once. Every challenge reads this card after that."
         above={above}
         // No money moves on this page; the footer carries the beta line.
         below={<SpotterCaption line={scene.line} live className="mt-4 max-w-md" />}

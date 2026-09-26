@@ -12,16 +12,22 @@ import { runName } from "@/lib/game/landing";
 import { useOpenRuns } from "@/lib/game/useOpenRuns";
 import type { CharacterView } from "@/lib/game/useCharacter";
 
+/** The checked chip: the One human stamp, and (Nikki, 2026-09-27) the paired
+ *  wearable on the lobby strip, so both read as the same kind of fact. */
+function CheckChip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-tag bg-moonlight/10 px-2.5 text-[0.8125rem] font-semibold text-moonlight">
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 12.5l4.5 4.5L19 7.5" />
+      </svg>
+      {children}
+    </span>
+  );
+}
+
 function HumanStamp({ verified, mode }: { verified: boolean; mode: "world" | "allowlist" }) {
   if (verified) {
-    return (
-      <span className="inline-flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-tag bg-moonlight/10 px-2.5 text-[0.8125rem] font-semibold text-moonlight">
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M5 12.5l4.5 4.5L19 7.5" />
-        </svg>
-        {mode === "world" ? "One human" : "On the list"}
-      </span>
-    );
+    return <CheckChip>{mode === "world" ? "One human" : "On the list"}</CheckChip>;
   }
   return (
     <span className="inline-flex h-[26px] items-center whitespace-nowrap rounded-tag bg-fill-quiet px-2.5 text-[0.8125rem] font-semibold text-haze shadow-[inset_0_0_0_1px_var(--border-strong)]">
@@ -104,9 +110,10 @@ export default function CharacterCard({
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="type-heading truncate text-[1.375rem]">{nameNode}</span>
           <HumanStamp verified={verified} mode={view.humanMode} />
+          {view.sensor.kind === "paired" ? <CheckChip>{view.sensor.device.label}</CheckChip> : null}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <SensorLine view={view} />
+          {view.sensor.kind === "paired" ? null : <SensorLine view={view} />}
           <Link href="/character" className={`${TEXT_LINK} text-sm`}>
             Edit
           </Link>
@@ -177,7 +184,7 @@ function PlayerCard({
         ) : null}
       </dl>
       <div className="border-t border-edge px-5 py-1">
-        <ChevronLink href="/pools">Go to the lobby</ChevronLink>
+        <ChevronLink href="/pools">See all challenges</ChevronLink>
       </div>
     </section>
   );

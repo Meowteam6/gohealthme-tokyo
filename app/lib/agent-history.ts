@@ -48,7 +48,7 @@ export function missStakeLine(
     case "refunded":
       return `Missed, but nobody hit, so ${stake} came back.`;
     case "cancelled":
-      return `Missed, but the creator cancelled the run, so ${stake} can be claimed back.`;
+      return `Missed, but the creator cancelled the challenge, so ${stake} can be claimed back.`;
     default:
       // Conditional until settle (docs/MONEY-FLOWS.md section 3, History).
       return `Missed. At settle ${stake} goes to who hits, or comes back if nobody does. A cancel before settle gives it back too.`;

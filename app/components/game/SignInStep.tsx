@@ -21,7 +21,7 @@ export default function SignInStep() {
     // No env names reach the player: say what it means for them.
     return (
       <Notice tone="limit" title="Sign-in is not on for this build">
-        Nobody can play on it yet. The home page still explains how a run works.
+        Nobody can play on it yet. The home page still explains how a challenge works.
       </Notice>
     );
   }

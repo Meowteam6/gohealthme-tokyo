@@ -261,6 +261,16 @@ describe("characterSteps and currentStep", () => {
     const i = inputs({ ens: { lane: "on", name: "dre.gohealthme.eth" } });
     expect(characterSteps(i).name).toEqual({ status: "done", summary: "dre.gohealthme.eth" });
   });
+
+  it("says challenge, never run, in the step copy (one vocabulary, 2026-09-27)", () => {
+    const human = characterSteps(inputs({ world: { lane: "on", human: "verified" } })).human;
+    expect(human).toEqual({ status: "done", summary: "Verified human, one entry per challenge" });
+    const sensor = characterSteps(inputs({ sensor: { kind: "unreadable", label: "WHOOP" } })).sensor;
+    expect(sensor).toEqual({
+      status: "waiting",
+      note: "Your WHOOP is linked, and SPOTTER cannot read what it measures right now. Wearable challenges stay locked until it can.",
+    });
+  });
 });
 
 describe("the character card", () => {

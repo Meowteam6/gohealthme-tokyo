@@ -181,7 +181,7 @@ function humanStep(i: CharacterInputs): StepState {
   if (i.world.lane === "loading") return { status: "loading" };
   if (i.world.lane === "on") {
     if (i.world.human === "verified") {
-      return { status: "done", summary: "Verified human, one entry per run" };
+      return { status: "done", summary: "Verified human, one entry per challenge" };
     }
     // The allowlist still counts as a way in: an approved pilot player keeps
     // their access, and the World step shows as the upgrade, not a wall.
@@ -240,7 +240,7 @@ function sensorStep(i: CharacterInputs): StepState {
     case "unreadable":
       return {
         status: "waiting",
-        note: `Your ${i.sensor.label} is linked, and SPOTTER cannot read what it measures right now. Wearable runs stay locked until it can.`,
+        note: `Your ${i.sensor.label} is linked, and SPOTTER cannot read what it measures right now. Wearable challenges stay locked until it can.`,
       };
     case "unavailable":
       return {

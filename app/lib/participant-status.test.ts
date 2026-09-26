@@ -19,11 +19,11 @@ describe("resultLabel", () => {
 
   it("tells a joiner of a cancelled pool to claim their refund, then that it is claimed", () => {
     expect(resultLabel({ settled: true, cancelled: true }, p({}))).toEqual({
-      text: "Run called off - claim your stake back",
+      text: "Challenge called off - claim your stake back",
       tone: "warning",
     });
     expect(resultLabel({ settled: true, cancelled: true }, p({ refunded: true }))).toEqual({
-      text: "Run called off - stake claimed back",
+      text: "Challenge called off - stake claimed back",
       tone: "muted",
     });
   });
@@ -87,7 +87,7 @@ describe("resultLabel", () => {
     // Model 2: a recorded miss goes to the players who hit, or comes back
     // when nobody hit. This label cannot see the tally, so it says neither.
     expect(resultLabel({ settled: true, bountyModel: 2 }, p({ resultRecorded: true }))).toEqual({
-      text: "Goal missed - see the run for your stake",
+      text: "Goal missed - see the challenge for your stake",
       tone: "muted",
     });
   });

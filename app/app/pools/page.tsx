@@ -9,7 +9,7 @@ import { providerConfigured } from "@/lib/server/wearable";
 // visitor's "What do you wear?" never offers a provider that is not set up.
 
 export const metadata: Metadata = {
-  title: "The lobby",
+  title: "Challenges",
 };
 
 export default function PoolsPage() {

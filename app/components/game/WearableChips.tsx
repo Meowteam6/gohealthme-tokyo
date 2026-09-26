@@ -61,7 +61,7 @@ export default function WearableChips({
       </div>
       <p aria-live="polite" className="m-0 mt-2 min-h-[21px] max-w-[60ch] text-sm leading-[1.45] text-haze">
         {hint === null
-          ? "Pick yours and each run shows whether it can check it. No account needed."
+          ? "Pick yours and each challenge shows whether it can check it. No account needed."
           : hint.map((s, i) =>
               s.strong === true ? (
                 <b key={i} className="font-semibold text-foreground">

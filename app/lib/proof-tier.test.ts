@@ -231,4 +231,9 @@ describe("railDeferredCopy (claim rail)", () => {
   it("reads Verified for a verified deferred verdict", () => {
     expect(railDeferredCopy(false)).toMatch(/^Verified/);
   });
+
+  it("says the challenge ends, never the run (one vocabulary, 2026-09-27)", () => {
+    expect(railDeferredCopy(true)).toBe("Self-reported (unverified). Settles after the challenge ends.");
+    expect(railDeferredCopy(false)).toBe("Verified. Settles after the challenge ends.");
+  });
 });

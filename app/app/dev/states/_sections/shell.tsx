@@ -63,7 +63,7 @@ function OpenDynamic() {
 export default function ShellStates({ meta }: SectionProps) {
   return (
     <GallerySection meta={meta}>
-      <StateFrame name="header-signed-out" note="transparent over the page: Runs, How it pays, Sign in">
+      <StateFrame name="header-signed-out" note="transparent over the page: Challenges, How it pays, Sign in">
         <HeaderView
           sticky={false}
           signedIn={false}
@@ -87,7 +87,7 @@ export default function ShellStates({ meta }: SectionProps) {
       </StateFrame>
       <StateFrame
         name="header-signed-in-menu"
-        note="below 1024px, menu open: the five links, then the name, the address to copy and Sign out"
+        note="below 1024px, menu open: the four links, then the name, the address to copy and Sign out"
       >
         <SignedIn menu />
       </StateFrame>
@@ -99,7 +99,7 @@ export default function ShellStates({ meta }: SectionProps) {
         note="the wallet SDK has not answered past 8s: the loading card holds the notice instead of its skeleton, one card, never two"
       >
         <div className="max-w-[40rem]">
-          <SignInLoadingCard label="Loading your runs" afterMs={0}>
+          <SignInLoadingCard label="Loading your challenges" afterMs={0}>
             <Skeleton className="h-6 w-1/2" />
           </SignInLoadingCard>
         </div>

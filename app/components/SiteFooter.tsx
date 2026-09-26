@@ -22,8 +22,8 @@ export default function SiteFooter() {
           <BrandLockup />
           <p className="m-0 mt-3 max-w-[62ch] text-[0.8125rem] leading-[1.55] text-haze">
             Beta on Base Sepolia with test USDC, so no real money moves. Your
-            wearable&apos;s numbers stay private; only the result of each run is
-            recorded. Not medical or financial advice.
+            wearable&apos;s numbers stay private; only the result of each
+            challenge is recorded. Not medical or financial advice.
           </p>
         </div>
         <nav aria-label="Footer">
