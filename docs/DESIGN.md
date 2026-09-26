@@ -121,7 +121,7 @@ Every stateful component renders default, loading, empty, error, success and dis
 
 ### State gallery (`/dev/states`)
 
-Dev only: `notFound()` whenever `NODE_ENV` is production, so it never exists on a deployment (previews included). Run `NEXT_PUBLIC_ACCESS_GATE_DISABLED=1 npx next dev -p <port>` (never write that flag to a file) and open `/dev/states`, `/dev/states?only=<section>` or `/dev/states?only=<section>#<state>`.
+Dev only. On any production build (previews included) a `beforeFiles` rewrite in `app/next.config.ts` sends `/dev/*` to a path no route matches, a real 404; the page also calls `notFound()` in production as a second guard. Run `NEXT_PUBLIC_ACCESS_GATE_DISABLED=1 npx next dev -p <port>` (never write that flag to a file) and open `/dev/states`, `/dev/states?only=<section>` or `/dev/states?only=<section>#<state>`.
 
 - Each screen owns one file in `app/app/dev/states/_sections/` (foundation, landing, run, verdict, lobby, shell, onboarding, challenges). The registry (`_sections/index.ts`) already lists them, with their id, title and owner, so filling a section never touches another file.
 - A section component takes `{ meta }: SectionProps` and returns `<GallerySection meta={meta}>` with one `<StateFrame name="run-zero-balance" note="..." phone?>` per state. Names are kebab-case, unique, prefixed by the screen. Add `"use client"` to the section file when a state needs local state or handlers.
