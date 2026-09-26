@@ -13,6 +13,52 @@ export interface HumanTxError {
   title: string;
   detail: string;
   raw: string;
+  /**
+   * The wallet ran out of Base Sepolia ETH for gas. Retrying the same action
+   * runs the gas drip first (lib/ensure-gas.ts), so the retry is the fix.
+   */
+  needsGas?: boolean;
+}
+
+/** Title for every "this wallet has no ETH for gas" state. */
+export const NEEDS_GAS_TITLE = "Your wallet needs a little test ETH for gas";
+
+/** The retry runs the drip, so the copy says so instead of "try again". */
+const NEEDS_GAS_DETAIL =
+  "This network charges a tiny fee in test ETH, and your wallet has none " +
+  "yet. Tap the button again: we send you a little test ETH for free first, " +
+  "then finish. No USDC moved.";
+
+/**
+ * Thrown by ensureGas when the drip route refused (daily cap, daily budget,
+ * treasury low). Its message is the server's plain sentence, which already
+ * names the next step (wait, or the Base Sepolia ETH faucet).
+ */
+export class GasDripRefusedError extends Error {
+  readonly reason: string;
+  constructor(message: string, reason: string) {
+    super(message);
+    this.name = "GasDripRefusedError";
+    this.reason = reason;
+  }
+}
+
+/**
+ * geth's "gas required exceeds allowance (N)": N is the gas the wallet's ETH
+ * balance can buy. A small N is an empty wallet. A block-sized N means the
+ * estimate itself failed (a revert), which the revert rules handle.
+ */
+const GAS_ALLOWANCE = /gas required exceeds allowance \((\d+)\)/i;
+const EMPTY_WALLET_ALLOWANCE_MAX = 1_000_000n;
+
+function isNativeGasShortfall(chain: string): boolean {
+  const allowance = GAS_ALLOWANCE.exec(chain);
+  if (allowance !== null && BigInt(allowance[1]) < EMPTY_WALLET_ALLOWANCE_MAX) {
+    return true;
+  }
+  return /insufficient funds for (?:gas|intrinsic transaction cost)|total cost \(gas \* gas fee \+ value\)[^\n]*exceeds the balance of the account/i.test(
+    chain,
+  );
 }
 
 // ------------------------------------------------------------ funding preflight
@@ -362,6 +408,15 @@ function firstLine(text: string): string {
 export function humanizeTxError(err: unknown): HumanTxError {
   const raw = rawMessage(err);
   const chain = messageChain(err);
+
+  if (err instanceof GasDripRefusedError) {
+    return { title: NEEDS_GAS_TITLE, detail: err.message, raw: "", needsGas: false };
+  }
+  // Before the funding and revert rules: the node's text contains both
+  // "insufficient funds" and "reverted", and neither story is true here.
+  if (isNativeGasShortfall(chain)) {
+    return { title: NEEDS_GAS_TITLE, detail: NEEDS_GAS_DETAIL, raw, needsGas: true };
+  }
 
   // Configuration errors already carry a human first line - keep it.
   if (/is not configured/i.test(chain)) {
