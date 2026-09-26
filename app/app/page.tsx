@@ -62,13 +62,14 @@ export default function Home() {
       <section className="grid gap-10 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
         <div className="space-y-6">
           <h1 className="font-display text-7xl font-black leading-[0.85] tracking-tight sm:text-8xl lg:text-9xl">
-            A dare with your own money.
+            Put money on yourself.
           </h1>
           <p className="max-w-xl text-xl leading-snug text-foreground/85">
             Stake on your own health goal. Your wearable decides. Hit it and
-            SPOTTER pays you when the run settles. Miss it and you just get
-            your stake back. Only the verdict goes on chain, never your health
-            data.
+            you get your stake back plus a share of the stakes of players who
+            missed. Miss it and your stake goes to the players who hit. If
+            nobody hits, everyone gets their stake back. Only the verdict goes
+            on chain, never your health data.
           </p>
           <LandingCta />
           <p className="max-w-xl text-sm text-muted">
