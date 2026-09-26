@@ -108,6 +108,14 @@ describe("challengeCreateBlock", () => {
     expect(challengeCreateBlock("available", "misconfigured").kind).toBe("paused");
   });
 
+  it("says challenge, never run, reward or dare, in what the player reads", () => {
+    for (const block of [challengeCreateBlock("off", "ready"), challengeCreateBlock("available", "misconfigured")]) {
+      if (block.kind !== "paused") throw new Error("expected paused");
+      expect(`${block.title} ${block.detail}`).not.toMatch(/\b(run|runs|reward|dare|pool)\b/i);
+      expect(block.detail).toMatch(/nothing has been charged/i);
+    }
+  });
+
   it("holds while loading and retries on a failed read, never ok", () => {
     expect(challengeCreateBlock("loading", "ready")).toEqual({ kind: "checking" });
     expect(challengeCreateBlock("available", "loading")).toEqual({ kind: "checking" });

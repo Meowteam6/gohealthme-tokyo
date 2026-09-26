@@ -22,6 +22,7 @@ import {
   darePot,
   isBackerView,
 } from "@/lib/challenges";
+import { potLineOf } from "@/lib/game/money-flow";
 import { challengeRunKindOf, creatorStakedIn } from "@/lib/game/money-sharing";
 import { missRulePool } from "@/lib/miss-rule";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
@@ -158,12 +159,15 @@ export default async function ChallengeLandingPage({
   const paused = pauseReason !== null;
   const canGrow = phase === "live" && canPay && !paused;
 
-  // Stake on yourself ("Match my stake" / "Back me") or a reward challenge,
-  // told apart money first (lib/game/money-sharing): the challenger's own
-  // seed where the funding read split it from backers' money, the pot net of
-  // stakes otherwise, then the creator's own stake. Decided once here; the
-  // headline, the chips and the terms all follow it. The chip-in warning
-  // names the creator: on a stake-on-yourself run, the person backed.
+  // Match the stake ("Match my stake" / "Back me") or an older reward
+  // challenge, told apart by the creator's own stake first
+  // (lib/game/money-sharing): a creator who staked is always match-the-stake,
+  // whatever extra is in the pot; with no creator stake, money the challenger
+  // put in at create (the seed where the funding read split it from backers'
+  // money, the pot net of stakes otherwise) is an older reward challenge.
+  // Decided once here; the headline, the chips and the terms all follow it.
+  // The chip-in warning names the creator: on a match-the-stake challenge,
+  // the person backed.
   const creatorStaked =
     participants !== null && creatorStakedIn(pool.creator, participants);
   const kind = challengeRunKindOf({
@@ -191,6 +195,17 @@ export default async function ChallengeLandingPage({
           recordsMisses: missRulePool(pool).ok,
           feeBps,
         }
+      : null;
+
+  // The one Pot figure with its parts in words: every stake in so far plus
+  // the extra. It equals pool.balance, the same Pot the lobby slip shows.
+  const potLine =
+    participantCount !== null && pot.prize !== null
+      ? potLineOf({
+          stake: pool.entryFee,
+          stakers: creatorStaked && participantCount === 1 ? [challengerName] : participantCount,
+          extra: pot.prize,
+        })
       : null;
 
   const target =
@@ -236,6 +251,8 @@ export default async function ChallengeLandingPage({
             message={challenge.message}
             terms={terms}
             backers={contributorNames}
+            stake={pool.entryFee}
+            potLine={potLine}
           />
         }
         highlightAction={

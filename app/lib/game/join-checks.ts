@@ -96,7 +96,7 @@ export function challengeCreateBlock(
       kind: "paused",
       title: "Challenges are paused for now",
       detail:
-        "A challenge is proven with an upload, and my document checker is paused on this build. I am not letting you put money on a goal I cannot check. Wearable runs still work, and nothing has been charged.",
+        "A challenge is proven with an upload, and my document checker is paused on this build. I am not letting you put money on a goal I cannot check. Wearable challenges still work, and nothing has been charged.",
     };
   }
   if (payouts === "misconfigured") {
@@ -104,7 +104,7 @@ export function challengeCreateBlock(
       kind: "paused",
       title: "Challenges are paused for now",
       detail:
-        "Players who hit confirm with World ID before the contract pays, and that step is not set up here right now. I am not letting you fund a reward that could not pay out. Nothing has been charged.",
+        "Players who hit confirm with World ID before the contract pays, and that step is not set up here right now. I am not letting you put money on a challenge that could not pay out. Nothing has been charged.",
     };
   }
   if (verifier === "error") return { kind: "retry", title: "I could not check my document checker just now" };

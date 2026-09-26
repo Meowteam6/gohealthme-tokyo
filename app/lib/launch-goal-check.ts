@@ -14,7 +14,7 @@ export const LAUNCH_GOAL_EXAMPLES: readonly string[] = [
 export function launchGoalIssue(goalSpec: string): string | null {
   const { metric } = classifyWearableGoal(goalSpec);
   if (metric !== null && isLaunchMetric(metric)) return null;
-  return `Runs have to work with every wearable, so pick ${launchGoalsSentence()}.`;
+  return `Challenges have to work with every wearable, so pick ${launchGoalsSentence()}.`;
 }
 
 /** Which single notice the create form shows under a wearable goal: the

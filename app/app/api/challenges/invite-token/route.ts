@@ -85,7 +85,7 @@ export async function POST(request: Request) {
       creator = getAddress(pool.creator);
       canPay = poolCanPay(pool);
     } catch {
-      return jsonError(404, "That pool could not be found on Base.");
+      return jsonError(404, "That challenge could not be found on Base.");
     }
     if (creator !== auth.address) {
       return jsonError(

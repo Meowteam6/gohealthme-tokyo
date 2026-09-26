@@ -19,6 +19,10 @@ describe("launch goal check", () => {
     expect(issue).toMatch(/sleep efficiency, hours of sleep or workouts/);
   });
 
+  it("says challenge, never run", () => {
+    expect(launchGoalIssue("Be nicer to people")).toMatch(/^Challenges have to work with every wearable/);
+  });
+
   it("blocks a goal no sensor can read", () => {
     expect(launchGoalIssue("Be nicer to people")).toMatch(/sleep efficiency, hours of sleep or workouts/);
   });
