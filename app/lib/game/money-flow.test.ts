@@ -107,7 +107,7 @@ describe("F1 group run", () => {
   it("0 stakers, a 2.00 pot, a run that records misses", () => {
     const copy = groupRunCopy({ ...base, pot: 2n * ONE });
     expect(copy.line).toBe(
-      "Everyone stakes 1.00 USDC. Hit it and you split the stakes of whoever misses, plus the 2.00 pot.",
+      "Everyone stakes 1.00 USDC. Hit it and you split the stakes of whoever misses, plus the 2.00 sponsor pot.",
     );
     expect(texts(copy.terms)).toEqual([
       "Same stake: 1.00, nobody in yet.",
@@ -115,7 +115,7 @@ describe("F1 group run", () => {
       // The first staker's chip reads "stake back"; the term says what changes
       // once others join, before the stake, and that nobody hitting refunds
       // every recorded stake (H = 0).
-      "Miss: your 1.00 comes back while you are the only one in; once others stake, it goes to whoever hits, or comes back if nobody does.",
+      "Miss: your 1.00 comes back while you are the only one in; once others stake, a miss your wearable shows goes to whoever hits, or comes back if nobody does.",
       "Confirm your hit by Sep 27, 16:30, or you only get 1.00 back. Test money, beta.",
     ]);
   });
@@ -126,7 +126,7 @@ describe("F1 group run", () => {
     expect(texts(copy.terms)).toEqual([
       "Same stake: 1.00, 3 in so far.",
       "Hit: 1.00 back + a share, 1.00 to 4.00 right now.",
-      "Miss: if anyone hits, your 1.00 goes to them; if nobody hits, it comes back.",
+      "Miss: if your wearable shows it and anyone hits, your 1.00 goes to them; if nobody hits, it comes back. No data from your wearable is not a miss.",
       "Confirm your hit by Sep 27, 16:30, or you only get 1.00 back. Test money, beta.",
     ]);
   });
@@ -134,7 +134,7 @@ describe("F1 group run", () => {
   it("3 stakers on a run that cannot record a miss never promises a missed stake", () => {
     const copy = groupRunCopy({ ...base, players: 3, pot: 2n * ONE, recordable: false, confirmBy: null });
     expect(copy.line).toBe(
-      "Everyone stakes 1.00 USDC. Hit it and your 1.00 comes back, plus a share of the 2.00 pot.",
+      "Everyone stakes 1.00 USDC. Hit it and your 1.00 comes back, plus a share of the 2.00 sponsor pot.",
     );
     expect(texts(copy.terms)).toEqual([
       "Same stake: 1.00, 3 in so far.",
@@ -183,7 +183,7 @@ describe("F2 stake on yourself", () => {
     expect(texts(copy.terms)).toEqual([
       "Same stake: 1.00, 3 in so far.",
       "Hit: 1.00 back + a share, 1.00 to 3.00 right now.",
-      "Miss: if anyone hits, your 1.00 goes to them; if nobody hits, it comes back.",
+      "Miss: if your wearable shows it and anyone hits, your 1.00 goes to them; if nobody hits, it comes back. No data from your wearable is not a miss.",
       "Confirm your hit by Sep 27, 16:30, or you only get 1.00 back. Test money, beta.",
     ]);
   });
@@ -231,7 +231,7 @@ describe("F3 challenge a friend", () => {
     expect(texts(copy.terms)).toEqual([
       "Accepting stakes 5.00.",
       "Hit: 5.00 back + a share, 10.00 to 20.00 right now.",
-      "Miss: if another player hits, your 5.00 goes to them; if nobody hits, it comes back, and @andre takes back 10.00 after Oct 26, 21:00.",
+      "Miss: if your wearable shows it and another player hits, your 5.00 goes to them; if nobody hits, it comes back, and @andre takes back 10.00 after Oct 26, 21:00.",
       "1 person has accepted this link; if more than one, whoever misses pays whoever hits.",
     ]);
   });
@@ -354,7 +354,7 @@ describe("runMoneyOf", () => {
 describe("missDetailOf", () => {
   it("turns the miss term into the sentence under the stake button", () => {
     expect(missDetailOf(groupRunCopy({ ...base, players: 1 }))).toBe(
-      "If anyone hits, your 1.00 goes to them; if nobody hits, it comes back.",
+      "If your wearable shows it and anyone hits, your 1.00 goes to them; if nobody hits, it comes back. No data from your wearable is not a miss.",
     );
     expect(
       missDetailOf(

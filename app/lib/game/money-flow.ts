@@ -166,8 +166,8 @@ export function groupRunCopy(input: MoneyInput): MoneyCopy {
   const stake = usd(input.entryFee);
   const pot = input.pot > 0n ? usd(input.pot) : null;
   const line = input.recordable
-    ? `Everyone stakes ${stake} USDC. Hit it and you split the stakes of whoever misses${pot !== null ? `, plus the ${pot} pot` : ""}.`
-    : `Everyone stakes ${stake} USDC. Hit it and your ${stake} comes back${pot !== null ? `, plus a share of the ${pot} pot` : ""}.`;
+    ? `Everyone stakes ${stake} USDC. Hit it and you split the stakes of whoever misses${pot !== null ? `, plus the ${pot} sponsor pot` : ""}.`
+    : `Everyone stakes ${stake} USDC. Hit it and your ${stake} comes back${pot !== null ? `, plus a share of the ${pot} sponsor pot` : ""}.`;
   return {
     flow: "F1",
     line,
@@ -189,8 +189,8 @@ export function groupRunCopy(input: MoneyInput): MoneyCopy {
               // still join, so the change that follows is said before the
               // stake, with the case that undoes it (nobody hitting refunds
               // every recorded stake, HealthPoolsV3 H = 0).
-              `Miss: your ${stake} comes back while you are the only one in; once others stake, it goes to whoever hits, or comes back if nobody does.`
-            : `Miss: if anyone hits, your ${stake} goes to them; if nobody hits, it comes back.`,
+              `Miss: your ${stake} comes back while you are the only one in; once others stake, a miss your wearable shows goes to whoever hits, or comes back if nobody does.`
+            : `Miss: if your wearable shows it and anyone hits, your ${stake} goes to them; if nobody hits, it comes back. No data from your wearable is not a miss.`,
       },
       confirmTerm(input, stake),
     ],
@@ -315,7 +315,7 @@ export function challengeCopy(
   const andTakeBack = takeBack !== "" ? `, and ${takeBack}` : "";
   const miss =
     accepters >= 2 && input.recordable
-      ? `Miss: if another player hits, your ${lockIn} goes to them; if nobody hits, it comes back${andTakeBack}.`
+      ? `Miss: if your wearable shows it and another player hits, your ${lockIn} goes to them; if nobody hits, it comes back${andTakeBack}.`
       : accepters >= 2 && takeBack !== ""
         ? `Miss: ${lockIn} comes back. If nobody hits, ${takeBack}.`
         : `Miss: ${lockIn} comes back${andTakeBack}.`;
