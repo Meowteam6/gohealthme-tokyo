@@ -12,6 +12,7 @@
 // (runSlotOf's "checking", "check-failed" and "payouts-paused"), so this note
 // only ever renders next to a stake button whose payout rule is known.
 
+import { Glyph } from "@/components/run/glyphs";
 import { parseApprovalMode } from "@/lib/game/lanes";
 import { useLaneProbe } from "@/lib/game/useLaneProbe";
 import { approvalModeOf, type ApprovalModeView } from "@/lib/game/join-checks";
@@ -35,14 +36,17 @@ export default function ApprovalNote() {
   const mode = useApprovalMode();
   if (mode !== "mock" && mode !== "world") return null;
   return (
-    <p className="rounded-2xl border border-edge bg-surface-raised p-3 text-sm">
-      SPOTTER will ask you to confirm with World ID before it pays. No
-      confirmation, no payout, and your stake is refunded.
-      {mode === "mock" ? (
-        <span className="mt-1 block text-xs text-muted">
-          This deployment uses a mocked World ID check, not a real one.
-        </span>
-      ) : null}
+    <p className="m-0 mt-2 flex items-start gap-2.5 text-sm leading-[1.45] text-muted">
+      <Glyph name="shield" size={18} className="mt-px text-muted" />
+      <span>
+        Before it pays, SPOTTER asks you to confirm with World ID. No
+        confirmation, no payout, and your stake comes back.
+        {mode === "mock" ? (
+          <span className="mt-0.5 block text-[0.8125rem] text-haze">
+            This deployment uses a mocked World ID check, not a real one.
+          </span>
+        ) : null}
+      </span>
     </p>
   );
 }

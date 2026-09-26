@@ -1,47 +1,83 @@
-// The receipt left once the stake is in: SPOTTER has the coin, the run is on.
-// Deliberately calm (docs/DESIGN.md, "Celebration only at the verdict"): a
-// join proves nothing and pays nothing, so there is no takeover, no confetti
-// and no gold. The line is fixed so the same state always reads the same, and
-// it is dry, never loud, because loud is reserved for a verified payout.
+// The stake card once the stake is in (docs/DESIGN.md, "Stake card states",
+// joined): the numbers relabelled "You put in", "You're in. Goodnight.", what
+// happens next in plain words, the public receipt, a calendar entry for the
+// close, and the one action left: bring a friend. Calm on purpose: a join
+// proves nothing and pays nothing, so there is no gold beyond the pot and no
+// celebration (that is the verdict's job).
 //
-// A fresh join in this mount announces itself politely; a returning player who
-// was already in gets the same card without the announcement. Which one is the
-// caller's call, read from its own local join state, never the transaction.
+// What happens next is said as the product works: the player syncs the
+// wearable and sends SPOTTER in to check; the contract pays after the close.
+// A fresh join in this mount announces itself; a returning player gets the
+// same card silently.
 
-import { ArcTxLink, Stamp } from "@/components/ui";
-import Spotter from "@/components/spotter/Spotter";
+import type { ReactNode } from "react";
+import { StakeStats, StakeVault } from "@/components/run/StakeCard";
+import { Glyph } from "@/components/run/glyphs";
+import { baseTxUrl } from "@/lib/chains";
+import { TEXT_LINK } from "@/components/ui";
+
+export interface JoinMomentProps {
+  txHash: string | null;
+  /** True right after a join landed in this mount: the card is announced. */
+  fresh?: boolean;
+  stake: string;
+  pot: string;
+  players: number | null;
+  /** A sleep run says goodnight; any other run just says you are in. */
+  night?: boolean;
+  /** "WHOOP", or "wearable" when none is known. */
+  deviceName?: string;
+  /** "7 hours", "the goal". */
+  goalShort?: string;
+  /** "08:30 on Sunday". */
+  closeLabel?: string;
+  /** A data: URL for the close's calendar event; null before the clock reads. */
+  icsHref?: string | null;
+  /** "08:30", for the calendar link's words. */
+  closeClock?: string;
+  /** Usually the challenge button; null for a private challenge. */
+  action?: ReactNode;
+}
 
 export default function JoinMoment({
   txHash,
   fresh = true,
-}: {
-  txHash: string | null;
-  /** True right after a join landed in this mount: the card is announced. */
-  fresh?: boolean;
-}) {
+  stake,
+  pot,
+  players,
+  night = true,
+  deviceName = "wearable",
+  goalShort = "the goal",
+  closeLabel,
+  icsHref = null,
+  closeClock,
+  action,
+}: JoinMomentProps) {
+  const app = deviceName === "wearable" ? "your wearable's app" : `the ${deviceName} app`;
   return (
-    <div
-      role={fresh ? "status" : undefined}
-      className="flex items-center gap-4 rounded-3xl border border-edge bg-surface p-5 sm:gap-5 sm:p-6"
-    >
-      <Spotter pose="thumbsup" size="xs" alt="SPOTTER giving you a thumbs up" />
-      <div className="min-w-0">
-        <Stamp tone="accent">Joined</Stamp>
-        <p className="mt-3 font-display text-xl font-bold leading-tight tracking-display text-balance">
-          You are in. One wallet, one entry.
-        </p>
-        <p className="mt-1 text-sm text-muted">
-          SPOTTER has your stake. Now go do the thing.
-        </p>
+    <div role={fresh ? "status" : undefined}>
+      <StakeStats joined stake={stake} pot={pot} players={players} className="mb-4 border-b border-edge pb-3.5" />
+      <h3 className="type-heading m-0 text-[1.75rem]">{night ? "You're in. Goodnight." : "You're in."}</h3>
+      <p className="num m-0 mt-2 text-base text-muted">
+        When you wake, open {app} so the {night ? "night" : "day"} syncs, then have SPOTTER check it here.
+        Hit {goalShort} and the contract pays after the run closes
+        {closeLabel !== undefined ? ` at ${closeLabel}` : ""}.
+      </p>
+      <div className="mt-1.5 flex flex-col items-start">
         {txHash !== null ? (
-          <p className="mt-2">
-            <ArcTxLink txHash={txHash} label="See the public receipt" />
-            <span className="mt-0.5 block text-xs text-muted">
-              Anyone can check it. That is the point.
-            </span>
-          </p>
+          <a href={baseTxUrl(txHash)} target="_blank" rel="noopener noreferrer" className={`${TEXT_LINK} text-[0.9375rem]`}>
+            See the stake on Basescan
+            <Glyph name="out" />
+          </a>
+        ) : null}
+        {icsHref !== null ? (
+          <a href={icsHref} download="gohealthme-run-close.ics" className={`${TEXT_LINK} text-[0.9375rem]`}>
+            Add the {closeClock ?? "close"} close to my calendar
+          </a>
         ) : null}
       </div>
+      {action !== undefined && action !== null ? <div id="stake-done-action" className="mt-2.5">{action}</div> : null}
+      <StakeVault />
     </div>
   );
 }

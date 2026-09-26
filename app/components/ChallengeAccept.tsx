@@ -13,17 +13,33 @@
 // second copy of the pool page's five refusals; now it is the lobby's lock
 // panel with its fix, so the challenge and the lobby can never word a limit
 // differently. The "sign so I can check your device" step is one tap here.
+// It wears the run page's stake card parts (components/run/StakeCard), so the
+// terms, the lock and the hold read the same on both staking surfaces.
 
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import JoinPool from "@/components/JoinPool";
 import ApprovalNote from "@/components/game/ApprovalNote";
-import LockPanel from "@/components/game/LockPanel";
-import { fetchParticipant, fetchParticipants, fetchPool, formatUsdc } from "@/lib/contract";
-import type { CommitmentTerms } from "@/lib/game/commitment-copy";
+import StakeLock from "@/components/run/StakeLock";
+import { SoloNote, StakeChecks, StakeTerms, StakeTermsPlain } from "@/components/run/StakeCard";
+import {
+  displayGoalSpec,
+  fetchParticipant,
+  fetchParticipants,
+  fetchPool,
+  formatUsdc,
+} from "@/lib/contract";
+import { sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
+import {
+  closeLabelOf,
+  clockLabel,
+  isSleepMetric,
+  runHeadlineOf,
+  soloLineOf,
+  stakeTermsOf,
+} from "@/lib/game/run-page";
 import { useWalletAuth } from "@/lib/useWalletAuth";
-import { Skeleton, TAP_TARGET } from "@/components/ui";
+import { ButtonLink, Skeleton, TEXT_LINK } from "@/components/ui";
 import {
   fetchProviderState,
   providerDownReason,
@@ -132,13 +148,9 @@ export default function ChallengeAccept({
     // Never fall back to a zero fee: that join would revert on the missing
     // allowance. Say so and offer the re-read.
     return (
-      <div className="space-y-2">
-        <p className="text-sm">I could not read the stake for this challenge just now.</p>
-        <button
-          type="button"
-          onClick={() => void poolQuery.refetch()}
-          className={`-ml-4 font-semibold text-accent-deep underline underline-offset-2 ${TAP_TARGET}`}
-        >
+      <div role="alert">
+        <p className="m-0 text-[0.9375rem] text-muted">I could not read the stake for this challenge just now.</p>
+        <button type="button" onClick={() => void poolQuery.refetch()} className={TEXT_LINK}>
           Read it again
         </button>
       </div>
@@ -148,13 +160,9 @@ export default function ChallengeAccept({
     // Unknown whether this wallet is already in: never offer a join that
     // could revert ALREADY_JOINED after the wallet prompt.
     return (
-      <div className="space-y-2">
-        <p className="text-sm">I could not check whether you are already in this challenge.</p>
-        <button
-          type="button"
-          onClick={() => void participantQuery.refetch()}
-          className={`-ml-4 font-semibold text-accent-deep underline underline-offset-2 ${TAP_TARGET}`}
-        >
+      <div role="alert">
+        <p className="m-0 text-[0.9375rem] text-muted">I could not check whether you are already in this challenge.</p>
+        <button type="button" onClick={() => void participantQuery.refetch()} className={TEXT_LINK}>
           Check again
         </button>
       </div>
@@ -165,7 +173,7 @@ export default function ChallengeAccept({
     now === null ||
     (address !== null && participantQuery.isLoading)
   ) {
-    return <Skeleton className="h-12 w-full rounded-2xl" />;
+    return <Skeleton className="h-[60px] w-full rounded-control" />;
   }
 
   const pool = poolQuery.data;
@@ -202,21 +210,22 @@ export default function ChallengeAccept({
     deviceLabel,
   });
 
+  const stake = formatUsdc(pool.entryFee);
+  const headline = runHeadlineOf({ goalSpec: pool.goalSpec, periodEnd: pool.periodEnd });
+  const terms = commitmentTermsOf(pool, playersQuery.data?.length ?? null, commitmentFee.bps);
+
   switch (slot.kind) {
     case "in-run":
       return (
-        <Link
-          href={`/pools/${poolId}`}
-          className={`w-full rounded-[18px] bg-foreground font-bold text-background hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
-        >
+        <ButtonLink href={`/pools/${poolId}`} block>
           You are in. Go to your run
-        </Link>
+        </ButtonLink>
       );
     case "checking":
-      return <Skeleton className="h-12 w-full rounded-2xl" />;
+      return <Skeleton className="h-[60px] w-full rounded-control" />;
     case "locked":
       return (
-        <LockPanel
+        <StakeLock
           lock={slot.lock}
           returnTo={returnTo}
           onCheckSensor={view.checkSensor}
@@ -225,45 +234,83 @@ export default function ChallengeAccept({
       );
     case "closed":
       return (
-        <p className="text-sm text-foreground/80">
+        <p className="m-0 text-[0.9375rem] text-muted">
           This challenge has closed. If you were already in, your result settles on
           your run page.
         </p>
       );
     case "cannot-pay":
       return (
-        <p className="text-sm text-foreground/80">
+        <p className="m-0 text-[0.9375rem] text-muted">
           This challenge was set up so even a verified result pays zero, so there is
           nothing to accept here.
         </p>
       );
-    case "playable":
+    case "playable": {
+      const copy =
+        terms !== null
+          ? stakeTermsOf({
+              entryFee: pool.entryFee,
+              sponsorPot: sponsorPotOf(terms),
+              goalShort: headline.short,
+              feeBps: terms.feeBps,
+            })
+          : null;
+      const solo = terms !== null ? soloLineOf(terms) : null;
       return (
-        <div className="space-y-2">
-          <p className="text-sm text-foreground/80">
-            Accepting stakes your {formatUsdc(pool.entryFee)} USDC. Hit the goal
-            and it comes back with your share on top; the challenger never keeps
-            it.
-          </p>
-          {slot.proof === "upload" ? (
-            <p className="rounded-2xl border border-warning/40 bg-warning/5 p-3 text-sm">
-              {uploadFallbackNote(pool.goalSpec)}
-            </p>
-          ) : null}
-          <ApprovalNote />
-          <JoinPool
-            poolId={poolIdBig}
-            entryFee={pool.entryFee}
-            alreadyJoined={joined}
-            commitment={commitmentTermsOf(pool, playersQuery.data?.length ?? null, commitmentFee.bps)}
-          />
-        </div>
+        <JoinPool
+          poolId={poolIdBig}
+          entryFee={pool.entryFee}
+          alreadyJoined={joined}
+          view={{
+            preamble: (
+              <>
+                {copy !== null ? (
+                  <StakeTerms terms={copy} id="challenge-terms" />
+                ) : (
+                  <StakeTermsPlain>
+                    Accepting stakes your {stake} USDC. Hit the goal and it comes back with
+                    your share on top; the challenger never keeps it.
+                  </StakeTermsPlain>
+                )}
+                {solo !== null ? <SoloNote line={solo} /> : null}
+                {slot.proof === "upload" ? (
+                  <StakeChecks
+                    items={[{ key: "upload", glyph: "info", children: uploadFallbackNote(pool.goalSpec) }]}
+                  />
+                ) : null}
+                <ApprovalNote />
+              </>
+            ),
+            goalTitle:
+              headline.figure !== null
+                ? `${headline.figure} ${headline.rest}`
+                : displayGoalSpec(pool.goalSpec),
+            joined: {
+              stake,
+              pot: formatUsdc(pool.balance),
+              players: playersQuery.data !== undefined ? playersQuery.data.length : null,
+              night: isSleepMetric(headline.metric),
+              deviceName: deviceLabel ?? "wearable",
+              goalShort: headline.short,
+              closeLabel: closeLabelOf(pool.periodEnd),
+              closeClock: clockLabel(Number(pool.periodEnd)),
+              action: (
+                <ButtonLink href={`/pools/${poolId}`} variant="secondary" block>
+                  Go to your run
+                </ButtonLink>
+              ),
+            },
+            barAction: null,
+          }}
+        />
       );
+    }
   }
 }
 
-/** The commitment terms for the coin, or null when this is not a commitment
- *  run or the count or fee has not been read. */
+/** The commitment terms for the stake, or null when this is not a commitment
+ *  run or the count has not been read. */
 function commitmentTermsOf(
   pool: { bountyModel: number; entryFee: bigint; balance: bigint; settled: boolean; cancelled: boolean },
   players: number | null,
