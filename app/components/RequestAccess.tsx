@@ -23,8 +23,7 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { fetchWithWalletAuth, authBlockReason } from "@/lib/client-auth";
 import { Button } from "@/components/ui";
-import Spotter from "@/components/spotter/Spotter";
-import type { SpotterPose } from "@/lib/spotter-poses";
+import { FIELD, FIELD_HINT, FIELD_LABEL, Notice } from "@/components/night/kit";
 import { stateBlockReason } from "@/lib/geo-blocklist";
 import type { AccessStatus } from "@/lib/useAccess";
 
@@ -85,28 +84,24 @@ const US_STATES: ReadonlyArray<{ code: string; name: string }> = [
   { code: "WY", name: "Wyoming" },
 ];
 
-// Lives inside character creation's step 2, under the riverbank scene, so it
-// is a left-aligned step body with SPOTTER at row size, not a second hero.
+// Lives inside character creation's step 2, under the title card SPOTTER
+// already stands on, so it is a left-aligned step body with no otter of its
+// own (one pose per screen).
 function Shell({ children }: { children: React.ReactNode }) {
   return <div className="flex w-full flex-col gap-4">{children}</div>;
 }
 
-function Otter({ pose, alt }: { pose: SpotterPose; alt: string }) {
-  return <Spotter pose={pose} size="xs" alt={alt} />;
-}
-
 function Heading({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="break-words font-display text-[1.75rem] font-extrabold leading-display tracking-display">
+    <h2 className="m-0 break-words text-lg font-semibold leading-tight text-foreground">
       {children}
     </h2>
   );
 }
 
-const inputClass =
-  "min-h-12 w-full rounded-2xl border-2 border-edge bg-surface px-4 py-3 text-base text-foreground placeholder:text-muted focus:border-foreground focus:outline-none";
+const inputClass = FIELD;
 
-const labelClass = "text-sm font-bold text-foreground";
+const labelClass = "text-[0.9375rem] font-semibold text-foreground";
 
 export default function RequestAccess({
   status,
@@ -129,15 +124,10 @@ export default function RequestAccess({
   if (status === "pending") {
     return (
       <Shell>
-        <div className="flex items-end gap-3">
-          <Otter pose="detective" alt="SPOTTER checking with a magnifier" />
-          <Heading>You&apos;re on the list.</Heading>
-        </div>
-        <p className="text-base text-foreground/85">
+        <Notice tone="limit" title="You're on the list" live>
           Andre reviews requests himself. Once you&apos;re approved this page
           turns into the app. No need to ask twice.
-        </p>
-        <p className="text-sm text-muted">Watching the door so you don&apos;t have to.</p>
+        </Notice>
       </Shell>
     );
   }
@@ -145,17 +135,14 @@ export default function RequestAccess({
   if (status === "denied" && !reopen) {
     return (
       <Shell>
-        <div className="flex items-end gap-3">
-          <Otter pose="thinking" alt="SPOTTER thinking it over" />
-          <Heading>Not this round.</Heading>
-        </div>
-        <p className="text-base text-foreground/85">
+        <Notice tone="limit" title="Not this round">
           The beta is small on purpose. If you think this is a mistake, ask
           again with a line on how you know Andre or Nikki.
-        </p>
+        </Notice>
         <Button
           type="button"
-          variant="ghost"
+          variant="secondary"
+          size="sm"
           className="self-start"
           onClick={() => {
             setError(null);
@@ -177,7 +164,7 @@ export default function RequestAccess({
     // A state must be picked: the server geo gate reads it, and an empty value
     // would fail open. Require a choice rather than sending a blank.
     if (state === "") {
-      setError("Pick your US state so we can confirm the pilot is available there.");
+      setError("Pick your US state so we can confirm the beta is open there.");
       return;
     }
     // Client-side geo pre-check: block a restricted state with the honest reason
@@ -223,17 +210,14 @@ export default function RequestAccess({
 
   return (
     <Shell>
-      <div className="flex items-end gap-3">
-        <Otter pose="wave" alt="SPOTTER waving hello" />
-        <Heading>Ask for a spot.</Heading>
-      </div>
-      <p className="text-base text-foreground/85">
+      <Heading>Ask for a spot</Heading>
+      <p className="m-0 -mt-2 text-[0.9375rem] leading-[1.5] text-muted">
         GoHealthMe is in a closed family-and-friends beta. Tell Andre who you
         are and he&apos;ll let you in. Base Sepolia test money, so nothing here
         can cost you anything.
       </p>
       <form onSubmit={submit} className="flex w-full flex-col gap-4 text-left">
-        <label className="flex flex-col gap-1">
+        <label className="flex flex-col gap-2">
           <span className={labelClass}>
             Your name
           </span>
@@ -246,9 +230,9 @@ export default function RequestAccess({
             autoComplete="name"
           />
         </label>
-        <label className="flex flex-col gap-1">
+        <label className="flex flex-col gap-2">
           <span className={labelClass}>
-            Email <span className="font-normal text-muted">(so Andre can reach you)</span>
+            Email <span className="font-normal text-haze">(so Andre can reach you)</span>
           </span>
           <input
             className={inputClass}
@@ -260,9 +244,9 @@ export default function RequestAccess({
             autoComplete="email"
           />
         </label>
-        <label className="flex flex-col gap-1">
+        <label className="flex flex-col gap-2">
           <span className={labelClass}>
-            US state <span className="font-normal text-muted">(where you live)</span>
+            US state <span className="font-normal text-haze">(where you live)</span>
           </span>
           <select
             className={inputClass}
@@ -270,19 +254,19 @@ export default function RequestAccess({
             onChange={(e) => setState(e.target.value)}
             autoComplete="address-level1"
           >
-            <option value="">Select your state…</option>
+            <option value="">Select your state</option>
             {US_STATES.map((s) => (
               <option key={s.code} value={s.code}>
                 {s.name}
               </option>
             ))}
           </select>
-          <span className="text-xs text-muted">
-            The self-staked pilot is not yet available in every state. We check
-            this so nobody stakes where they cannot.
+          <span className={FIELD_HINT}>
+            The beta is not open in every state yet. We check this before you
+            stake, so nobody stakes where they cannot.
           </span>
         </label>
-        <label className="flex flex-col gap-1">
+        <label className="flex flex-col gap-2">
           <span className={labelClass}>
             How do you know Andre or Nikki?
           </span>
@@ -290,19 +274,17 @@ export default function RequestAccess({
             className={`${inputClass} min-h-20 resize-y`}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="We went to school together / Nikki invited me / …"
+            placeholder="We went to school together, Nikki invited me"
             maxLength={500}
           />
         </label>
         {error !== null ? (
-          <p role="alert" className="rounded-2xl border border-danger/40 bg-danger/5 p-3 text-sm font-medium text-danger">
-            {error}
-          </p>
+          <Notice tone="error">{error}</Notice>
         ) : null}
-        <Button type="submit" disabled={submitting} className="w-full">
+        <Button type="submit" disabled={submitting} block>
           {submitting ? "Sending your request" : "Ask for my spot"}
         </Button>
-        <p className="text-sm text-muted">
+        <p className="m-0 -mt-1 text-[0.8125rem] text-haze">
           You sign once to prove the wallet is yours. Nothing is charged.
         </p>
       </form>

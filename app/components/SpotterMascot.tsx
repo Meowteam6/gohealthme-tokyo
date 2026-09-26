@@ -1,11 +1,18 @@
-import Spotter from "@/components/spotter/Spotter";
+import Perch from "@/components/spotter/Perch";
 import type { SpotterPose } from "@/lib/spotter-poses";
 
-// SPOTTER with a caption underneath, for the pool and agent pages. Draws
-// through components/spotter/Spotter so the art and alt text stay in one place.
+// SPOTTER standing on the top edge of a small caption card: his name or a
+// one-line label, then a quiet sublabel. Draws through components/spotter so
+// the art, alt text and contact shadow stay in one place.
+
+const WIDTH: Record<"sm" | "md" | "lg", readonly [number, number]> = {
+  sm: [72, 84],
+  md: [96, 120],
+  lg: [132, 176],
+};
 
 export default function SpotterMascot({
-  pose = "neutral",
+  pose = "wave",
   caption,
   sublabel,
   size = "md",
@@ -20,14 +27,15 @@ export default function SpotterMascot({
   className?: string;
 }) {
   return (
-    <div className={`flex shrink-0 flex-col items-center ${className}`}>
-      <Spotter pose={pose} size={size} alt={caption} />
-      {caption !== undefined ? (
-        <p className="mt-2 text-center text-sm font-bold">{caption}</p>
-      ) : null}
-      {sublabel !== undefined ? (
-        <p className="mt-0.5 text-center text-xs text-muted">{sublabel}</p>
-      ) : null}
-    </div>
+    <Perch pose={pose} width={WIDTH[size]} side="left" inset={[14, 18]} alt={caption} className={className}>
+      <div className="rounded-control bg-surface-raised px-3.5 py-3 shadow-[inset_0_0_0_1px_var(--border)]">
+        {caption !== undefined ? (
+          <p className="m-0 text-[0.9375rem] font-semibold text-foreground">{caption}</p>
+        ) : null}
+        {sublabel !== undefined ? (
+          <p className="m-0 mt-0.5 text-[0.8125rem] text-haze">{sublabel}</p>
+        ) : null}
+      </div>
+    </Perch>
   );
 }

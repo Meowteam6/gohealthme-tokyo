@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import EnsName from "@/components/ens/EnsName";
-import { TAP_TARGET } from "@/components/ui";
+import { ChevronLink, TEXT_LINK } from "@/components/ui";
 import { measurableGoalsOf } from "@/lib/game/character";
 import { countsLineFor } from "@/lib/game/sensor-copy";
 import type { CharacterView } from "@/lib/game/useCharacter";
@@ -15,8 +15,8 @@ import type { CharacterView } from "@/lib/game/useCharacter";
 function HumanStamp({ verified, mode }: { verified: boolean; mode: "world" | "allowlist" }) {
   if (verified) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border-2 border-accent-deep px-2.5 py-0.5 text-xs font-bold text-accent-deep">
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+      <span className="inline-flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-tag bg-moonlight/10 px-2.5 text-[0.8125rem] font-semibold text-moonlight">
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
           <path d="M5 12.5l4.5 4.5L19 7.5" />
         </svg>
         {mode === "world" ? "One human" : "On the list"}
@@ -24,7 +24,7 @@ function HumanStamp({ verified, mode }: { verified: boolean; mode: "world" | "al
     );
   }
   return (
-    <span className="inline-flex items-center rounded-full border-2 border-dashed border-muted px-2.5 py-0.5 text-xs font-bold text-muted">
+    <span className="inline-flex h-[26px] items-center whitespace-nowrap rounded-tag bg-fill-quiet px-2.5 text-[0.8125rem] font-semibold text-haze shadow-[inset_0_0_0_1px_var(--border-strong)]">
       Human not proven
     </span>
   );
@@ -35,34 +35,34 @@ function SensorLine({ view }: { view: CharacterView }) {
   const sensor = view.sensor;
   switch (sensor.kind) {
     case "loading":
-      return <p className="text-sm text-muted">Looking at your wearable</p>;
+      return <p className="m-0 text-sm text-haze">Looking at your wearable</p>;
     case "paired":
       return (
-        <p className="text-sm">
-          <span className="font-semibold">{sensor.device.label}.</span>{" "}
+        <p className="m-0 text-[0.9375rem] text-muted">
+          <span className="font-semibold text-foreground">{sensor.device.label}.</span>{" "}
           {countsLineFor(sensor.device.metrics)}
         </p>
       );
     case "none":
       return (
-        <p className="text-sm">
-          <span className="text-muted">No wearable paired. </span>
-          <Link href="/character?step=sensor" className="font-semibold text-accent-deep underline underline-offset-2">
+        <p className="m-0 flex flex-wrap items-center gap-x-2 text-[0.9375rem]">
+          <span className="text-muted">No wearable paired.</span>
+          <Link href="/character?step=sensor" className={TEXT_LINK}>
             Pair one
           </Link>
         </p>
       );
     case "unreadable":
       return (
-        <p className="text-sm text-warning">
+        <p className="m-0 text-[0.9375rem] text-warning">
           {sensor.label} is linked and I cannot read it right now.
         </p>
       );
     case "unavailable":
-      return <p className="text-sm text-muted">Wearable check is not answering right now.</p>;
+      return <p className="m-0 text-[0.9375rem] text-muted">Wearable check is not answering right now.</p>;
     case "unchecked":
       return (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.9375rem]">
           <span className="text-muted">
             {declined ? "Still not checked. " : "Not checked this visit. "}
           </span>
@@ -72,7 +72,7 @@ function SensorLine({ view }: { view: CharacterView }) {
             onClick={() => {
               void view.checkSensor().then((ok) => setDeclined(!ok));
             }}
-            className="min-h-11 font-semibold text-accent-deep underline underline-offset-2 disabled:opacity-60"
+            className={`${TEXT_LINK} text-left disabled:opacity-60`}
           >
             {view.checkingSensor ? "Waiting for your signature" : "Check my wearable (free, no transaction)"}
           </button>
@@ -102,15 +102,15 @@ export default function CharacterCard({
     return (
       <section
         aria-label="Your character"
-        className="flex flex-col gap-2 rounded-3xl border border-edge bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        className="flex flex-col gap-2 rounded-card bg-surface px-4 py-3 shadow-card sm:flex-row sm:items-center sm:justify-between"
       >
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="truncate font-display text-xl font-extrabold tracking-display">{nameNode}</span>
+          <span className="type-heading truncate text-[1.375rem]">{nameNode}</span>
           <HumanStamp verified={verified} mode={view.humanMode} />
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <SensorLine view={view} />
-          <Link href="/character" className="text-sm font-semibold text-muted underline underline-offset-2 hover:text-foreground">
+          <Link href="/character" className={`${TEXT_LINK} text-sm`}>
             Edit
           </Link>
         </div>
@@ -121,41 +121,39 @@ export default function CharacterCard({
   return (
     <section
       aria-label="Your character"
-      className="overflow-hidden rounded-3xl border border-edge bg-surface"
+      className="overflow-hidden rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] shadow-card-hero"
     >
-      <div className="bg-surface-raised px-5 py-4 text-foreground">
-        <p className="text-xs font-semibold text-haze">Player</p>
-        <p className="mt-1 break-all font-display text-[2rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]">
+      <div className="px-5 pb-4 pt-5">
+        <p className="m-0 text-[0.8125rem] font-medium text-haze">Player</p>
+        <p className="type-heading m-0 mt-1 break-all text-[1.875rem] min-[900px]:text-[2.25rem]">
           {nameNode}
         </p>
       </div>
-      <dl className="divide-y divide-edge">
+      <dl className="m-0 divide-y divide-edge border-t border-edge">
         <div className="flex items-center justify-between gap-3 px-5 py-3">
-          <dt className="text-sm text-muted">Human</dt>
-          <dd>
+          <dt className="text-sm text-haze">Human</dt>
+          <dd className="m-0">
             <HumanStamp verified={verified} mode={view.humanMode} />
           </dd>
         </div>
         <div className="px-5 py-3">
-          <dt className="text-sm text-muted">Wearable</dt>
-          <dd className="mt-1">
+          <dt className="text-sm text-haze">Wearable</dt>
+          <dd className="m-0 mt-1">
             <SensorLine view={view} />
           </dd>
         </div>
         {c.device !== null ? (
           <div className="px-5 py-3">
-            <dt className="text-sm text-muted">Runs you can play</dt>
-            <dd className="mt-1 text-sm">
+            <dt className="text-sm text-haze">Runs you can play</dt>
+            <dd className="m-0 mt-1 text-[0.9375rem] text-muted">
               Goals scored on {measurableGoalsOf(c.device).join(", ")}. Anything
               else shows as locked in the lobby, with the reason.
             </dd>
           </div>
         ) : null}
       </dl>
-      <div className="border-t border-edge px-5 py-3">
-        <Link href="/pools" className={`-ml-4 font-semibold text-accent-deep ${TAP_TARGET}`}>
-          Go to the lobby
-        </Link>
+      <div className="border-t border-edge px-5 py-1">
+        <ChevronLink href="/pools">Go to the lobby</ChevronLink>
       </div>
     </section>
   );

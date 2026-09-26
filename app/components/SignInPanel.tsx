@@ -24,6 +24,11 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import { useBaseAccountConnect } from "@/lib/useBaseAccountConnect";
 import { markExternalConnectIntent } from "@/lib/wallet-connect-intent";
 import { buttonClasses } from "@/components/ui";
+import { FIELD, FIELD_HINT, Notice, QUIET_ACTION } from "@/components/night/kit";
+
+// A well inside whatever card asks for sign-in.
+const PANEL =
+  "rounded-card bg-surface-raised p-4 shadow-[inset_0_0_0_1px_var(--border-strong)] min-[960px]:p-5";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -106,14 +111,14 @@ function SignInPanelInner() {
   };
 
   return (
-    <div className="rounded-2xl border border-edge bg-surface p-5">
-      <h2 className="font-display text-xl font-bold leading-display tracking-display">Get started</h2>
+    <div className={PANEL}>
+      <h2 className="m-0 text-lg font-semibold leading-tight text-foreground">Sign in</h2>
 
       {step.kind === "otp" || step.kind === "verifying" ? (
         <div className="mt-4 space-y-3">
-          <p className="text-sm text-muted">
+          <p className="m-0 text-[0.9375rem] text-muted">
             We sent a code to{" "}
-            <span className="font-medium text-foreground">{email.trim()}</span>.
+            <span className="break-all font-semibold text-foreground">{email.trim()}</span>.
             Enter it to finish.
           </p>
           <label htmlFor="otp-code" className="sr-only">
@@ -131,7 +136,7 @@ function SignInPanelInner() {
             }}
             placeholder="123456"
             disabled={busy}
-            className="min-h-11 w-full rounded-2xl border-2 border-edge bg-surface px-4 py-3 font-mono tracking-widest text-foreground placeholder:text-muted focus:border-foreground focus:outline-none disabled:opacity-60"
+            className={`${FIELD} num text-[1.25rem] font-semibold tracking-[0.3em]`}
           />
           <button
             type="button"
@@ -139,20 +144,20 @@ function SignInPanelInner() {
             onClick={() => {
               void verify();
             }}
-            className={`${buttonClasses()} w-full`}
+            className={buttonClasses({ block: true })}
           >
-            {step.kind === "verifying" ? "Verifying..." : "Verify and continue"}
+            {step.kind === "verifying" ? "Checking the code" : "Sign me in"}
           </button>
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-x-4">
             <button
               type="button"
               disabled={busy}
               onClick={() => {
                 void resend();
               }}
-              className="text-accent-deep underline underline-offset-2 disabled:opacity-60"
+              className={QUIET_ACTION}
             >
-              Resend code
+              Send a new code
             </button>
             <button
               type="button"
@@ -163,21 +168,21 @@ function SignInPanelInner() {
                 setResent(false);
                 setError(null);
               }}
-              className="text-muted underline underline-offset-2 hover:text-foreground disabled:opacity-60"
+              className={QUIET_ACTION}
             >
               Use a different email
             </button>
           </div>
           {resent ? (
-            <p className="text-xs text-accent-deep" aria-live="polite">
+            <p className="m-0 text-[0.9375rem] text-moonlight" aria-live="polite">
               A new code is on its way.
             </p>
           ) : null}
         </div>
       ) : (
         <div className="mt-4 space-y-3">
-          <p className="text-sm text-muted">
-            The fastest way in — just your fingerprint or face, no password to
+          <p className="m-0 text-[0.9375rem] text-muted">
+            The fastest way in is your fingerprint or face. No password to
             remember.
           </p>
 
@@ -186,7 +191,9 @@ function SignInPanelInner() {
               white surface, near-black label, and the #0000FF Base Square with
               8px of separation from the text (gap-2). The white button carries a
               hairline border and a soft shadow only so it reads against the
-              white card; the Base colors and mark are untouched. The SAME button
+              white card; the Base colors and mark are untouched. On the night
+              field the moon face is that light surface with an ink label, so
+              the Base button is the primary here. The SAME button
               creates the account for a first-time visitor and signs in a
               returning one - the connect handler below is unchanged. */}
           <button
@@ -199,24 +206,23 @@ function SignInPanelInner() {
               setError(null);
               void connectBase();
             }}
-            className={`${buttonClasses({ variant: "secondary" })} flex w-full`}
+            className={buttonClasses({ block: true })}
           >
+            {/* Base's own mark: its brand blue, not a UI colour. */}
             <span
               aria-hidden="true"
               className="h-4 w-4 shrink-0 rounded-[2px] bg-[#0000FF]"
             />
-            {baseBusy ? "Opening Base..." : "Sign in or create a wallet with Base"}
+            {baseBusy ? "Opening Base" : "Sign in with Base"}
           </button>
-          <p className="text-xs text-muted">
+          <p className={FIELD_HINT}>
             New here? This sets up your account. Already have one? The same
             button signs you in.
           </p>
 
-          <div className="flex items-center gap-3 py-1">
+          <div className="flex items-center gap-3 py-1" aria-hidden="true">
             <span className="h-px flex-1 bg-edge" />
-            <span className="text-sm text-muted">
-              or use email
-            </span>
+            <span className="text-sm text-haze">or use email</span>
             <span className="h-px flex-1 bg-edge" />
           </div>
 
@@ -234,7 +240,7 @@ function SignInPanelInner() {
             }}
             placeholder="you@email.com"
             disabled={busy}
-            className="min-h-11 w-full rounded-2xl border-2 border-edge bg-surface px-4 py-3 text-foreground placeholder:text-muted focus:border-foreground focus:outline-none disabled:opacity-60"
+            className={FIELD}
           />
           <button
             type="button"
@@ -242,38 +248,29 @@ function SignInPanelInner() {
             onClick={() => {
               void sendCode();
             }}
-            className="min-h-11 w-full rounded-[18px] border-2 border-edge bg-surface px-5 py-3 text-base font-bold text-foreground hover:border-foreground/40 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
+            className={buttonClasses({ variant: "secondary", block: true })}
           >
-            {busy ? "Sending the code..." : "Email me a code"}
+            {busy ? "Sending your code" : "Email me a sign-in code"}
           </button>
-          <p className="text-xs text-muted">
-            We create the wallet from your email - no seed phrase, no extension.
+          <p className={FIELD_HINT}>
+            Your wallet is made from your email. No seed phrase, no extension.
           </p>
         </div>
       )}
 
       {error !== null ? (
-        <p
-          role="alert"
-          className="mt-3 rounded-2xl border border-danger/40 bg-danger/5 p-3 text-sm text-danger"
-        >
+        <Notice tone="error" className="mt-3">
           {error}
-        </p>
+        </Notice>
       ) : null}
 
       {step.kind === "email" ? (
-        <div className="mt-5 border-t border-edge pt-4">
-          <button
-            type="button"
-            onClick={connectExternal}
-            className="min-h-11 w-full rounded-[18px] border-2 border-edge px-5 py-3 text-sm font-bold text-foreground hover:border-foreground/40"
-          >
-            Connect your own wallet
+        <div className="mt-4 border-t border-edge pt-2">
+          <button type="button" onClick={connectExternal} className={QUIET_ACTION}>
+            I already have a wallet
           </button>
-          <p className="mt-2 text-xs text-muted">
-            Already have MetaMask, Coinbase Wallet, or another wallet? Connect it
-            instead. This is the power-user path - the email option above is the
-            simplest way in.
+          <p className="m-0 text-[0.8125rem] leading-[1.45] text-haze">
+            MetaMask, Coinbase Wallet or another wallet. Email is the simpler way in.
           </p>
         </div>
       ) : null}
@@ -289,12 +286,9 @@ function SignInPanelInner() {
 export default function SignInPanel() {
   if (!DYNAMIC_CONFIGURED) {
     return (
-      <div className="rounded-2xl border border-edge bg-surface p-5">
-        <h2 className="font-display text-xl font-bold leading-display tracking-display">Sign-in is off on this build</h2>
-        <p className="mt-2 text-sm text-muted">
-          Nobody can sign in or play on this build yet.
-        </p>
-      </div>
+      <Notice tone="limit" title="Sign-in is off on this build">
+        Nobody can sign in or play on this build yet.
+      </Notice>
     );
   }
   return <SignInPanelInner />;

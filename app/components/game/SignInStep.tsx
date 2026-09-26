@@ -15,12 +15,10 @@ import { useConnectWithOtp } from "@dynamic-labs/sdk-react-core";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { markExternalConnectIntent } from "@/lib/wallet-connect-intent";
-import { Button, TAP_TARGET } from "@/components/ui";
+import { Button } from "@/components/ui";
+import { FIELD, FIELD_LABEL, FIELD_HINT, Notice, QUIET_ACTION } from "@/components/night/kit";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const inputClass =
-  "min-h-12 w-full rounded-2xl border-2 border-edge bg-surface px-4 py-3 text-base text-foreground placeholder:text-muted focus:border-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground disabled:opacity-60";
 
 function SignInStepInner() {
   const { login } = useEmbeddedWallet();
@@ -78,7 +76,7 @@ function SignInStepInner() {
             void sendCode();
           }}
         >
-          <label htmlFor="game-email" className="block text-sm font-bold">
+          <label htmlFor="game-email" className={FIELD_LABEL}>
             Your email
           </label>
           <input
@@ -89,12 +87,13 @@ function SignInStepInner() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@email.com"
             disabled={busy}
-            className={inputClass}
+            aria-invalid={error !== null ? true : undefined}
+            className={FIELD}
           />
-          <Button type="submit" pop disabled={busy} className="w-full">
+          <Button type="submit" block disabled={busy}>
             {busy ? "Sending your code" : "Email me a sign-in code"}
           </Button>
-          <p className="text-xs text-muted">
+          <p className={FIELD_HINT}>
             Your wallet is made from your email. No seed phrase, no extension.
           </p>
         </form>
@@ -106,7 +105,7 @@ function SignInStepInner() {
             void verify();
           }}
         >
-          <label htmlFor="game-code" className="block text-sm font-bold">
+          <label htmlFor="game-code" className={`${FIELD_LABEL} break-all`}>
             Code sent to {email.trim()}
           </label>
           <input
@@ -118,12 +117,13 @@ function SignInStepInner() {
             onChange={(e) => setCode(e.target.value)}
             placeholder="123456"
             disabled={busy}
-            className={`${inputClass} font-mono tracking-widest`}
+            aria-invalid={error !== null ? true : undefined}
+            className={`${FIELD} num text-[1.25rem] font-semibold tracking-[0.3em]`}
           />
-          <Button type="submit" pop disabled={busy} className="w-full">
+          <Button type="submit" block disabled={busy}>
             {busy ? "Checking the code" : "Sign me in"}
           </Button>
-          <div className="flex flex-wrap gap-x-4">
+          <div className="flex flex-wrap gap-x-5">
             <button
               type="button"
               disabled={busy}
@@ -135,7 +135,7 @@ function SignInStepInner() {
                   .catch(() => setError("The code did not resend. Try again in a moment."))
                   .finally(() => setBusy(false));
               }}
-              className={`-ml-4 text-accent-deep underline underline-offset-2 ${TAP_TARGET}`}
+              className={QUIET_ACTION}
             >
               Send a new code
             </button>
@@ -148,7 +148,7 @@ function SignInStepInner() {
                 setNote(null);
                 setError(null);
               }}
-              className={`text-muted underline underline-offset-2 ${TAP_TARGET}`}
+              className={QUIET_ACTION}
             >
               Use a different email
             </button>
@@ -156,15 +156,11 @@ function SignInStepInner() {
         </form>
       )}
       {note !== null ? (
-        <p className="text-sm text-accent-deep" aria-live="polite">
+        <p className="m-0 text-[0.9375rem] text-moonlight" aria-live="polite">
           {note}
         </p>
       ) : null}
-      {error !== null ? (
-        <p role="alert" className="rounded-2xl border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
+      {error !== null ? <Notice tone="error">{error}</Notice> : null}
       {phase === "email" ? (
         <button
           type="button"
@@ -172,7 +168,7 @@ function SignInStepInner() {
             markExternalConnectIntent();
             login();
           }}
-          className={`-ml-4 text-sm text-muted underline underline-offset-2 hover:text-foreground ${TAP_TARGET}`}
+          className={QUIET_ACTION}
         >
           I already have a wallet
         </button>
@@ -185,10 +181,9 @@ export default function SignInStep() {
   if (!DYNAMIC_CONFIGURED) {
     // No env names reach the player: say what it means for them.
     return (
-      <p className="rounded-2xl border border-edge bg-surface-raised p-4 text-sm text-foreground/85">
-        Sign-in is not switched on for this build, so nobody can play on it
-        yet. The home page still explains how a run works.
-      </p>
+      <Notice tone="limit" title="Sign-in is not on for this build">
+        Nobody can play on it yet. The home page still explains how a run works.
+      </Notice>
     );
   }
   return <SignInStepInner />;
