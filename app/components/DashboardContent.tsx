@@ -59,6 +59,7 @@ import {
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
+import PhonePairPanel, { type PhoneSteps } from "@/components/PhonePairPanel";
 import { resultLabel } from "@/lib/participant-status";
 import {
   runApprovalLine,
@@ -231,7 +232,7 @@ function ConnectButton({
   // A provider that can only be linked on a phone is not an error state: the
   // user did nothing wrong and a retry cannot help. It gets its own calm panel
   // rather than the red ErrorNote, which would read as a fault.
-  const [phoneSteps, setPhoneSteps] = useState<string | null>(null);
+  const [phoneSteps, setPhoneSteps] = useState<PhoneSteps | null>(null);
   const [opening, setOpening] = useState(false);
   const requestAuth = useWalletAuth();
 
@@ -257,7 +258,11 @@ function ConnectButton({
                 return;
               }
               if (err instanceof PhoneLinkRequiredError) {
-                setPhoneSteps(err.instructions);
+                setPhoneSteps({
+                  instructions: err.instructions,
+                  pairing: err.pairing,
+                  installUrl: err.installUrl,
+                });
                 return;
               }
               setError(
@@ -273,13 +278,9 @@ function ConnectButton({
         {opening ? "Opening the connect flow" : label}
       </Button>
       {phoneSteps !== null ? (
-        <p
-          role="status"
-          aria-live="polite"
-          className="mt-3 rounded-xl border border-accent/30 bg-accent/15 p-4 text-sm text-accent-deep"
-        >
-          {phoneSteps}
-        </p>
+        <div className="mt-3">
+          <PhonePairPanel steps={phoneSteps} />
+        </div>
       ) : null}
       {error !== null ? (
         <div className="mt-3">

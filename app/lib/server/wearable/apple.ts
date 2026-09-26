@@ -58,6 +58,7 @@ import {
   countQualifyingDays,
   daySeries,
 } from "@/lib/server/wearable/streak";
+import { mintPairingCode } from "@/lib/server/wearable/apple-pairing";
 import type {
   MetricProgress,
   ObservedCapability,
@@ -102,11 +103,21 @@ export function appleAppAvailable(): boolean {
  * charged, and has anything of mine been read.
  */
 const APP_HANDOFF_INSTRUCTIONS =
-  "Apple Health can only be read on the device that holds it, so there is " +
-  "nothing for this browser to open. Open the GoHealthMe app on your iPhone " +
-  "and allow Apple Health when it asks, then sync. Your Apple Health " +
-  "totals sync to this wallet each time you open the app and sync. Nothing " +
-  "was charged and no health data has been read yet.";
+  "Apple Health can only be read on your iPhone. Open the GoHealthMe app " +
+  "there, enter this code, and allow Apple Health when it asks. Your runs " +
+  "switch to Apple Health once the first day arrives from the phone; until " +
+  "then anything you already connected keeps counting. Nothing was charged " +
+  "and no health data has been read yet.";
+
+/**
+ * Where a player gets the iPhone app (a TestFlight public link during the
+ * beta). Optional: without it the copy still says what to open, it just has
+ * no link to hand over.
+ */
+export function appleInstallUrl(): string | null {
+  const raw = process.env.APPLE_APP_INSTALL_URL?.trim() ?? "";
+  return raw.startsWith("https://") ? raw : null;
+}
 
 /**
  * Where a wallet sits in the Apple link, in the shared vocabulary.
@@ -187,13 +198,17 @@ export const appleProvider: WearableProvider = {
   linkKind: "app",
   metrics: PROVIDER_CAPABILITIES.apple,
 
-  async startLink(): Promise<WearableLink> {
-    // Nothing to provision. The phone posts under the wallet it signs as, so
-    // the first sync creates everything that needs creating.
+  async startLink(address: string): Promise<WearableLink> {
+    // The link route verified this wallet's signature before calling here, so
+    // this is the one moment the server can vouch for the phone: a short,
+    // single-use code the phone redeems for its device token. Nothing else is
+    // provisioned, and no provider choice is recorded until data arrives.
     return {
       kind: "app",
       linkUrl: null,
       instructions: APP_HANDOFF_INSTRUCTIONS,
+      pairing: await mintPairingCode(address),
+      installUrl: appleInstallUrl(),
     };
   },
 

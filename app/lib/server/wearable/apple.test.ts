@@ -164,7 +164,7 @@ describe("provider metadata", () => {
 });
 
 describe("startLink", () => {
-  it("returns an app handoff with no URL and provisions nothing", async () => {
+  it("returns an app handoff with no URL, a pairing code, and reads no health data", async () => {
     supabaseWith(() => []);
     const link = await appleProvider.startLink(ADDRESS);
 
@@ -175,8 +175,11 @@ describe("startLink", () => {
     // answer "was I charged".
     expect(link.instructions).toContain("iPhone");
     expect(link.instructions).toMatch(/nothing was charged/i);
-    // Nothing is created server-side by tapping Set up.
+    // No health data is touched by tapping Set up: the only thing created is
+    // a one-time pairing code the phone app redeems.
     expect(from).not.toHaveBeenCalled();
+    expect(link.pairing?.code).toMatch(/^[2-9A-Z]{4}-[2-9A-Z]{4}$/);
+    expect(link.pairing?.deepLink.startsWith("gohealthme://pair?code=")).toBe(true);
   });
 });
 
