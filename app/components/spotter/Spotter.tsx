@@ -109,7 +109,10 @@ export function SpotterFigure({
         alt={decorative ? "" : (alt ?? meta.alt)}
         aria-hidden={decorative ? true : undefined}
         sizes={`${Math.max(width[0], width[1])}px`}
-        priority={priority}
+        // Next 16 deprecates `priority`; eager plus high fetch priority is the
+        // documented replacement for an above-the-fold image.
+        loading={priority ? "eager" : undefined}
+        fetchPriority={priority ? "high" : undefined}
         className={`block h-auto w-full ${sleeping ? "animate-breathe" : ""}`}
       />
       {contact ? <span aria-hidden="true" className="night-contact" /> : null}
