@@ -905,7 +905,7 @@ export default function PoolDetail({ id }: { id: string }) {
               </h2>
               <p className="mt-3 mb-4 text-sm text-foreground/80">
                 {pool.bountyModel === 2
-                  ? `Stake ${formatUsdc(pool.entryFee)} USDC. Hit the goal inside the run and your stake comes back plus a share of what the players who missed left behind. Miss it and your stake stays in the pool.`
+                  ? `Stake ${formatUsdc(pool.entryFee)} USDC. Hit the goal inside the run and your stake comes back plus an equal share of the missed stakes. Miss it, with your wearable showing the miss, and your stake goes to the players who hit. No wearable data for the run, or nobody hits, and your stake comes back.`
                   : isDocGoal
                     ? `Pay the ${formatUsdc(pool.entryFee)} USDC entry, then hand SPOTTER your record. The prize pays the moment the document checks out.`
                     : `Pay the ${formatUsdc(pool.entryFee)} USDC entry, hit the goal inside the run, and the prize pays the moment SPOTTER confirms it.`}

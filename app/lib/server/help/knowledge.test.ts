@@ -61,6 +61,15 @@ describe("guardrail prompt", () => {
     expect(HELP_KB.toLowerCase()).toContain("testnet");
   });
 
+  it("states the commitment rule players are held to, including the no-data case", () => {
+    const kb = HELP_KB.toLowerCase();
+    expect(kb).toContain("your stake goes to the players who hit");
+    expect(kb).toContain("did not sync the whole run");
+    expect(kb).toContain("nobody hits, everyone's stake comes back");
+    expect(kb).toContain("records the result");
+    expect(kb).not.toContain("your stake is credited back to you when the run settles");
+  });
+
   it("buildAskPrompt appends only the user question", () => {
     const prompt = buildAskPrompt("what is a pool");
     expect(prompt.startsWith(HELP_SYSTEM_PROMPT)).toBe(true);

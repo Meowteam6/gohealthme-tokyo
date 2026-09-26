@@ -165,14 +165,14 @@ export function outcomeCopy(outcome: ApprovalOutcome): {
       return {
         headline: "confirmed.",
         detail:
-          "SPOTTER is recording the result on-chain and settles the moment the pool closes. Your data stayed off-chain; only your consent and the verdict travel.",
+          "SPOTTER is recording the result on-chain and settles after the run ends. Your data stayed off-chain; only your consent and the verdict travel.",
         askAgain: false,
       };
     case "declined":
       return {
         headline: "you said no. nothing moved.",
         detail:
-          "SPOTTER wrote nothing on-chain and will not pay this claim. Your stake comes back when the pool closes.",
+          "SPOTTER wrote nothing on-chain and will not pay this claim. Your stake comes back when the run settles.",
         askAgain: true,
       };
     case "expired":

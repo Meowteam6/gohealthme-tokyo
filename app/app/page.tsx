@@ -48,8 +48,8 @@ function runSteps(human: boolean, confirm: boolean): { title: string; body: stri
     {
       title: "The Verdict",
       body: confirm
-        ? "SPOTTER checks the data, asks you to confirm it is you with World ID, and pays in test USDC when the run settles. Miss it and there is no prize; your stake is credited back at settle."
-        : "SPOTTER checks the data and pays in test USDC when the run settles. Miss it and there is no prize; your stake is credited back at settle.",
+        ? "SPOTTER checks the data, asks you to confirm it is you with World ID, and pays in test USDC when the run settles. Miss it and your stake goes to the players who hit. If your wearable did not sync the whole run, nothing is recorded and your stake comes back."
+        : "SPOTTER checks the data and pays in test USDC when the run settles. Miss it and your stake goes to the players who hit. If your wearable did not sync the whole run, nothing is recorded and your stake comes back.",
     },
   ];
 }
@@ -66,9 +66,10 @@ export default function Home() {
           </h1>
           <p className="max-w-xl text-xl leading-snug text-foreground/85">
             Stake on your own health goal. Your wearable decides. Hit it and
-            you get your stake back plus your share of the pot. Miss it and
-            your stake is refunded when the run settles. Only the verdict goes
-            on chain, never your health data.
+            you get your stake back plus an equal share of the missed stakes
+            and the pot. Miss it and your stake goes to the players who hit.
+            No wearable data for the run, or nobody hits, and your stake comes
+            back. Only the verdict goes on chain, never your health data.
           </p>
           <LandingCta />
           <p className="max-w-xl text-sm text-muted">

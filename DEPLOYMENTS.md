@@ -98,6 +98,30 @@ Optional env (server only, wei; defaults in code):
 Per address: at most 3 drips per UTC day (429). Refusals carry plain copy that names the
 next step (wait, or the Base Sepolia ETH faucet at portal.cdp.coinbase.com/products/faucet).
 
+### Recorded misses (commitment model)
+
+On a self-staked pool (bountyModel 2) proven by wearable only, on a metric whose day is final
+(sleep score, sleep efficiency, sleep hours, workouts), SPOTTER records `verdict=false` for a
+joined player once `periodEnd + MISS_GRACE_HOURS` has passed, and only when the wearable
+covered every day of the run on the wearer's own calendar and shows the goal not met. Missing,
+partial or unreadable data records nothing and settle() refunds the stake (B-2). Rule:
+`app/lib/server/agent/miss.ts`; writes: `app/lib/server/agent/miss-record.ts`; driven by the
+`/api/agent/sweep` cron (every 2 min) and by the run route when a player opens a finished run.
+
+Such a pool settles only after the grace and after the sweep judged every player (store key
+`agent-miss-pool-<poolId>.json`, `done: true`), or 2h after the grace at the latest. Every
+other pool keeps its old timing. The operator route `/api/oracle/record` no longer writes a
+miss (409).
+
+Optional env (server, and inlined into the browser bundle by `app/next.config.ts` so the run
+page prints the same deadline):
+
+| Var | Default | Meaning |
+|---|---|---|
+| `MISS_GRACE_HOURS` | `6` | hours after periodEnd before a miss may be recorded; clamped to 1..18 so the miss and the settle land inside the contract's 24h settler-only window (`SETTLE_GRACE`); a non-number falls back to 6 and logs once |
+
+A change needs a redeploy (the value is inlined at build time).
+
 ## Tokyo 2026 (ENSv2 Sepolia)
 
 ENSv2 on Ethereum Sepolia (chain 11155111), the 2026-09-15 deployment. Pools stay on Base Sepolia.

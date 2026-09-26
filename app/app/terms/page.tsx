@@ -99,6 +99,38 @@ export default function TermsPage() {
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-foreground">
+            Staking on yourself: hit, miss, and no data
+          </h2>
+          <p>
+            On a run where every player stakes on their own goal, the result
+            decides where each stake goes when the run settles:
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              Hit the goal: you get your stake back plus an equal share of the
+              missed stakes and anything else in the pot.
+            </li>
+            <li>
+              Miss it, with your wearable showing the miss: your stake goes to
+              the players who hit.
+            </li>
+            <li>
+              No wearable data for the run: SPOTTER records a miss only when
+              your wearable synced every day of the run. If it did not, or the
+              data provider could not be read, nothing is recorded and your
+              stake comes back.
+            </li>
+            <li>Nobody hits: every player&apos;s stake comes back.</li>
+          </ul>
+          <p>
+            SPOTTER takes its last look a few hours after the run ends, so a
+            late sync still counts until then. A missing result never counts as
+            a miss.
+          </p>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-foreground">
             Challenges and the sweep rule
           </h2>
           <p>

@@ -60,6 +60,8 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
 import { resultLabel } from "@/lib/participant-status";
+import { missGraceSeconds } from "@/lib/miss-grace";
+import { missRulePool } from "@/lib/miss-rule";
 import {
   runApprovalLine,
   type RunApprovalLine,
@@ -100,7 +102,11 @@ function deferredUntil(entry: JoinedPool): bigint | null {
   const { pool, participant } = entry;
   if (pool.settled) return null;
   if (!participant.resultRecorded || !participant.verdict) return null;
-  return pool.periodEnd;
+  // A run that can record a miss settles only after MISS_GRACE_HOURS, once
+  // every player's wearable had time to sync (lib/miss-grace.ts).
+  return missRulePool(pool).ok
+    ? pool.periodEnd + BigInt(missGraceSeconds())
+    : pool.periodEnd;
 }
 
 function formatSettleMoment(periodEnd: bigint): string {
@@ -132,7 +138,7 @@ function DeferredNote({
   return (
     <p className={`mt-3 rounded-xl border border-dashed p-3 text-sm ${cls}`}>
       {lead} SPOTTER settles this {selfReported ? "self-reported claim " : ""}
-      when the pool period ends at {formatSettleMoment(settlesAt)} (
+      at {formatSettleMoment(settlesAt)} (
       <Countdown periodStart={0n} periodEnd={settlesAt} />). Nothing for you to
       do.
     </p>

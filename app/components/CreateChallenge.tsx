@@ -1343,7 +1343,7 @@ function CreateChallengeInner() {
             <p className="text-xs text-muted">
               {isDare
                 ? "Pulled from your wallet now and held in the pool. If the pool ends with no winner, you reclaim it."
-                : "Pulled from your wallet when you lock in. Hit the goal and it comes back with a cut of the forfeits; miss and it goes to whoever did."}
+                : "Pulled from your wallet when you lock in. Hit the goal and it comes back with a cut of the forfeits; miss and it goes to whoever did. No wearable data for the run and it comes back."}
             </p>
           </section>
 

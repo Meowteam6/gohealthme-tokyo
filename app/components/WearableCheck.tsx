@@ -657,7 +657,7 @@ function WearableCheckInner({
               </p>
             ) : (
               <p className="mt-1 text-sm text-foreground/80">
-                SPOTTER settles the payout the moment the pool period ends - no
+                SPOTTER settles the payout after the run ends - no
                 human involved. Come back after the period closes and the payout
                 appears here.
               </p>

@@ -43,14 +43,18 @@ SHAPES = {
     "GAS_DRIP_MIN_WEI": r"^\d+$",
     "GAS_DRIP_DAILY_BUDGET_WEI": r"^\d+$",
     "GAS_DRIP_TREASURY_FLOOR_WEI": r"^\d+$",
+    "MISS_GRACE_HOURS": r"^\d+(\.\d+)?$",
 }
 
-# Gas drip limits in wei. Defaults live in app/lib/server/gas-drip.ts.
+# Optional settings with defaults in code: gas drip limits in wei
+# (app/lib/server/gas-drip.ts) and MISS_GRACE_HOURS, the sync grace before
+# SPOTTER may record a miss (app/lib/miss-grace.ts, default 6, clamped 1..18).
 OPTIONAL_WEI = (
     "GAS_DRIP_WEI",
     "GAS_DRIP_MIN_WEI",
     "GAS_DRIP_DAILY_BUDGET_WEI",
     "GAS_DRIP_TREASURY_FLOOR_WEI",
+    "MISS_GRACE_HOURS",
 )
 
 
@@ -132,8 +136,9 @@ def main():
         "WORLD_ENVIRONMENT": local.get("WORLD_ENVIRONMENT", ""),
         **supabase_values(),
     }
-    # Optional: the gas drip (/api/gas/drip) has defaults in code, so these are
-    # pushed only when set locally and never listed as a founder action.
+    # Optional: the gas drip (/api/gas/drip) and the miss grace have defaults
+    # in code, so these are pushed only when set locally and never listed as
+    # a founder action.
     for key in OPTIONAL_WEI:
         if local.get(key):
             want[key] = local[key]

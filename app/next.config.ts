@@ -28,6 +28,14 @@ function loadRootEnv(): void {
 loadRootEnv();
 
 const nextConfig: NextConfig = {
+  // MISS_GRACE_HOURS decides when SPOTTER may record a miss (server) and is
+  // printed on the run page as the moment late syncs stop counting (browser).
+  // Inlined into both bundles at build time, so both read the same value; a
+  // change needs a redeploy, like every Vercel env change. lib/miss-grace.ts
+  // parses and clamps it; blank means the default.
+  env: {
+    MISS_GRACE_HOURS: process.env.MISS_GRACE_HOURS ?? "",
+  },
   // The dev-tools indicator is for developers, not for footage: the e2e demo
   // profile records the dev server, and the floating "N" badge would sit in
   // the corner of every frame. Same cosmetic-only flag that hides the

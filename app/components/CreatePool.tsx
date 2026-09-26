@@ -568,9 +568,10 @@ function CreatePoolInner() {
                 </span>
                 <span className="block text-xs font-normal text-muted">
                   Everyone stakes the same entry fee on their own goal. Hit it
-                  and your stake comes back plus a cut of what the ones who
-                  didn&apos;t forfeit. No sponsor needed - initial funding can be
-                  zero.
+                  and your stake comes back plus an equal share of the missed
+                  stakes. A miss the wearable shows goes to the players who hit;
+                  no wearable data for the run, or nobody hitting, gives the
+                  stake back. No sponsor needed - initial funding can be zero.
                 </span>
               </span>
             </label>

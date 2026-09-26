@@ -58,15 +58,17 @@ function MatchCard({ match, lead }: { match: Match; lead: boolean }) {
       {/* A self-staked commitment pool (model 2) is funded by the participants'
           own stakes, so it must never claim a sponsor put the money up. Sponsor
           pools keep the existing framing. */}
-      {/* A missed stake is credited back at settle today (SPOTTER records
-          wins only), so there are no forfeits to promise a cut of. The pot
-          includes every entrant's stake, so it is "in the pot", not a
-          sponsor's money. */}
+      {/* The commitment rule, short: a hit gets the stake back plus a share
+          of the missed stakes; a recorded miss goes to the players who hit;
+          no wearable data, or nobody hitting, gives the stake back
+          (lib/server/agent/miss.ts). */}
       {match.bountyModel === 2 ? (
         entryFeeUsd !== null ? (
           <p className="mt-2 text-sm text-muted">
-            Stake <Money usd={entryFeeUsd} size="sm" /> USDC on yourself. You
-            get it back when the run settles.
+            Stake <Money usd={entryFeeUsd} size="sm" /> USDC on yourself. Hit
+            it and it comes back with a share of the missed stakes. Miss it and
+            it goes to the players who hit; no wearable data for the run and it
+            comes back.
           </p>
         ) : null
       ) : balanceUsd !== null ? (
