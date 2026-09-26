@@ -52,9 +52,10 @@ Keep the semantic token names so existing components re-theme; the values change
 | `--muted` | `#4E5E5F` | Secondary text; passes AA on cream and surface. |
 | `--accent` | `#F2764F` | Coral nose. Primary actions only. **Ink text on it** (about 6:1), never white. |
 | `--accent-strong` / `--accent-deep` | `#D95E38` / `#1E6F6A` | Button press shadow; deep pond for links and text on tint. |
-| `--gold` / `--gold-deep` | `#F5B82E` / `#8A6200` | Money only: stakes, pots, payouts, the coin, banked pebbles. Deep gold for money text on cream. Never a verdict colour, never decoration. |
-| `--dusk` | `#6B7A8F` | A lost run. Wash and text. Never red for a loss. |
-| `--danger` / `--warning` | `#C8283A` / `#9A4A00` | Real errors and locks only, not losses. |
+| `--accent-hover` | `#F58A67` | Primary hover: lighter, so ink text stays AA (6.3:1). Coral is a fill only, never a text colour. |
+| `--gold` / `--gold-deep` | `#F5B82E` / `#7F5A00` | Money only: stakes, pots, payouts, the coin, banked pebbles. Deep gold for money text on cream. Never a verdict colour, never decoration. |
+| `--dusk` / `--dusk-ink` | `#6B7A8F` / `#526076` | A lost run: `--dusk` for the wash, `--dusk-ink` for text (plain dusk is 3.8:1 on cream). Never red for a loss. |
+| `--danger` / `--warning` | `#B82234` / `#9A4A00` | Real errors and locks only, not losses. |
 | `--otter` | `#3FAF8E` | SPOTTER only. |
 
 Radius: 16 to 20px on cards and rows, 18px on buttons, pills stay pills. Primary buttons carry a 4px solid `--accent-strong` bottom shadow (pressable toy, not a gradient). No purple, no gradients on buttons, no decorative blobs.
@@ -107,3 +108,4 @@ Every game component renders default, loading, empty, error, success and disable
 | 2026-09-26 | Replaced the "bet with your boys" scoreboard system with SPOTTER's Riverbank | Andre: the UI was plain and the otter barely used; the UI has to draw users as much as the product. Research: no stake app owns a mascot (Duolingo and Finch show the pattern); celebrate the verdict, not the deposit (Robinhood 2021). Preview: `docs/design/riverbank-preview.html` built from the real poses, approved. Revert: tag `pre-redesign-2026-09-26`. |
 | 2026-09-26 | Memorable thing: put money on yourself, commitment model | Andre. Worded as stake, never bet (hard rule). |
 | 2026-09-26 | Cut Big Shoulders, Barlow, cobalt, concrete paper, slip shadows, 8px radii | Scoreboard lettering fights a plush 3D otter. |
+| 2026-09-26 | Foundation contrast pass: gold-deep `#8A6200` to `#7F5A00`, danger `#C8283A` to `#B82234`, added `--dusk-ink` and `--accent-hover`; accent text and focus rings moved to pond and ink | The approved values failed AA on `--surface-raised` (locked lobby rows) or as text; coral is 2.5:1 on cream, so it is a fill with ink text only. Foundation components: `components/spotter/Spotter.tsx`, `components/spotter/HoldCoin.tsx`, `lib/spotter-poses.ts`. |
