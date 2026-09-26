@@ -2,14 +2,15 @@
 // (docs/MONEY-FLOWS.md F2, F3 and F5). Pure, so every sentence is tested.
 //
 // A challenge run (initiative "challenge", bountyModel 2) is one of two flows
-// on the same on-chain object, told apart by the creator's own stake, the way
-// /challenges already tells them apart:
-//   - "self": the creator staked on their own goal. Friends either match the
-//     stake (the accept link) or back them (the backer link, ?as=backer).
-//   - "reward": the creator put up a reward and did not stake. A friend
-//     accepts with a lock-in.
-//   - "unstaked": neither yet, a stake-on-yourself run whose creator has not
-//     locked in. No link is offered to the creator until they do.
+// on the same on-chain object, told apart money first and then by the
+// creator's own stake (challengeRunKindOf, the one rule every surface uses):
+//   - "reward": the creator put up a seed at create. A friend accepts with a
+//     lock-in. It stays a reward challenge even if the challenger also joined.
+//   - "self": no seed, and the creator staked on their own goal. Friends
+//     either match the stake (the accept link) or back them (?as=backer).
+//   - "unstaked": no seed and no stake yet, a stake-on-yourself run whose
+//     creator has not locked in. No link is offered to the creator until they
+//     do; the chips already read as their own stake, never as a challenge.
 //
 // Money chipped in (fundPool) is recorded against nobody (HealthPoolsV3
 // C:336-342), so the warning says where it goes per bounty model and that it
@@ -28,20 +29,26 @@ export function creatorStakedIn(creator: string, participants: readonly string[]
 }
 
 /**
- * Which flow a challenge run is. `reward` is the money in the pot net of every
- * stake (lib/challenges darePot prize), or null when it could not be read
- * (settled, cancelled, a read missed). `named` is whether the challenge row
- * names a target or carries a message: only the reward flow writes either
- * (the stake-on-yourself link is minted bare, api/challenges/invite-token),
- * so it still tells a finished reward challenge apart once the pot is gone.
+ * Which flow a challenge run is, money first. `reward` is the creator's own
+ * seed at create (R): the pot net of every stake and of backers' top-ups
+ * where those read (lib/challenges darePot seed, GET /api/pools/[id]/funding),
+ * or the pot net of stakes alone where they did not; null when nothing could
+ * be read (settled, cancelled, a read missed). A seed above zero is a reward
+ * challenge even when the challenger also joined their own run. With no
+ * seed, the creator's own stake makes it a stake on yourself, and a creator
+ * who has not locked in yet is "unstaked", the same flow before its first
+ * stake. `named` is whether the challenge row names a target or carries a
+ * message: only the reward flow writes either (the stake-on-yourself link is
+ * minted bare, api/challenges/invite-token), so it still tells a finished
+ * reward challenge apart once the pot is gone.
  */
 export function challengeRunKindOf(input: {
   creatorStaked: boolean;
   reward: bigint | null;
   named?: boolean;
 }): ChallengeRunKind {
-  if (input.creatorStaked) return "self";
   if (input.reward !== null && input.reward > 0n) return "reward";
+  if (input.creatorStaked) return "self";
   if (input.named === true) return "reward";
   return "unstaked";
 }

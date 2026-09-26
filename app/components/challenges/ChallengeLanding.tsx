@@ -133,18 +133,22 @@ export function RallyCard({
  * The terms before someone accepts (docs/MONEY-FLOWS.md, section 3): the kind
  * and miss chips, the flow's line and its terms. A stake on yourself reads as
  * "match it"; a challenge with a reward names the lock-in, the reward and what
- * the challenger takes back. Wording from lib/game/money-flow.ts, numbers
- * from lib/commitment.ts; no arithmetic here. SPOTTER stands on this card, so
- * the list carries no otter of its own. Dates stay out: this renders on the
- * server, whose clock zone is not the reader's.
+ * the challenger takes back. The flow is the page's one decision (`kind`,
+ * challengeRunKindOf), so the chips can never disagree with the headline.
+ * Wording from lib/game/money-flow.ts, numbers from lib/commitment.ts; no
+ * arithmetic here. SPOTTER stands on this card, so the list carries no otter
+ * of its own. Dates stay out: this renders on the server, whose clock zone is
+ * not the reader's.
  */
 function ChallengeTermsList({
   terms,
+  kind,
   challengerName,
   seed,
   targetHandle,
 }: {
   terms: ChallengeTerms;
+  kind: ChallengeRunKind;
   challengerName: string;
   seed: bigint | null;
   targetHandle: string | null;
@@ -153,8 +157,8 @@ function ChallengeTermsList({
     pool: { bountyModel: 2, initiative: "challenge" },
     flow: {
       players: terms.players,
-      creatorStaked: terms.creatorStaked ?? null,
-      seed,
+      creatorStaked: null,
+      kind,
       creatorName: challengerName,
     },
     numbers: {
@@ -186,10 +190,6 @@ export interface ChallengeTerms {
   sponsorPot: bigint;
   /** Whether SPOTTER can record a miss on this run (lib/miss-rule.ts). */
   recordsMisses: boolean;
-  /** Whether the challenger staked in their own run: a stake on yourself to
-   *  match (F2) rather than a challenge with a reward (F3). Null when the
-   *  read missed; the seed then decides. */
-  creatorStaked?: boolean | null;
   /** commitmentFeeBps; null when it did not read (no range is stated). */
   feeBps?: number | null;
 }
@@ -246,6 +246,7 @@ export function ChallengeIntro({
         {terms !== null ? (
           <ChallengeTermsList
             terms={terms}
+            kind={kind}
             challengerName={challengerName}
             seed={seed}
             targetHandle={targetHandle}

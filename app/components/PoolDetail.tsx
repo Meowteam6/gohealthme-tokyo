@@ -781,7 +781,7 @@ export default function PoolDetail({ id }: { id: string }) {
   const solo =
     flowTerms === null && terms !== null && commitmentTerms !== null ? soloLineOf(commitmentTerms) : null;
   const moneyChips =
-    runMoney !== null && live ? <MoneyChips kind={runMoney.kind.chip} miss={runMoney.miss} /> : null;
+    runMoney !== null && live ? <MoneyChips kind={runMoney.kind?.chip ?? null} miss={runMoney.miss} /> : null;
   const underStake =
     runMoney !== null && runMoney.miss !== null && flowTerms !== null ? (
       <MissUnderStake miss={runMoney.miss} detail={missDetailOf(flowTerms)} />

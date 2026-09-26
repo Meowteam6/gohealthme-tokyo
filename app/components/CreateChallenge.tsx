@@ -205,6 +205,8 @@ function draftMoney(input: {
     flow: {
       players: 0,
       creatorStaked: isSelf,
+      // Nothing is on chain yet: the flow is the creator's own choice.
+      kind: isSelf ? "self" : "reward",
       creatorName: asFriend ? (input.fromName ?? "you") : "you",
       viewerIsCreator: !asFriend,
     },

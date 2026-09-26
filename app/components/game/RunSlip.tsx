@@ -104,7 +104,7 @@ export default function RunSlip({
   const open = slot.kind !== "closed" && slot.kind !== "cannot-pay";
   const moneyBlock = open && money !== null ? (
     <div className="mt-2.5 [&>*+*]:mt-2">
-      <MoneyChips kind={money.kind.chip} miss={money.miss} />
+      <MoneyChips kind={money.kind?.chip ?? null} miss={money.miss} />
       {!row.highlighted && money.copy !== null ? <MoneyLine copy={money.copy} /> : null}
     </div>
   ) : null;

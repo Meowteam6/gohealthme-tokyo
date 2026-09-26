@@ -36,7 +36,20 @@ describe("flowKindOf", () => {
     });
   });
 
-  it("tells a stake on yourself from a challenge by whether the creator staked", () => {
+  it("a stake-on-yourself creator who has not locked in yet reads On yourself, never Challenge from you", () => {
+    const pool = { bountyModel: 2, initiative: "challenge" };
+    // The creator lands on /pools/<id> before staking: nothing in the pot,
+    // nobody in. It is their own stake on themselves, the same flow as after
+    // they lock in.
+    expect(flowKindOf(pool, { ...ctx, players: 0, creatorStaked: false, seed: 0n, viewerIsCreator: true })).toEqual({
+      flow: "F2",
+      name: "Stake on yourself",
+      chip: "On yourself",
+    });
+    expect(flowKindOf(pool, { ...ctx, players: 0, creatorStaked: false, seed: 0n }).chip).toBe("Match @andre");
+  });
+
+  it("a stake on yourself by the creator's own stake, with no seed", () => {
     const pool = { bountyModel: 2, initiative: "challenge" };
     expect(flowKindOf(pool, { ...ctx, creatorStaked: true, viewerIsCreator: true }).chip).toBe("On yourself");
     expect(flowKindOf(pool, { ...ctx, players: 3, creatorStaked: true, viewerIsCreator: true }).chip).toBe(
@@ -44,20 +57,28 @@ describe("flowKindOf", () => {
     );
     expect(flowKindOf(pool, { ...ctx, creatorStaked: true }).chip).toBe("Match @andre");
     expect(flowKindOf(pool, { ...ctx, players: 2, creatorStaked: true }).chip).toBe("@andre + 1");
-    expect(flowKindOf(pool, { ...ctx, creatorStaked: false })).toEqual({
+  });
+
+  it("a seed above zero is a challenge with a reward, even when the challenger also joined", () => {
+    const pool = { bountyModel: 2, initiative: "challenge" };
+    expect(flowKindOf(pool, { ...ctx, creatorStaked: false, seed: 10n * ONE })).toEqual({
       flow: "F3",
       name: "Challenge a friend",
       chip: "Challenge from @andre",
     });
-    expect(flowKindOf(pool, { ...ctx, creatorStaked: false, viewerIsCreator: true }).chip).toBe(
+    expect(flowKindOf(pool, { ...ctx, creatorStaked: true, seed: 10n * ONE, viewerIsCreator: true }).chip).toBe(
       "Challenge from you",
     );
+    // The seed did not read and the creator's stake is unknown: a stake on
+    // yourself until the money says otherwise, never a challenge nobody funded.
+    expect(flowKindOf(pool, { ...ctx, seed: null }).flow).toBe("F2");
   });
 
-  it("falls back to the seed when the creator's stake did not read", () => {
+  it("takes the flow a surface already decided, from the same rule", () => {
     const pool = { bountyModel: 2, initiative: "challenge" };
-    expect(flowKindOf(pool, { ...ctx, seed: 10n * ONE }).flow).toBe("F3");
-    expect(flowKindOf(pool, { ...ctx, seed: 0n }).flow).toBe("F2");
+    expect(flowKindOf(pool, { ...ctx, kind: "reward" }).flow).toBe("F3");
+    expect(flowKindOf(pool, { ...ctx, kind: "self" }).flow).toBe("F2");
+    expect(flowKindOf(pool, { ...ctx, kind: "unstaked", viewerIsCreator: true }).chip).toBe("On yourself");
   });
 
   it("names models 0 and 1 by their sponsor, and the backer page Backing", () => {

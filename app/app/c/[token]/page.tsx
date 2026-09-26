@@ -159,13 +159,16 @@ export default async function ChallengeLandingPage({
   const canGrow = phase === "live" && canPay && !paused;
 
   // Stake on yourself ("Match my stake" / "Back me") or a reward challenge,
-  // told apart by the creator's own stake (lib/game/money-sharing). The chip-in
-  // warning names the creator: on a stake-on-yourself run, the person backed.
+  // told apart money first (lib/game/money-sharing): the challenger's own
+  // seed where the funding read split it from backers' money, the pot net of
+  // stakes otherwise, then the creator's own stake. Decided once here; the
+  // headline, the chips and the terms all follow it. The chip-in warning
+  // names the creator: on a stake-on-yourself run, the person backed.
   const creatorStaked =
     participants !== null && creatorStakedIn(pool.creator, participants);
   const kind = challengeRunKindOf({
     creatorStaked,
-    reward: pot.prize,
+    reward: pot.seed ?? pot.prize,
     named: challenge.targetHandle !== null || challenge.message !== null,
   });
 
@@ -186,9 +189,6 @@ export default async function ChallengeLandingPage({
           players: participantCount,
           sponsorPot: pot.prize,
           recordsMisses: missRulePool(pool).ok,
-          // A challenger who staked in their own run is asking friends to
-          // match it (stake on yourself), not offering a reward.
-          creatorStaked: participants !== null ? creatorStaked : null,
           feeBps,
         }
       : null;

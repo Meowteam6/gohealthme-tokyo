@@ -20,6 +20,7 @@
 import { commitmentOutcome, commitmentRange } from "@/lib/commitment";
 import { missConsequence, type MissChip } from "@/lib/commitment-copy";
 import { formatUsdc } from "@/lib/contract";
+import { challengeRunKindOf, type ChallengeRunKind } from "@/lib/game/money-sharing";
 
 export type FlowId = "F1" | "F2" | "F3" | "F4" | "F5";
 
@@ -34,12 +35,18 @@ export interface FlowKind {
 export interface FlowContext {
   /** Stakers in the run now (participantCount); null while unread. */
   players: number | null;
-  /** Whether the creator staked in their own run, which tells a stake on
-   *  yourself (F2) from a challenge with a reward (F3). Null when unread. */
+  /** Whether the creator staked in their own run. Null when unread. */
   creatorStaked: boolean | null;
-  /** The creator's seed on a challenge (R), used only when creatorStaked is
-   *  unread: a stake on yourself is created with no funding. */
+  /** The creator's seed at create (R), or the pot net of every stake where
+   *  the seed cannot be split from backers' money; null or absent while
+   *  unread. Money decides first (challengeRunKindOf): a seed above zero is
+   *  a challenge with a reward (F3) even when the challenger also joined;
+   *  otherwise it is a stake on yourself (F2), locked in or not yet. */
   seed?: bigint | null;
+  /** The flow a surface already decided from the same rule (the link page
+   *  decides once for its headline, the create form by the creator's own
+   *  choice). Derived from creatorStaked and seed when absent. */
+  kind?: ChallengeRunKind;
   /** "@handle" or a short address. */
   creatorName: string;
   /** The person reading is the run's creator. */
@@ -64,13 +71,14 @@ export function flowKindOf(
   if (pool.initiative !== CHALLENGE_INITIATIVE) {
     return { flow: "F1", name: "Group run", chip: "Group run" };
   }
-  const staked =
-    ctx.creatorStaked ??
-    (ctx.seed !== undefined && ctx.seed !== null ? ctx.seed === 0n : null);
-  if (staked === false) {
+  const kind =
+    ctx.kind ??
+    challengeRunKindOf({ creatorStaked: ctx.creatorStaked === true, reward: ctx.seed ?? null });
+  if (kind === "reward") {
     return { flow: "F3", name: "Challenge a friend", chip: `Challenge from ${creator}` };
   }
-  // A stake on yourself: the creator is the first staker, friends match.
+  // A stake on yourself, locked in or about to be: the creator is the first
+  // staker, friends match.
   const others = Math.max(0, (ctx.players ?? 0) - 1);
   if (ctx.viewerIsCreator === true) {
     return { flow: "F2", name: "Stake on yourself", chip: others === 0 ? "On yourself" : `You + ${others}` };

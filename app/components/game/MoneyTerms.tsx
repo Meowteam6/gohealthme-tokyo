@@ -34,10 +34,13 @@ export function MissTag({ miss }: { miss: MissChip }) {
   );
 }
 
+const KIND_CHIP = `${CHIP} bg-fill-quiet text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)]`;
+
 /**
- * The two chips: what kind of run this is, and what a miss does. `miss` is
- * null while the player count has not read: a placeholder holds the space
- * rather than a guess.
+ * The two chips: what kind of run this is, and what a miss does. Either is
+ * null while its read is out (`kind` on a challenge until the seed and the
+ * creator's stake read, `miss` until the player count does): a placeholder
+ * holds the space rather than a guess.
  */
 export function MoneyChips({
   kind,
@@ -45,7 +48,7 @@ export function MoneyChips({
   inline = false,
   className = "",
 }: {
-  kind: string;
+  kind: string | null;
   miss: MissChip | null;
   /** Inside a <label> (a radio option): spans, since a list is not allowed there. */
   inline?: boolean;
@@ -54,19 +57,22 @@ export function MoneyChips({
   if (inline) {
     return (
       <span className={`flex flex-wrap gap-1.5 ${className}`}>
-        <span className={`${CHIP} bg-fill-quiet text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)]`}>
-          {kind}
-        </span>
+        {kind !== null ? <span className={KIND_CHIP}>{kind}</span> : null}
         {miss !== null ? <MissTag miss={miss} /> : null}
       </span>
     );
   }
   return (
     <ul aria-label="How the money works" className={`m-0 flex list-none flex-wrap gap-1.5 p-0 ${className}`}>
-      <li>
-        <span className={`${CHIP} bg-fill-quiet text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)]`}>
-          {kind}
-        </span>
+      <li aria-busy={kind === null ? true : undefined}>
+        {kind !== null ? (
+          <span className={KIND_CHIP}>{kind}</span>
+        ) : (
+          <>
+            <span className="sr-only">Reading what kind of run this is</span>
+            <Skeleton className="h-[26px] w-[104px] rounded-tag" />
+          </>
+        )}
       </li>
       <li aria-busy={miss === null ? true : undefined}>
         {miss !== null ? (

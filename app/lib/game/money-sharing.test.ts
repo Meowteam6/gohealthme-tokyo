@@ -25,7 +25,7 @@ function allText(value: unknown): string {
   return JSON.stringify(value);
 }
 
-describe("challengeRunKindOf: the creator's own stake tells the flows apart", () => {
+describe("challengeRunKindOf: money first, then the creator's own stake", () => {
   const creator = "0x8A39000000000000000000000000000000006141";
 
   it("reads the creator in the player list case-insensitively", () => {
@@ -34,13 +34,14 @@ describe("challengeRunKindOf: the creator's own stake tells the flows apart", ()
     expect(creatorStakedIn(creator, [])).toBe(false);
   });
 
-  it("is a stake on yourself once the creator staked, reward or not", () => {
-    expect(challengeRunKindOf({ creatorStaked: true, reward: 0n })).toBe("self");
-    expect(challengeRunKindOf({ creatorStaked: true, reward: 5n * USDC })).toBe("self");
+  it("is a reward challenge when the creator put up a seed, even if they also joined", () => {
+    expect(challengeRunKindOf({ creatorStaked: false, reward: 5n * USDC })).toBe("reward");
+    expect(challengeRunKindOf({ creatorStaked: true, reward: 5n * USDC })).toBe("reward");
   });
 
-  it("is a reward challenge when the creator put money in and did not stake", () => {
-    expect(challengeRunKindOf({ creatorStaked: false, reward: 5n * USDC })).toBe("reward");
+  it("is a stake on yourself once the creator staked with no seed, whether or not the pot read", () => {
+    expect(challengeRunKindOf({ creatorStaked: true, reward: 0n })).toBe("self");
+    expect(challengeRunKindOf({ creatorStaked: true, reward: null })).toBe("self");
   });
 
   it("keeps a finished reward challenge a reward once the pot reads null, from the named row", () => {
