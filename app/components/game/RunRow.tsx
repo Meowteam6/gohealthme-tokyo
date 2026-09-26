@@ -110,6 +110,8 @@ export interface RunRowProps {
   entryFee: bigint;
   /** pool.balance: every stake plus any sponsor money. */
   balance: bigint;
+  /** "Stake" on a commitment run, "Entry" on an older sponsor-funded one. */
+  stakeLabel?: string;
   /** A line above the name, e.g. "You were challenged into this run". */
   eyebrow?: ReactNode;
   /** The last line inside the link (a FitLine). */
@@ -131,6 +133,7 @@ export default function RunRow({
   players,
   entryFee,
   balance,
+  stakeLabel = "Stake",
   eyebrow,
   fit,
   footer,
@@ -165,7 +168,7 @@ export default function RunRow({
       </p>
       <p className="num m-0 mt-2.5 flex gap-5 text-[0.9375rem] text-haze">
         <span>
-          Stake <b className="font-semibold text-foreground">{formatUsdc(entryFee)}</b>
+          {stakeLabel} <b className="font-semibold text-foreground">{formatUsdc(entryFee)}</b>
         </span>
         <span>
           Pot <b className="font-semibold text-gold">{formatUsdc(balance)}</b>
