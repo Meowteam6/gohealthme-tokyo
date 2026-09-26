@@ -20,6 +20,7 @@ import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import { isEconomicallyDeadConfig } from "@/lib/pool-lifecycle";
 import { resolveNewPoolId } from "@/lib/resolve-pool-id";
 import { ArcTxLink, Button, Chip, EmptyState, ErrorNote } from "@/components/ui";
+import { CommitmentRangeLine } from "@/components/CommitmentTerms";
 import Spotter from "@/components/spotter/Spotter";
 import GaslessBadge from "@/components/GaslessBadge";
 import SignInGate from "@/components/SignInGate";
@@ -155,6 +156,18 @@ function CreatePoolInner() {
       return false;
     }
   })();
+
+  // Parsed amounts for the commitment range line; null while the field does
+  // not parse, so the line simply hides instead of guessing.
+  const parsedOrNull = (raw: string): bigint | null => {
+    try {
+      return parseUsdc(raw.trim() === "" ? "0" : raw.trim());
+    } catch {
+      return null;
+    }
+  };
+  const entryFeeParsed = parsedOrNull(entryFee);
+  const fundingParsed = parsedOrNull(initialFunding) ?? 0n;
 
   // A self-staked commitment pool can be created with no sponsor seed, so the
   // primary button honestly says "Create pool" (no funding to approve) rather
@@ -483,6 +496,14 @@ function CreatePoolInner() {
               What each participant stakes to join. It comes back to them when
               they hit the goal.
             </span>
+            {bountyModel === 2 && entryFeeParsed !== null && entryFeeParsed > 0n ? (
+              <span className="mt-1.5 block font-normal">
+                <CommitmentRangeLine
+                  entryFee={entryFeeParsed}
+                  sponsorPot={fundingParsed}
+                />
+              </span>
+            ) : null}
             {feeIsZero ? (
               <span className="mt-1 block text-xs font-normal text-warning">
                 Must be above zero - the contract does not allow free-to-join

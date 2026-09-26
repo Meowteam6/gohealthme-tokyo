@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import HeroActivityTicker from "@/components/HeroActivityTicker";
+import { CommitmentBeats } from "@/components/CommitmentTerms";
 import LandingCta from "@/components/game/LandingCta";
 import Spotter, { SpotterBubble } from "@/components/spotter/Spotter";
 import { SPOTTER_BACKDROP_SRC, type SpotterPose } from "@/lib/spotter-poses";
@@ -59,8 +60,8 @@ function runSteps(human: boolean, confirm: boolean): RunStep[] {
     {
       title: "The verdict",
       body: confirm
-        ? "SPOTTER checks the data, asks you to confirm it is you with World ID, and pays in test USDC when the run settles. Miss it and there is no prize; your stake is credited back at settle."
-        : "SPOTTER checks the data and pays in test USDC when the run settles. Miss it and there is no prize; your stake is credited back at settle.",
+        ? "SPOTTER checks the data, asks you to confirm it is you with World ID, and settles in test USDC: your stake back and your share if you hit, your stake to the players who hit if you miss."
+        : "SPOTTER checks the data and settles in test USDC: your stake back and your share if you hit, your stake to the players who hit if you miss.",
       pose: "detective",
     },
   ];
@@ -98,8 +99,9 @@ export default function Home() {
               Put money on yourself.
             </h1>
             <p className="mt-3 max-w-md text-base leading-snug text-foreground sm:mt-4 sm:text-xl">
-              Stake test USDC on your own health goal. Your wearable decides,
-              and SPOTTER pays when the run settles. Only the verdict goes on
+              Stake test USDC on your own health goal. Hit it and you get your
+              stake back plus a share of the stakes people missed. Your
+              wearable decides; SPOTTER settles. Only the verdict goes on
               chain, never your health data.
             </p>
             <div className="mt-5 hidden lg:block">
@@ -140,6 +142,16 @@ export default function Home() {
         </Link>
         .
       </p>
+
+      <section aria-labelledby="how-it-works" className="space-y-5">
+        <h2
+          id="how-it-works"
+          className="font-display text-[2rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]"
+        >
+          How it works
+        </h2>
+        <CommitmentBeats />
+      </section>
 
       <section aria-labelledby="how-a-run-goes" className="space-y-6">
         <h2
