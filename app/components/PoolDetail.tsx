@@ -1359,10 +1359,11 @@ export default function PoolDetail({ id }: { id: string }) {
     caption,
     endLabel: endClock,
     rail,
+    left,
     railLabel:
       rail !== null
         ? `From now to the ${endClock} close. Asleep by ${rail.latestLabel} fits ${headline.short}.`
-        : `From now to the ${endClock} close.`,
+        : `From now to the ${endClock} close: ${left ?? ""} left.`,
     note,
   };
   const yourNight =
