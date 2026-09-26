@@ -1,58 +1,50 @@
-// A row of boxes, one per night the goal needs: filled ink for banked,
-// outlined for still to play, struck through for a night that can no longer
-// count. The count is always written in words beside it, so it never lives in
-// colour alone.
+// Nights as pebbles (docs/DESIGN.md): one per night the goal needs. A banked
+// night is a gold pebble, a night still to play is outlined, a night that can
+// no longer count is grey. "1 of 2 nights banked" is always written beside
+// them, so the count never lives in colour alone.
 
+import { pebbleOf, type Pebble } from "@/lib/game/run-scene";
 import { tallyWords, type NightTally as Tally } from "@/lib/game/tally";
 
-const SLOT_LABEL = {
-  banked: "banked",
-  open: "still to play",
-  dead: "can no longer count",
-} as const;
+const PEBBLE_SHAPE = { borderRadius: "50% 50% 46% 54% / 60% 60% 40% 40%" };
 
-export default function NightTally({ tally }: { tally: Tally }) {
+function fillClass(fill: Pebble["fill"], onDark: boolean): string {
+  if (fill === "gold") {
+    return "border-foreground bg-gold shadow-[inset_-6px_-4px_0_rgba(127,90,0,0.35)]";
+  }
+  if (fill === "outline") {
+    return onDark ? "border-background bg-transparent" : "border-foreground bg-surface";
+  }
+  return onDark ? "border-background/40 bg-background/15" : "border-edge bg-surface-raised";
+}
+
+export default function NightTally({
+  tally,
+  onDark = false,
+}: {
+  tally: Tally;
+  /** Drawn inside the river-ink night panel. */
+  onDark?: boolean;
+}) {
+  const words = tallyWords(tally);
   return (
     <div>
-      <p className="font-display text-2xl font-extrabold leading-none">
-        {tallyWords(tally)}
-      </p>
-      <ol className="mt-3 flex flex-wrap gap-1.5" aria-label={tallyWords(tally)}>
-        {tally.slots.map((slot, i) => (
-          <li
-            key={i}
-            aria-label={`Night ${i + 1}: ${SLOT_LABEL[slot]}`}
-            className={`relative size-9 rounded-md border-2 sm:size-10 ${
-              slot === "banked"
-                ? "ghm-stamp border-foreground bg-foreground"
-                : slot === "open"
-                  ? "border-foreground bg-surface"
-                  : "border-edge bg-surface-raised"
-            }`}
-          >
-            {slot === "dead" ? (
-              <span
-                aria-hidden="true"
-                className="absolute inset-x-1 top-1/2 h-0.5 -translate-y-1/2 -rotate-45 bg-muted"
-              />
-            ) : null}
-            {slot === "banked" ? (
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="absolute inset-0 m-auto size-5 text-gold"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={3}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M5 12.5l4.5 4.5L19 7.5" />
-              </svg>
-            ) : null}
-          </li>
-        ))}
+      <ol className="flex flex-wrap gap-2.5" aria-label={words}>
+        {tally.slots.map((slot, i) => {
+          const pebble = pebbleOf(slot);
+          return (
+            <li
+              key={i}
+              aria-label={`Night ${i + 1}: ${pebble.label}`}
+              className={`h-[30px] w-11 border-2 transition-colors duration-150 motion-reduce:transition-none ${fillClass(pebble.fill, onDark)}`}
+              style={PEBBLE_SHAPE}
+            />
+          );
+        })}
       </ol>
+      <p className={`mt-2 text-base font-bold ${onDark ? "text-background" : "text-foreground"}`}>
+        {words}.
+      </p>
     </div>
   );
 }
