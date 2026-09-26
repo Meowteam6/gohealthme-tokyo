@@ -47,15 +47,7 @@ import {
   challengeCreateBlock,
   payoutStateOf,
 } from "@/lib/game/join-checks";
-import {
-  Badge,
-  Card,
-  EmptyState,
-  ErrorNote,
-  Money,
-  Skeleton,
-  TAP_TARGET,
-} from "@/components/ui";
+import { Badge, Card, EmptyState, ErrorNote, Money, Skeleton, buttonClasses } from "@/components/ui";
 import {
   ContractNotConfiguredError,
   displayGoalSpec,
@@ -76,9 +68,9 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { useDisplayNames } from "@/lib/use-display-names";
 
-// The coral pressable (components/ui Button) and the ink ghost, for Links.
-const PRIMARY_LINK = `w-full rounded-[18px] bg-accent font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 motion-reduce:transition-none sm:w-auto ${TAP_TARGET}`;
-const GHOST_LINK = `w-full rounded-[18px] border-2 border-foreground font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 sm:w-auto ${TAP_TARGET}`;
+// The shared button looks (components/ui buttonClasses), for Links.
+const PRIMARY_LINK = `${buttonClasses({ size: "sm" })} w-full sm:w-auto`;
+const GHOST_LINK = `${buttonClasses({ variant: "secondary", size: "sm" })} w-full sm:w-auto`;
 const CARD_TITLE =
   "mt-1 break-words font-display text-xl font-bold leading-snug";
 const SECTION_TITLE =

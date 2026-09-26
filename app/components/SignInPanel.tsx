@@ -23,6 +23,7 @@ import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useBaseAccountConnect } from "@/lib/useBaseAccountConnect";
 import { markExternalConnectIntent } from "@/lib/wallet-connect-intent";
+import { buttonClasses } from "@/components/ui";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -138,7 +139,7 @@ function SignInPanelInner() {
             onClick={() => {
               void verify();
             }}
-            className="min-h-12 w-full rounded-[18px] font-bold shadow-[var(--shadow-pop)] active:translate-y-1 active:shadow-none disabled:translate-y-0 disabled:shadow-none bg-accent px-5 py-3 text-base text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className={`${buttonClasses()} w-full`}
           >
             {step.kind === "verifying" ? "Verifying..." : "Verify and continue"}
           </button>
@@ -198,7 +199,7 @@ function SignInPanelInner() {
               setError(null);
               void connectBase();
             }}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[18px] border-2 border-foreground bg-transparent px-4 py-3 text-base font-bold text-foreground hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-60"
+            className={`${buttonClasses({ variant: "secondary" })} flex w-full`}
           >
             <span
               aria-hidden="true"

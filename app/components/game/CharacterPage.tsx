@@ -9,6 +9,7 @@ import CharacterCreation from "@/components/game/CharacterCreation";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useOnboarding } from "@/lib/game/onboarding-store";
 import type { StepId } from "@/lib/game/character";
+import { buttonClasses } from "@/components/ui";
 
 export default function CharacterPage({
   focus,
@@ -24,7 +25,7 @@ export default function CharacterPage({
       {next !== null ? (
         <Link
           href={next}
-          className="inline-flex min-h-11 items-center rounded-[18px] border-2 border-foreground bg-transparent px-4 font-bold hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
+          className={`${buttonClasses({ variant: "secondary", size: "sm" })}`}
         >
           Back to the run
         </Link>

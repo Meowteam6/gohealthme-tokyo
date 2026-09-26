@@ -7,7 +7,7 @@ import {
   startBlinkTopUp,
   type BlinkDepositOutcome,
 } from "@/lib/blink";
-import { ErrorNote } from "@/components/ui";
+import { ErrorNote, buttonClasses } from "@/components/ui";
 
 /**
  * One-tap stablecoin top-up via Blink. Pulls USDC from the user's existing
@@ -121,7 +121,7 @@ export default function BlinkTopUp({
         onClick={() => {
           void startTopUp();
         }}
-        className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+        className={`${buttonClasses()} w-full`}
       >
         {status.kind === "opening"
           ? "Opening Blink..."

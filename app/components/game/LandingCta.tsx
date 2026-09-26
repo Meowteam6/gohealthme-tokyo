@@ -7,26 +7,22 @@
 import Link from "next/link";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { useEmbeddedWallet } from "@/lib/wallet";
-
-// The Button primary look (components/ui.tsx) on a Link: coral fill, ink
-// text, the pressable 4px bottom shadow. Full width on a phone.
-const PRIMARY =
-  "inline-flex min-h-14 w-full items-center justify-center rounded-[18px] bg-accent px-7 py-3 text-lg font-bold text-foreground shadow-[var(--shadow-pop)] transition-transform hover:bg-accent-hover active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto";
+import { ChevronLink, buttonClasses } from "@/components/ui";
 
 export default function LandingCta() {
   const { ready, authenticated } = useEmbeddedWallet();
   const signedIn = DYNAMIC_CONFIGURED && ready && authenticated;
   return (
-    <div className="flex flex-col items-center gap-1 sm:flex-row sm:items-center sm:gap-5">
-      <Link href={signedIn ? "/pools" : "/character?next=%2Fpools"} className={PRIMARY}>
+    <div className="flex flex-col items-stretch gap-1">
+      <Link
+        href={signedIn ? "/pools" : "/character?next=%2Fpools"}
+        className={buttonClasses({ block: true })}
+      >
         {signedIn ? "Go to the lobby" : "Make your player"}
       </Link>
-      <Link
-        href="/pools"
-        className="inline-flex min-h-11 items-center font-bold text-accent-deep underline underline-offset-4 hover:text-foreground"
-      >
+      <ChevronLink href="/pools" className="self-center">
         See the open runs first
-      </Link>
+      </ChevronLink>
     </div>
   );
 }

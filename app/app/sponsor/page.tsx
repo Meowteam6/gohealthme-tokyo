@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import SponsorConsole from "@/components/SponsorConsole";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, buttonClasses } from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "Sponsor a health goal",
@@ -35,7 +35,7 @@ export default function SponsorPage() {
           action={
             <Link
               href="/pools"
-              className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-5 py-3 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
+              className={`${buttonClasses()}`}
             >
               Browse pools instead
             </Link>

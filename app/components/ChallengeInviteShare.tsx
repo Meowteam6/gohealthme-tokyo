@@ -12,7 +12,7 @@ import { useState } from "react";
 import { fetchWithWalletAuth } from "@/lib/client-auth";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import ShareChallenge from "@/components/ShareChallenge";
-import { TAP_TARGET } from "@/components/ui";
+import { buttonClasses } from "@/components/ui";
 
 type Reveal =
   | { kind: "idle" }
@@ -82,7 +82,7 @@ export default function ChallengeInviteShare({
         type="button"
         onClick={() => void reveal()}
         disabled={state.kind === "loading"}
-        className={`inline-flex items-center justify-center rounded-[18px] bg-accent font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none ${TAP_TARGET}`}
+        className={`${buttonClasses({ size: "sm" })}`}
       >
         {state.kind === "loading"
           ? "Getting your link..."

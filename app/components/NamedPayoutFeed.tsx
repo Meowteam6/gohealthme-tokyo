@@ -13,7 +13,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import Spotter from "@/components/spotter/Spotter";
-import { EmptyState, Money, TAP_TARGET } from "@/components/ui";
+import { EmptyState, Money, TAP_TARGET, buttonClasses } from "@/components/ui";
 import { arcTxUrl } from "@/lib/chains";
 import { shortAddress } from "@/lib/social";
 
@@ -176,7 +176,7 @@ export default function NamedPayoutFeed() {
           action={
             <Link
               href="/pools"
-              className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-6 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
+              className={`${buttonClasses()}`}
             >
               Find a run
             </Link>

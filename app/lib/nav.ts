@@ -14,6 +14,13 @@ export interface NavItem {
   label: string;
 }
 
+/** A signed-out visitor's header: where the runs are and how a run pays. The
+ *  player tabs mean nothing before there is a player. */
+export const SIGNED_OUT_NAV_ITEMS: readonly NavItem[] = [
+  { href: "/pools", label: "Runs" },
+  { href: "/#how", label: "How it pays" },
+];
+
 export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/pools", label: "Lobby" },
   { href: "/dashboard", label: "My runs" },

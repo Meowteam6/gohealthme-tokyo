@@ -80,7 +80,7 @@ export default function SponsorPoolOutcome({
   const isDocGoal = evidenceTypeOf(pool.goalSpec) === "document";
 
   return (
-    <article className="flex flex-col gap-4 rounded-3xl border-2 border-edge bg-surface p-5 shadow-[var(--shadow-pop-edge)] sm:p-6">
+    <article className="flex flex-col gap-4 rounded-3xl border-2 border-edge bg-surface p-5 sm:p-6">
       <header className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">

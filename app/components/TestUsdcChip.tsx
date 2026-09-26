@@ -24,6 +24,7 @@ import {
   reconcileWalletUsdc,
   useTestUsdcFunding,
 } from "@/lib/faucet-funding";
+import { buttonClasses } from "@/components/ui";
 
 /** What the last tap actually did. `fallback` keeps its dashboard link for
  *  real failures; `enough` and `capped` are not failures and get no link. */
@@ -119,7 +120,7 @@ export default function TestUsdcChip() {
           void run();
         }}
         title="Add practice money to your account. Not real money — never charged."
-        className="inline-flex min-h-11 items-center rounded-full border-2 border-foreground px-3 text-xs font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+        className={`${buttonClasses({ variant: "secondary", size: "sm" })} px-3`}
       >
         {label}
       </button>

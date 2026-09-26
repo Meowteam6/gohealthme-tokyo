@@ -16,6 +16,7 @@ import { formatUsdc, shortAddress } from "@/lib/contract";
 import { FAUCET_GRANT_UUSDC } from "@/lib/money-guards";
 import { FAUCET_URL, FUNDING_STEPS } from "@/lib/tx-errors";
 import { type FundingResult, useTestUsdcFunding } from "@/lib/faucet-funding";
+import { buttonClasses } from "@/components/ui";
 
 type CopyState = { kind: "idle" } | { kind: "copied" } | { kind: "failed" };
 
@@ -211,7 +212,7 @@ export default function FundingHelp({
             onClick={() => {
               void runFunding();
             }}
-            className="mt-4 min-h-11 w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className={`${buttonClasses({ size: "sm" })} mt-4 w-full`}
           >
             {primaryLabel}
           </button>

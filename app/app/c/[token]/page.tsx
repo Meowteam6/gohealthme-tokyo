@@ -7,7 +7,7 @@ import SpotterSays from "@/components/SpotterSays";
 import Lobby from "@/components/game/Lobby";
 import { CommitmentTermsList } from "@/components/CommitmentTerms";
 import Spotter from "@/components/spotter/Spotter";
-import { EmptyState, Money, TAP_TARGET } from "@/components/ui";
+import { EmptyState, Money, buttonClasses } from "@/components/ui";
 import {
   fetchParticipants,
   fetchPool,
@@ -44,9 +44,8 @@ function nowUnixSeconds(): bigint {
   return BigInt(Math.floor(Date.now() / 1000));
 }
 
-// The coral pressable toy (components/ui Button) for a Link: coral fill, ink
-// text, the 4px deeper-coral bottom shadow that compresses on press.
-const PRIMARY_LINK = `rounded-[18px] bg-accent font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 motion-reduce:transition-none ${TAP_TARGET}`;
+// The primary button look (components/ui buttonClasses) for a Link.
+const PRIMARY_LINK = `${buttonClasses({ size: "sm" })}`;
 
 // Display headline: Bricolage 800, tight, and wrapping (never overflowing) a
 // long @handle at 360px.

@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { displayGoalSpec, formatUsdc } from "@/lib/contract";
-import { Badge, EmptyState, ErrorNote, Money, Skeleton } from "@/components/ui";
+import { Badge, EmptyState, ErrorNote, Money, Skeleton, buttonClasses } from "@/components/ui";
 
 interface Match {
   poolId: string;
@@ -141,7 +141,7 @@ export default function GoalMatch({ query }: { query: string }) {
               <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link
                   href="/pools/create"
-                  className="inline-flex min-h-11 items-center rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-foreground hover:bg-accent-hover"
+                  className={`${buttonClasses({ size: "sm" })}`}
                 >
                   Create the pool
                 </Link>

@@ -15,11 +15,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import Spotter from "@/components/spotter/Spotter";
-import { EmptyState, Skeleton } from "@/components/ui";
+import { EmptyState, Skeleton, buttonClasses, TEXT_LINK } from "@/components/ui";
 import CharacterCard from "@/components/game/CharacterCard";
 import LockPanel from "@/components/game/LockPanel";
 import RunSlip from "@/components/game/RunSlip";
-import { GHOST_LINK, PRIMARY_LINK, TEXT_LINK } from "@/components/game/link-styles";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useLobby } from "@/lib/game/useLobby";
 import { lobbyNeedsSensorCheck, type LobbyRow } from "@/lib/game/lobby";
@@ -111,7 +110,7 @@ export default function Lobby({
           </p>
           <Link
             href={`/character?next=${encodeURIComponent(returnTo)}`}
-            className={`shrink-0 ${PRIMARY_LINK}`}
+            className={`shrink-0 ${buttonClasses()}`}
           >
             Sign in
           </Link>
@@ -145,7 +144,7 @@ export default function Lobby({
           <div className="min-w-0">
             <p className="font-bold">I could not read the runs from Base Sepolia just now.</p>
             <p className="mt-1 text-sm text-foreground/85">Nothing changed on your side.</p>
-            <button type="button" onClick={retry} className={`mt-3 ${GHOST_LINK}`}>
+            <button type="button" onClick={retry} className={`mt-3 ${buttonClasses({ variant: "secondary" })}`}>
               Read the runs again
             </button>
           </div>
@@ -189,7 +188,7 @@ export default function Lobby({
                 line="Nothing running. I'm on break."
                 detail="Nobody has put a goal on the board. Start one and I will hold the coin."
                 action={
-                  <Link href="/pools/create" className={PRIMARY_LINK}>
+                  <Link href="/pools/create" className={buttonClasses()}>
                     Start a run
                   </Link>
                 }
@@ -202,10 +201,10 @@ export default function Lobby({
             </div>
           ) : (
             <div className="flex flex-wrap gap-3">
-              <Link href="/pools/create" className={GHOST_LINK}>
+              <Link href="/pools/create" className={buttonClasses({ variant: "secondary" })}>
                 Start a run
               </Link>
-              <Link href="/challenge/new" className={GHOST_LINK}>
+              <Link href="/challenge/new" className={buttonClasses({ variant: "secondary" })}>
                 Challenge a friend
               </Link>
             </div>

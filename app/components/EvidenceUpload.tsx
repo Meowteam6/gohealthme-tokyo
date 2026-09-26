@@ -50,7 +50,7 @@ import {
 import AgentReceipt from "@/components/AgentReceipt";
 import Countdown from "@/components/Countdown";
 import PayoutMoment from "@/components/PayoutMoment";
-import { ErrorNote, Skeleton } from "@/components/ui";
+import { ErrorNote, Skeleton, buttonClasses } from "@/components/ui";
 import SignInGate from "@/components/SignInGate";
 
 // text/plain stays accepted so old sample records keep working, but it is
@@ -621,7 +621,7 @@ function EvidenceUploadInner({
                 type="button"
                 disabled={!ready}
                 onClick={openSignIn}
-                className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+                className={`${buttonClasses()} w-full`}
               >
                 Sign in to see this claim
               </button>
@@ -631,7 +631,7 @@ function EvidenceUploadInner({
           <button
             type="button"
             onClick={unlockClaim}
-            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
+            className={`${buttonClasses()} w-full`}
           >
             Sign and show my claim
           </button>
@@ -915,7 +915,7 @@ function EvidenceUploadInner({
                 }
                 void submit();
               }}
-              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className={`${buttonClasses()} w-full`}
             >
               {authenticated
                 ? "Submit and get paid"

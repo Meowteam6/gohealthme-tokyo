@@ -20,7 +20,7 @@ import {
   isUserRejection,
 } from "@/lib/client-auth";
 import { checkEmoji, checkHandle, HANDLE_MAX, EMOJI_MAX } from "@/lib/social";
-import { Button, ErrorNote } from "@/components/ui";
+import { Button, ErrorNote, buttonClasses } from "@/components/ui";
 import Spotter from "@/components/spotter/Spotter";
 import SignInGate from "@/components/SignInGate";
 
@@ -138,7 +138,7 @@ function ClaimHandleInner() {
             payouts, never the health category behind them.
           </p>
           <div className="flex flex-wrap gap-3">
-            <Link href={`/u/${status.handle}`} className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-6 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2">
+            <Link href={`/u/${status.handle}`} className={`${buttonClasses()}`}>
               View your page
             </Link>
             <Button

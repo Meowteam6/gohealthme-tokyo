@@ -32,7 +32,7 @@ import {
   sepoliaTxUrl,
 } from "@/lib/ens/names";
 import { forgetName, rememberName } from "@/lib/ens/client-cache";
-import { ErrorNote } from "@/components/ui";
+import { ErrorNote, buttonClasses } from "@/components/ui";
 import SignInGate from "@/components/SignInGate";
 
 export interface EnsNameClaimProps {
@@ -423,7 +423,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
                 }
                 void submitLink();
               }}
-              className="min-h-12 w-full rounded-[18px] font-bold shadow-[var(--shadow-pop)] active:translate-y-1 active:shadow-none disabled:translate-y-0 disabled:shadow-none bg-accent px-5 py-3.5 text-base text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className={`${buttonClasses()} w-full`}
             >
               {status.kind === "signing"
                 ? "Waiting for your signature..."
@@ -494,7 +494,7 @@ export default function EnsNameClaim({ address, currentName, onClaimed }: EnsNam
               }
               void submit();
             }}
-            className="min-h-12 w-full rounded-[18px] font-bold shadow-[var(--shadow-pop)] active:translate-y-1 active:shadow-none disabled:translate-y-0 disabled:shadow-none bg-accent px-5 py-3.5 text-base text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className={`${buttonClasses()} w-full`}
           >
             {status.kind === "signing"
               ? "Waiting for your signature..."

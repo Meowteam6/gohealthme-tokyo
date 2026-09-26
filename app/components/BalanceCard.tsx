@@ -8,7 +8,7 @@ import {
   FAUCET_GRANT_UUSDC,
   WITHDRAW_DAILY_CAP_UUSDC,
 } from "@/lib/money-guards";
-import { ErrorNote } from "@/components/ui";
+import { ErrorNote, buttonClasses } from "@/components/ui";
 
 /**
  * GoHealthMe balance card.
@@ -208,7 +208,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
         onClick={() => {
           void claimFaucet();
         }}
-        className="mt-4 w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+        className={`${buttonClasses()} mt-4 w-full`}
       >
         {claiming
           ? "Claiming from the faucet..."
@@ -241,7 +241,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
         onClick={() => {
           void moveToArc();
         }}
-        className="mt-3 w-full rounded-xl bg-accent px-5 py-3 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+        className={`${buttonClasses()} mt-3 w-full`}
       >
         {moving
           ? "Moving to Base wallet..."

@@ -33,7 +33,7 @@ import type {
   PublicFeedScreen,
 } from "@/lib/server/agent/feed-view";
 import { settleMomentLine } from "@/components/AgentReceipt";
-import { EmptyState, ErrorNote, Money, Skeleton } from "@/components/ui";
+import { EmptyState, ErrorNote, Money, Skeleton, buttonClasses } from "@/components/ui";
 import Spotter from "@/components/spotter/Spotter";
 
 // The feed's human-readable stage names for a stalled claim. The feed-view
@@ -301,7 +301,7 @@ export default function AgentFeed() {
           detail="When SPOTTER checks one of your runs, its verdict, your World ID confirmation and the payout land here. Everyone's claims are one tap away."
           line="Nothing running. I'm on break."
           action={
-            <Link href="/pools" className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-6 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 motion-reduce:transition-none">
+            <Link href="/pools" className={`${buttonClasses()}`}>
               See the open runs
             </Link>
           }
@@ -312,7 +312,7 @@ export default function AgentFeed() {
           detail="Enter a run, prove it from your wearable or an uploaded record, and SPOTTER checks the result and pays out here when the run settles."
           line="No claims to check. I'm on break."
           action={
-            <Link href="/pools" className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-6 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 motion-reduce:transition-none">
+            <Link href="/pools" className={`${buttonClasses()}`}>
               See the open runs
             </Link>
           }

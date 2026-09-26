@@ -19,7 +19,7 @@ import { COMING_LINE } from "@/lib/provider-capabilities";
 import { useUsdcDeposit } from "@/lib/useUsdcDeposit";
 import { isEconomicallyDeadConfig } from "@/lib/pool-lifecycle";
 import { resolveNewPoolId } from "@/lib/resolve-pool-id";
-import { ArcTxLink, Button, Chip, EmptyState, ErrorNote } from "@/components/ui";
+import { ArcTxLink, Button, Chip, EmptyState, ErrorNote, buttonClasses } from "@/components/ui";
 import { CommitmentRangeLine } from "@/components/CommitmentTerms";
 import Spotter from "@/components/spotter/Spotter";
 import GaslessBadge from "@/components/GaslessBadge";
@@ -123,7 +123,7 @@ function CreatePoolInner() {
         title="Runs are off on this build"
         detail="Starting a run is not switched on for this build yet. Nothing is wrong on your side."
         action={
-          <Link href="/pools" className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-5 py-3 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2">
+          <Link href="/pools" className={`${buttonClasses()}`}>
             Go to the lobby
           </Link>
         }
@@ -699,7 +699,7 @@ export default function CreatePool() {
         title="Sign-in is off on this build"
         detail="Starting a run needs sign-in, which is not switched on for this build yet. Nothing is wrong on your side."
         action={
-          <Link href="/pools" className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-5 py-3 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2">
+          <Link href="/pools" className={`${buttonClasses()}`}>
             Go to the lobby
           </Link>
         }

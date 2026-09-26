@@ -19,7 +19,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { challengeBackerUrl, challengeShareUrl } from "@/lib/challenges";
-import { TAP_TARGET } from "@/components/ui";
+import { TAP_TARGET, buttonClasses } from "@/components/ui";
 
 type CopyState = "idle" | "copied" | "failed";
 
@@ -132,20 +132,20 @@ export default function ShareChallenge({
           <button
             type="button"
             onClick={nativeShare}
-            className={`flex-1 rounded-[18px] bg-accent font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 motion-reduce:transition-none ${TAP_TARGET}`}
+            className={`${buttonClasses({ size: "sm" })} flex-1`}
           >
             {shareLabel}
           </button>
         ) : null}
         <a
           href={smsHref(body)}
-          className={`flex-1 rounded-[18px] border-2 border-foreground text-center font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
+          className={`${buttonClasses({ variant: "secondary", size: "sm" })} flex-1 text-center`}
         >
           Text
         </a>
         <a
           href={mailtoHref(emailSubject, body)}
-          className={`flex-1 rounded-[18px] border-2 border-foreground text-center font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
+          className={`${buttonClasses({ variant: "secondary", size: "sm" })} flex-1 text-center`}
         >
           Email
         </a>

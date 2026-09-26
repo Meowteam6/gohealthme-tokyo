@@ -91,7 +91,7 @@ export default function PayoutMoment({
         />
         <span
           aria-hidden="true"
-          className="ghm-coin-flip absolute bottom-[22%] right-0 grid h-14 w-14 place-items-center rounded-full border-[3px] border-foreground bg-gold font-display text-lg font-extrabold tabular-nums text-foreground shadow-[inset_-5px_-4px_0_rgba(127,90,0,0.3)] sm:h-16 sm:w-16"
+          className="ghm-coin-flip absolute bottom-[22%] right-0 grid h-14 w-14 place-items-center rounded-full bg-ink text-lg font-bold text-gold shadow-[0_0_0_3px_var(--gold)] sm:h-16 sm:w-16"
         >
           +
         </span>

@@ -269,10 +269,10 @@ const PRIVACY_POINTS: { icon: IconName; title: string; body: string }[] = [
 
 function PrivacyFeature() {
   return (
-    <section className="overflow-hidden rounded-3xl bg-board px-5 py-8 text-chalk sm:px-9 sm:py-10">
+    <section className="overflow-hidden rounded-card bg-surface-raised px-5 py-8 text-foreground shadow-[inset_0_0_0_1px_var(--border)] sm:px-9 sm:py-10">
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
         <div>
-          <span className="inline-flex items-center gap-2 rounded-full bg-chalk/10 px-3 py-1.5 text-sm font-bold">
+          <span className="inline-flex items-center gap-2 rounded-tag bg-moonlight/10 px-3 py-1.5 text-sm font-semibold text-moonlight">
             <Icon name="shield" className="h-4 w-4" />
             The promise, not the fine print
           </span>
@@ -281,7 +281,7 @@ function PrivacyFeature() {
             <br />
             Their health data never is.
           </h2>
-          <p className="mt-3 max-w-md text-base leading-relaxed text-chalk/85">
+          <p className="mt-3 max-w-md text-base leading-relaxed text-muted">
             You always see what you funded and what got paid, in aggregate,
             never a participant&apos;s actual steps, sleep, or vitals. That line
             does not move for anyone.
@@ -292,15 +292,15 @@ function PrivacyFeature() {
           {PRIVACY_POINTS.map((point) => (
             <div
               key={point.title}
-              className="rounded-2xl border border-board-edge bg-chalk/[0.06] p-4"
+              className="rounded-2xl border border-edge bg-fill-quiet p-4"
             >
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-chalk/10">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-fill-quiet-hover">
                 <Icon name={point.icon} className="h-4 w-4" />
               </span>
               <p className="mt-3 font-display text-base font-bold">
                 {point.title}
               </p>
-              <p className="mt-1 text-sm leading-relaxed text-chalk/80">
+              <p className="mt-1 text-sm leading-relaxed text-muted">
                 {point.body}
               </p>
             </div>

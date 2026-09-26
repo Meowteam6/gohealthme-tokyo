@@ -48,9 +48,8 @@ function amount(usd: string | null): string {
   return Number.isFinite(n) ? n.toFixed(2) : usd;
 }
 
-// Each event type gets a colored status dot and a one-line verb. Colors carry
-// the app's own meaning: emerald = a person acting on their goal, coral = the
-// human dare/reward, gold = money actually landing.
+// Each event type gets a status dot and a one-line verb. Gold is money
+// actually landing; the rest are night tokens.
 const META: Record<
   ActivityType,
   { dot: string; line: (name: string) => string }

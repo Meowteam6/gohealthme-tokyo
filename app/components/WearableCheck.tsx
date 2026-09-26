@@ -66,7 +66,7 @@ import {
 import AgentReceipt from "@/components/AgentReceipt";
 import Countdown from "@/components/Countdown";
 import PayoutMoment from "@/components/PayoutMoment";
-import { Button, ErrorNote, Skeleton, TAP_TARGET } from "@/components/ui";
+import { Button, ErrorNote, Skeleton, TAP_TARGET, buttonClasses } from "@/components/ui";
 import Spotter from "@/components/spotter/Spotter";
 import SignInGate from "@/components/SignInGate";
 
@@ -997,7 +997,7 @@ function WearableCheckInner({
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setConnectFallbackUrl(null)}
-              className="flex min-h-12 w-full items-center justify-center rounded-[18px] border-2 border-foreground px-5 py-3 text-center text-base font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
+              className={`${buttonClasses({ variant: "secondary" })} flex w-full text-center`}
             >
               Your browser blocked the popup - tap here to connect
             </a>

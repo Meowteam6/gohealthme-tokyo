@@ -3,8 +3,11 @@ import Link from "next/link";
 import HeroActivityTicker from "@/components/HeroActivityTicker";
 import { CommitmentBeats } from "@/components/CommitmentTerms";
 import LandingCta from "@/components/game/LandingCta";
-import Spotter, { SpotterBubble } from "@/components/spotter/Spotter";
-import { SPOTTER_BACKDROP_SRC, type SpotterPose } from "@/lib/spotter-poses";
+import Spotter from "@/components/spotter/Spotter";
+import Perch from "@/components/spotter/Perch";
+import Moon from "@/components/spotter/Moon";
+import { Card, Fine, buttonClasses } from "@/components/ui";
+import type { SpotterPose } from "@/lib/spotter-poses";
 import { approvalMode } from "@/lib/server/agent/approval-provider";
 import { worldSetup } from "@/lib/server/world/config";
 
@@ -72,65 +75,44 @@ export default function Home() {
   const RUN = runSteps(human, confirm);
   return (
     <div className="flex flex-col gap-14 pb-4 sm:gap-20">
-      {/* The poster. SPOTTER holds the coin; the page says what the coin is
-          for; one coral action. Full bleed on a phone. */}
+      {/* The night stage (docs/DESIGN.md): the headline, then the moon behind
+          the card and SPOTTER asleep on its top edge. The card carries the one
+          action. */}
       <section
         aria-labelledby="poster-title"
-        className="relative -mx-4 -mt-8 overflow-hidden bg-surface-raised sm:mx-0 sm:mt-0 sm:rounded-3xl sm:border sm:border-edge"
+        className="relative isolate max-[899px]:-mx-[var(--gutter)] max-[899px]:overflow-x-clip max-[899px]:px-[var(--gutter)] min-[900px]:grid min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,500px)] min-[900px]:items-center min-[900px]:gap-x-14 min-[900px]:pb-10"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={SPOTTER_BACKDROP_SRC}
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-3/5 bg-gradient-to-b from-background/90 via-background/60 to-transparent lg:inset-y-0 lg:left-0 lg:h-full lg:w-3/5 lg:bg-gradient-to-r"
-        />
+        <div>
+          <h1 id="poster-title" className="type-display m-0 text-[2.75rem] min-[900px]:text-[5rem] min-[900px]:leading-[0.98]">
+            Put money on yourself.
+          </h1>
+          <p className="m-0 mt-3 text-[1.0625rem] leading-[1.45] text-muted min-[900px]:mt-[22px] min-[900px]:text-[1.3125rem]">
+            <span className="block">Stake on your sleep or workouts.</span>
+            <span className="block">Your wearable decides.</span>
+          </p>
+        </div>
 
-        <div className="relative grid min-h-[calc(100svh-8.5rem)] grid-rows-[auto_1fr_auto] px-4 pt-7 sm:px-10 sm:pt-10 lg:min-h-[36rem] lg:grid-cols-[1.1fr_0.9fr] lg:grid-rows-1 lg:items-end lg:gap-6">
-          <div className="max-w-xl lg:self-center lg:pb-10">
-            <h1
-              id="poster-title"
-              className="font-display text-[2.5rem] font-extrabold leading-display tracking-display sm:text-[4rem]"
-            >
-              Put money on yourself.
-            </h1>
-            <p className="mt-3 max-w-md text-base leading-snug text-foreground sm:mt-4 sm:text-xl">
-              Stake test USDC on your own health goal. Hit it and you get your
-              stake back plus a share of the stakes people missed. Your
-              wearable decides; SPOTTER settles. Only the verdict goes on
-              chain, never your health data.
-            </p>
-            <div className="mt-5 hidden lg:block">
-              <LandingCta />
-            </div>
-          </div>
-
-          <div className="relative flex min-h-0 items-end justify-center lg:justify-end">
-            <div className="absolute left-0 top-3 z-10 hidden sm:block lg:left-auto lg:right-[62%] lg:top-10">
-              <SpotterBubble line="Hand it over. I'll hold it until your wearable says otherwise." />
-            </div>
-            <Spotter
-              pose="payday"
-              size="hero"
-              priority
-              alt="SPOTTER holding up a gold coin, your stake"
-              className="-mb-1 [&_img]:h-[min(34svh,20rem)] sm:[&_img]:h-[min(46svh,28rem)] lg:[&_img]:h-[32rem]"
-            />
-          </div>
-
-          {/* pb-20 on a phone keeps the action clear of the floating helper
-              button (HelperWidget, fixed bottom-right). */}
-          <div className="-mx-4 border-t border-edge bg-background/95 px-4 pb-20 pt-4 backdrop-blur sm:-mx-10 sm:px-10 sm:pb-6 lg:hidden">
-            <LandingCta />
-          </div>
+        <div className="relative mt-[18px] min-[900px]:mt-0">
+          <Moon className="absolute left-[calc(50%-16px)] top-0.5 z-0 min-[900px]:left-auto min-[900px]:right-[-8px] min-[900px]:top-[-18px]" />
+          <Perch state="landing-hero" side="left" inset={[6, 18]} priority decorative>
+            <Card variant="hero" className="z-[2]">
+              <p className="m-0 text-[1.25rem] font-semibold leading-tight tracking-[-0.01em] min-[900px]:text-[1.375rem]">
+                Sleep and workout runs, checked by your wearable
+              </p>
+              <p className="m-0 mt-2 text-sm leading-[1.45] text-muted">
+                Everyone stakes the same. Hit your goal and your stake comes
+                back with a share. Your health data stays private.
+              </p>
+              <div className="mt-3.5">
+                <LandingCta />
+              </div>
+              <Fine className="mt-2 text-center">Test USDC during beta.</Fine>
+            </Card>
+          </Perch>
         </div>
       </section>
 
-      <p className="-mt-8 max-w-2xl text-sm text-muted sm:-mt-12">
+      <p className="-mt-6 max-w-2xl text-sm text-muted sm:-mt-10">
         In beta on Base Sepolia test USDC, built at ETHGlobal Tokyo 2026:
         nothing here can cost you real money. Not medical or financial advice.{" "}
         <Link href="/privacy" className="text-accent-deep underline underline-offset-2 hover:text-foreground">
@@ -143,7 +125,7 @@ export default function Home() {
         .
       </p>
 
-      <section aria-labelledby="how-it-works" className="space-y-5">
+      <section id="how" aria-labelledby="how-it-works" className="scroll-mt-20 space-y-5">
         <h2
           id="how-it-works"
           className="font-display text-[2rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]"
@@ -204,7 +186,7 @@ export default function Home() {
         <div className="flex flex-col items-start gap-2">
           <Link
             href="/challenge/new"
-            className="inline-flex min-h-12 items-center justify-center rounded-[18px] border-2 border-foreground px-5 py-3 text-base font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            className={`${buttonClasses({ variant: "secondary" })}`}
           >
             Challenge a friend
           </Link>

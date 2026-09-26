@@ -30,15 +30,7 @@ import Countdown from "@/components/Countdown";
 import SignInPanel from "@/components/SignInPanel";
 import SpotterSays from "@/components/SpotterSays";
 import Spotter from "@/components/spotter/Spotter";
-import { GHOST_LINK, PRIMARY_LINK } from "@/components/game/link-styles";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  ErrorNote,
-  Skeleton,
-} from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorNote, Skeleton, buttonClasses } from "@/components/ui";
 import {
   displayGoalSpec,
   evidenceTypeOf,
@@ -298,7 +290,7 @@ function ConnectButton({
             href={fallbackUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={PRIMARY_LINK}
+            className={buttonClasses()}
           >
             Open the wearable connect page
           </a>
@@ -460,7 +452,7 @@ function StreakCard({
           </p>
           <Link
             href="/pools"
-            className={`mt-3 ${GHOST_LINK}`}
+            className={`mt-3 ${buttonClasses({ variant: "secondary" })}`}
           >
             Find a goal you can still prove
           </Link>
@@ -920,7 +912,7 @@ export default function DashboardContent() {
           line="Nothing running. I'm on break."
           detail="Pick a run in the lobby and put money on yourself. Your nights show up here."
           action={
-            <Link href="/pools" className={PRIMARY_LINK}>
+            <Link href="/pools" className={buttonClasses()}>
               Find a run
             </Link>
           }

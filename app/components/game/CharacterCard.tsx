@@ -123,8 +123,8 @@ export default function CharacterCard({
       aria-label="Your character"
       className="overflow-hidden rounded-3xl border border-edge bg-surface"
     >
-      <div className="bg-board px-5 py-4 text-chalk">
-        <p className="text-xs font-semibold text-chalk/70">Player</p>
+      <div className="bg-surface-raised px-5 py-4 text-foreground">
+        <p className="text-xs font-semibold text-haze">Player</p>
         <p className="mt-1 break-all font-display text-[2rem] font-extrabold leading-display tracking-display sm:text-[2.5rem]">
           {nameNode}
         </p>

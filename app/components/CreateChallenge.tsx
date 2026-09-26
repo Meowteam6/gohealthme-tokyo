@@ -73,7 +73,7 @@ import {
   MESSAGE_MAX,
   TARGET_HANDLE_MAX,
 } from "@/lib/challenges";
-import { ArcTxLink, Button, Card, Chip, ErrorNote, Money, Skeleton } from "@/components/ui";
+import { ArcTxLink, Button, Card, Chip, ErrorNote, Money, Skeleton, buttonClasses } from "@/components/ui";
 import Spotter from "@/components/spotter/Spotter";
 import type { SpotterPose } from "@/lib/spotter-poses";
 import { useApprovalProbe } from "@/components/game/ApprovalNote";
@@ -135,14 +135,12 @@ const CHALLENGE_INITIATIVE = "challenge";
 // stakes on join.
 const CHALLENGE_BOUNTY_MODEL = 2;
 
-// A Next Link dressed as the shared candy Button. Button is a <button> and
-// cannot be a Link, so the post-create navigation matches its look here rather
-// than hand-rolling a one-off style: the coral pressable for the go-do-it
-// action, the ink ghost for the quieter "start another".
+// Next Links in the shared button looks (components/ui buttonClasses): the
+// primary for the go-do-it action, the secondary for "start another".
 const CANDY_LINK_PRIMARY =
-  "inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-5 py-3 text-base font-bold text-foreground shadow-[var(--shadow-pop)] transition-transform hover:bg-accent-hover active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  `${buttonClasses()}`;
 const CANDY_LINK_SECONDARY =
-  "inline-flex min-h-12 items-center justify-center rounded-[18px] border-2 border-foreground bg-transparent px-5 py-3 text-base font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  `${buttonClasses({ variant: "secondary" })}`;
 
 /** Which of the two honest variants the creator is building. */
 type Variant = "self" | "dare";
@@ -418,8 +416,8 @@ function SuggestionRow({
 }
 
 // ----------------------------------------------------------------- the type picker
-// The one clear choice, as two tiles. The selected one is ink-edged with an ink
-// press shadow (coral stays the one action colour, on the submit button).
+// The one clear choice, as two tiles. The selected one takes the moon face
+// (the primary action colour stays on the submit button).
 function TypePicker({
   value,
   onChange,

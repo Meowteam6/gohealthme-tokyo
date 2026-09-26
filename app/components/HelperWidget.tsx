@@ -6,7 +6,10 @@
 //
 // It never opens by itself. An auto-opened panel sat on top of the landing
 // hero and the sign-in call to action for every first-time visitor; the
-// bubble's coral dot is the nudge, and the player opens it when they want it.
+// bubble's dot is the nudge, and the player opens it when they want it. It
+// stays off the landing and the run pages (docs/DESIGN.md): there the run card
+// and the stake card carry the one action, and a floating bubble would sit on
+// top of them on a phone.
 //
 // The coach reads the SAME character state as the gate (useCharacter: sign
 // in, prove human, pick a name, pair a sensor) plus the onboarding skips, so
@@ -37,6 +40,7 @@ import {
 } from "@/lib/server/help/knowledge";
 import SignInPanel from "@/components/SignInPanel";
 import Spotter from "@/components/spotter/Spotter";
+import { buttonClasses } from "@/components/ui";
 
 type Tab = "coach" | "ask" | "feedback";
 type AskMessage = { role: "you" | "spotter"; text: string };
@@ -181,7 +185,7 @@ function CoachTab({
           <button
             type="button"
             onClick={onRetry}
-            className="min-h-11 rounded-[18px] bg-accent px-4 py-2 text-sm font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            className={`${buttonClasses({ size: "sm" })}`}
           >
             {step.error !== null ? "Try again" : "Check my spot"}
           </button>
@@ -199,7 +203,7 @@ function CoachTab({
             type="button"
             onClick={onPrimary}
             disabled={step.loading}
-            className="min-h-11 rounded-[18px] bg-accent px-4 py-2 text-sm font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            className={`${buttonClasses({ size: "sm" })}`}
           >
             {copy.primary}
           </button>
@@ -207,7 +211,7 @@ function CoachTab({
             <button
               type="button"
               onClick={onSecondary}
-              className="min-h-11 rounded-[18px] border-2 border-foreground px-4 py-2 text-sm font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+              className={`${buttonClasses({ variant: "secondary", size: "sm" })}`}
             >
               {copy.secondary}
             </button>
@@ -338,7 +342,7 @@ function AskTab({ address }: { address: Address | null }) {
             type="button"
             onClick={() => void submit()}
             disabled={asking || input.trim() === ""}
-            className="min-h-11 rounded-[18px] bg-accent px-4 py-2 text-sm font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            className={`${buttonClasses({ size: "sm" })}`}
           >
             Ask
           </button>
@@ -453,7 +457,7 @@ function FeedbackTab({
         type="button"
         onClick={() => void submit()}
         disabled={busy}
-        className="mt-3 w-full min-h-11 rounded-[18px] bg-accent px-4 py-2 text-sm font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        className={`${buttonClasses({ size: "sm" })} mt-3 w-full`}
       >
         {busy ? "Sending..." : "Send feedback"}
       </button>
@@ -469,7 +473,18 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "feedback", label: "Feedback" },
 ];
 
+/** Routes where the helper bubble never renders. */
+function helperHidden(pathname: string): boolean {
+  return pathname === "/" || /^\/pools\/\d+\/?$/.test(pathname);
+}
+
 export default function HelperWidget() {
+  const pathname = usePathname();
+  if (helperHidden(pathname)) return null;
+  return <HelperWidgetPanel />;
+}
+
+function HelperWidgetPanel() {
   const router = useRouter();
   const pathname = usePathname();
   const view = useCharacter();

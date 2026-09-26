@@ -15,7 +15,13 @@ import {
 } from "@/lib/agent-budget";
 import { toUsd2 } from "@/lib/agent-receipt";
 
-export default function SpotterStatusLine() {
+export default function SpotterStatusLine({
+  outageOnly = false,
+}: {
+  /** Night Shift header: render only while checks are paused, as a band
+   *  under the bar. The healthy line is not header chrome any more. */
+  outageOnly?: boolean;
+}) {
   const { data } = useQuery({
     queryKey: AGENT_WALLET_QUERY_KEY,
     queryFn: fetchAgentWallet,
@@ -27,27 +33,35 @@ export default function SpotterStatusLine() {
   const balance = toUsd2(data.balanceUsd);
 
   if (agentIsBroke(data.balanceUsd)) {
-    return (
+    const line = (
       <Link
         href="/agent"
         role="status"
-        className="flex min-h-11 items-center gap-2 text-sm font-semibold text-warning hover:underline"
+        className="flex min-h-11 items-center gap-2 text-sm font-semibold text-warning no-underline hover:underline"
       >
         <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-warning" />
         SPOTTER is out of check money. Checks wait until it is topped up; your
         stake is safe.
       </Link>
     );
+    if (!outageOnly) return line;
+    return (
+      <div className="border-t border-edge bg-surface-raised">
+        <div className="mx-auto w-full max-w-[75rem] px-gutter">{line}</div>
+      </div>
+    );
   }
+
+  if (outageOnly) return null;
 
   return (
     <Link
       href="/agent"
-      className="flex min-h-11 items-center gap-2 text-sm text-muted hover:text-foreground"
+      className="flex min-h-11 items-center gap-2 text-sm text-muted no-underline hover:text-foreground"
     >
-      <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-otter" />
+      <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-moonlight" />
       SPOTTER is checking, with{" "}
-      <span className="font-bold tabular-nums text-gold-deep">{balance} USDC</span>{" "}
+      <span className="num font-semibold text-gold">{balance} USDC</span>{" "}
       to spend on proof
     </Link>
   );

@@ -13,6 +13,7 @@ import { getSocialStats } from "@/lib/server/social-stats";
 import { NOINDEX } from "@/lib/site";
 import { checkHandle } from "@/lib/social";
 import Spotter from "@/components/spotter/Spotter";
+import { buttonClasses } from "@/components/ui";
 
 // Live on-chain stats and a Supabase lookup on every view, so never prerender.
 export const dynamic = "force-dynamic";
@@ -61,7 +62,7 @@ function NotAHandle({ handle }: { handle: string }) {
       <p className="text-base text-muted">
         That is not a player name anyone can hold here.
       </p>
-      <Link href="/feed" className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-6 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2">
+      <Link href="/feed" className={`${buttonClasses()}`}>
         See who got paid
       </Link>
     </div>
@@ -79,7 +80,7 @@ function LookupFailed({ handle, reference }: { handle: string; reference: string
           This profile could not be loaded right now. That is a problem on our
           side, not a missing page. Reference {reference}.
         </p>
-        <Link href={`/u/${handle}`} className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-6 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2">
+        <Link href={`/u/${handle}`} className={`${buttonClasses()}`}>
           Try again
         </Link>
       </div>

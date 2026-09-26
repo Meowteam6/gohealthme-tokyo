@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { lockCopy, type RunLock } from "@/lib/game/lobby";
 import Spotter from "@/components/spotter/Spotter";
-import { GHOST_LINK, PRIMARY_LINK } from "@/components/game/link-styles";
+import { buttonClasses } from "@/components/ui";
 
 export default function LockPanel({
   lock,
@@ -55,12 +55,12 @@ export default function LockPanel({
         </p>
         <p className="mt-1 text-sm text-foreground/85">{copy.detail}</p>
         {fix.kind === "link" ? (
-          <Link href={fix.href} className={`mt-3 ${GHOST_LINK}`}>
+          <Link href={fix.href} className={`mt-3 ${buttonClasses({ variant: "secondary" })}`}>
             {fix.label}
           </Link>
         ) : fix.kind === "retry" ? (
           onRetry !== undefined ? (
-            <button type="button" onClick={onRetry} className={`mt-3 ${GHOST_LINK}`}>
+            <button type="button" onClick={onRetry} className={`mt-3 ${buttonClasses({ variant: "secondary" })}`}>
               {fix.label}
             </button>
           ) : (
@@ -79,7 +79,7 @@ export default function LockPanel({
                   .catch(() => setDeclined(true))
                   .finally(() => setChecking(false));
               }}
-              className={`${PRIMARY_LINK} disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none`}
+              className={`${buttonClasses()} disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none`}
             >
               {checking ? "Waiting for your signature" : fix.label}
             </button>

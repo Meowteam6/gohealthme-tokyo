@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { DEMO_CHROME, DYNAMIC_CONFIGURED } from "@/lib/config";
@@ -10,27 +10,32 @@ import EnsName from "@/components/ens/EnsName";
 import SpotterStatusLine from "@/components/game/SpotterStatusLine";
 import TestUsdcChip from "@/components/TestUsdcChip";
 import { CopyAddressButton } from "@/components/FundingHelp";
-import { NAV_ITEMS } from "@/lib/nav";
-import Spotter from "@/components/spotter/Spotter";
+import { NAV_ITEMS, SIGNED_OUT_NAV_ITEMS, type NavItem } from "@/lib/nav";
+import { BrandLockup, FOCUS_RING, buttonClasses } from "@/components/ui";
 
-const FOCUS =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+// The header (docs/DESIGN.md, Night Shift chrome). Transparent over the page,
+// then an opaque night bar with a blur once scrolled, so nothing (SPOTTER, the
+// moon) ever shows through it. No status strip: the only thing that may sit
+// under the bar is SPOTTER's outage notice, and only while checks are paused.
 
 function isActive(pathname: string, href: string): boolean {
+  if (href.startsWith("/#")) return false;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function NavLinks({
+  items,
   stacked = false,
   onNavigate,
 }: {
+  items: readonly NavItem[];
   stacked?: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   return (
     <>
-      {NAV_ITEMS.map((item) => {
+      {items.map((item) => {
         const active = isActive(pathname, item.href);
         return (
           <Link
@@ -38,14 +43,14 @@ function NavLinks({
             href={item.href}
             onClick={onNavigate}
             aria-current={active ? "page" : undefined}
-            className={`${FOCUS} ${
+            className={`${FOCUS_RING} ${
               stacked
-                ? "flex min-h-12 items-center rounded-2xl px-4 text-base"
-                : "inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3.5"
-            } font-bold ${
+                ? "flex min-h-12 items-center rounded-control px-4 text-base"
+                : "inline-flex min-h-11 items-center whitespace-nowrap rounded-[10px] px-3 text-[0.9375rem]"
+            } font-medium no-underline ${
               active
-                ? "bg-foreground text-background"
-                : "text-foreground/75 hover:bg-surface-raised hover:text-foreground"
+                ? "bg-fill-quiet-hover text-foreground"
+                : "text-muted hover:bg-fill-quiet hover:text-foreground"
             }`}
           >
             {item.label}
@@ -64,21 +69,20 @@ function AuthControls() {
     return (
       <div
         aria-hidden="true"
-        className="h-11 w-24 animate-pulse rounded-[18px] bg-surface-raised motion-reduce:animate-none"
+        className="h-11 w-24 animate-pulse rounded-control bg-surface-raised motion-reduce:animate-none"
       />
     );
   }
 
   if (!authenticated) {
     // One way in. Character creation owns sign-in (email makes the wallet,
-    // your own wallet is a quiet link inside it), so the header no longer
-    // offers two competing buttons that each open a different flow.
+    // your own wallet is a quiet link inside it).
     const next =
       pathname === "/character" ? "" : `?next=${encodeURIComponent(pathname)}`;
     return (
       <Link
         href={`/character${next}`}
-        className={`inline-flex min-h-11 items-center rounded-[18px] bg-accent px-4 text-sm font-bold text-foreground shadow-[0_3px_0_0_var(--accent-strong)] hover:bg-accent-hover active:translate-y-[3px] active:shadow-none motion-reduce:transition-none ${FOCUS}`}
+        className={buttonClasses({ variant: "secondary", size: "sm" })}
       >
         Sign in
       </Link>
@@ -91,7 +95,7 @@ function AuthControls() {
       onClick={() => {
         void logout();
       }}
-      className={`min-h-11 rounded-[18px] border-2 border-foreground/20 px-3.5 py-2 text-sm font-bold text-foreground hover:border-foreground ${FOCUS}`}
+      className={buttonClasses({ variant: "secondary", size: "sm" })}
     >
       Sign out
     </button>
@@ -99,10 +103,9 @@ function AuthControls() {
 }
 
 /**
- * Signed out this answers "what is this about to ask me for" before Dynamic's
- * modal takes over the screen. Signed in it carries the wallet address, which
- * is the first thing anyone needs: funding the wallet with test USDC at
- * the faucet starts by copying this.
+ * The signed-in player's name and address, with a copy button (funding the
+ * wallet at the faucet starts by copying the address). Renders nothing signed
+ * out.
  */
 function WalletNote() {
   const { authenticated, address } = useEmbeddedWallet();
@@ -110,55 +113,18 @@ function WalletNote() {
   // address. Disabled until a wallet exists, so it costs nothing signed out.
   const { handleFor } = useDisplayNames(address !== null ? [address] : []);
 
-  if (!authenticated) {
-    return (
-      <p className="py-2 text-xs leading-relaxed text-muted">
-        Sign in with an email and a wallet is made for you. No seed phrase.
-      </p>
-    );
-  }
-
-  if (address === null) return null;
+  if (!authenticated || address === null) return null;
   const handle = handleFor(address);
 
   return (
-    <div className="flex items-center gap-2 py-1">
+    <div className="flex min-w-0 items-center gap-2">
       <Link
         href="/character"
-        className={`min-w-0 truncate rounded text-sm font-bold text-foreground hover:text-accent-deep ${FOCUS}`}
+        className={`inline-flex min-h-11 min-w-0 items-center truncate rounded-md text-sm font-semibold text-foreground no-underline hover:text-muted ${FOCUS_RING}`}
       >
-        <EnsName
-          address={address}
-          fallback={handle !== null ? `@${handle}` : undefined}
-        />
+        <EnsName address={address} fallback={handle !== null ? `@${handle}` : undefined} />
       </Link>
       <CopyAddressButton address={address} compact />
-    </div>
-  );
-}
-
-/**
- * The row under the header bar. It exists because the 64px bar cannot hold an
- * address, an explanation, and SPOTTER's balance at 375px without crushing the
- * nav to nothing. SPOTTER's wallet status is one line here on every screen
- * size, which replaced the out-of-budget wall on each pool. Vertical padding
- * sits on the children, so the row collapses to a hairline when every child
- * renders null.
- */
-function HeaderNote() {
-  return (
-    <div className="border-t border-edge bg-surface/60">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-3 px-4">
-        {DYNAMIC_CONFIGURED ? (
-          <div className="flex flex-wrap items-center gap-x-3">
-            <WalletNote />
-            <TestUsdcChip />
-          </div>
-        ) : null}
-        <div className="w-full sm:ml-auto sm:w-auto">
-          <SpotterStatusLine />
-        </div>
-      </div>
     </div>
   );
 }
@@ -167,103 +133,119 @@ function AuthOrPill() {
   if (DYNAMIC_CONFIGURED) return <AuthControls />;
   if (DEMO_CHROME) return null;
   // Real unconfigured builds keep the honest pill; DEMO_CHROME is the
-  // cosmetic-only recording flag (lib/config.ts) and hiding operator chrome is
-  // exactly its charter. The join panel's fail-closed refusal is untouched.
+  // cosmetic-only recording flag (lib/config.ts).
   return (
-    <span className="rounded-full border border-edge bg-surface px-3 py-2 text-xs font-bold text-muted">
+    <span className="inline-flex h-11 items-center rounded-control bg-fill-quiet px-3 text-[0.8125rem] font-semibold text-haze shadow-[inset_0_0_0_1px_var(--border)]">
       Sign-in is off on this build
     </span>
   );
 }
 
+function MenuIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      {open ? (
+        <>
+          <path d="M6 6l12 12" />
+          <path d="M18 6L6 18" />
+        </>
+      ) : (
+        <>
+          <path d="M4 7h16" />
+          <path d="M4 12h16" />
+          <path d="M4 17h16" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 export default function Header() {
-  // Mobile (375px) cannot fit wordmark + five links + auth on one row. Below
-  // `sm` the links collapse into a tap-to-open menu (a hidden horizontal
-  // scroll strip is undiscoverable on a phone and left Challenges/Wallet
-  // unreachable); at `sm` and up the inline nav returns. The menu closes on
-  // navigation (pathname effect) and on any link tap.
-  // The menu is open FOR a path, so navigating anywhere closes it without an
-  // effect that sets state after render.
+  // Signed out, the header is the brand, two links from 640px up, and Sign in:
+  // nothing to open on a phone. Signed in, five links do not fit beside the
+  // account controls below 1024px, so they collapse into a menu that also
+  // carries the wallet address and the test USDC chip. The menu is open FOR a
+  // path, so navigating anywhere closes it without an effect.
   const pathname = usePathname();
+  const { authenticated } = useEmbeddedWallet();
+  const signedIn = DYNAMIC_CONFIGURED && authenticated;
+  const items = signedIn ? NAV_ITEMS : SIGNED_OUT_NAV_ITEMS;
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const menuOpen = menuFor === pathname;
+  const menuOpen = signedIn && menuFor === pathname;
   const setMenuOpen = (open: boolean) => setMenuFor(open ? pathname : null);
+
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  const solid = scrolled || menuOpen;
 
   return (
     <header
-      className="sticky top-0 z-40 border-b border-edge bg-background/90 backdrop-blur"
+      className={`sticky top-0 z-40 border-b transition-[background-color,border-color] duration-[160ms] ease-out ${
+        solid
+          ? "border-edge bg-[var(--header-scrolled)] backdrop-blur-[14px] backdrop-saturate-[1.2]"
+          : "border-transparent"
+      }`}
       onKeyDown={(e) => {
         if (e.key === "Escape" && menuOpen) setMenuOpen(false);
       }}
     >
-      <div className="mx-auto flex h-16 max-w-5xl items-center gap-2 px-4 sm:gap-3">
-        <Link
-          href="/"
-          aria-label="GoHealthMe home"
-          className={`flex shrink-0 items-center gap-2 rounded-2xl pr-1 ${FOCUS}`}
-        >
-          <Spotter pose="portrait" size="row" decorative className="sm:hidden md:inline-flex" />
-          <span className="font-display text-[1.375rem] font-extrabold tracking-display sm:text-2xl">
-            GoHealthMe
-          </span>
-        </Link>
-        {/* Desktop nav: inline, right-aligned, scrolls only if it must. */}
+      <div className="mx-auto flex h-14 w-full max-w-[75rem] items-center gap-4 px-gutter min-[900px]:h-16">
+        <BrandLockup />
         <nav
           aria-label="Main"
-          className="hidden min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] sm:block [&::-webkit-scrollbar]:hidden">
-          <div className="flex w-max items-center gap-1 py-1 text-sm sm:ml-auto">
-            <NavLinks />
-          </div>
+          className={`ml-auto hidden items-center gap-1 ${
+            signedIn ? "min-[1024px]:flex" : "min-[640px]:flex"
+          }`}
+        >
+          <NavLinks items={items} />
         </nav>
-        <div className="ml-auto flex shrink-0 items-center gap-1 sm:ml-0 sm:gap-2">
+        <div className="ml-auto flex flex-none items-center gap-2 min-[640px]:ml-0">
+          {signedIn ? (
+            <div className="hidden max-w-[14rem] min-[1180px]:block">
+              <WalletNote />
+            </div>
+          ) : null}
           <AuthOrPill />
-          {/* Mobile menu toggle: only below `sm`, where the inline nav hides. */}
-          <button
-            type="button"
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={menuOpen}
-            aria-controls="mobile-nav"
-            className={`flex min-h-11 min-w-11 items-center justify-center rounded-full border-2 border-foreground/20 text-foreground hover:border-foreground sm:hidden ${FOCUS}`}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              aria-hidden="true"
+          {signedIn ? (
+            <button
+              type="button"
+              onClick={() => setMenuOpen(!menuOpen)}
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={menuOpen}
+              aria-controls="mobile-nav"
+              className={`grid size-11 place-items-center rounded-control bg-fill-quiet text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)] hover:bg-fill-quiet-hover min-[1024px]:hidden ${FOCUS_RING}`}
             >
-              {menuOpen ? (
-                <>
-                  <path d="M6 6l12 12" />
-                  <path d="M18 6L6 18" />
-                </>
-              ) : (
-                <>
-                  <path d="M4 7h16" />
-                  <path d="M4 12h16" />
-                  <path d="M4 17h16" />
-                </>
-              )}
-            </svg>
-          </button>
+              <MenuIcon open={menuOpen} />
+            </button>
+          ) : null}
         </div>
       </div>
       {menuOpen ? (
-        <nav
-          id="mobile-nav"
-          aria-label="Main"
-          className="border-t border-edge bg-background sm:hidden"
-        >
-          <div className="mx-auto flex max-w-5xl flex-col gap-1 px-3 py-3">
-            <NavLinks stacked onNavigate={() => setMenuOpen(false)} />
+        <nav id="mobile-nav" aria-label="Main" className="border-t border-edge min-[1024px]:hidden">
+          <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-1 px-gutter py-3">
+            <NavLinks items={items} stacked onNavigate={() => setMenuOpen(false)} />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-edge px-1 pt-3">
+              <WalletNote />
+              <TestUsdcChip />
+            </div>
           </div>
         </nav>
       ) : null}
-      <HeaderNote />
+      <SpotterStatusLine outageOnly />
     </header>
   );
 }

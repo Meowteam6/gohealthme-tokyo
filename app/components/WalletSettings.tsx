@@ -19,7 +19,7 @@ import { formatUsdc } from "@/lib/contract";
 import { fetchWalletUsdc } from "@/lib/faucet-funding";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useCharacter, type CharacterView } from "@/lib/game/useCharacter";
-import { Badge, Button, Money, Skeleton } from "@/components/ui";
+import { Badge, Button, Money, Skeleton, buttonClasses } from "@/components/ui";
 import { CopyAddressButton } from "@/components/FundingHelp";
 import DisconnectDeviceButton from "@/components/DisconnectDeviceButton";
 import SignInPanel from "@/components/SignInPanel";
@@ -69,7 +69,7 @@ function BackupSection() {
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {/* Both reveals are optional and sensitive, so neither wears the
-            coral primary: a backup is never what this page pushes. */}
+            primary: a backup is never what this page pushes. */}
         <Button
           type="button"
           variant="ghost"
@@ -216,7 +216,7 @@ function DeviceSection({
         </p>
         <Link
           href="/character"
-          className="mt-3 inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-5 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
+          className={`${buttonClasses()} mt-3`}
         >
           Pair my wearable
         </Link>

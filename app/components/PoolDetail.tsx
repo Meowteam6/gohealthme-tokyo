@@ -13,16 +13,8 @@ import ShareChallenge from "@/components/ShareChallenge";
 import ChallengeInviteShare from "@/components/ChallengeInviteShare";
 import SpotterSays from "@/components/SpotterSays";
 import Spotter from "@/components/spotter/Spotter";
-import { PRIMARY_LINK, TEXT_LINK } from "@/components/game/link-styles";
 import ClaimPayout from "@/components/ClaimPayout";
-import {
-  Badge,
-  Card,
-  ErrorNote,
-  ProofTierBadges,
-  Skeleton,
-  TAP_TARGET,
-} from "@/components/ui";
+import { Badge, Card, ErrorNote, ProofTierBadges, Skeleton, TAP_TARGET, buttonClasses, TEXT_LINK } from "@/components/ui";
 import ApprovalNote from "@/components/game/ApprovalNote";
 import LockPanel from "@/components/game/LockPanel";
 import RunBoard from "@/components/game/RunBoard";
@@ -98,7 +90,7 @@ function BrowsePoolsLink({ label = "Browse live pools" }: { label?: string }) {
   return (
     <Link
       href="/pools"
-      className={`mt-4 ${PRIMARY_LINK}`}
+      className={`mt-4 ${buttonClasses()}`}
     >
       {label}
     </Link>

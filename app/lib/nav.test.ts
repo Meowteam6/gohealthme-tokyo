@@ -1,7 +1,14 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { NAV_ITEMS } from "@/lib/nav";
+import { NAV_ITEMS, SIGNED_OUT_NAV_ITEMS } from "@/lib/nav";
+
+describe("SIGNED_OUT_NAV_ITEMS", () => {
+  it("is Runs and How it pays for a visitor with no player yet", () => {
+    expect(SIGNED_OUT_NAV_ITEMS.map((i) => i.label)).toEqual(["Runs", "How it pays"]);
+    expect(SIGNED_OUT_NAV_ITEMS.map((i) => i.href)).toEqual(["/pools", "/#how"]);
+  });
+});
 
 // The header nav, named for the game loop. Every tab points at a real page.
 

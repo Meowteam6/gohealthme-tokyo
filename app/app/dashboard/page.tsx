@@ -7,8 +7,7 @@ import Link from "next/link";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import DashboardContent from "@/components/DashboardContent";
 import SpotterSays from "@/components/SpotterSays";
-import { EmptyState } from "@/components/ui";
-import { PRIMARY_LINK } from "@/components/game/link-styles";
+import { EmptyState, buttonClasses } from "@/components/ui";
 
 export default function DashboardPage() {
   return (
@@ -32,7 +31,7 @@ export default function DashboardPage() {
           line="No sign-in, no runs. I'm on break."
           detail="Without sign-in there are no runs to show. The home page still explains how a run works."
           action={
-            <Link href="/" className={PRIMARY_LINK}>
+            <Link href="/" className={buttonClasses()}>
               Go to the home page
             </Link>
           }
