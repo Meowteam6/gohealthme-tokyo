@@ -109,15 +109,28 @@ export type LedgerEntry = Stamped &
         resultTx?: string;
         registryStatus: "recorded" | "already-recorded" | "skipped";
         registryTx?: string;
+        /** The verdict written on chain. Absent means true: every record row
+         *  written before misses existed was a pass. false is a recorded
+         *  miss (lib/server/agent/miss.ts), which never pays this player. */
+        verdict?: boolean;
+        /** The player's stake (the pool's entry fee), two decimals, on a
+         *  miss row, so every surface can say what the miss costs. */
+        stakeUsd?: string;
       }
     | {
         kind: "settle";
-        status: "deferred" | "settled" | "already-settled";
+        /** "closed" ends a recorded miss: the pool settled and this player
+         *  was paid nothing (forfeited) or refunded because nobody hit. Never
+         *  "settled", which every surface reads as paid. */
+        status: "deferred" | "settled" | "already-settled" | "closed";
         txHash?: string;
         paidUsd?: string;
-        /** For deferred entries: when the pool period ends, ISO-8601 UTC.
-         *  The note stays plain prose; no raw epoch seconds in it. */
+        /** For deferred entries: when the pool settles at the earliest,
+         *  ISO-8601 UTC. The note stays plain prose; no raw epoch seconds. */
         periodEndIso?: string;
+        /** Closed rows only: what settle() did with this player's stake,
+         *  asserted on the settle transaction's own events. */
+        outcome?: "forfeited" | "refunded";
         note?: string;
       }
     | {

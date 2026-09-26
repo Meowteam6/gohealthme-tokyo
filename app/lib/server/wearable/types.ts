@@ -74,6 +74,36 @@ export interface MetricProgress {
 }
 
 /**
+ * What SPOTTER reads once a run is over, to decide whether a miss may be
+ * recorded (lib/server/agent/miss.ts). Keyed to the WEARER'S own calendar
+ * days, because a night belongs to the local day it ended and a pool window
+ * judged in UTC days lands on the wrong night east or west of Greenwich.
+ *
+ * Privacy: per-day derived numbers only, never raw samples. Nothing here is
+ * written to the ledger or the chain; only the miss/skip decision is.
+ */
+export interface MissEvidence {
+  /**
+   * The metric's value per local day (YYYY-MM-DD): the best value of the
+   * sleep that ended that day, or the number of workouts that day. A day with
+   * no value for this metric is absent, never zero-filled.
+   */
+  values: Record<string, number>;
+  /**
+   * Local days the device reported anything at all for (a sleep of any
+   * state, a daily activity summary, a workout). This is what tells "no
+   * workout that day" from "the device did not sync that day".
+   */
+  heartbeatDays: string[];
+  /**
+   * The wearer's UTC offset in seconds, from their newest record that carries
+   * one. Null when no record says, and then no miss can be recorded: the
+   * window cannot be placed on the wearer's calendar.
+   */
+  tzOffsetSec: number | null;
+}
+
+/**
  * Derived, privacy-safe sleep-streak progress for the dashboard card.
  *
  * `streakDays` is a COUNT of qualifying days inside the window, not a strict
@@ -196,6 +226,17 @@ export interface WearableProvider {
     windowStartISO: string,
     windowEndISO: string,
   ): Promise<MetricProgress>;
+  /**
+   * Per-local-day evidence for the miss rule, from `fromISO` (a UTC date,
+   * inclusive) to now. Optional: a provider that cannot place its data on
+   * the wearer's calendar (Apple rows carry no timezone) does not implement
+   * it, and SPOTTER then never records a miss for its wallets.
+   */
+  getMissEvidence?(
+    address: string,
+    metric: WearableMetric,
+    fromISO: string,
+  ): Promise<MissEvidence>;
   /**
    * Sleep-streak progress for the dashboard card. When a window is given,
    * progress is scoped to [windowStartISO, min(windowEndISO, today)];
