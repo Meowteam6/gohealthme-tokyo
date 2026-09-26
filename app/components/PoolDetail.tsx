@@ -524,6 +524,9 @@ export default function PoolDetail({ id }: { id: string }) {
             title="That run does not exist"
             detail={`"${id}" is not a run number. Pick one from the open runs.`}
           />
+          <ButtonLink href="/pools" variant="tertiary" className="mt-2">
+            See the open runs
+          </ButtonLink>
         </div>
       </div>
     );
@@ -548,6 +551,9 @@ export default function PoolDetail({ id }: { id: string }) {
             }}
             retryLabel="Read the run again"
           />
+          <ButtonLink href="/pools" variant="tertiary" className="mt-2">
+            See the open runs instead
+          </ButtonLink>
         </div>
       </div>
     );
