@@ -32,8 +32,9 @@ import {
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { formatRunClock, nightTally, runClock, type RunStanding } from "@/lib/game/tally";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
+import type { SpotterPose } from "@/lib/spotter-poses";
 
-const STANDING_LINE: Record<RunStanding, { say: string; pose: string }> = {
+const STANDING_LINE: Record<RunStanding, { say: string; pose: SpotterPose }> = {
   "on-target": {
     say: "That is enough nights. Have me check it and the verdict is mine to make.",
     pose: "flex",

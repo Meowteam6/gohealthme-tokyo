@@ -11,6 +11,7 @@
 //   - A declined, expired or cancelled human approval is its own screen with a
 //     retry, and nothing is paid from it.
 
+import type { SpotterPose } from "@/lib/spotter-poses";
 import {
   currentAttesterIdOf,
   currentReasonEntry,
@@ -291,8 +292,8 @@ export function runApprovalLine(
 export interface VerdictCopy {
   headline: string;
   body: string;
-  /** SPOTTER pose for the stage (a real /spotter/spotter-<pose>.png). */
-  pose: string;
+  /** SPOTTER pose for the stage (lib/spotter-poses.ts). */
+  pose: SpotterPose;
 }
 
 /**

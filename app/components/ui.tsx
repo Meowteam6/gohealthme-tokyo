@@ -1,6 +1,8 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { baseTxUrl } from "@/lib/chains";
 import type { ProofPolicy } from "@/lib/contract";
+import type { SpotterPose } from "@/lib/spotter-poses";
+import Spotter from "@/components/spotter/Spotter";
 
 /**
  * The minimum a thumb can reliably hit: 44px tall with room either side. Small
@@ -104,33 +106,42 @@ export function ErrorNote({
   );
 }
 
+/**
+ * An empty slot: SPOTTER reacting, what goes here, and the one action that
+ * fills it. DESIGN.md: empty states get `lounging` and a line, never an icon.
+ */
 export function EmptyState({
   title,
   detail,
   action,
-  pose = "peek",
+  pose = "lounging",
+  line,
 }: {
   title: string;
   detail: string;
+  /** The one action that fills this slot. */
   action?: ReactNode;
   /** SPOTTER pose shown above the title. Pass null to render no otter. */
-  pose?: string | null;
+  pose?: SpotterPose | null;
+  /** SPOTTER's deadpan line, in his speech bubble. */
+  line?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-edge bg-surface/50 px-6 py-12 text-center">
+    <div className="rounded-3xl border border-edge bg-surface px-6 py-10 text-center">
       {pose !== null ? (
-        // A peeking otter softens every empty slot in the product.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`/spotter/spotter-${pose}.png`}
-          alt=""
-          aria-hidden="true"
-          className="mx-auto mb-4 h-20 w-auto drop-shadow-sm"
+        <Spotter
+          pose={pose}
+          size="lg"
+          line={line}
+          decorative={line === undefined}
+          className="mx-auto mb-4 justify-center"
         />
       ) : null}
-      <p className="text-lg font-semibold">{title}</p>
-      <p className="mx-auto mt-2 max-w-md text-sm text-muted">{detail}</p>
-      {action !== undefined ? <div className="mt-5">{action}</div> : null}
+      <p className="font-display text-2xl font-bold leading-display tracking-display">
+        {title}
+      </p>
+      <p className="mx-auto mt-2 max-w-md text-base text-muted">{detail}</p>
+      {action !== undefined ? <div className="mt-6">{action}</div> : null}
     </div>
   );
 }
@@ -143,13 +154,13 @@ export function Badge({
   tone?: "accent" | "muted" | "warning";
 }) {
   const tones: Record<string, string> = {
-    accent: "bg-accent/12 text-accent-deep border-accent/30",
-    muted: "bg-surface-raised text-foreground/75 border-edge",
+    accent: "bg-accent/15 text-accent-deep border-accent/40",
+    muted: "bg-surface-raised text-foreground border-edge",
     warning: "bg-warning/10 text-warning border-warning/30",
   };
   return (
     <span
-      className={`inline-flex items-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${tones[tone]}`}
+      className={`inline-flex items-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-bold ${tones[tone]}`}
     >
       {children}
     </span>
@@ -193,25 +204,21 @@ export function Money({
   usd: string;
   sign?: "+" | "-";
   size?: "sm" | "md" | "lg" | "xl";
-  /** "gold" is reserved for money in motion - a payout landing or the agent's
-   *  live spend. Static figures stay "default". No adjective ever lives here;
-   *  the tone is the only thing that changes. */
-  tone?: "default" | "gold";
+  /** Money is always gold (DESIGN.md): deep gold on cream and surface.
+   *  "gold" is kept for older call sites and renders the same. "on-dark" is
+   *  bright gold for the river-ink night panel, where deep gold is unreadable.
+   *  No adjective ever lives here; only the tone changes. */
+  tone?: "default" | "gold" | "on-dark";
 }) {
   const sizes: Record<string, string> = {
-    sm: "text-sm",
-    md: "text-base",
-    lg: "text-2xl",
-    xl: "text-4xl",
+    sm: "text-sm font-bold",
+    md: "text-base font-bold",
+    lg: "text-[1.75rem] font-extrabold leading-display tracking-display",
+    xl: "text-[2.5rem] font-extrabold leading-display tracking-display",
   };
-  const tones: Record<string, string> = {
-    default: "text-foreground",
-    gold: "text-gold-deep",
-  };
+  const color = tone === "on-dark" ? "text-gold" : "text-gold-deep";
   return (
-    <span
-      className={`font-mono font-semibold tabular-nums ${tones[tone]} ${sizes[size]}`}
-    >
+    <span className={`font-display tabular-nums ${color} ${sizes[size]}`}>
       {sign !== undefined ? sign : ""}
       {usd} USDC
     </span>
@@ -234,16 +241,12 @@ export function Verdict({
   if (selfReported) {
     return (
       <span className="inline-flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-warning">
+        <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-bold text-warning">
           Self-reported
         </span>
-        <span className="text-xs uppercase tracking-wide text-muted">
-          unverified · low-trust
-        </span>
+        <span className="text-xs text-muted">unverified · low-trust</span>
         {confidence !== undefined ? (
-          <span className="text-xs uppercase tracking-wide text-muted">
-            {confidence} confidence
-          </span>
+          <span className="text-xs text-muted">{confidence} confidence</span>
         ) : null}
       </span>
     );
@@ -251,23 +254,22 @@ export function Verdict({
   return (
     <span className="inline-flex items-center gap-2">
       <span
-        className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+        className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${
           verified
-            ? "border-accent/30 bg-accent/12 text-accent-deep"
+            ? "border-accent-deep/40 bg-accent-deep/10 text-accent-deep"
             : "border-danger/40 bg-danger/10 text-danger"
         }`}
       >
         {verified ? "✓ Verified" : "Not verified"}
       </span>
       {confidence !== undefined ? (
-        <span className="text-xs uppercase tracking-wide text-muted">
-          {confidence} confidence
-        </span>
+        <span className="text-xs text-muted">{confidence} confidence</span>
       ) : null}
     </span>
   );
 }
 
+/** The verdict stamp. The one place all-caps is allowed (DESIGN.md). */
 export function Stamp({
   children,
   tone = "accent",
@@ -278,14 +280,14 @@ export function Stamp({
   tone?: "accent" | "danger" | "gold";
 }) {
   const tones: Record<string, string> = {
-    accent: "border-accent text-accent-deep",
-    danger: "border-danger text-danger",
-    gold: "border-gold text-gold-deep",
+    accent: "border-foreground bg-surface text-foreground",
+    danger: "border-danger bg-surface text-danger",
+    gold: "border-foreground bg-gold text-foreground",
   };
   return (
     <span
-      className={`animate-stamp-in inline-block rounded-md border-2 px-3 py-1 font-mono text-sm font-bold uppercase tracking-widest ${tones[tone]}`}
-      style={{ transform: "rotate(-3deg)" }}
+      className={`animate-stamp-in inline-block rounded-[10px] border-[3px] px-2.5 py-0.5 font-display text-sm font-extrabold uppercase tracking-[0.06em] ${tones[tone]}`}
+      style={{ transform: "rotate(-4deg)" }}
     >
       {children}
     </span>
@@ -294,29 +296,31 @@ export function Stamp({
 
 export function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-xl border border-edge bg-surface-raised p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted">
-        {label}
-      </p>
-      <p className="mt-1 text-lg font-semibold leading-snug">{value}</p>
+    <div className="rounded-2xl border border-edge bg-surface p-4">
+      <p className="text-sm text-muted">{label}</p>
+      <p className="mt-1 text-lg font-bold leading-snug">{value}</p>
     </div>
   );
 }
 
-// -------------------------------------------------- playful shared primitives
-// The vibe layer: display font, full radius, and the chunky "candy" press. New
-// and additive - surfaces adopt them to stop hand-rolling flat controls. Money
-// and verdicts still render only through Money/Verdict above; a button or chip
-// never states a number.
+// ------------------------------------------------------- Riverbank controls
+// Buttons are Atkinson (it is UI copy, not display type). Coral is the one
+// action colour and always carries ink text. Money and verdicts still render
+// only through Money/Verdict above; a button or chip never states a number.
+
+const FOCUS =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 /**
- * The shared pressable button. `pop` gives it the chunky candy shadow that sits
- * flush underneath and compresses on press (a transform, not a keyframe, so it
- * respects reduced-motion). `coral` is for human/dare actions, never money.
+ * The shared button. `primary` is the pressable toy: coral, ink text, a 4px
+ * deeper-coral bottom shadow that compresses on press (a transform, so it
+ * respects reduced-motion). `ghost` is the ink-outlined second action.
+ * `secondary` is a quiet filled well. `coral` is an alias of `primary`.
+ * `pop` is accepted for older call sites; primary always presses now.
  */
 export function Button({
   variant = "primary",
-  pop = false,
+  pop: _pop = false,
   className = "",
   children,
   ...props
@@ -324,37 +328,29 @@ export function Button({
   variant?: "primary" | "secondary" | "coral" | "ghost";
   pop?: boolean;
 }) {
-  const base =
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 py-2.5 font-display text-sm font-bold transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60";
+  const base = `inline-flex min-h-12 items-center justify-center gap-2 rounded-[18px] px-5 py-3 text-base font-bold transition-transform motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS}`;
+  const pressable =
+    "bg-accent text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none disabled:translate-y-0 disabled:shadow-none disabled:hover:bg-accent";
   const variants: Record<string, string> = {
-    primary: "bg-accent text-foreground hover:bg-accent-hover",
+    primary: pressable,
+    coral: pressable,
     secondary:
-      "border-2 border-edge bg-secondary text-secondary-foreground hover:border-accent/50",
-    coral: "bg-coral-strong text-foreground hover:bg-accent-hover",
-    ghost: "text-accent-deep hover:bg-secondary",
+      "border border-edge bg-surface-raised text-foreground hover:border-foreground/40",
+    ghost:
+      "border-2 border-foreground bg-transparent text-foreground hover:bg-surface-raised",
   };
-  const popClass =
-    pop && variant !== "ghost"
-      ? `${
-          variant === "coral"
-            ? "shadow-[var(--shadow-pop-coral)]"
-            : "shadow-[var(--shadow-pop)]"
-        } hover:translate-y-px active:translate-y-[3px] active:shadow-none disabled:translate-y-0 disabled:shadow-none`
-      : "";
+  void _pop;
   return (
-    <button
-      className={`${base} ${variants[variant]} ${popClass} ${className}`}
-      {...props}
-    >
+    <button className={`${base} ${variants[variant]} ${className}`} {...props}>
       {children}
     </button>
   );
 }
 
 /**
- * A tactile selectable pill: border-2 with a warm-tan fill, emerald when
- * selected. Powers amount pickers, duration pills, and suggestion chips.
- * aria-pressed plus a visible ring keep selection from being colour-only.
+ * A selectable pill for amount pickers, duration pills and suggestion chips.
+ * Selected is an ink fill (coral stays reserved for the primary action);
+ * aria-pressed plus the fill keep selection from being colour-only.
  */
 export function Chip({
   selected = false,
@@ -366,10 +362,10 @@ export function Chip({
     <button
       type="button"
       aria-pressed={selected}
-      className={`inline-flex min-h-11 items-center justify-center rounded-full border-2 px-5 py-2.5 font-display text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+      className={`inline-flex min-h-11 items-center justify-center rounded-full border-2 px-5 py-2.5 text-sm font-bold transition-colors motion-reduce:transition-none ${FOCUS} ${
         selected
-          ? "border-accent bg-accent text-foreground"
-          : "border-edge bg-secondary text-secondary-foreground hover:border-accent/50"
+          ? "border-foreground bg-foreground text-background"
+          : "border-edge bg-surface text-foreground hover:border-foreground/40"
       } ${className}`}
       {...props}
     >
@@ -379,12 +375,11 @@ export function Chip({
 }
 
 /**
- * A rounded, friendly feature card. `pop` adds the raised edge shadow for hero /
- * preview cards. Replaces the hand-rolled `rounded-2xl border border-edge
- * bg-surface p-5` repeated across surfaces.
+ * A card or row on the cream: surface fill, hairline border, 20px radius, no
+ * offset shadow. `pop` is accepted for older call sites and adds nothing.
  */
 export function Card({
-  pop = false,
+  pop: _pop = false,
   className = "",
   children,
 }: {
@@ -392,11 +387,10 @@ export function Card({
   className?: string;
   children: ReactNode;
 }) {
+  void _pop;
   return (
     <div
-      className={`rounded-3xl border border-edge bg-surface p-5 sm:p-6 ${
-        pop ? "shadow-[var(--shadow-pop-edge)]" : ""
-      } ${className}`}
+      className={`rounded-3xl border border-edge bg-surface p-5 sm:p-6 ${className}`}
     >
       {children}
     </div>

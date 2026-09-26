@@ -1,45 +1,29 @@
-// SPOTTER, placed. Every surface gets the otter doing something relevant to
-// that page - watching the ledger, handing over a payout, nodding a verdict.
-// One component, a pose per page, so the character reads as one system and no
-// screen is just the run-across Easter egg.
+import Spotter from "@/components/spotter/Spotter";
+import type { SpotterPose } from "@/lib/spotter-poses";
 
-type Pose = "nature" | "watching" | "verified" | "payout" | "neutral";
-
-const WIDTHS: Record<string, string> = {
-  sm: "w-28",
-  md: "w-40",
-  lg: "w-56",
-};
+// SPOTTER with a caption underneath, for the pool and agent pages. Draws
+// through components/spotter/Spotter so the art and alt text stay in one place.
 
 export default function SpotterMascot({
   pose = "neutral",
   caption,
   sublabel,
   size = "md",
-  float = true,
   className = "",
 }: {
-  pose?: Pose;
+  pose?: SpotterPose;
   caption?: string;
   sublabel?: string;
   size?: "sm" | "md" | "lg";
+  /** Retired: SPOTTER no longer idles (motion answers the player only). */
   float?: boolean;
   className?: string;
 }) {
   return (
-    <div className={`shrink-0 ${className}`}>
-      <div
-        className={`${float ? "otter-float" : ""} ${WIDTHS[size]} overflow-hidden rounded-2xl border border-edge bg-surface-raised shadow-sm`}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/spotter/spotter-${pose}.png`}
-          alt={caption ?? "SPOTTER, the GoHealthMe otter"}
-          className="aspect-square w-full object-cover"
-        />
-      </div>
+    <div className={`flex shrink-0 flex-col items-center ${className}`}>
+      <Spotter pose={pose} size={size} alt={caption} />
       {caption !== undefined ? (
-        <p className="mt-2 text-center text-sm font-semibold">{caption}</p>
+        <p className="mt-2 text-center text-sm font-bold">{caption}</p>
       ) : null}
       {sublabel !== undefined ? (
         <p className="mt-0.5 text-center text-xs text-muted">{sublabel}</p>
