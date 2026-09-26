@@ -34,7 +34,9 @@ import {
   type WearableAvailability,
 } from "@/lib/game/wearable-fit";
 
-const GRID = "m-0 grid list-none gap-2.5 p-0 min-[900px]:grid-cols-3 min-[900px]:gap-4";
+// Columns follow the lobby's own width, not the viewport: /pools is the full
+// column, the challenge link hosts the lobby in a narrower one.
+const GRID = "m-0 grid list-none gap-2.5 p-0 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-3 @min-[56rem]:gap-4";
 
 function Section({
   title,
@@ -143,8 +145,9 @@ export default function Lobby({
   const hint = picker !== null && picked !== null && lobby !== null ? brandHint(picked, openSpecs, picker) : null;
 
   // One pose per screen: SPOTTER stands on the top card unless the empty
-  // state below brings its own.
-  const perched = !nothingOpen && !(error && !loading);
+  // state below brings its own, or the host page (the challenge link's
+  // intro) already has him.
+  const perched = intro === undefined && !nothingOpen && !(error && !loading);
   const next = encodeURIComponent(returnTo);
 
   const topCard = signedIn ? (
@@ -170,7 +173,7 @@ export default function Lobby({
   );
 
   return (
-    <div className="grid gap-8 min-[900px]:gap-12">
+    <div className="@container grid gap-8 min-[900px]:gap-12">
       {intro ?? (
         <header>
           <h1 className="type-display m-0 text-[2.75rem] min-[900px]:text-[4rem]">The lobby</h1>
