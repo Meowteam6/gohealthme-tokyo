@@ -35,6 +35,19 @@ const nextConfig: NextConfig = {
   ...(process.env.NEXT_PUBLIC_DEMO_CHROME === "1"
     ? { devIndicators: false as const }
     : {}),
+  // The dev-only state gallery (app/dev/states) must not exist on any
+  // deployment. Its page calls notFound() in production, but the root layout
+  // streams, so that alone answers 200. A beforeFiles rewrite runs before the
+  // filesystem routes and sends /dev/* to a path no route matches: a real 404
+  // on every production build, previews included.
+  async rewrites() {
+    if (process.env.NODE_ENV !== "production") return [];
+    return {
+      beforeFiles: [{ source: "/dev/:path*", destination: "/__not-on-deployments" }],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
 };
 
 export default nextConfig;

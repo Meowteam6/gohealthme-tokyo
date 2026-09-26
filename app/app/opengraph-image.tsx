@@ -42,7 +42,7 @@ export default async function Image() {
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
-            width: 620,
+            width: 580,
             height: "100%",
           }}
         >
@@ -54,11 +54,11 @@ export default async function Image() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             <div
-              style={{ display: "flex", fontSize: 84, fontWeight: 700, lineHeight: 1.02, letterSpacing: -2 }}
+              style={{ display: "flex", fontSize: 80, fontWeight: 700, lineHeight: 1.02, letterSpacing: -2 }}
             >
               Put money on yourself.
             </div>
-            <div style={{ display: "flex", fontSize: 32, color: N.muted, lineHeight: 1.3 }}>
+            <div style={{ display: "flex", fontSize: 30, color: N.muted, lineHeight: 1.3 }}>
               Stake on your sleep or workouts. Your wearable decides.
             </div>
           </div>
@@ -70,8 +70,8 @@ export default async function Image() {
         <div
           style={{
             position: "absolute",
-            right: 70,
-            top: 90,
+            right: 64,
+            top: 70,
             width: 330,
             height: 330,
             borderRadius: 330,
@@ -82,9 +82,9 @@ export default async function Image() {
         <img
           src={otter}
           alt=""
-          width={440}
-          height={319}
-          style={{ position: "absolute", right: 170, top: 250, width: 440, height: 319 }}
+          width={400}
+          height={290}
+          style={{ position: "absolute", right: 64, top: 270, width: 400, height: 290 }}
         />
       </div>
     ),
