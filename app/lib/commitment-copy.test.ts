@@ -4,7 +4,9 @@ import {
   commitmentJoinCopy,
   commitmentShortCopy,
   createCommitmentCopy,
+  missConsequence,
 } from "@/lib/commitment-copy";
+import { missRulePool } from "@/lib/miss-rule";
 
 // F11 and F9 (fix/record-misses review): the forfeit promise ("miss it and
 // your stake goes to the players who hit") is only true on a pool that can
@@ -56,6 +58,33 @@ describe("createCommitmentCopy (the create form)", () => {
     expect(createCommitmentCopy(`[doc] ${SLEEP}`, 1n)).toMatch(/cannot record a miss/);
     expect(createCommitmentCopy("Walk 8000 steps for 1 day", 1n)).toMatch(/cannot record a miss/);
     expect(createCommitmentCopy(SLEEP, null)).toMatch(/cannot record a miss/);
+  });
+});
+
+describe("missConsequence (the miss chip)", () => {
+  it("reads 'goes to who hits' only on a run that can record a miss with 2 or more stakers", () => {
+    const recordable = missRulePool(miss, 1n).ok;
+    expect(recordable).toBe(true);
+    expect(missConsequence({ players: 2, recordable })).toBe("Miss: goes to who hits");
+    expect(missConsequence({ players: 7, recordable })).toBe("Miss: goes to who hits");
+  });
+
+  it("reads 'stake back' with one staker: a lone miss means nobody hit, and every stake comes back", () => {
+    expect(missConsequence({ players: 1, recordable: true })).toBe("Miss: stake back");
+    expect(missConsequence({ players: 0, recordable: true })).toBe("Miss: stake back");
+  });
+
+  it("reads 'stake back' on every run the miss rule does not cover, however many stake", () => {
+    for (const pool of [
+      { ...miss, bountyModel: 0 },
+      { ...miss, bountyModel: 1 },
+      { ...miss, goalSpec: "Walk at least 8,000 steps for 1 day" },
+      { ...miss, id: 5n },
+    ]) {
+      const recordable = missRulePool(pool, 6n).ok;
+      expect(recordable).toBe(false);
+      expect(missConsequence({ players: 5, recordable })).toBe("Miss: stake back");
+    }
   });
 });
 

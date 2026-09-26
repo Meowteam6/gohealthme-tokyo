@@ -3,12 +3,11 @@
 // Create a challenge. Two honest variants, one screen, one clear choice:
 //
 //   STAKE ON YOURSELF (commitment) — you put your OWN USDC on your OWN goal.
-//     Hit it, your stake comes back plus a share of the pot. A challenge is a
-//     wearable run on a launch goal (encodeGoal). Whether SPOTTER can record a
-//     miss on it follows lib/miss-rule.ts (sleep or workouts, one plain count,
-//     past the cutoff): where it can, a miss goes to the players who hit;
-//     where it cannot, a miss is refunded at settle, and the copy says which
-//     before the stake (lib/game/commitment-copy.ts commitmentFacts).
+//     Hit it, your stake comes back plus a share of the pot. With only you
+//     staked a miss has nobody to go to, so it comes back; once a friend
+//     matches you, on a run SPOTTER can record a miss on (lib/miss-rule.ts),
+//     whoever misses pays whoever hits. The copy is the flow's own
+//     (lib/game/money-flow.ts, docs/MONEY-FLOWS.md F2), said before the stake.
 //
 //   DARE A FRIEND (reward) — you put up a reward for someone else. They stake a
 //     small lock-in to accept, hit the goal, and collect their lock-in back plus
@@ -87,7 +86,6 @@ import {
   Skeleton,
   Stat,
   StatRow,
-  Tag,
   buttonClasses,
 } from "@/components/ui";
 import SpotterCaption from "@/components/spotter/SpotterCaption";
@@ -103,21 +101,22 @@ import {
   QUIET_ACTION,
   optionCard,
 } from "@/components/night/kit";
-import { commitmentFacts } from "@/lib/game/commitment-copy";
-import { missRuleFromPoolId, missRuleWouldApply } from "@/lib/miss-rule";
+import { runMoneyOf, type MoneyCopy, type RunMoney } from "@/lib/game/money-flow";
+import { MoneyChips, MoneyTermsList } from "@/components/game/MoneyTerms";
+import { missRuleWouldApply } from "@/lib/miss-rule";
 import { useApprovalProbe } from "@/components/game/ApprovalNote";
 import {
   challengeCreateBlock,
   payoutStateOf,
 } from "@/lib/game/join-checks";
 import AuthorCapabilityNotice from "@/components/AuthorCapabilityNotice";
-import { CommitmentRangeLine } from "@/components/CommitmentTerms";
 import {
   launchGoalIssue,
   LAUNCH_GOAL_EXAMPLES,
   wearableGoalNotice,
 } from "@/lib/launch-goal-check";
 import { COMING_LINE } from "@/lib/provider-capabilities";
+import { lockInHint } from "@/lib/game/money-sharing";
 
 const DURATION_OPTIONS: { label: string; days: number }[] = [
   { label: "1 week", days: 7 },
@@ -171,6 +170,70 @@ function selfRecordsMisses(goal: string): boolean {
   return missRuleWouldApply({ bountyModel: CHALLENGE_BOUNTY_MODEL, goalSpec: goal.trim() });
 }
 
+/** A USDC amount typed so far, or 0 while it is empty or half-typed. */
+function unitsOf(raw: string): bigint {
+  try {
+    const units = parseUsdc(raw.trim() === "" ? "0" : raw.trim());
+    return units > 0n ? units : 0n;
+  } catch {
+    return 0n;
+  }
+}
+
+/**
+ * What the other side reads, in the numbers typed so far (docs/MONEY-FLOWS.md):
+ * a stake on yourself before anyone matches it (F2, one staker), or a
+ * challenge with its reward and one accepter (F3). Nobody is in yet, so no
+ * fee can apply to a missed stake.
+ */
+function draftMoney(input: {
+  variant: Variant;
+  goal: string;
+  amount: string;
+  lockIn: string;
+  recipient: string;
+  /** The challenger's "@handle" when signed in: the preview then reads as
+   *  the friend will see it. Null words it for the challenger. */
+  fromName?: string | null;
+}): RunMoney {
+  const isSelf = input.variant === "self";
+  const handle = input.recipient.trim().replace(/^@/, "");
+  const reward = isSelf ? 0n : unitsOf(input.amount);
+  const asFriend = !isSelf && input.fromName !== undefined && input.fromName !== null;
+  return runMoneyOf({
+    pool: { bountyModel: CHALLENGE_BOUNTY_MODEL, initiative: CHALLENGE_INITIATIVE },
+    flow: {
+      players: 0,
+      creatorStaked: isSelf,
+      // Nothing is on chain yet: the flow is the creator's own choice.
+      kind: isSelf ? "self" : "reward",
+      creatorName: asFriend ? (input.fromName ?? "you") : "you",
+      viewerIsCreator: !asFriend,
+    },
+    numbers: {
+      entryFee: isSelf ? unitsOf(input.amount) : unitsOf(input.lockIn),
+      players: 0,
+      pot: reward,
+      feeBps: 0,
+      recordable: selfRecordsMisses(input.goal),
+      includeJoiner: true,
+      confirmBy: null,
+    },
+    targetName: handle !== "" ? `@${handle}` : null,
+    targetIsYou: asFriend,
+    reward: isSelf ? null : reward,
+  });
+}
+
+/** The flow's hit, miss and matching terms as one hint under a field. */
+function termsHint(copy: MoneyCopy | null): string | null {
+  if (copy === null) return null;
+  return copy.terms
+    .filter((t) => t.key === "hit" || t.key === "miss" || t.key === "match")
+    .map((t) => t.text)
+    .join(" ");
+}
+
 // Next Links in the shared button looks (components/ui buttonClasses): the
 // primary for the go-do-it action, the secondary for "start another".
 const CANDY_LINK_PRIMARY =
@@ -206,9 +269,9 @@ interface DareInvite {
 // The amount picker's live reaction: SPOTTER's one deadpan line in his caption
 // box, keyed to the amount. He never states a number and never claims to hold
 // the money (the run's contract does); the amount lives in the field and the
-// preview card. On a goal that cannot record a miss (lib/miss-rule.ts) a miss
-// comes back, so no line may say a miss costs anything: the line under the
-// field says the same thing a sentence later.
+// preview card. Alone in a run a miss comes back (nobody hit), and on a goal
+// that cannot record a miss (lib/miss-rule.ts) it always does, so no line says
+// a miss costs anything; the terms under the field say the rest.
 type SpotterMood = { line: string };
 
 function getSpotterMoodForAmount(
@@ -229,7 +292,7 @@ function getSpotterMoodForAmount(
       line:
         kind === "self"
           ? recordsMisses
-            ? "Respectable. Enough to sting if you miss, not enough to cry about."
+            ? "Respectable. Bring friends in and a miss starts to sting."
             : "Respectable. A miss comes back on this build, so this one is about the streak."
           : "Solid challenge. They'll feel this one.",
     };
@@ -238,9 +301,7 @@ function getSpotterMoodForAmount(
     return {
       line:
         kind === "self"
-          ? recordsMisses
-            ? "Now we're talking. I love a person with something to lose."
-            : "Now we're talking. I love a person who means it."
+          ? "Now we're talking. I love a person who means it."
           : "Okay big spender. They better not miss this one.",
     };
   }
@@ -404,23 +465,20 @@ function SuggestionRow({
 function TypePicker({
   value,
   onChange,
-  missRule,
 }: {
   value: Variant;
   onChange: (v: Variant) => void;
-  /** Whether any run on this build can record a miss (lib/miss-rule.ts). The
-   *  goal is not written yet, so this says only what can be true. */
-  missRule: boolean;
 }) {
+  // Both start with one staker, so a miss comes back on either until more join.
+  const tileMoney: Record<Variant, RunMoney> = {
+    self: draftMoney({ variant: "self", goal: "", amount: "", lockIn: "", recipient: "" }),
+    dare: draftMoney({ variant: "dare", goal: "", amount: "", lockIn: "", recipient: "" }),
+  };
   const options: { id: Variant; title: string; body: string; icon: ReactNode }[] = [
     {
       id: "self",
       title: "Stake on yourself",
-      // A new run starts with no sponsor money, and a missed stake is shared
-      // only on a run that can record the miss: "any" for both.
-      body: missRule
-        ? "Your own stake on your own goal. Hit it and your stake comes back plus an equal share of any missed stakes and sponsor pot."
-        : "Your own stake on your own goal. Hit it and your stake comes back plus an equal share of any sponsor pot.",
+      body: "Your own stake on your own goal. With just you in, a miss comes back; friends can match your stake.",
       icon: <IconSelf className="size-5" />,
     },
     {
@@ -454,6 +512,7 @@ function TypePicker({
               <OptionMark selected={selected} />
             </span>
             <span className="text-[1.0625rem] font-semibold leading-tight">{opt.title}</span>
+            <MoneyChips kind={tileMoney[opt.id].kind.chip} miss={tileMoney[opt.id].miss} inline />
             <span className="text-[0.9375rem] leading-[1.45] text-muted">{opt.body}</span>
           </button>
         );
@@ -474,6 +533,7 @@ function PreviewCard({
   recipient,
   trashTalk,
   days,
+  fromName,
 }: {
   variant: Variant;
   title: string;
@@ -482,13 +542,15 @@ function PreviewCard({
   recipient: string;
   trashTalk: string;
   days: number;
+  /** The challenger's name when signed in, so a challenge previews as the
+   *  friend reads it. */
+  fromName: string | null;
 }) {
   const isSelf = variant === "self";
-  const selfFacts = commitmentFacts(selfRecordsMisses(title));
+  const money = draftMoney({ variant, goal: title, amount, lockIn, recipient, fromName });
   const displayTitle = title.trim() !== "" ? title.trim() : "Pick a goal";
   const displayAmount = amount.trim() !== "" ? amount.trim() : "0";
   const displayLockIn = lockIn.trim() !== "" ? lockIn.trim() : "0";
-  const cleanRecipient = recipient.trim().replace(/^@/, "");
   const displayTrash =
     trashTalk.trim() !== "" ? trashTalk.trim() : "you won't. proving me wrong pays.";
 
@@ -496,11 +558,11 @@ function PreviewCard({
     <RunCard
       id="challenge-preview"
       titleAs="h3"
-      tag={<Tag>{isSelf ? "Stake on yourself" : "Challenge"}</Tag>}
+      tag={<MoneyChips kind={money.kind.chip} miss={money.miss} inline />}
       ends={
-        <>
+        <span className="whitespace-nowrap">
           Runs <b>{days} days</b>
-        </>
+        </span>
       }
       title={displayTitle}
       stats={
@@ -517,23 +579,11 @@ function PreviewCard({
           )}
         </StatRow>
       }
-      note={
-        isSelf ? (
-          <>
-            <b>You vs. yourself.</b> {selfFacts.hit} {selfFacts.miss}
-          </>
-        ) : (
-          <>
-            For{" "}
-            <b>{cleanRecipient !== "" ? `@${cleanRecipient}` : "whoever opens the link"}</b>.
-            Hit it: their stake back plus the reward. Nobody hits: their stake goes
-            back to them and you take the reward back from the run page once it
-            settles.
-          </>
-        )
-      }
       fine={HONESTY_NOTE}
     >
+      {money.copy !== null ? (
+        <MoneyTermsList copy={money.copy} className="mt-3 border-t border-edge pt-3" />
+      ) : null}
       {!isSelf ? (
         <p className="m-0 mt-3 border-l-2 border-moonlight/60 pl-3 text-[0.9375rem] leading-[1.45] text-foreground">
           {displayTrash}
@@ -1020,8 +1070,8 @@ function CreateChallengeInner() {
               <b className="font-semibold text-gold">
                 {stake.trim() === "" ? "0" : stake.trim()} USDC
               </b>{" "}
-              and you are in. {commitmentFacts(selfRecordsMisses(goal)).hit}{" "}
-              {commitmentFacts(selfRecordsMisses(goal)).miss}
+              and you are in.{" "}
+              {termsHint(draftMoney({ variant: "self", goal, amount: stake, lockIn: "", recipient: "" }).copy)}
             </p>
             <SpotterCaption line="Locked in. The contract holds the stakes; I just read the wearables." />
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -1185,7 +1235,7 @@ function CreateChallengeInner() {
         <PerchedHeader title="Start a challenge" lead={PAGE_LEAD_COPY} pose="wearable" width={[88, 132]}>
           <Card className="[&>*+*]:mt-6">
             <FormSection label="Whose goal is it">
-              <TypePicker value={variant} onChange={selectVariant} missRule={missRuleFromPoolId() !== null} />
+              <TypePicker value={variant} onChange={selectVariant} />
             </FormSection>
 
             <FormSection label={isDare ? "Pick their goal" : "Pick your goal"} htmlFor="challenge-goal">
@@ -1239,10 +1289,11 @@ function CreateChallengeInner() {
                 </p>
               ) : selfStakeUnits !== null ? (
                 // Stake on yourself is a commitment pool (bountyModel 2) with no
-                // sponsor money at creation; the creator is the joiner. A friend
-                // challenge gets no range line: its creator does not stake, and
-                // the line speaks to the player who does.
-                <CommitmentRangeLine entryFee={selfStakeUnits} recordsMisses={selfRecordsMisses(goal)} />
+                // sponsor money at creation; the creator is the joiner and, until
+                // a friend matches, the only staker (docs/MONEY-FLOWS.md F2).
+                <p className={FIELD_HINT}>
+                  {termsHint(draftMoney({ variant: "self", goal, amount: stake, lockIn: "", recipient: "" }).copy)}
+                </p>
               ) : (
                 <p className={FIELD_HINT}>Pulled from your wallet when you lock in.</p>
               )}
@@ -1257,10 +1308,7 @@ function CreateChallengeInner() {
                     onChange={setStake}
                     ariaLabel="Their lock-in in USDC"
                   />
-                  <p className={FIELD_HINT}>
-                    The small amount they put up to lock in. Real money keeps the goal
-                    honest. They get it back when they hit it, and you never keep it.
-                  </p>
+                  <p className={FIELD_HINT}>{lockInHint(selfRecordsMisses(goal))}</p>
                 </FormSection>
 
                 <FormSection label="Who's it for">
@@ -1350,7 +1398,7 @@ function CreateChallengeInner() {
               <p className={FIELD_HINT}>
                 {isDare
                   ? "Starts the moment you send it."
-                  : "Starts the moment you lock in your stake."}
+                  : "Starts the moment you create it, so lock in your stake right after."}
               </p>
             </FormSection>
           </Card>
@@ -1368,6 +1416,7 @@ function CreateChallengeInner() {
             recipient={target}
             trashTalk={message}
             days={durationDays}
+            fromName={address !== null ? displayName(address) : null}
           />
 
           <SignInGate

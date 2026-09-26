@@ -11,6 +11,7 @@
 // odds, gamble or a prize-first framing.
 
 import { commitmentRange } from "@/lib/commitment";
+import { missConsequence } from "@/lib/commitment-copy";
 import { formatUsdc, parseUsdc } from "@/lib/contract";
 import { missRulePool } from "@/lib/miss-rule";
 
@@ -161,8 +162,25 @@ export function commitmentFacts(recordsMisses: boolean): {
   };
 }
 
-/** The run board's reminder under the money, for a player already in. */
-export function commitmentReminder(recordsMisses: boolean): string {
-  const f = commitmentFacts(recordsMisses);
-  return `${f.hit} ${f.miss} ${f.nobody}`;
+/**
+ * The run board's reminder under the money, for a player already in. The
+ * miss line follows the miss chip (missConsequence): a stake goes to the
+ * players who hit only on a run that can record a miss with two or more
+ * staked, the reader counted. Alone, a miss means nobody hit and every stake
+ * comes back; with the count unread, the line is the one true at any count.
+ */
+export function commitmentReminder(input: {
+  recordable: boolean;
+  /** Stakers in the run, the reader included; null while unread. */
+  players: number | null;
+}): string {
+  const f = commitmentFacts(input.recordable);
+  const miss = !input.recordable
+    ? f.miss
+    : input.players === null
+      ? "Miss it: if anyone else hits, your stake goes to them; if nobody hits, it comes back."
+      : missConsequence({ players: input.players, recordable: true }) === "Miss: goes to who hits"
+        ? f.miss
+        : "Miss it: your stake comes back while you are the only one in; once others stake, it goes to whoever hits, or comes back if nobody does.";
+  return `${f.hit} ${miss} ${f.nobody}`;
 }

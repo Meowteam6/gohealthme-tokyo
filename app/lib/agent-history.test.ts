@@ -35,7 +35,7 @@ describe("the History line for a recorded miss", () => {
 
   it("says plainly where the stake goes, in the player's own history", () => {
     expect(missLineOf(miss(null), true)).toBe(
-      "Missed. At settle your 1.00 stake goes to the players who hit; it comes back if nobody hits or the run is cancelled.",
+      "Missed. At settle your 1.00 stake goes to who hits, or comes back if nobody does. A cancel before settle gives it back too.",
     );
     expect(missLineOf(miss({ status: "closed", outcome: "forfeited" }), true)).toBe(
       "Missed. Your 1.00 stake went to the players who hit.",
@@ -47,7 +47,7 @@ describe("the History line for a recorded miss", () => {
 
   it("speaks in the third person on everyone's feed", () => {
     expect(missLineOf(miss(null), false)).toBe(
-      "Missed. At settle the 1.00 stake goes to the players who hit; it comes back if nobody hits or the run is cancelled.",
+      "Missed. At settle the 1.00 stake goes to who hits, or comes back if nobody does. A cancel before settle gives it back too.",
     );
   });
 
