@@ -3,8 +3,10 @@
 // Character creation: sign in, prove you are one human, pick your name, pair
 // your wearable. Replaces the closed-beta wall. The steps are a real sequence,
 // so they are numbered; the current one is open and the rest collapse to one
-// line each with their result. SPOTTER stands on the title card's top edge in
-// a new pose per step, the one pose on the screen (docs/DESIGN.md).
+// line each with their result. The page header is every page's header
+// (PerchedHeader): the title and lead outside the card, SPOTTER beside the
+// lead in a new pose per step, standing on the steps card, the one pose on the
+// screen (docs/DESIGN.md).
 //
 // The World, ENS and sensor steps mount the other lanes' components through
 // their contracts (docs/LANES.md) and never assume the lane is on: a lane that
@@ -16,11 +18,10 @@ import ProveHuman from "@/components/world/ProveHuman";
 import EnsNameClaim from "@/components/ens/EnsNameClaim";
 import ClaimHandle from "@/components/ClaimHandle";
 import RequestAccess from "@/components/RequestAccess";
-import Perch from "@/components/spotter/Perch";
 import SpotterCaption from "@/components/spotter/SpotterCaption";
 import { Button, Card } from "@/components/ui";
-import { Notice, PAGE_TITLE, QUIET_ACTION } from "@/components/night/kit";
-import type { SpotterScreenState } from "@/lib/spotter-poses";
+import { Notice, PAGE_COLUMN, PerchedHeader, QUIET_ACTION } from "@/components/night/kit";
+import { poseFor, poseMeta, type SpotterScreenState, type StageWidth } from "@/lib/spotter-poses";
 import CharacterCard from "@/components/game/CharacterCard";
 import SignInStep from "@/components/game/SignInStep";
 import SlowSignInNotice from "@/components/night/SlowSignInNotice";
@@ -57,39 +58,15 @@ const SCENE: Record<StepId, SpotterScreenState> = {
 
 const DONE_LINE = "That is your player. Every run reads this card.";
 
-/**
- * The title card over the steps, SPOTTER standing on its top edge in a new
- * pose per step. 84px on a phone so the open step's action stays near the
- * fold at 390x844; 156px from 900px up. The perch reserves the tallest pose's
- * height, so the steps never jump when the pose changes. His line sits in his
- * caption box.
- */
-function Scene({ step, title }: { step: StepId | null; title: string }) {
-  const state: SpotterScreenState =
-    step !== null ? SCENE[step] : "onboarding-welcome";
-  const line = step !== null ? SPOTTER_LINE[step] : DONE_LINE;
-  return (
-    <section className="relative lg:sticky lg:top-24">
-      <Perch
-        state={state}
-        width={[84, 156]}
-        reserve={[126, 239]}
-        side="right"
-        inset={[16, 32]}
-        priority
-        decorative
-      >
-        <Card>
-          <h1 className={PAGE_TITLE}>{title}</h1>
-          <p className="m-0 mt-2 max-w-md text-base text-muted text-pretty">
-            Four steps, once. Every run reads this card after that.
-          </p>
-          <SpotterCaption line={line} live className="mt-4" />
-          <p className="m-0 mt-3 text-[0.8125rem] text-haze">Beta on Base Sepolia test USDC.</p>
-        </Card>
-      </Perch>
-    </section>
-  );
+/** SPOTTER's height beside the lead, [phone, from 900px]. Each pose gets the
+ *  width that gives it this height, so the steps card never moves when the
+ *  pose changes with the step. */
+const FIGURE_HEIGHT: StageWidth = [124, 188];
+
+function sceneOf(step: StepId | null): { state: SpotterScreenState; line: string } {
+  return step !== null
+    ? { state: SCENE[step], line: SPOTTER_LINE[step] }
+    : { state: "onboarding-welcome", line: DONE_LINE };
 }
 
 function StatusText({
@@ -307,6 +284,7 @@ export default function CharacterCreation({
   onboarding,
   focus = null,
   mode,
+  above,
 }: {
   view: CharacterView;
   onboarding: Onboarding;
@@ -315,6 +293,8 @@ export default function CharacterCreation({
   /** "gate": shown in place of a page until the hard steps pass and the
    *  onboarding pass is done. "page": the /character editor. */
   mode: "gate" | "page";
+  /** Over the title: the way back to the run a lock fix came from. */
+  above?: ReactNode;
 }) {
   const [picked, setPicked] = useState<StepId | null>(null);
   const current = currentStep(
@@ -327,11 +307,25 @@ export default function CharacterCreation({
   // Hard steps cannot be bypassed by picking another row.
   const open: StepId | null = hardOpen ? current : (picked ?? focus ?? current);
   const signedIn = view.steps["sign-in"].status === "done";
+  const scene = sceneOf(open);
+  const pose = poseFor(scene.state).pose;
+  const meta = poseMeta(pose);
+  const figure: StageWidth = [
+    Math.round((FIGURE_HEIGHT[0] * meta.width) / meta.height),
+    Math.round((FIGURE_HEIGHT[1] * meta.width) / meta.height),
+  ];
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-6 py-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] lg:items-start lg:gap-10 min-[960px]:py-4">
-      <Scene step={open} title={mode === "page" ? "Your player" : "Make your player"} />
-
+    <div className={`${PAGE_COLUMN} py-2 min-[960px]:py-4`}>
+      <PerchedHeader
+        title={mode === "page" ? "Your player" : "Make your player"}
+        lead="Four steps, once. Every run reads this card after that."
+        above={above}
+        // No money moves on this page; the footer carries the beta line.
+        below={<SpotterCaption line={scene.line} live className="mt-4 max-w-md" />}
+        pose={pose}
+        width={figure}
+      >
       <div className="min-w-0 [&>*+*]:mt-6">
       <Card as="ol" padding="none" aria-label="Steps" className="m-0 list-none divide-y divide-edge overflow-hidden p-0">
         {STEP_ORDER.map((id, index) => {
@@ -414,6 +408,7 @@ export default function CharacterCreation({
       ) : null}
       {signedIn && view.gate && mode === "page" ? <CharacterCard view={view} /> : null}
       </div>
+      </PerchedHeader>
     </div>
   );
 }

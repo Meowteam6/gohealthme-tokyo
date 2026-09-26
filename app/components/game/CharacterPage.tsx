@@ -21,9 +21,12 @@ export default function CharacterPage({
   const view = useCharacter();
   const onboarding = useOnboarding(view.address);
   return (
-    <div className="[&>*+*]:mt-4">
-      {next !== null ? <BackLink href={next}>Back to the run</BackLink> : null}
-      <CharacterCreation view={view} onboarding={onboarding} focus={focus} mode="page" />
-    </div>
+    <CharacterCreation
+      view={view}
+      onboarding={onboarding}
+      focus={focus}
+      mode="page"
+      above={next !== null ? <BackLink href={next}>Back to the run</BackLink> : undefined}
+    />
   );
 }
