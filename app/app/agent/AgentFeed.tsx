@@ -34,7 +34,7 @@ import type {
 } from "@/lib/server/agent/feed-view";
 import { settleMomentLine } from "@/components/AgentReceipt";
 import { EmptyState, ErrorNote, Money, Skeleton } from "@/components/ui";
-import SpotterSays from "@/components/SpotterSays";
+import Spotter from "@/components/spotter/Spotter";
 
 // The feed's human-readable stage names for a stalled claim. The feed-view
 // only ever sends this fixed vocabulary (or "other"), never error prose.
@@ -80,7 +80,7 @@ const TONE_CLASS = {
 
 function Tag({ children }: { children: string }) {
   return (
-    <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 font-sans text-[10px] font-semibold uppercase tracking-wide text-warning">
+    <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 font-sans text-xs font-bold text-warning">
       {children}
     </span>
   );
@@ -98,93 +98,100 @@ function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
     claim.approval !== null ? APPROVAL_LINE[claim.approval.status] : null;
   const screen = claim.screen !== undefined ? SCREEN_LINE[claim.screen.status] : null;
   const resultTx = claim.recordTxs?.resultTx ?? null;
+  // DESIGN.md History: a claim that paid gets the verified pose; anything
+  // still being checked, held, declined or refused gets the magnifier.
+  const paid =
+    settle !== null &&
+    (settle.status === "settled" || settle.status === "already-settled") &&
+    claim.decision === "pay";
 
   return (
-    <li className="rounded-3xl border border-edge bg-surface-raised p-4 sm:p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="flex flex-wrap items-center gap-2 font-mono text-xs text-muted">
-          {shortGoal(claim.goalId)}
-          {claim.selfReported ? <Tag>self-reported</Tag> : null}
-          {claim.approval?.provider === "mock" ? <Tag>mocked World ID</Tag> : null}
-          {claim.approval?.credential != null ? (
-            <Tag>{`World ID: ${credentialLabel(claim.approval.credential)}`}</Tag>
-          ) : null}
-        </span>
-        <span className="text-xs text-muted">
-          {new Date(claim.at).toLocaleString()}
-        </span>
-      </div>
-      <div className="mt-2 space-y-1 text-sm">
-        {claim.spends.map((spend, index) => (
-          <p key={index} className="flex items-baseline justify-between gap-3">
-            <span className="min-w-0">
-              {spend.label}
-              <span className="ml-2 text-xs text-muted">
-                {spend.settlement === "x402" ? "paid via x402" : "metered"}
+    <li className="flex gap-3 rounded-[20px] border border-edge bg-surface p-4 sm:p-5">
+      <Spotter state={paid ? "history-verified" : "history-other"} decorative />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="flex flex-wrap items-center gap-2 font-mono text-xs text-muted">
+            {shortGoal(claim.goalId)}
+            {claim.selfReported ? <Tag>Self-reported</Tag> : null}
+            {claim.approval?.provider === "mock" ? <Tag>Mocked World ID</Tag> : null}
+            {claim.approval?.credential != null ? (
+              <Tag>{`World ID: ${credentialLabel(claim.approval.credential)}`}</Tag>
+            ) : null}
+          </span>
+          <span className="text-sm text-muted">
+            {new Date(claim.at).toLocaleString()}
+          </span>
+        </div>
+        <div className="mt-2 space-y-1 text-base">
+          {claim.spends.map((spend, index) => (
+            <p key={index} className="flex items-baseline justify-between gap-3">
+              <span className="min-w-0">
+                {spend.label}
+                <span className="ml-2 text-sm text-muted">
+                  {spend.settlement === "x402" ? "paid via x402" : "metered"}
+                </span>
               </span>
-            </span>
-            <Money usd={toUsd2(spend.amountUsd)} size="sm" />
-          </p>
-        ))}
-        {claim.decision !== null ? (
-          <p className="flex flex-wrap items-baseline gap-x-2">
-            <span className="text-xs uppercase tracking-wide text-muted">
-              decision
-            </span>
-            <span
-              className={
-                claim.decision === "pay" ? "text-accent-deep" : "text-warning"
-              }
-            >
-              {claim.decision === "pay" ? "pay" : "no pay"}
-            </span>
-            {resultTx !== null ? (
-              <a
-                href={baseTxUrl(resultTx)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-accent-deep underline"
+              <Money usd={toUsd2(spend.amountUsd)} size="sm" />
+            </p>
+          ))}
+          {claim.decision !== null ? (
+            <p className="flex flex-wrap items-baseline gap-x-2">
+              <span className="text-sm text-muted">SPOTTER&apos;s decision</span>
+              <span
+                className={`font-bold ${
+                  claim.decision === "pay" ? "text-accent-deep" : "text-warning"
+                }`}
               >
-                verdict tx
-              </a>
-            ) : null}
-          </p>
-        ) : null}
-        {approval !== null ? (
-          <p className={`text-xs ${TONE_CLASS[approval.tone]}`}>{approval.text}</p>
-        ) : null}
-        {screen !== null ? (
-          <p className={`text-xs ${TONE_CLASS[screen.tone]}`}>{screen.text}</p>
-        ) : null}
-        {settle !== null &&
-        settle.status === "settled" &&
-        settle.paidUsd !== null ? (
-          <p className="flex items-baseline justify-between gap-3">
-            <span className="text-accent-deep">
-              paid <Money usd={toUsd2(settle.paidUsd)} sign="+" size="sm" />
-            </span>
-            {settle.txHash !== null ? (
-              <a
-                href={baseTxUrl(settle.txHash)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-accent-deep underline"
-              >
-                payout tx
-              </a>
-            ) : null}
-          </p>
-        ) : settle !== null && settle.status === "already-settled" ? (
-          <p className="text-xs text-muted">paid in the pool&apos;s settle</p>
-        ) : deferredLine !== null ? (
-          <p className="text-xs text-muted">{deferredLine}</p>
-        ) : null}
-        {claim.problem !== undefined ? (
-          <p className="text-xs text-warning">
-            SPOTTER hit a problem at {STAGE_LABEL[claim.problem.stage] ?? STAGE_LABEL.other}.
-            Nothing has been paid on this claim yet.
-          </p>
-        ) : null}
+                {claim.decision === "pay" ? "pay" : "no pay"}
+              </span>
+              {resultTx !== null ? (
+                <a
+                  href={baseTxUrl(resultTx)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center text-sm font-bold text-accent-deep underline underline-offset-2"
+                >
+                  Verdict tx
+                </a>
+              ) : null}
+            </p>
+          ) : null}
+          {approval !== null ? (
+            <p className={`text-sm ${TONE_CLASS[approval.tone]}`}>{approval.text}</p>
+          ) : null}
+          {screen !== null ? (
+            <p className={`text-sm ${TONE_CLASS[screen.tone]}`}>{screen.text}</p>
+          ) : null}
+          {settle !== null &&
+          settle.status === "settled" &&
+          settle.paidUsd !== null ? (
+            <p className="flex items-baseline justify-between gap-3">
+              <span className="font-bold text-foreground">
+                paid <Money usd={toUsd2(settle.paidUsd)} sign="+" size="sm" />
+              </span>
+              {settle.txHash !== null ? (
+                <a
+                  href={baseTxUrl(settle.txHash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center text-sm font-bold text-accent-deep underline underline-offset-2"
+                >
+                  Payout tx
+                </a>
+              ) : null}
+            </p>
+          ) : settle !== null && settle.status === "already-settled" ? (
+            <p className="text-sm text-muted">paid in the pool&apos;s settle</p>
+          ) : deferredLine !== null ? (
+            <p className="text-sm text-muted">{deferredLine}</p>
+          ) : null}
+          {claim.problem !== undefined ? (
+            <p className="text-sm text-warning">
+              SPOTTER hit a problem at {STAGE_LABEL[claim.problem.stage] ?? STAGE_LABEL.other}.
+              Nothing has been paid on this claim yet.
+            </p>
+          ) : null}
+        </div>
       </div>
     </li>
   );
@@ -230,7 +237,7 @@ export default function AgentFeed() {
   return (
     <section className="space-y-3" aria-live="polite">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-lg font-bold">
+        <h2 className="font-display text-xl font-bold leading-display tracking-display">
           {view === "mine" ? "Your history" : "Everyone's claims"}
         </h2>
         {signedIn ? (
@@ -245,7 +252,7 @@ export default function AgentFeed() {
                 type="button"
                 aria-pressed={view === v}
                 onClick={() => setPicked(v)}
-                className={`min-h-11 rounded-full px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${
+                className={`min-h-11 rounded-full px-4 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${
                   view === v ? "bg-foreground text-background" : "text-muted hover:text-foreground"
                 }`}
               >
@@ -256,10 +263,10 @@ export default function AgentFeed() {
         ) : null}
       </div>
       {!signedIn ? (
-        <p className="text-sm text-muted">
+        <p className="text-base text-muted">
           <Link
             href={`/character?next=${encodeURIComponent(pathname)}`}
-            className="font-semibold text-accent-deep underline"
+            className="font-bold text-accent-deep underline underline-offset-2"
           >
             Sign in
           </Link>{" "}
@@ -267,7 +274,13 @@ export default function AgentFeed() {
         </p>
       ) : null}
       {feed.isPending ? (
-        <Skeleton className="h-24 w-full" />
+        <div role="status" className="flex items-center gap-3">
+          <Spotter state="loading" size="xs" decorative />
+          <div className="flex-1 space-y-2">
+            <span className="sr-only">Reading SPOTTER&apos;s claims</span>
+            <Skeleton className="h-20 w-full" />
+          </div>
+        </div>
       ) : items.length > 0 ? (
         <ol className="space-y-3">
           {items.map((claim) => (
@@ -286,31 +299,24 @@ export default function AgentFeed() {
         <EmptyState
           title="Nothing in your history yet."
           detail="When SPOTTER checks one of your runs, its verdict, your World ID confirmation and the payout land here. Everyone's claims are one tap away."
+          line="Nothing running. I'm on break."
           action={
-            <Link
-              href="/pools"
-              className="inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-foreground hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
-            >
+            <Link href="/pools" className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-6 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 motion-reduce:transition-none">
               See the open runs
             </Link>
           }
         />
       ) : (
-        <div className="space-y-4">
-          <SpotterSays surface="agent-empty" state="empty" size="md" />
-          <EmptyState
-            title="SPOTTER has not settled a claim yet."
-            detail="Enter a run, prove it from your wearable or an uploaded record, and SPOTTER checks the result and pays out here when the run settles."
-            action={
-              <Link
-                href="/pools"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-foreground shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-hover active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none"
-              >
-                See the open runs
-              </Link>
-            }
-          />
-        </div>
+        <EmptyState
+          title="SPOTTER has not settled a claim yet."
+          detail="Enter a run, prove it from your wearable or an uploaded record, and SPOTTER checks the result and pays out here when the run settles."
+          line="No claims to check. I'm on break."
+          action={
+            <Link href="/pools" className="inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-6 text-base font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 motion-reduce:transition-none">
+              See the open runs
+            </Link>
+          }
+        />
       )}
     </section>
   );
