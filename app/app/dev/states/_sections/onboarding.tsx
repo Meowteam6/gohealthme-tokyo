@@ -18,6 +18,8 @@ import { CARD_TITLE, EmptyCard, PAGE_COLUMN, PerchedHeader } from "@/components/
 import { Card, Chip, ErrorNote, buttonClasses } from "@/components/ui";
 import type { PoolInfo } from "@/lib/contract";
 import type { PublicFeedClaim } from "@/lib/server/agent/feed-view";
+import { ProfilePaidWall } from "@/components/profile-paid-wall";
+import { PayoutRow } from "@/components/NamedPayoutFeed";
 
 // Character creation states for the dev gallery: the real CharacterCreation
 // with fixture views. Nothing here reads a wallet; every callback is a no-op.
@@ -346,6 +348,54 @@ export default function OnboardingStates({ meta }: SectionProps) {
             logout={noop}
           />
         </PerchedHeader>
+      </StateFrame>
+      <StateFrame name="profile-with-runs" note="/u/[handle] with runs hit: a verified and a self-reported row">
+        <ProfilePaidWall
+          profile={{
+            handle: "mika",
+            emoji: "M",
+            address: ADDRESS,
+            goalsHit: 3,
+            verifiedWins: 2,
+            selfReportedWins: 1,
+            usdcEarned: "7.50",
+            winStreak: 2,
+            readOk: true,
+            wins: [
+              { id: "a", at: "2026-09-26T23:00:00.000Z", amountUsd: "3.00", txHash: "0xabc1230000000000000000000000000000000000000000000000000000000002", role: "achiever", tier: "verified" },
+              { id: "b", at: "2026-09-20T08:30:00.000Z", amountUsd: "1.50", txHash: "0xabc1230000000000000000000000000000000000000000000000000000000003", role: "achiever", tier: "self-reported" },
+            ],
+          }}
+        />
+      </StateFrame>
+      <StateFrame name="profile-read-failed" note="/u/[handle] when the chain does not answer: no zeros as fact">
+        <ProfilePaidWall
+          profile={{
+            handle: "mika",
+            emoji: "M",
+            address: ADDRESS,
+            goalsHit: 0,
+            verifiedWins: 0,
+            selfReportedWins: 0,
+            usdcEarned: "0.00",
+            winStreak: 0,
+            readOk: false,
+            wins: [],
+          }}
+        />
+      </StateFrame>
+      <StateFrame name="feed-with-payouts" note="/feed rows: name, time, tx, amount; self-reported tagged">
+        <div className={PAGE_COLUMN}>
+          <PerchedHeader title="Who got paid" lead="Recent payouts on Base Sepolia, named by handle." pose="thumbsup">
+            <Card>
+              <h2 className={CARD_TITLE}>Payout feed</h2>
+              <ul className="mt-4 list-none">
+                <PayoutRow payout={{ at: "2026-09-26T23:00:00.000Z", handle: "mika", address: ADDRESS, amountUsd: "3.00", txHash: "0xabc1230000000000000000000000000000000000000000000000000000000002", selfReported: false }} />
+                <PayoutRow payout={{ at: "2026-09-26T21:00:00.000Z", handle: null, address: "0x51f2000000000000000000000000000000a90c", amountUsd: "1.50", txHash: "0xabc1230000000000000000000000000000000000000000000000000000000004", selfReported: true }} />
+              </ul>
+            </Card>
+          </PerchedHeader>
+        </div>
       </StateFrame>
       <StateFrame name="character-done" note="all four done: the card and the way in">
         <CharacterCreation
