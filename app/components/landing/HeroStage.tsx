@@ -1,12 +1,14 @@
 "use client";
 
-// The night stage (docs/DESIGN.md, landing hero): the moon behind the run
-// card and SPOTTER on its top edge, staged for the run the card features. On a
-// sleep run he sleeps in front of the moon; tap him once and he wakes, waves
-// and says his one line. On a workout or steps run he is already up, pointing
-// at his wearable, and the moon dims behind him: a sleeping otter on a workout
-// card says the wrong thing. A tap there brings up the same line. One pose on
-// screen at a time: the sleeper hides when the waver shows.
+// The night stage (docs/DESIGN.md, landing hero): one large moon behind the
+// run card, cut off by its top edge, and SPOTTER on that edge in front of it,
+// whichever run the card features. On a sleep run he sleeps across the moon's
+// left side; tap him once and he wakes, waves and says his one line. On a
+// workout or steps run only the pose changes: he is up, pointing at his
+// wearable, standing against the moon a quarter of his width left of its
+// centre (a sleeping otter on a workout card says the wrong thing), and a tap
+// brings up the same line on his left. One pose on screen at a time: the
+// sleeper hides when the waver shows.
 
 import { useState, type CSSProperties, type ReactNode } from "react";
 import Moon from "@/components/spotter/Moon";
@@ -57,16 +59,7 @@ export default function HeroStage({
 
   return (
     <div className="relative mt-[18px] min-[900px]:mt-0">
-      {night ? (
-        <Moon className="absolute left-[calc(50%-16px)] top-0.5 z-0 min-[900px]:left-auto min-[900px]:right-[-8px] min-[900px]:top-[-18px]" />
-      ) : (
-        // A day run: the moon steps back, small and high, so the one warm
-        // light stays and SPOTTER, awake, owns the stage.
-        <Moon
-          diameter={[76, 120]}
-          className="absolute right-5 top-1 z-0 min-[900px]:right-8 min-[900px]:top-0"
-        />
-      )}
+      <Moon className="absolute left-[calc(50%-16px)] top-0.5 z-0 min-[900px]:left-auto min-[900px]:right-[-8px] min-[900px]:top-[-18px]" />
       <div className="night-perch" style={perch}>
         <button
           type="button"
@@ -74,7 +67,9 @@ export default function HeroStage({
           aria-label={night ? (woke ? "SPOTTER, awake" : "Wake SPOTTER") : "SPOTTER"}
           aria-describedby="spotter-says"
           className={`night-figure cursor-pointer rounded-[20px] border-0 bg-transparent p-0 [-webkit-tap-highlight-color:transparent] ${
-            night ? "left-1.5 min-[900px]:left-[18px]" : "left-4 min-[900px]:left-7"
+            // Awake: centred on the moon (184px from 50% - 16px on a phone,
+            // 300px at right -8px from 900px), then a quarter of his width left.
+            night ? "left-1.5 min-[900px]:left-[18px]" : "left-[calc(50%+4px)] min-[900px]:left-auto min-[900px]:right-[104px]"
           } ${FOCUS_RING}`}
           style={stageVars(width)}
         >
@@ -100,7 +95,7 @@ export default function HeroStage({
           className={`${CAPTION} ${
             night
               ? "left-[calc(6px+var(--sw)*0.6)] top-[calc(var(--sw)*0.726-106px)] min-[900px]:left-[calc(18px+var(--sw)*0.6)] min-[900px]:top-[calc(var(--sw)*0.726-156px)]"
-              : "left-[calc(16px+var(--sw)+10px)] top-[calc(var(--perch-pad)-96px)] min-[900px]:left-[calc(28px+var(--sw)+14px)] min-[900px]:top-[calc(var(--perch-pad)-112px)]"
+              : "right-[calc(50%+6px)] top-[calc(var(--perch-pad)-110px)] min-[900px]:right-[268px] min-[900px]:top-[calc(var(--perch-pad)-112px)]"
           } ${woke ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"}`}
         >
           {woke ? (

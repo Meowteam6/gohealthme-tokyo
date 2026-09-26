@@ -175,7 +175,8 @@ export function LandingView({
 
       <section id="how" aria-labelledby="how-h" className="scroll-mt-20 pb-10 pt-6 min-[900px]:pb-[88px]">
         <h2 id="how-h" className="type-title m-0 text-[2rem] min-[900px]:text-[3rem]">
-          Everyone stakes the same. Your night decides the rest.
+          Everyone stakes the same. Your {featuredKind === "workout" || featuredKind === "move" ? "day" : "night"}{" "}
+          decides the rest.
         </h2>
         <p className="m-0 mt-2.5 max-w-[44ch] text-[1.0625rem] text-muted text-pretty">
           Your result depends only on what your own wearable records.
