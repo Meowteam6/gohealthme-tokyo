@@ -55,6 +55,10 @@ project; both values are the new contract address, never `0x66815e3A…`):
 
 ### Deploy log
 <!-- tokyo-deploy-log -->
+- 2026-09-26T00:03:49Z reuse: HealthPoolsV3 `0x0B6E8D477313599aBB746218a1AE45BAb333A12F` (seed-only run)
+- 2026-09-26T00:03:49Z pool 4: **Sleep efficiency 85 tonight** | goalSpec "Sleep efficiency 85% or better for 1 night" | model 2 (commitment) | entry 1000000 uUSDC | sponsor pot 2000000 uUSDC
+  - periodStart 1790381042 (Sat 2026-09-26 09:04 JST), periodEnd 1790472600 (Sun 2026-09-27 10:30 JST); settler-only until 1790559000 (Mon 2026-09-28 10:30 JST), then anyone
+  - create tx https://sepolia.basescan.org/tx/0xabfd9a5cf23396b818377b72a089b7a395cfea5045be16a5984fc4c3887caca9 (on-chain id 4; replaces pool 3 "Walk 8k steps today", cancelled in tx 0xc4bc6837d2a1d826ab10b4420d85479ba6cf6bb7d02801c81b25c6bc0c5d41f3 because steps is not a launch goal)
 - 2026-09-25T20:40:37Z reuse: HealthPoolsV3 `0x0B6E8D477313599aBB746218a1AE45BAb333A12F` (seed-only run)
 - 2026-09-25T20:40:37Z pool 0: **Sleep 7 hours tonight** | goalSpec "Sleep at least 7 hours for 1 night" | model 2 (commitment) | entry 1000000 uUSDC | sponsor pot 2000000 uUSDC
   - periodStart 1790368846 (Sat 2026-09-26 05:40 JST), periodEnd 1790416800 (Sat 2026-09-26 19:00 JST); settler-only until 1790503200 (Sun 2026-09-27 19:00 JST), then anyone
