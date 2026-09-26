@@ -3,7 +3,6 @@
 import { GallerySection, StateFrame, type SectionProps } from "../_kit";
 import { HeaderView } from "@/components/Header";
 import SiteFooter from "@/components/SiteFooter";
-import { CopyAddressButton } from "@/components/FundingHelp";
 import { SpotterOutageBand } from "@/components/game/SpotterStatusLine";
 import { Button, buttonClasses } from "@/components/ui";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
@@ -18,31 +17,28 @@ import { markExternalConnectIntent } from "@/lib/wallet-connect-intent";
 // it, themed by the .dynamic-shadow-dom variables in globals.css.
 
 const ADDRESS = "0x8a39c0ffee000000000000000000000000006141";
+const MIKA = { name: "mika.gohealthme.eth", initial: "M", address: ADDRESS };
 
-function WalletFixture() {
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <span className="truncate text-sm font-semibold text-foreground">mika.gohealthme.eth</span>
-      <CopyAddressButton address={ADDRESS} compact />
-    </div>
-  );
-}
-
-function SignedIn({ menu = false, outage = false }: { menu?: boolean; outage?: boolean }) {
+function SignedIn({
+  menu = false,
+  account = false,
+  outage = false,
+}: {
+  menu?: boolean;
+  account?: boolean;
+  outage?: boolean;
+}) {
   return (
     <HeaderView
       sticky={false}
       solid
       signedIn
       initialMenuOpen={menu}
+      initialAccountOpen={account}
       status={outage ? <SpotterOutageBand /> : null}
-      auth={
-        <Button variant="secondary" size="sm">
-          Sign out
-        </Button>
-      }
-      wallet={<WalletFixture />}
-      menuFoot={<WalletFixture />}
+      auth={null}
+      account={MIKA}
+      onSignOut={() => {}}
     />
   );
 }
@@ -73,10 +69,24 @@ export default function ShellStates({ meta }: SectionProps) {
           auth={<span className={buttonClasses({ variant: "secondary", size: "sm" })}>Sign in</span>}
         />
       </StateFrame>
-      <StateFrame name="header-signed-in" note="scrolled: the solid night bar with the approved nav; below 1024px it folds into the menu">
+      <StateFrame
+        name="header-signed-in"
+        note="scrolled: the solid night bar, the approved nav and one account pill (the full name from 1280px); below 1024px the pill is the avatar and the menu"
+      >
         <SignedIn />
       </StateFrame>
-      <StateFrame name="header-signed-in-menu" note="below 1024px, menu open: the five links, the name and the copy button">
+      <StateFrame
+        name="header-signed-in-account"
+        note="from 1024px, the pill open: the full name, the address to copy, Sign out"
+      >
+        <div className="min-h-[15rem]">
+          <SignedIn account />
+        </div>
+      </StateFrame>
+      <StateFrame
+        name="header-signed-in-menu"
+        note="below 1024px, menu open: the five links, then the name, the address to copy and Sign out"
+      >
         <SignedIn menu />
       </StateFrame>
       <StateFrame name="header-outage" note="SPOTTER's wallet is empty: the one band that may sit under the bar">
