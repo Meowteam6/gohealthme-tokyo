@@ -17,7 +17,7 @@ import { challengeNote, termsOf, type OpenRun, type OutcomeKey } from "@/lib/gam
 import { useMyRuns } from "@/lib/game/useLobby";
 import { useOpenRuns, type OpenRunsStatus } from "@/lib/game/useOpenRuns";
 import { useWearPick } from "@/lib/game/useWearPick";
-import type { WearableAvailability, WearableBrand } from "@/lib/game/wearable-fit";
+import { brandFit, type WearableAvailability, type WearableBrand } from "@/lib/game/wearable-fit";
 import { useEmbeddedWallet } from "@/lib/wallet";
 
 /** The challenge band's example stake, 1.00 USDC; its figures are worked by
@@ -128,6 +128,11 @@ export function LandingView({
             run={data.featured}
             feeBps={data.feeBps}
             joined={joined}
+            fit={
+              picked !== null && data.featured !== null
+                ? brandFit(picked, data.featured.pool.goalSpec, flags.availability)
+                : null
+            }
             onRetry={data.retry}
           />
         </HeroStage>

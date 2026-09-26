@@ -12,18 +12,22 @@ export default function LandingCta({
   poolId,
   entryFee,
   joined = false,
+  locked = false,
 }: {
   poolId: bigint;
   entryFee: bigint;
   /** The signed-in player is already in this run. */
   joined?: boolean;
+  /** The wearable the visitor picked cannot check this run: the run page
+   *  says why and what works instead, so this only opens it. */
+  locked?: boolean;
 }) {
   return (
     <Link
       href={`/pools/${poolId.toString()}`}
-      className={buttonClasses({ block: true, variant: joined ? "secondary" : "primary" })}
+      className={buttonClasses({ block: true, variant: joined || locked ? "secondary" : "primary" })}
     >
-      {joined ? "Open my run" : `Put ${stakeWords(entryFee)} USDC on myself`}
+      {joined ? "Open my run" : locked ? "See this run" : `Put ${stakeWords(entryFee)} USDC on myself`}
     </Link>
   );
 }

@@ -43,7 +43,9 @@ export function KindIcon({ kind, className = "" }: { kind: RunKind; className?: 
     case "move":
       return (
         <svg {...common}>
-          <path d="M5 2.5c1.4 0 2 1.3 2 3s-.7 3-2 3-2-1.2-2-3 .6-3 2-3ZM3.3 10.5h3.4M11 6.5c1.4 0 2 1.3 2 3s-.7 3-2 3-2-1.2-2-3 .6-3 2-3ZM9.3 14h3.4" />
+          {/* Two footprints, one ahead of the other. */}
+          <ellipse cx="5.2" cy="5.6" rx="1.9" ry="2.9" />
+          <ellipse cx="10.8" cy="10.4" rx="1.9" ry="2.9" />
         </svg>
       );
     case "other":
