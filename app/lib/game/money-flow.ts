@@ -425,6 +425,15 @@ export function runMoneyOf(input: {
   return { kind, miss, copy };
 }
 
+/** The flow's miss term as a sentence, for under the stake button beside the
+ *  miss chip: "If anyone hits, your 1.00 goes to them; ...". */
+export function missDetailOf(copy: MoneyCopy): string | null {
+  const term = copy.terms.find((t) => t.key === "miss");
+  if (term === undefined) return null;
+  const rest = term.text.replace(/^Miss: /, "");
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
+
 /** A moment for a sentence, "Sep 27, 14:30", in the reader's zone. */
 export function momentLabel(ms: number, timeZone?: string): string {
   return new Intl.DateTimeFormat("en-US", {

@@ -19,8 +19,8 @@ import {
 import { Card, Tag, buttonClasses } from "@/components/ui";
 import { formatUsdc } from "@/lib/contract";
 import type { DarePot } from "@/lib/challenges";
-import { commitmentRange } from "@/lib/commitment";
-import { commitmentFacts } from "@/lib/game/commitment-copy";
+import { MoneyChips, MoneyTermsList } from "@/components/game/MoneyTerms";
+import { runMoneyOf } from "@/lib/game/money-flow";
 
 const PRIMARY_LINK = buttonClasses({ size: "sm" });
 
@@ -116,93 +116,52 @@ export function RallyCard({ token }: { token: string }) {
   );
 }
 
-/** "Hit it: ..." -> the lead bolded, the rest plain, as on the run page. */
-function Fact({ icon, text, extra }: { icon: ReactNode; text: string; extra?: ReactNode }) {
-  const cut = text.indexOf(": ");
-  const lead = cut > 0 ? text.slice(0, cut + 1) : "";
-  const rest = cut > 0 ? text.slice(cut + 2) : text;
-  return (
-    <li className="flex gap-3">
-      <span aria-hidden="true" className="mt-0.5 flex size-5 flex-none items-center justify-center text-muted">
-        {icon}
-      </span>
-      <span className="text-[0.9375rem] leading-[1.5] text-muted">
-        {lead !== "" ? <b className="font-semibold text-foreground">{lead}</b> : null} {rest}
-        {extra}
-      </span>
-    </li>
-  );
-}
-
-const ICON = {
-  width: 18,
-  height: 18,
-  viewBox: "0 0 18 18",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.7,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
-
 /**
- * The commitment terms before someone accepts (docs/DESIGN.md, the commitment
- * model): the same stake, then hit, miss and nobody hits, in the run page's
- * icon-list form. Wording from commitmentFacts, which follows whether this
- * run can record a miss (lib/miss-rule.ts), the one number from
- * commitmentRange; no arithmetic here. SPOTTER stands on this card, so the list
- * carries no otter of its own.
+ * The terms before someone accepts (docs/MONEY-FLOWS.md, section 3): the kind
+ * and miss chips, the flow's line and its terms. A stake on yourself reads as
+ * "match it"; a challenge with a reward names the lock-in, the reward and what
+ * the challenger takes back. Wording from lib/game/money-flow.ts, numbers
+ * from lib/commitment.ts; no arithmetic here. SPOTTER stands on this card, so
+ * the list carries no otter of its own. Dates stay out: this renders on the
+ * server, whose clock zone is not the reader's.
  */
-function ChallengeTermsList({ terms }: { terms: ChallengeTerms }) {
-  const range = commitmentRange({
-    entryFee: terms.entryFee,
-    players: terms.players,
-    sponsorPot: terms.sponsorPot,
-    includeJoiner: true,
-    recordsMisses: terms.recordsMisses,
+function ChallengeTermsList({
+  terms,
+  challengerName,
+  seed,
+  targetHandle,
+}: {
+  terms: ChallengeTerms;
+  challengerName: string;
+  seed: bigint | null;
+  targetHandle: string | null;
+}) {
+  const money = runMoneyOf({
+    pool: { bountyModel: 2, initiative: "challenge" },
+    flow: {
+      players: terms.players,
+      creatorStaked: terms.creatorStaked ?? null,
+      seed,
+      creatorName: challengerName,
+    },
+    numbers: {
+      entryFee: terms.entryFee,
+      players: terms.players,
+      pot: terms.sponsorPot,
+      // The gallery's fixtures predate the fee read; a live page passes it.
+      feeBps: terms.feeBps === undefined ? 0 : terms.feeBps,
+      recordable: terms.recordsMisses,
+      includeJoiner: true,
+      confirmBy: null,
+    },
+    targetName: targetHandle !== null ? `@${targetHandle}` : null,
+    targetIsYou: true,
+    reward: seed,
   });
-  const facts = commitmentFacts(terms.recordsMisses);
   return (
-    <div>
-      <p className="num m-0 text-[0.9375rem] text-muted">
-        Everyone puts in the same stake:{" "}
-        <b className="font-semibold text-gold">{formatUsdc(terms.entryFee)} USDC</b>.{" "}
-        {facts.effort}
-      </p>
-      <ul className="num m-0 mt-3 list-none [&>*+*]:mt-2.5 p-0">
-        <Fact
-          icon={
-            <svg {...ICON}>
-              <circle cx="9" cy="9" r="7.2" />
-              <path d="M5.8 9.2 8 11.3l4.2-4.5" />
-            </svg>
-          }
-          text={facts.hit}
-          extra={
-            <>
-              {" "}Up to <b className="font-semibold text-gold">{formatUsdc(range.ifOnlyYou)}</b> right now.
-            </>
-          }
-        />
-        <Fact
-          icon={
-            <svg {...ICON}>
-              <circle cx="9" cy="9" r="7.2" />
-              <path d="M5.8 9h6.4" />
-            </svg>
-          }
-          text={facts.miss}
-        />
-        <Fact
-          icon={
-            <svg {...ICON}>
-              <path d="M6.5 5 3.5 8l3 3" />
-              <path d="M3.8 8h7.2a3.5 3.5 0 0 1 0 7H9" />
-            </svg>
-          }
-          text={facts.nobody}
-        />
-      </ul>
+    <div className="[&>*+*]:mt-3.5">
+      <MoneyChips kind={money.kind.chip} miss={money.miss} />
+      {money.copy !== null ? <MoneyTermsList copy={money.copy} id="challenge-intro-terms" /> : null}
     </div>
   );
 }
@@ -213,6 +172,12 @@ export interface ChallengeTerms {
   sponsorPot: bigint;
   /** Whether SPOTTER can record a miss on this run (lib/miss-rule.ts). */
   recordsMisses: boolean;
+  /** Whether the challenger staked in their own run: a stake on yourself to
+   *  match (F2) rather than a challenge with a reward (F3). Null when the
+   *  read missed; the seed then decides. */
+  creatorStaked?: boolean | null;
+  /** commitmentFeeBps; null when it did not read (no range is stated). */
+  feeBps?: number | null;
 }
 
 /**
@@ -259,7 +224,14 @@ export function ChallengeIntro({
       }
     >
       <Card className="[&>*+*]:mt-4">
-        {terms !== null ? <ChallengeTermsList terms={terms} /> : null}
+        {terms !== null ? (
+          <ChallengeTermsList
+            terms={terms}
+            challengerName={challengerName}
+            seed={seed}
+            targetHandle={targetHandle}
+          />
+        ) : null}
         <BackedBy names={backers} />
         <SpotterCaption line="Accept and your stake goes in. I read your wearable; only the yes or no result goes on chain, never your data." />
         <p className="m-0 text-[0.8125rem] leading-[1.45] text-haze">Test USDC during beta.</p>

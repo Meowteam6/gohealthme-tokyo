@@ -20,7 +20,8 @@ import { useQuery } from "@tanstack/react-query";
 import JoinPool from "@/components/JoinPool";
 import ApprovalNote from "@/components/game/ApprovalNote";
 import StakeLock from "@/components/run/StakeLock";
-import { SoloNote, StakeChecks, StakeTerms, StakeTermsPlain } from "@/components/run/StakeCard";
+import { MissUnderStake, MoneyTermsList } from "@/components/game/MoneyTerms";
+import { StakeChecks, StakeTermsPlain } from "@/components/run/StakeCard";
 import {
   displayGoalSpec,
   fetchParticipant,
@@ -28,15 +29,14 @@ import {
   fetchPool,
   formatUsdc,
 } from "@/lib/contract";
-import { recordsMissesOf, sponsorPotOf, type CommitmentTerms } from "@/lib/game/commitment-copy";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
+import { missDetailOf } from "@/lib/game/money-flow";
+import { useRunMoney } from "@/lib/game/useRunMoney";
 import {
   closeLabelOf,
   clockLabel,
   isSleepMetric,
   runHeadlineOf,
-  soloLineOf,
-  stakeTermsOf,
 } from "@/lib/game/run-page";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { ButtonLink, Skeleton, TEXT_LINK } from "@/components/ui";
@@ -63,10 +63,14 @@ import { useNowSeconds } from "@/lib/game/useNowSeconds";
 export default function ChallengeAccept({
   poolId,
   returnTo,
+  termsAbove = false,
 }: {
   poolId: string;
   /** The challenge link, so a fix brings the player back to the challenge. */
   returnTo: string;
+  /** The challenge's intro already states the terms right above this slip,
+   *  so the slip keeps only the miss chip under the stake button. */
+  termsAbove?: boolean;
 }) {
   const view = useCharacter();
   const checks = useJoinChecks(view);
@@ -141,6 +145,14 @@ export default function ChallengeAccept({
     staleTime: 30_000,
   });
   const commitmentFee = useCommitmentFee(selfStaked);
+  // The flow's chips and terms (docs/MONEY-FLOWS.md), from the same reads.
+  const money = useRunMoney({
+    pool: poolQuery.data ?? null,
+    players: playersQuery.data?.length ?? null,
+    includeJoiner: !joined,
+    viewer: address,
+    feeBps: commitmentFee.bps,
+  });
 
   if (poolIdBig === null) return null;
 
@@ -212,7 +224,7 @@ export default function ChallengeAccept({
 
   const stake = formatUsdc(pool.entryFee);
   const headline = runHeadlineOf({ goalSpec: pool.goalSpec, periodEnd: pool.periodEnd });
-  const terms = commitmentTermsOf(pool, playersQuery.data?.length ?? null, commitmentFee.bps);
+  const flowTerms = money?.copy ?? null;
 
   switch (slot.kind) {
     case "in-run":
@@ -247,17 +259,6 @@ export default function ChallengeAccept({
         </p>
       );
     case "playable": {
-      const copy =
-        terms !== null
-          ? stakeTermsOf({
-              entryFee: pool.entryFee,
-              sponsorPot: sponsorPotOf(terms),
-              goalShort: headline.short,
-              feeBps: terms.feeBps,
-              recordsMisses: terms.recordsMisses,
-            })
-          : null;
-      const solo = terms !== null ? soloLineOf(terms) : null;
       return (
         <JoinPool
           poolId={poolIdBig}
@@ -266,15 +267,14 @@ export default function ChallengeAccept({
           view={{
             preamble: (
               <>
-                {copy !== null ? (
-                  <StakeTerms terms={copy} id="challenge-terms" />
+                {termsAbove ? null : flowTerms !== null ? (
+                  <MoneyTermsList copy={flowTerms} id="challenge-terms" />
                 ) : (
                   <StakeTermsPlain>
                     Accepting stakes your {stake} USDC. Hit the goal and it comes back with
                     your share on top; the challenger never keeps it.
                   </StakeTermsPlain>
                 )}
-                {solo !== null ? <SoloNote line={solo} /> : null}
                 {slot.proof === "upload" ? (
                   <StakeChecks
                     items={[{ key: "upload", glyph: "info", children: uploadFallbackNote(pool.goalSpec) }]}
@@ -283,6 +283,10 @@ export default function ChallengeAccept({
                 <ApprovalNote />
               </>
             ),
+            underStake:
+              money !== null && money.miss !== null && flowTerms !== null ? (
+                <MissUnderStake miss={money.miss} detail={missDetailOf(flowTerms)} />
+              ) : null,
             goalTitle:
               headline.figure !== null
                 ? `${headline.figure} ${headline.rest}`
@@ -308,23 +312,4 @@ export default function ChallengeAccept({
       );
     }
   }
-}
-
-/** The commitment terms for the stake, or null when this is not a commitment
- *  run or the count has not been read. */
-function commitmentTermsOf(
-  pool: {
-    id: bigint;
-    bountyModel: number;
-    goalSpec: string;
-    entryFee: bigint;
-    balance: bigint;
-    settled: boolean;
-    cancelled: boolean;
-  },
-  players: number | null,
-  feeBps: number | null,
-): CommitmentTerms | null {
-  if (pool.bountyModel !== 2 || players === null || pool.settled || pool.cancelled) return null;
-  return { entryFee: pool.entryFee, players, balance: pool.balance, feeBps, recordsMisses: recordsMissesOf(pool) };
 }

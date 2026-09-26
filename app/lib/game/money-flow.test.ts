@@ -4,6 +4,7 @@ import {
   flowKindOf,
   groupRunCopy,
   missConsequence,
+  missDetailOf,
   momentLabel,
   runMoneyOf,
   selfStakeCopy,
@@ -275,6 +276,17 @@ describe("runMoneyOf", () => {
     });
     expect(backing.kind.chip).toBe("Backing");
     expect(backing.copy).toBeNull();
+  });
+});
+
+describe("missDetailOf", () => {
+  it("turns the miss term into the sentence under the stake button", () => {
+    expect(missDetailOf(groupRunCopy({ ...base, players: 1 }))).toBe(
+      "If anyone hits, your 1.00 goes to them; if nobody hits, it comes back.",
+    );
+    expect(missDetailOf(sponsoredCopy({ bountyModel: 0, entryFee: ONE, pot: ONE, sponsorName: "@a", sponsorIsYou: false }))).toBe(
+      "1.00 comes back.",
+    );
   });
 });
 

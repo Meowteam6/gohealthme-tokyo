@@ -49,6 +49,8 @@ type JoinStatus =
 export interface JoinPoolView {
   /** Stats, terms, the solo line and the checks: shown above the hold. */
   preamble: ReactNode;
+  /** Right under the stake button: the miss chip and what a miss does. */
+  underStake?: ReactNode;
   /** The run's name, for the tap-to-confirm question. */
   goalTitle: string;
   /** The joined card's words and numbers (JoinMoment), minus the receipt. */
@@ -360,6 +362,7 @@ function JoinPoolInner({
             <>
               <StakeAction id="stake-action" fine={BETA_FINE}>
                 {hold(false)}
+                {view.underStake}
               </StakeAction>
               <HoldBar mode="hold" actionIds={["stake-action"]} watchKey={`hold-${coinKey}`}>
                 {hold(true)}
@@ -371,6 +374,7 @@ function JoinPoolInner({
               <Button block disabled={!ready} onClick={openSignIn}>
                 {ready ? `Sign in to stake ${amount} USDC` : "Getting sign-in ready"}
               </Button>
+              {view.underStake}
             </StakeAction>
           )
         }
