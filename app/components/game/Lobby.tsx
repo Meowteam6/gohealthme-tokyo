@@ -10,7 +10,8 @@
 // is one button at the top that unlocks every run at once.
 //
 // Night Shift (docs/DESIGN.md): runs are the landing's night cards (RunRow),
-// SPOTTER stands on the top card and nowhere else, and gold is only money.
+// SPOTTER stands beside the lead on the top card's edge (PerchedHeader, as on
+// every other page) and nowhere else, and gold is only money.
 // Signed out, "What do you wear?" marks every run for a wearable before any
 // account, from the same capability table the landing reads.
 
@@ -20,8 +21,8 @@ import CharacterCard from "@/components/game/CharacterCard";
 import LockPanel from "@/components/game/LockPanel";
 import RunSlip from "@/components/game/RunSlip";
 import WearableChips from "@/components/game/WearableChips";
-import Perch from "@/components/spotter/Perch";
 import { Button, ButtonLink, Card, EmptyState, Fine, Skeleton, TEXT_LINK } from "@/components/ui";
+import { PAGE_LEAD, PAGE_TITLE, PerchedHeader } from "@/components/night/kit";
 import { lobbyNeedsSensorCheck, type LobbyRow } from "@/lib/game/lobby";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useLobby } from "@/lib/game/useLobby";
@@ -172,40 +173,42 @@ export default function Lobby({
     </Card>
   );
 
+  const lead = "Every open run, marked for your wearable before you stake.";
+  const fine = <Fine className="mt-2">Test USDC during beta. No real money moves.</Fine>;
+  const top = (
+    <div className="grid gap-3">
+      {topCard}
+      {lobby !== null && lobbyNeedsSensorCheck(lobby) ? (
+        <LockPanel lock={{ kind: "sensor-unchecked" }} returnTo={returnTo} onCheckSensor={view.checkSensor} />
+      ) : null}
+      {outage ? <LockPanel lock={{ kind: "outage" }} returnTo={returnTo} /> : null}
+    </div>
+  );
+
   return (
     <div className="@container grid gap-8 min-[900px]:gap-12">
-      {intro ?? (
-        <header>
-          <h1 className="type-display m-0 text-[2.75rem] min-[900px]:text-[4rem]">The lobby</h1>
-          <p className="m-0 mt-3 max-w-[44ch] text-[1.0625rem] leading-[1.45] text-muted min-[900px]:text-[1.3125rem]">
-            Every open run, marked for your wearable before you stake.
-          </p>
-          <Fine className="mt-2">Test USDC during beta. No real money moves.</Fine>
-        </header>
+      {intro !== undefined ? (
+        <>
+          {intro}
+          {top}
+        </>
+      ) : perched ? (
+        // Title and lead outside the card, SPOTTER beside the lead with his
+        // feet on the top card: no empty band above it, and the first run
+        // row reaches the first phone screen.
+        <PerchedHeader title="The lobby" lead={lead} below={fine} pose="wearable">
+          {top}
+        </PerchedHeader>
+      ) : (
+        <div className="grid gap-5">
+          <header>
+            <h1 className={PAGE_TITLE}>The lobby</h1>
+            <p className={PAGE_LEAD}>{lead}</p>
+            {fine}
+          </header>
+          {top}
+        </div>
       )}
-
-      <div className="grid gap-3">
-        {perched ? (
-          // From 900px the header's right side is empty, so SPOTTER stands in
-          // it (the perch lifts by its own reserve) instead of opening a gap.
-          <Perch
-            state="lobby"
-            width={[80, 120]}
-            side="right"
-            inset={[16, 32]}
-            decorative
-            className="min-[900px]:-mt-[calc(var(--perch-pad)-12px)]"
-          >
-            {topCard}
-          </Perch>
-        ) : (
-          topCard
-        )}
-        {lobby !== null && lobbyNeedsSensorCheck(lobby) ? (
-          <LockPanel lock={{ kind: "sensor-unchecked" }} returnTo={returnTo} onCheckSensor={view.checkSensor} />
-        ) : null}
-        {outage ? <LockPanel lock={{ kind: "outage" }} returnTo={returnTo} /> : null}
-      </div>
 
       {loading ? (
         <RowsLoading />
