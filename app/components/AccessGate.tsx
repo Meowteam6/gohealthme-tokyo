@@ -26,7 +26,8 @@ import CharacterCreation from "@/components/game/CharacterCreation";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useOnboarding } from "@/lib/game/onboarding-store";
 import { creationBlocks, hardGateClosed } from "@/lib/game/character";
-import { isPublicPath } from "@/lib/public-paths";
+import { rendersWithoutGate } from "@/lib/public-paths";
+import { useEmbeddedWallet } from "@/lib/wallet";
 
 function GateLoading() {
   return (
@@ -91,9 +92,13 @@ function CharacterGate({ children }: { children: ReactNode }) {
 
 export default function AccessGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { ready, authenticated } = useEmbeddedWallet();
   // Playwright-only switch (playwright.config.ts). Never set on a deployed
   // environment: it opens the closed beta (CLAUDE.md landmine 3).
   const gateDisabled = process.env.NEXT_PUBLIC_ACCESS_GATE_DISABLED === "1";
-  if (gateDisabled || isPublicPath(pathname)) return <>{children}</>;
+  // A run page is a read-only preview while signed out (lib/public-paths.ts).
+  if (gateDisabled || rendersWithoutGate(pathname, { ready, signedIn: authenticated })) {
+    return <>{children}</>;
+  }
   return <CharacterGate>{children}</CharacterGate>;
 }
