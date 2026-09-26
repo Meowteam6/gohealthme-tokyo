@@ -230,14 +230,14 @@ function Roster({ rows, joined = false }: { rows: RosterRow[]; joined?: boolean 
 const ALSO = [
   {
     href: "/pools/6",
-    title: "Sleep efficiency 85% or better for 1 night",
+    title: "Sleep efficiency 85% tonight",
     ends: endsLabel(END + 7200n, TZ),
     stake: STAKE,
     pot: formatUsdc(2n * USDC),
   },
   {
     href: "/pools/7",
-    title: "Complete at least 1 workout for 1 day",
+    title: "One workout today",
     ends: endsLabel(END - 1800n, TZ),
     stake: STAKE,
     pot: formatUsdc(3n * USDC),
