@@ -90,7 +90,7 @@ const TONE_CLASS = {
 /** A tx link on a claim row: quiet, underlined, 44px tall. */
 const TX_LINK = `${TEXT_LINK} text-sm`;
 
-function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
+export function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
   const settle = claim.settle;
   const deferredLine =
     settle !== null &&
@@ -285,7 +285,7 @@ export default function AgentFeed() {
 }
 
 /** The empty feed, inside the feed card: what lands here and the one action. */
-function FeedEmpty({ title, detail }: { title: string; detail: string }) {
+export function FeedEmpty({ title, detail }: { title: string; detail: string }) {
   return (
     <div className="rounded-control bg-fill-quiet px-4 py-6 text-center shadow-[inset_0_0_0_1px_var(--border)]">
       <p className="type-heading m-0 text-[1.5rem]">{title}</p>
