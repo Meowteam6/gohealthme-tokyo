@@ -1,6 +1,10 @@
 "use client";
 
+import { useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GallerySection, StateFrame, type SectionProps } from "../_kit";
+import RunBoard, { type Player } from "@/components/game/RunBoard";
+import { providerQueryKey, type ProviderState } from "@/lib/wearable-provider";
 import CharacterCreation from "@/components/game/CharacterCreation";
 import { GateLoading } from "@/components/AccessGate";
 import type { CharacterView } from "@/lib/game/useCharacter";
@@ -14,7 +18,7 @@ import { FinishedRunRow, LoadingCard, MY_RUNS_LEAD, MyRunsFrame } from "@/compon
 import { WalletDetailView } from "@/components/WalletSettings";
 import CharacterCard from "@/components/game/CharacterCard";
 import SignInPanel from "@/components/SignInPanel";
-import { CARD_TITLE, EmptyCard, PAGE_COLUMN, PerchedHeader } from "@/components/night/kit";
+import { CARD_TITLE, EmptyCard, PAGE_COLUMN, PAGE_LEAD, PAGE_TITLE, PerchedHeader } from "@/components/night/kit";
 import { Card, Chip, ErrorNote, buttonClasses } from "@/components/ui";
 import type { PoolInfo } from "@/lib/contract";
 import type { PublicFeedClaim } from "@/lib/server/agent/feed-view";
@@ -128,6 +132,69 @@ const FIXTURE_POOL: PoolInfo = {
   initiative: "sleep",
   goalSpec: "Sleep at least 7 hours for 1 night",
 };
+
+/**
+ * My runs with a live run: the page as a player in one sees it. RunBoard reads
+ * the chain and the wearable through react-query, so the fixture hands it a
+ * client of its own, seeded with the answers (players, the night count, the
+ * fee) and never refetching. Times are relative to now, so the clock is live.
+ */
+function ActiveRunBoard() {
+  const [fixture] = useState(() => {
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const pool: PoolInfo = {
+      id: 9007n,
+      creator: ADDRESS,
+      bountyModel: 2,
+      settled: false,
+      cancelled: false,
+      periodStart: now - 30n * 3600n,
+      periodEnd: now + 42n * 3600n,
+      entryFee: 1_000_000n,
+      balance: 5_000_000n,
+      initiative: "Sleep 7 hours, 3 nights",
+      goalSpec: "Sleep at least 7 hours for 3 nights",
+    };
+    const players: Player[] = [
+      { address: ADDRESS, hit: false },
+      { address: "0x2b6f00000000000000000000000000000000a11c", hit: true },
+      { address: "0x77e100000000000000000000000000000000b0b0", hit: false },
+    ];
+    const progress: ProviderState = {
+      kind: "ok",
+      progress: {
+        connected: true,
+        provider: "whoop",
+        linkState: "linked",
+        metric: "sleep_hours",
+        streakDays: 1,
+        targetDays: 3,
+        lastSync: new Date().toISOString(),
+      },
+    };
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: {
+          staleTime: Infinity,
+          gcTime: Infinity,
+          retry: false,
+          refetchOnMount: false,
+          refetchOnWindowFocus: false,
+          refetchOnReconnect: false,
+        },
+      },
+    });
+    client.setQueryData(["run-players", pool.id.toString()], players);
+    client.setQueryData(providerQueryKey(ADDRESS, pool.id, "sleep_hours"), progress);
+    client.setQueryData(["commitment-fee-bps"], 0);
+    return { pool, client };
+  });
+  return (
+    <QueryClientProvider client={fixture.client}>
+      <RunBoard pool={fixture.pool} address={ADDRESS} promptForData={false} showLink />
+    </QueryClientProvider>
+  );
+}
 
 const CLAIMS: PublicFeedClaim[] = [
   {
@@ -254,6 +321,29 @@ export default function OnboardingStates({ meta }: SectionProps) {
               />
             </Card>
           </MyRunsFrame>
+        </div>
+      </StateFrame>
+      <StateFrame
+        name="my-runs-active"
+        note="in a live run: the board carries its own scene, so no pose in the header; night count, If you hit, Who's in"
+      >
+        <div className={`${PAGE_COLUMN} [&>*+*]:mt-8`}>
+          <div className="[&>*+*]:mt-5">
+            <header>
+              <h1 className={PAGE_TITLE}>My runs</h1>
+              <p className={PAGE_LEAD}>{MY_RUNS_LEAD}</p>
+            </header>
+            <CharacterCard
+              view={view({
+                name: "mika.gohealthme.eth",
+                steps: { human: HUMAN_DONE, name: NAME_DONE, sensor: { status: "done", summary: "WHOOP" } },
+                sensor: { kind: "paired", device: WHOOP },
+                providers: WHOOP_PAIRED,
+              })}
+              variant="strip"
+            />
+          </div>
+          <ActiveRunBoard />
         </div>
       </StateFrame>
       <StateFrame name="my-runs-finished" note="only finished runs: SPOTTER on the character strip, result rows below">

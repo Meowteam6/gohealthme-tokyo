@@ -198,6 +198,11 @@ export interface HeaderViewProps {
    *  sits in the page and can start solid. */
   sticky?: boolean;
   solid?: boolean;
+  /** What sits under the bar: SPOTTER's outage band, and only while checks
+   *  are paused. The gallery passes the band itself, or null. */
+  status?: ReactNode;
+  /** Open the signed-in menu on first render (the state gallery). */
+  initialMenuOpen?: boolean;
 }
 
 /**
@@ -217,10 +222,12 @@ export function HeaderView({
   menuFoot,
   sticky = true,
   solid: forceSolid = false,
+  status = <SpotterStatusLine outageOnly />,
+  initialMenuOpen = false,
 }: HeaderViewProps) {
   const pathname = usePathname();
   const items = signedIn ? NAV_ITEMS : SIGNED_OUT_NAV_ITEMS;
-  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [menuFor, setMenuFor] = useState<string | null>(initialMenuOpen ? pathname : null);
   const menuOpen = signedIn && menuFor === pathname;
   const setMenuOpen = (open: boolean) => setMenuFor(open ? pathname : null);
 
@@ -286,7 +293,7 @@ export function HeaderView({
           </div>
         </nav>
       ) : null}
-      <SpotterStatusLine outageOnly />
+      {status}
     </header>
   );
 }

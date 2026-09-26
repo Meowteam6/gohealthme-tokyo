@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { HeaderView } from "@/components/Header";
 import LockPanel from "@/components/game/LockPanel";
 import RunSlip from "@/components/game/RunSlip";
 import FeaturedRunCard from "@/components/landing/FeaturedRunCard";
@@ -9,7 +8,7 @@ import HeroStage from "@/components/landing/HeroStage";
 import HowItPays from "@/components/landing/HowItPays";
 import { LandingView, type LandingData, type LandingFlags } from "@/components/landing/Landing";
 import OpenRunsList from "@/components/landing/OpenRunsList";
-import { Button, buttonClasses } from "@/components/ui";
+import { Button } from "@/components/ui";
 import type { PoolInfo } from "@/lib/contract";
 import { pickFeaturedRun, termsOf, type OpenRun, type OutcomeKey } from "@/lib/game/landing";
 import type { LobbyRow, RunSlot } from "@/lib/game/lobby";
@@ -293,23 +292,6 @@ export default function LandingStates({ meta }: SectionProps) {
         <LockPanel lock={{ kind: "payouts-paused" }} returnTo="/pools" />
       </StateFrame>
 
-      <StateFrame name="header-signed-out" note="transparent over the page">
-        <HeaderView
-          sticky={false}
-          signedIn={false}
-          auth={<span className={buttonClasses({ variant: "secondary", size: "sm" })}>Sign in</span>}
-        />
-      </StateFrame>
-      <StateFrame name="header-signed-in" note="scrolled: the solid night bar; the menu opens below 1024px">
-        <HeaderView
-          sticky={false}
-          solid
-          signedIn
-          auth={<Button variant="secondary" size="sm">Sign out</Button>}
-          wallet={<span className="text-sm font-semibold">mika.gohealthme.eth</span>}
-          menuFoot={<span className="text-sm font-semibold">mika.gohealthme.eth</span>}
-        />
-      </StateFrame>
     </GallerySection>
   );
 }

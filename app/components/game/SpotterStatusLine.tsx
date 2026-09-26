@@ -15,6 +15,32 @@ import {
 } from "@/lib/agent-budget";
 import { toUsd2 } from "@/lib/agent-receipt";
 
+/** The outage line as the header's band under the bar, from props, so the
+ *  state gallery can render it without a broke agent wallet. */
+export function SpotterOutageBand() {
+  return (
+    <div className="border-t border-edge bg-surface-raised">
+      <div className="mx-auto w-full max-w-[75rem] px-gutter">
+        <OutageLine />
+      </div>
+    </div>
+  );
+}
+
+function OutageLine() {
+  return (
+    <Link
+      href="/agent"
+      role="status"
+      className="flex min-h-11 items-center gap-2 text-sm font-semibold text-warning no-underline hover:underline"
+    >
+      <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-warning" />
+      SPOTTER is out of check money. Checks wait until it is topped up; your
+      stake is safe.
+    </Link>
+  );
+}
+
 export default function SpotterStatusLine({
   outageOnly = false,
 }: {
@@ -33,23 +59,7 @@ export default function SpotterStatusLine({
   const balance = toUsd2(data.balanceUsd);
 
   if (agentIsBroke(data.balanceUsd)) {
-    const line = (
-      <Link
-        href="/agent"
-        role="status"
-        className="flex min-h-11 items-center gap-2 text-sm font-semibold text-warning no-underline hover:underline"
-      >
-        <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-warning" />
-        SPOTTER is out of check money. Checks wait until it is topped up; your
-        stake is safe.
-      </Link>
-    );
-    if (!outageOnly) return line;
-    return (
-      <div className="border-t border-edge bg-surface-raised">
-        <div className="mx-auto w-full max-w-[75rem] px-gutter">{line}</div>
-      </div>
-    );
+    return outageOnly ? <SpotterOutageBand /> : <OutageLine />;
   }
 
   if (outageOnly) return null;
