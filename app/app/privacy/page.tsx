@@ -45,15 +45,15 @@ const CONTACT_EMAIL = "andre102599@gmail.com";
  */
 export default function PrivacyPage() {
   return (
-    <div className="mx-auto w-full max-w-3xl py-4">
+    <div className="mx-auto w-full max-w-[46rem]">
       {/* REVIEW: Nikki and counsel to confirm this notice before any
           real-money launch, including whether US state health-data laws
           (for example Washington's My Health My Data Act) apply to the
           wearable summaries our server reads. */}
-      <header className="space-y-3">
-        <Badge tone="warning">Beta, testnet</Badge>
-        <h1 className="text-3xl font-bold tracking-tight">Privacy Policy</h1>
-        <p className="text-sm text-muted">
+      <header className="[&>*+*]:mt-3">
+        <Badge tone="muted">Beta, testnet</Badge>
+        <h1 className="type-title text-[2.5rem] min-[900px]:text-[3.25rem]">Privacy Policy</h1>
+        <p className="max-w-[60ch] text-[1.0625rem] leading-[1.5] text-muted text-pretty">
           Last updated {LAST_UPDATED}. This covers GoHealthMe V4, the beta
           built at ETHGlobal Tokyo 2026 and running on Base Sepolia test
           money. It says what happens to your data before you try the app.
@@ -62,12 +62,12 @@ export default function PrivacyPage() {
 
       <section
         aria-labelledby="privacy-summary"
-        className="mt-6 rounded-2xl border border-edge bg-surface p-5 text-sm leading-relaxed"
+        className="relative mt-8 rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] px-4 py-[18px] text-[0.9375rem] leading-[1.6] shadow-card min-[960px]:p-6"
       >
-        <h2 id="privacy-summary" className="text-base font-semibold text-foreground">
+        <h2 id="privacy-summary" className="text-lg font-semibold leading-tight text-foreground">
           The short version
         </h2>
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-foreground/90">
+        <ul className="mt-3 list-disc pl-5 text-muted marker:text-haze [&>*+*]:mt-2.5 [&_strong]:font-semibold [&_strong]:text-foreground">
           <li>
             <strong>Health data never goes on chain.</strong> Our server reads
             daily summaries from your wearable to run the check; only
@@ -95,15 +95,15 @@ export default function PrivacyPage() {
         </ul>
       </section>
 
-      <div className="mt-6 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-relaxed text-foreground/90">
+      <div className="mt-6 rounded-control bg-surface-raised p-4 text-[0.9375rem] leading-[1.55] text-muted shadow-[inset_0_0_0_1px_var(--border-strong)] [&_strong]:font-semibold [&_strong]:text-foreground">
         This is not legal advice. It is an honest, good-faith description of a
         beta that runs on test money, not a finished legal policy. Before any
         real-money launch it will be replaced by a policy reviewed by a lawyer.
       </div>
 
-      <div className="mt-10 space-y-10 text-sm leading-relaxed text-muted">
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+      <div className="mt-10 text-base leading-[1.65] text-muted [&>*+*]:mt-10 [&_strong]:font-semibold [&_strong]:text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             This is a testnet beta
           </h2>
           <p>
@@ -113,8 +113,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Signing in creates a wallet
           </h2>
           <p>
@@ -132,8 +132,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Proving you are one human (World ID)
           </h2>
           <p>
@@ -163,8 +163,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Your name is public on purpose
           </h2>
           <p>
@@ -194,8 +194,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Test gas for your wallet
           </h2>
           <p>
@@ -207,8 +207,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Payout wallets are screened
           </h2>
           <p>
@@ -221,8 +221,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             SPOTTER&apos;s receipts and History
           </h2>
           <p>
@@ -241,8 +241,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Challenges and feedback
           </h2>
           <p>
@@ -261,8 +261,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             What goes to Google
           </h2>
           <p>
@@ -279,8 +279,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Document proof
           </h2>
           <p>
@@ -296,8 +296,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Wearable data, and what our server sees
           </h2>
           <p>
@@ -336,7 +336,7 @@ export default function PrivacyPage() {
           </p>
           <p>
             You can disconnect a wearable at any time from{" "}
-            <Link href="/settings" className="text-accent-deep underline">
+            <Link href="/settings" className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4 hover:decoration-foreground">
               your Settings page, under Your wearable
             </Link>
             . For WHOOP that revokes our access at WHOOP and deletes the stored
@@ -350,8 +350,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Some things are public and permanent by design
           </h2>
           <p>
@@ -365,15 +365,15 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Who processes your data
           </h2>
           <p>
             We rely on the following third parties to run the beta. Each is
             named so you can read their own policies:
           </p>
-          <ul className="list-disc space-y-1 pl-5">
+          <ul className="list-disc pl-5 marker:text-haze [&>*+*]:mt-1.5">
             <li>Dynamic (a Fireblocks company) - email sign-in and embedded wallets</li>
             <li>World (Tools for Humanity) - proof that you are one human, and the payout confirmation</li>
             <li>ENS on Ethereum Sepolia - public player and run names, and settlement receipts</li>
@@ -403,8 +403,8 @@ export default function PrivacyPage() {
           </ul>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             How long we keep it
           </h2>
           {/* REVIEW: no automated deletion exists for anything except Apple
@@ -423,8 +423,8 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">Contact</h2>
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">Contact</h2>
           {/* REVIEW: the contact address is a personal inbox placeholder.
               Confirm the operator entity (Meowteam6 vs Chuabio Labs) and a
               team address before launch. */}
@@ -433,7 +433,7 @@ export default function PrivacyPage() {
             deletion of your off-chain data, email{" "}
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="text-accent-deep underline"
+              className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4 hover:decoration-foreground"
             >
               {CONTACT_EMAIL}
             </a>{" "}
@@ -441,13 +441,13 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="space-y-3 border-t border-edge pt-8">
-          <p className="text-xs text-muted">
+        <section className="border-t border-edge pt-8 [&>*+*]:mt-3">
+          <p className="text-[0.8125rem] text-haze">
             GoHealthMe V4 is a beta built at ETHGlobal Tokyo 2026, running on
             Base Sepolia test money. This notice is not legal advice and will
             be replaced by a lawyer-reviewed policy before any real-money
             launch. See also our{" "}
-            <Link href="/terms" className="text-accent-deep underline">
+            <Link href="/terms" className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4 hover:decoration-foreground">
               Terms
             </Link>
             .

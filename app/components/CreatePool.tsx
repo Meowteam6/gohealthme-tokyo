@@ -94,7 +94,7 @@ const DOC_TEMPLATES: DocTemplate[] = [
   },
 ];
 
-function CreatePoolInner() {
+function CreatePoolInner({ embedded }: { embedded: boolean }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { ready, authenticated } = useEmbeddedWallet();
@@ -334,18 +334,7 @@ function CreatePoolInner() {
     },
   ];
 
-  return (
-    <div className={PAGE_COLUMN}>
-      <PerchedHeader
-        title="Start a run"
-        lead="Set a goal and a stake. Everyone who joins puts up the same USDC on their own goal, and the players who hit it split what the misses leave behind."
-        pose="wearable"
-        below={
-          <Link href="/sponsor" className={`${QUIET_ACTION} mt-2`}>
-            Put up a prize pot instead
-          </Link>
-        }
-      >
+  const form = (
         <Card className="[&>*+*]:mt-6">
           <fieldset className="m-0 min-w-0 border-0 p-0">
             <legend className={SECTION_LABEL}>How the goal is checked</legend>
@@ -647,6 +636,24 @@ function CreatePoolInner() {
             ) : null}
           </div>
         </Card>
+  );
+
+  // Inside the sponsor console the form is one card among others: no second
+  // page title and no second pose.
+  if (embedded) return form;
+  return (
+    <div className={PAGE_COLUMN}>
+      <PerchedHeader
+        title="Start a run"
+        lead="Set a goal and a stake. Everyone who joins puts up the same USDC on their own goal, and the players who hit it split what the misses leave behind."
+        pose="wearable"
+        below={
+          <Link href="/sponsor" className={`${QUIET_ACTION} mt-2`}>
+            Put up a prize pot instead
+          </Link>
+        }
+      >
+        {form}
       </PerchedHeader>
     </div>
   );
@@ -673,7 +680,7 @@ function RunsOff({ title, detail }: { title: string; detail: string }) {
   );
 }
 
-export default function CreatePool() {
+export default function CreatePool({ embedded = false }: { embedded?: boolean } = {}) {
   if (!DYNAMIC_CONFIGURED) {
     return (
       <RunsOff
@@ -682,5 +689,5 @@ export default function CreatePool() {
       />
     );
   }
-  return <CreatePoolInner />;
+  return <CreatePoolInner embedded={embedded} />;
 }

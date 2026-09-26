@@ -8,7 +8,7 @@ import AdminAccess from "@/components/AdminAccess";
 import { NOINDEX } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Admin · Access requests",
+  title: "Access requests",
   robots: NOINDEX,
 };
 

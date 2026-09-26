@@ -1027,7 +1027,7 @@ export function FinishedRunRow({
         <p className="num m-0 mt-1.5 text-[0.9375rem] text-haze">
           {/* After settle this is what was NOT paid out; calling it the prize
               read as if the player who hit won nothing. */}
-          Left in the run <span className="font-semibold text-gold">{formatUsdc(pool.balance)}</span>{" "}
+          Left in the run <span className={`font-semibold ${pool.balance > 0n ? "text-gold" : "text-dusk"}`}>{formatUsdc(pool.balance)}</span>{" "}
           test USDC
         </p>
       </Link>

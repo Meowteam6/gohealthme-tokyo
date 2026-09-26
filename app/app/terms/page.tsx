@@ -37,13 +37,13 @@ const CONTACT_EMAIL = "andre102599@gmail.com";
  */
 export default function TermsPage() {
   return (
-    <div className="mx-auto w-full max-w-3xl py-4">
+    <div className="mx-auto w-full max-w-[46rem]">
       {/* REVIEW: counsel to add governing law, dispute resolution and a
           limitation-of-liability clause; none exist in these terms. */}
-      <header className="space-y-3">
-        <Badge tone="warning">Beta, testnet</Badge>
-        <h1 className="text-3xl font-bold tracking-tight">Terms of Use</h1>
-        <p className="text-sm text-muted">
+      <header className="[&>*+*]:mt-3">
+        <Badge tone="muted">Beta, testnet</Badge>
+        <h1 className="type-title text-[2.5rem] min-[900px]:text-[3.25rem]">Terms of Use</h1>
+        <p className="max-w-[60ch] text-[1.0625rem] leading-[1.5] text-muted text-pretty">
           Last updated {LAST_UPDATED}. These are the plain-language rules for
           GoHealthMe V4, the beta built at ETHGlobal Tokyo 2026 and running on
           Base Sepolia test money. By using GoHealthMe you agree to them.
@@ -52,12 +52,12 @@ export default function TermsPage() {
 
       <section
         aria-labelledby="terms-summary"
-        className="mt-6 rounded-2xl border border-edge bg-surface p-5 text-sm leading-relaxed"
+        className="relative mt-8 rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] px-4 py-[18px] text-[0.9375rem] leading-[1.6] shadow-card min-[960px]:p-6"
       >
-        <h2 id="terms-summary" className="text-base font-semibold text-foreground">
+        <h2 id="terms-summary" className="text-lg font-semibold leading-tight text-foreground">
           The short version
         </h2>
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-foreground/90">
+        <ul className="mt-3 list-disc pl-5 text-muted marker:text-haze [&>*+*]:mt-2.5 [&_strong]:font-semibold [&_strong]:text-foreground">
           <li>
             <strong>Test money only.</strong> Every USDC here is Base Sepolia
             test USDC with no monetary value. This is a beta, not a financial
@@ -86,16 +86,16 @@ export default function TermsPage() {
         </ul>
       </section>
 
-      <div className="mt-6 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-relaxed text-foreground/90">
+      <div className="mt-6 rounded-control bg-surface-raised p-4 text-[0.9375rem] leading-[1.55] text-muted shadow-[inset_0_0_0_1px_var(--border-strong)] [&_strong]:font-semibold [&_strong]:text-foreground">
         This is not legal advice, and it is not medical, health, financial,
         investment, or tax advice. It is an honest description of a testnet
         beta, not a finished legal agreement. Before any real-money launch it
         will be replaced by terms reviewed by a lawyer.
       </div>
 
-      <div className="mt-10 space-y-10 text-sm leading-relaxed text-muted">
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+      <div className="mt-10 text-base leading-[1.65] text-muted [&>*+*]:mt-10 [&_strong]:font-semibold [&_strong]:text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Test money, no real value
           </h2>
           <p>
@@ -108,8 +108,8 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             This is not advice, and your health decisions are your own
           </h2>
           <p>
@@ -122,8 +122,8 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">18 and over</h2>
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">18 and over</h2>
           {/* REVIEW: nothing in the product checks age. World ID proves one
               human, not an age. Nikki to decide whether an age attestation
               belongs in character creation. */}
@@ -133,8 +133,8 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             One human, one entry
           </h2>
           <p>
@@ -156,8 +156,8 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             How a run pays out
           </h2>
           {/* REVIEW: the page avoids the words the design voice forbids. Counsel
@@ -170,7 +170,7 @@ export default function TermsPage() {
             decided by SPOTTER, never on chance and never on how anyone else
             does. When the run settles:
           </p>
-          <ul className="list-disc space-y-1 pl-5">
+          <ul className="list-disc pl-5 marker:text-haze [&>*+*]:mt-1.5">
             <li>
               If you hit the goal, you get your own stake back plus an equal
               share of the stakes of players who missed and of any sponsor
@@ -194,8 +194,8 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             When SPOTTER cannot decide, or you do not confirm
           </h2>
           <p>
@@ -215,8 +215,8 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Sponsored runs and the leftover rule
           </h2>
           {/* REVIEW: sponsored runs made at /pools/create can use a fixed
@@ -250,8 +250,8 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Provided as-is, with no guarantees
           </h2>
           <p>
@@ -263,8 +263,8 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             We may change or end the beta at any time
           </h2>
           <p>
@@ -273,28 +273,28 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Privacy and public data
           </h2>
           <p>
             How we handle your data, and what becomes public and permanent
             on-chain (your wallet activity, run goal text, payouts, and any ENS
             name you pick), is described in our{" "}
-            <Link href="/privacy" className="text-accent-deep underline">
+            <Link href="/privacy" className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4 hover:decoration-foreground">
               Privacy Policy
             </Link>
             . Please read it before you create or join a run.
           </p>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">Contact</h2>
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">Contact</h2>
           <p>
             This beta is operated by Meowteam6. Questions go to{" "}
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="text-accent-deep underline"
+              className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4 hover:decoration-foreground"
             >
               {CONTACT_EMAIL}
             </a>{" "}
@@ -302,8 +302,8 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="space-y-3 border-t border-edge pt-8">
-          <p className="text-xs text-muted">
+        <section className="border-t border-edge pt-8 [&>*+*]:mt-3">
+          <p className="text-[0.8125rem] text-haze">
             GoHealthMe V4 is a beta built at ETHGlobal Tokyo 2026, running on
             Base Sepolia test money. These terms are not legal advice and will
             be replaced by lawyer-reviewed terms before any real-money launch.
