@@ -131,8 +131,8 @@ export default function BlinkTopUp({
       </button>
       <p className="text-xs text-muted">
         Blink pulls USDC from your existing wallet on Base Sepolia in one tap.
-        It credits your in-app balance, which you draw on to join and fund
-        pools. No bridge step, {BLINK_USDC_DECIMALS}-decimal USDC.
+        It credits your in-app balance, which you draw on to join challenges
+        and add to their pots. No bridge step, {BLINK_USDC_DECIMALS}-decimal USDC.
       </p>
       {status.kind === "error" ? (
         <ErrorNote

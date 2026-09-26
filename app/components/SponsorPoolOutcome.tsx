@@ -112,7 +112,7 @@ export default function SponsorPoolOutcome({
       {/* Sponsor capital: always shown, never gated. This is the sponsor's own
           money movement, not a participant-derived figure. */}
       <div className="grid grid-cols-2 gap-3 rounded-2xl bg-secondary/60 p-4">
-        <WellStat label="In the pool now">
+        <WellStat label="Pot">
           <Money usd={formatUsdc(d.balanceUsdc)} />
         </WellStat>
         {/* Top-ups only (the create-time seed emits no PoolFunded), from any
@@ -131,8 +131,8 @@ export default function SponsorPoolOutcome({
           role="status"
           className="rounded-2xl border border-dashed border-warning/40 bg-surface-raised p-4 text-sm text-muted"
         >
-          Joins, completions and payouts for this pool could not be read right
-          now. The balance above is live.
+          Joins, completions and payouts for this challenge could not be read
+          right now. The pot above is live.
         </p>
       ) : d.belowFloor ? (
         <div className="rounded-2xl border border-dashed border-edge bg-surface-raised p-4">
@@ -141,7 +141,7 @@ export default function SponsorPoolOutcome({
             Outcomes are hidden here
           </p>
           <p className="mt-1 text-sm text-muted">
-            This pool has fewer than five participants, so no completion or
+            This challenge has fewer than five players, so no completion or
             payout figure is shown. Outcomes appear once at least five people
             have joined. No participant is ever named.
           </p>
@@ -207,7 +207,7 @@ export default function SponsorPoolOutcome({
               className="w-full"
             >
               <Icon name="plus" className="h-4 w-4" />
-              Top up this pool
+              Add to the pot
             </Button>
           )}
         </div>

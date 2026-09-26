@@ -164,7 +164,7 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
         const bountyModel = call.args[5];
         if (isEconomicallyDeadConfig(bountyModel, entryFee)) {
           const message =
-            "The pool contract requires an entry fee above zero for every pool - each participant stakes it to join, so every winner has real skin in the game. Set an entry fee above zero.";
+            "The contract requires a stake above zero for every challenge - each player stakes it to join, so every winner has real skin in the game. Set a stake above zero.";
           setStatus({ kind: "error", message });
           throw new Error(message);
         }

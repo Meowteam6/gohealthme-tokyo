@@ -19,9 +19,9 @@ export const SECTIONS: readonly {
 }[] = [
   { meta: { id: "foundation", title: "Foundation", owner: "foundation" }, Component: FoundationStates },
   { meta: { id: "landing", title: "Landing", owner: "landing agent" }, Component: LandingStates },
-  { meta: { id: "run", title: "Run page", owner: "run-page agent" }, Component: RunStates },
+  { meta: { id: "run", title: "Challenge page", owner: "run-page agent" }, Component: RunStates },
   { meta: { id: "verdict", title: "Verdict", owner: "verdict agent" }, Component: VerdictStates },
-  { meta: { id: "lobby", title: "Lobby, My runs, History", owner: "lobby agent" }, Component: LobbyStates },
+  { meta: { id: "lobby", title: "Lobby, My challenges, History", owner: "lobby agent" }, Component: LobbyStates },
   { meta: { id: "shell", title: "Shell", owner: "shell agent" }, Component: ShellStates },
   { meta: { id: "onboarding", title: "Character creation", owner: "onboarding agent" }, Component: OnboardingStates },
   { meta: { id: "challenges", title: "Challenges", owner: "challenges agent" }, Component: ChallengeStates },

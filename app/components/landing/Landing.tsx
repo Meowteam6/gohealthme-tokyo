@@ -93,7 +93,7 @@ function HeroMore({ status, count, human, className }: { status: OpenRunsStatus;
     status !== "ready" || count === 0
       ? "See the open challenges"
       : count === 1
-        ? "See the open run"
+        ? "See the open challenge"
         : `See all ${count} open challenges`;
   return (
     <div className={`flex-col items-start ${className}`}>
@@ -186,7 +186,7 @@ export function LandingView({
 
       <section id="runs" aria-labelledby="runs-h" className="scroll-mt-20 pb-10 min-[900px]:pb-[88px]">
         <h2 id="runs-h" className="type-title m-0 text-[2rem] min-[900px]:text-[3rem]">
-          Open runs
+          Open challenges
         </h2>
         <OpenRunsList
           status={data.status}
@@ -208,8 +208,8 @@ export function LandingView({
             <p className="m-0 mt-2 max-w-[52ch] text-muted">
               {friendRun !== null && terms !== null ? (
                 <>
-                  Send them this run. They see the goal, the stake and the pot
-                  before they sign up.{" "}
+                  Send them this challenge. They see the goal, the stake and
+                  the pot before they sign up.{" "}
                   <span className="num">
                     <Segments segments={friendNote(terms)} />
                   </span>
@@ -227,11 +227,11 @@ export function LandingView({
           </div>
           {friendRun !== null ? (
             <ButtonLink href={`/pools/${friendRun.pool.id.toString()}#friends`} variant="secondary" className="flex-none">
-              Challenge a friend into this run
+              Send this challenge to a friend
             </ButtonLink>
           ) : (
             <ButtonLink href="/challenge/new" variant="secondary" className="flex-none">
-              Challenge a friend
+              Start a challenge
             </ButtonLink>
           )}
         </div>

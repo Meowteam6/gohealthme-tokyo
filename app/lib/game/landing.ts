@@ -170,7 +170,7 @@ export function heroNote(terms: RunTerms): Segment[] {
       {
         text: terms.recordsMisses
           ? `Everyone stakes ${stake}. Hit it and your stake comes back plus a share of the missed stakes.`
-          : `Everyone stakes ${stake}. Hit it or miss it, your stake comes back; a hit adds a share of any sponsor pot.`,
+          : `Everyone stakes ${stake}. Hit it or miss it, your stake comes back; a hit adds a share of any extra in the pot.`,
       },
     ];
   }
@@ -193,13 +193,13 @@ export function heroNote(terms: RunTerms): Segment[] {
         : [
             { text: "Nobody's in yet. Hit it or miss it, your " },
             { text: stake, strong: true },
-            { text: " comes back: this run cannot record a miss." },
+            { text: " comes back: this challenge cannot record a miss." },
           ];
     }
     return [
       { text: "Nobody's in yet. Hit it alone and " },
       { text: formatUsdc(range.ifOnlyYou), strong: true },
-      { text: ` comes back: your ${stake} plus the ${formatUsdc(pot)} pot.` },
+      { text: ` comes back: your ${stake} plus the ${formatUsdc(pot)} already in the pot.` },
     ];
   }
   if (!terms.recordsMisses) {
@@ -209,7 +209,7 @@ export function heroNote(terms: RunTerms): Segment[] {
       return [
         { text: `${playersIn(terms.players)}. Hit it and your ` },
         { text: formatUsdc(range.ifOnlyYou), strong: true },
-        { text: " comes back. This run cannot record a miss, so a miss comes back too." },
+        { text: " comes back. This challenge cannot record a miss, so a miss comes back too." },
       ];
     }
     return [
@@ -217,12 +217,12 @@ export function heroNote(terms: RunTerms): Segment[] {
       { text: formatUsdc(range.ifEveryone), strong: true },
       { text: " to " },
       { text: formatUsdc(range.ifOnlyYou), strong: true },
-      { text: ` back: your ${stake}, plus an equal share of the ${formatUsdc(pot)} sponsor pot. A miss here is refunded.` },
+      { text: ` back: your ${stake}, plus an equal share of the ${formatUsdc(pot)} extra in the pot. A miss here is refunded.` },
     ];
   }
   // "Sponsor pot", never bare "pot": once anyone is in, the Pot stat above is
   // the whole balance (stakes included), and this figure is only the sponsor's.
-  const share = pot > 0n ? `an equal share of the ${formatUsdc(pot)} sponsor pot and any missed stakes` : "an equal share of any missed stakes";
+  const share = pot > 0n ? `an equal share of the ${formatUsdc(pot)} extra in the pot and any missed stakes` : "an equal share of any missed stakes";
   return [
     { text: `${playersIn(terms.players)}. Hit it and you get ` },
     { text: formatUsdc(range.ifEveryone), strong: true },
@@ -291,7 +291,7 @@ export function friendNote(terms: RunTerms): Segment[] {
       lead,
       { text: `If you both hit, each of you gets your ${stake} back plus an equal share of the ` },
       { text: formatUsdc(pot), strong: true },
-      { text: terms.recordsMisses ? " sponsor pot and any missed stakes." : " sponsor pot." },
+      { text: terms.recordsMisses ? " extra in the pot and any missed stakes." : " extra in the pot." },
     ];
   }
   return [
@@ -356,7 +356,7 @@ export function outcomeCopy(
           feeBps: terms.feeBps,
         });
         worked = {
-          label: "In this run, if you hit alone",
+          label: "In this challenge, if you hit alone",
           usd: formatUsdc(o.kind === "paid" ? o.perAchiever : o.refundEach),
           tone: "money",
         };
@@ -366,10 +366,10 @@ export function outcomeCopy(
           heading: pot > 0n ? "Your stake comes back, plus a share." : "Your stake comes back.",
           body:
             pot > 0n
-              ? "An equal share of the sponsor pot goes to everyone who hits. This run cannot record a miss, so no missed stake is shared."
+              ? "An equal share of the extra in the pot goes to everyone who hits. This challenge cannot record a miss, so no missed stake is shared."
               : terms !== null
-                ? "This run cannot record a miss, so there are no missed stakes to share. A sponsor pot, when a run has one, is shared equally among everyone who hits."
-                : "No run on this build records a miss yet, so a hit is your stake back plus an equal share of any sponsor pot.",
+                ? "This challenge cannot record a miss, so there are no missed stakes to share. Extra in the pot, when a challenge has some, is shared equally among everyone who hits."
+                : "No challenge on this build records a miss yet, so a hit is your stake back plus an equal share of any extra in the pot.",
           worked,
         };
       }
@@ -377,7 +377,7 @@ export function outcomeCopy(
         heading: "Your stake comes back, plus a share.",
         body:
           pot > 0n
-            ? "An equal share of the missed stakes and the sponsor pot goes to everyone who hits."
+            ? "An equal share of the missed stakes and the extra in the pot goes to everyone who hits."
             : "An equal share of the missed stakes goes to everyone who hits.",
         worked,
       };
@@ -385,15 +385,15 @@ export function outcomeCopy(
     case "miss":
       if (terms !== null && !terms.recordsMisses) {
         return {
-          heading: "On this run, your stake comes back.",
-          body: "This run cannot record a miss, so a miss is refunded when it settles. On a run that can, the run page says so before you stake, and a miss your wearable shows goes to the players who hit.",
+          heading: "In this challenge, your stake comes back.",
+          body: "This challenge cannot record a miss, so a miss is refunded when it settles. On a challenge that can, its page says so before you stake, and a miss your wearable shows goes to the players who hit.",
           worked: { label: "You get back", usd: formatUsdc(terms.entryFee), tone: "plain" },
         };
       }
       if (terms === null && !missRule) {
         return {
           heading: "Your stake comes back.",
-          body: "No run on this build records a miss yet, so a miss is refunded when the run settles.",
+          body: "No challenge on this build records a miss yet, so a miss is refunded when the challenge settles.",
           worked: null,
         };
       }
@@ -401,8 +401,8 @@ export function outcomeCopy(
         heading: "Your stake goes to the players who hit.",
         body:
           terms !== null
-            ? `Your ${stake} is shared equally among everyone whose wearable shows they hit. If nobody hits, it comes back. If your wearable sends nothing for the run, that is not a miss, and your stake comes back.`
-            : "It is shared equally among everyone whose wearable shows they hit, on a run that can record a miss; the run page says so before you stake, and every other run refunds a miss. If nobody hits, it comes back. If your wearable sends nothing for the run, that is not a miss, and your stake comes back.",
+            ? `Your ${stake} is shared equally among everyone whose wearable shows they hit. If nobody hits, it comes back. If your wearable sends nothing for the challenge, that is not a miss, and your stake comes back.`
+            : "It is shared equally among everyone whose wearable shows they hit, on a challenge that can record a miss; the challenge page says so before you stake, and every other challenge refunds a miss. If nobody hits, it comes back. If your wearable sends nothing for the challenge, that is not a miss, and your stake comes back.",
         // The worked figure is the case the heading names: someone else hit.
         worked: terms !== null ? { label: "If anyone else hits", usd: formatUsdc(0n), tone: "dusk" } : null,
       };

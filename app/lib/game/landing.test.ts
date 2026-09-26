@@ -129,7 +129,7 @@ describe("heroNote", () => {
     const terms = termsOf({ pool: sleep, players: 0 }, 0, CUTOFF);
     expect(terms).not.toBeNull();
     expect(segmentsText(heroNote(terms!))).toBe(
-      "Nobody's in yet. Hit it alone and 3.00 comes back: your 1.00 plus the 2.00 pot.",
+      "Nobody's in yet. Hit it alone and 3.00 comes back: your 1.00 plus the 2.00 already in the pot.",
     );
   });
 
@@ -137,7 +137,7 @@ describe("heroNote", () => {
     const terms = termsOf({ pool: workout, players: 1 }, 0, CUTOFF)!;
     const note = heroNote(terms);
     expect(segmentsText(note)).toBe(
-      "1 player in. Hit it and you get 2.00 to 4.00 back: your 1.00, plus an equal share of the 2.00 sponsor pot and any missed stakes.",
+      "1 player in. Hit it and you get 2.00 to 4.00 back: your 1.00, plus an equal share of the 2.00 extra in the pot and any missed stakes.",
     );
     expect(note.filter((s) => s.strong).map((s) => s.text)).toEqual(["2.00", "4.00"]);
   });
@@ -165,13 +165,13 @@ describe("heroNote", () => {
     const bare = termsOf({ pool: pool({ id: 3n, balance: 0n }), players: 0 }, 0, null)!;
     expect(bare.recordsMisses).toBe(false);
     expect(segmentsText(heroNote(bare))).toBe(
-      "Nobody's in yet. Hit it or miss it, your 1.00 comes back: this run cannot record a miss.",
+      "Nobody's in yet. Hit it or miss it, your 1.00 comes back: this challenge cannot record a miss.",
     );
     const two = termsOf({ pool: pool({ id: 3n, balance: 2n * USDC }), players: 2 }, 0, null)!;
-    expect(segmentsText(heroNote(two))).toBe("2 players in. Hit it and your 1.00 comes back. This run cannot record a miss, so a miss comes back too.");
+    expect(segmentsText(heroNote(two))).toBe("2 players in. Hit it and your 1.00 comes back. This challenge cannot record a miss, so a miss comes back too.");
     const withPot = termsOf({ pool: workout, players: 1 }, 0, null)!;
     expect(segmentsText(heroNote(withPot))).toBe(
-      "1 player in. Hit it and you get 2.00 to 3.00 back: your 1.00, plus an equal share of the 2.00 sponsor pot. A miss here is refunded.",
+      "1 player in. Hit it and you get 2.00 to 3.00 back: your 1.00, plus an equal share of the 2.00 extra in the pot. A miss here is refunded.",
     );
   });
 });
@@ -181,7 +181,7 @@ describe("outcomeCopy", () => {
 
   it("works each outcome's figure from the live run", () => {
     expect(outcomeCopy("hit", terms).worked).toEqual({
-      label: "In this run, if you hit alone",
+      label: "In this challenge, if you hit alone",
       usd: "3.00",
       tone: "money",
     });
@@ -191,7 +191,7 @@ describe("outcomeCopy", () => {
   });
 
   it("says a run with no wearable data is not a miss", () => {
-    expect(outcomeCopy("miss", terms).body).toContain("If your wearable sends nothing for the run, that is not a miss");
+    expect(outcomeCopy("miss", terms).body).toContain("If your wearable sends nothing for the challenge, that is not a miss");
     expect(outcomeCopy("miss", terms).body).toContain("Your 1.00 is shared equally");
     expect(outcomeCopy("miss", terms).body).toContain("If nobody hits, it comes back.");
   });
@@ -201,13 +201,13 @@ describe("outcomeCopy", () => {
     expect(outcomeCopy("miss", null, true).worked).toBeNull();
     expect(outcomeCopy("none", null, true).worked).toBeNull();
     expect(outcomeCopy("hit", null, true).body).toBe("An equal share of the missed stakes goes to everyone who hits.");
-    expect(outcomeCopy("miss", null, true).body).toContain("on a run that can record a miss");
+    expect(outcomeCopy("miss", null, true).body).toContain("on a challenge that can record a miss");
   });
 
   it("says a miss comes back on a run that cannot record one", () => {
     const refundRun = termsOf({ pool: sleep, players: 2 }, 0, null)!;
     const miss = outcomeCopy("miss", refundRun);
-    expect(miss.heading).toBe("On this run, your stake comes back.");
+    expect(miss.heading).toBe("In this challenge, your stake comes back.");
     expect(miss.worked).toEqual({ label: "You get back", usd: "1.00", tone: "plain" });
     // Hitting alone beside one other player: their miss is refunded first,
     // so 1.00 + the 2.00 pot, where a recorded miss would have made it 4.00.
@@ -246,7 +246,7 @@ describe("friendNote", () => {
     // Pool 2: 1 player in, 3.00 balance, so a 2.00 sponsor pot.
     const busy = termsOf({ pool: workout, players: 1 }, 0, null)!;
     expect(segmentsText(friendNote(busy))).toBe(
-      "Stake 1.00 each. If you both hit, each of you gets your 1.00 back plus an equal share of the 2.00 sponsor pot.",
+      "Stake 1.00 each. If you both hit, each of you gets your 1.00 back plus an equal share of the 2.00 extra in the pot.",
     );
     const noPot = termsOf({ pool: pool({ id: 9n, balance: USDC }), players: 1 }, 0, null)!;
     expect(segmentsText(friendNote(noPot))).toBe("Stake 1.00 each. If you both hit, you both get your stake back.");
@@ -256,5 +256,39 @@ describe("friendNote", () => {
     expect(friendQuestion("workout")).toBe("Know someone who swears they work out every day?");
     expect(friendQuestion("sleep")).toBe("Know someone who swears they sleep 8 hours?");
     expect(friendQuestion(null)).toBe("Know someone who swears they sleep 8 hours?");
+  });
+});
+
+describe("landing vocabulary", () => {
+  const BANNED = /\b(runs?|pools?|dares?|bets?|wager\w*|odds)\b|sponsor pot/i;
+
+  it("says challenge and pot, never run, pool, dare or a part called the pot", () => {
+    const variants = [
+      termsOf({ pool: sleep, players: 0 }, 0, CUTOFF)!,
+      termsOf({ pool: sleep, players: 0 }, null, CUTOFF)!,
+      termsOf({ pool: sleep, players: 0 }, null, null)!,
+      termsOf({ pool: sleep, players: 2 }, 0, null)!,
+      termsOf({ pool: workout, players: 1 }, 0, CUTOFF)!,
+      termsOf({ pool: workout, players: 1 }, 0, null)!,
+      termsOf({ pool: pool({ id: 3n, balance: 0n }), players: 0 }, 0, CUTOFF)!,
+      termsOf({ pool: pool({ id: 3n, balance: 0n }), players: 0 }, 0, null)!,
+      termsOf({ pool: pool({ id: 9n, balance: USDC }), players: 1 }, 0, null)!,
+    ];
+    const lines: string[] = [];
+    for (const t of variants) {
+      lines.push(segmentsText(heroNote(t)), segmentsText(friendNote(t)));
+      for (const key of ["hit", "miss", "none"] as const) {
+        const c = outcomeCopy(key, t);
+        lines.push(c.heading, c.body, c.worked?.label ?? "");
+      }
+    }
+    for (const missRule of [true, false]) {
+      lines.push(segmentsText(challengeNote(USDC, missRule)));
+      for (const key of ["hit", "miss", "none"] as const) {
+        const c = outcomeCopy(key, null, missRule);
+        lines.push(c.heading, c.body);
+      }
+    }
+    for (const line of lines) expect(line, line).not.toMatch(BANNED);
   });
 });

@@ -141,14 +141,14 @@ export default function GoalMatch({ query }: { query: string }) {
         <div className="[&>*+*]:mt-6">
           <EmptyState
             title="Nothing staked on this one yet."
-            detail="No open run matches your goal. Create the run and stake on your goal, or look at what is already open."
+            detail="No open challenge matches your goal. Start one and stake on your goal, or look at what is already open."
             action={
               <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link
-                  href="/pools/create"
+                  href="/challenge/new"
                   className={`${buttonClasses({ size: "sm" })}`}
                 >
-                  Create the run
+                  Start a challenge
                 </Link>
                 <Link href="/pools" className={buttonClasses({ variant: "secondary", size: "sm" })}>
                   Browse open challenges

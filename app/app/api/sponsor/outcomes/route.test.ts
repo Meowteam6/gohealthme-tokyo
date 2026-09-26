@@ -42,6 +42,6 @@ describe("GET /api/sponsor/outcomes", () => {
     fetchPoolEventTotals.mockRejectedValue(new ContractNotConfiguredError());
     const res = await GET();
     expect(res.status).toBe(503);
-    expect((await res.json()).error).toBe("Runs are not open on this build yet.");
+    expect((await res.json()).error).toBe("Challenges are not open on this build yet.");
   });
 });

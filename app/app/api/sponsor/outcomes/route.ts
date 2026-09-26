@@ -42,8 +42,8 @@ export async function GET() {
     console.error(`[${cid}] sponsor outcomes unavailable`, err);
     const error =
       err instanceof ContractNotConfiguredError
-        ? "Runs are not open on this build yet."
-        : `Pool outcomes could not be read right now. Reference ${cid}.`;
+        ? "Challenges are not open on this build yet."
+        : `Challenge outcomes could not be read right now. Reference ${cid}.`;
     return NextResponse.json({ error }, { status: 503 });
   }
 }

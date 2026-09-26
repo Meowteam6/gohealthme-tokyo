@@ -27,7 +27,7 @@ export default function LandingCta({
       href={`/pools/${poolId.toString()}`}
       className={buttonClasses({ block: true, variant: joined || locked ? "secondary" : "primary" })}
     >
-      {joined ? "Open my run" : locked ? "See this run" : `Put ${stakeWords(entryFee)} USDC on myself`}
+      {joined ? "Open my challenge" : locked ? "See this challenge" : `Put ${stakeWords(entryFee)} USDC on myself`}
     </Link>
   );
 }

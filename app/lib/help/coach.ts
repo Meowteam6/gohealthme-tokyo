@@ -104,7 +104,7 @@ export function coachChecklist(humanMode: HumanMode): ChecklistRow[] {
     },
     { id: "pickName", label: "Pick a name" },
     { id: "pairSensor", label: "Pair your wearable" },
-    { id: "enterRun", label: "Enter a run" },
+    { id: "enterRun", label: "Join a challenge" },
     { id: "paid", label: "Get paid", gold: true },
   ];
 }
@@ -130,7 +130,7 @@ export function coachCopy(id: CoachAction, humanMode: HumanMode): CoachCopy {
       return humanMode === "world"
         ? {
             headline: "Prove you are one human",
-            body: "One scan with World ID. One human, one entry per run. We never see your face or your name, just a yes.",
+            body: "One scan with World ID. One human, one entry per challenge. We never see your face or your name, just a yes.",
             primary: "Prove I am human",
           }
         : {
@@ -148,16 +148,16 @@ export function coachCopy(id: CoachAction, humanMode: HumanMode): CoachCopy {
     case "pairSensor":
       return {
         headline: "Pair your wearable",
-        body: "Your wearable is the referee. Once it is paired, the lobby shows which runs it can actually measure before you stake anything.",
+        body: "Your wearable is the referee. Once it is paired, the lobby shows which challenges it can actually measure before you stake anything.",
         primary: "Pair my wearable",
-        secondary: "Look at the runs first",
+        secondary: "Look at the challenges first",
       };
     case "enterRun":
       return {
-        headline: "Now pick a run",
-        body: "Stake test USDC on yourself, bank your nights, and SPOTTER reads the result; the contract pays when the run settles. Or challenge a friend.",
+        headline: "Now pick a challenge",
+        body: "Stake test USDC on yourself, bank your nights, and SPOTTER reads the result; the contract pays when the challenge settles. Or start one with a friend.",
         primary: "Open the lobby",
-        secondary: "Challenge a friend",
+        secondary: "Start a challenge",
       };
   }
 }

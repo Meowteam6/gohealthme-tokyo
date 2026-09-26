@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui";
 export const metadata: Metadata = {
   title: "Terms",
   description:
-    "The rules of the GoHealthMe V4 beta on testnet: test money, one human per entry, how a run pays out, no guarantees. A plain-language, pre-launch notice.",
+    "The rules of the GoHealthMe V4 beta on testnet: test money, one human per entry, how a challenge pays out, no guarantees. A plain-language, pre-launch notice.",
   alternates: { canonical: "/terms" },
 };
 
@@ -64,16 +64,17 @@ export default function TermsPage() {
             product.
           </li>
           <li>
-            <strong>You put money on yourself.</strong> Everyone in a run
-            stakes the same amount, and only your own verified effort decides
-            your result.
+            <strong>You put money on yourself.</strong> Everyone in a
+            challenge stakes the same amount, and only your own verified effort
+            decides your result.
           </li>
           <li>
             <strong>Hit the goal:</strong> your stake back plus an equal share
-            of the missed stakes and any sponsor pot.{" "}
+            of the missed stakes and any extra in the pot.{" "}
             <strong>Miss it:</strong> your stake goes to the players who hit,
-            on a run that can record a miss; the run page says before you
-            stake whether it can, and every other run refunds a miss.{" "}
+            on a challenge that can record a miss; the challenge page says
+            before you stake whether it can, and every other challenge refunds
+            a miss.{" "}
             <strong>Nobody hits:</strong> everyone gets their stake back. V4
             takes no fee.
           </li>
@@ -142,7 +143,7 @@ export default function TermsPage() {
           <p>
             To play, you sign in (which creates a wallet) and prove you are one
             human with World ID. One human is bound to one wallet, and one
-            wallet gets one entry per run. SPOTTER will not check a wallet, or
+            wallet gets one entry per challenge. SPOTTER will not check a wallet, or
             settle a payout to it, until it has proven it is one human. On a build where World
             ID is off, the closed-beta list decides who can play instead.
           </p>
@@ -153,35 +154,35 @@ export default function TermsPage() {
           <p>
             Some US states are not admitted to the closed beta, and the
             request form says so before you send it. Do not use another
-            person&apos;s wallet or World ID, and do not try to enter a run
-            twice.
+            person&apos;s wallet or World ID, and do not try to enter a
+            challenge twice.
           </p>
         </section>
 
         <section className="[&>*+*]:mt-3">
           <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
-            How a run pays out
+            How a challenge pays out
           </h2>
           {/* REVIEW: the page avoids the words the design voice forbids. Counsel
               to decide whether the terms need an explicit statement on the
               legal classification of a self-staked commitment run. */}
           <p>
-            A run is a commitment you make to your own health goal. Everyone in
-            the run puts up the same stake. Your result depends only on your
-            own verified effort, checked by your wearable or your document and
-            decided by SPOTTER, never on chance and never on how anyone else
-            does. When the run settles:
+            A challenge is a commitment you make to your own health goal.
+            Everyone in the challenge puts up the same stake. Your result
+            depends only on your own verified effort, checked by your wearable
+            or your document and decided by SPOTTER, never on chance and never
+            on how anyone else does. When the challenge settles:
           </p>
           <ul className="list-disc pl-5 marker:text-haze [&>*+*]:mt-1.5">
             <li>
               If you hit the goal, you get your own stake back plus an equal
               share of the stakes of players whose miss was recorded and of
-              any sponsor money in the pot.
+              any extra money in the pot.
             </li>
             <li>
               If you miss the goal, your stake goes to the players who hit it,
-              on a run that can record a miss (see below). On every other run a
-              miss is refunded.
+              on a challenge that can record a miss (see below). On every other
+              challenge a miss is refunded.
             </li>
             <li>
               If nobody hits the goal, every stake is refunded in full.
@@ -193,8 +194,9 @@ export default function TermsPage() {
           </ul>
           <p>
             Amounts are split in whole units of test USDC, so a tiny remainder
-            can stay in the pool. Your payout is credited in the contract when
-            the run settles, and you claim it to your wallet from the run page.
+            can stay in the contract. Your payout is credited in the contract
+            when the challenge settles, and you claim it to your wallet from the
+            challenge page.
           </p>
         </section>
 
@@ -203,42 +205,45 @@ export default function TermsPage() {
             Staking on yourself: hit, miss, and no data
           </h2>
           <p>
-            On a run where every player stakes on their own goal, the result
-            decides where each stake goes when the run settles:
+            In a challenge where every player stakes on their own goal, the
+            result decides where each stake goes when the challenge settles:
           </p>
           <ul className="list-disc pl-5 marker:text-haze [&>*+*]:mt-1.5">
             <li>
               Hit the goal: you get your stake back plus an equal share of the
               missed stakes and anything else in the pot, once your hit is
-              recorded. SPOTTER records a hit only after you open the run and
-              confirm it with World ID, and only before the run settles. A hit
+              recorded. SPOTTER records a hit only after you open the challenge
+              and confirm it with World ID, and only before the challenge
+              settles. A hit
               that is not confirmed by then gets its stake back without a
               share.
             </li>
             <li>
               Miss it, with your wearable showing the miss: your stake goes to
-              the players who hit. This applies only on runs that can record a
-              miss: proven by wearable alone, measuring sleep or workouts, with
-              a goal SPOTTER can read one way, and opened after this rule
-              started. The run page says before you stake whether it can. On
-              every other run a miss is refunded at settle.
+              the players who hit. This applies only on challenges that can
+              record a miss: proven by wearable alone, measuring sleep or
+              workouts, with a goal SPOTTER can read one way, and opened after
+              this rule started. The challenge page says before you stake
+              whether it can. On every other challenge a miss is refunded at
+              settle.
             </li>
             <li>
-              No wearable data for the run: SPOTTER records a miss only when
-              your wearable synced every day of the run. If it did not, or the
+              No wearable data for the challenge: SPOTTER records a miss only
+              when your wearable synced every day of the challenge. If it did
+              not, or the
               data provider could not be read, nothing is recorded and your
               stake comes back.
             </li>
             <li>Nobody hits: every player&apos;s stake comes back.</li>
             <li>
-              The run&apos;s creator can cancel it any time before it settles,
-              including after SPOTTER has recorded results. A cancelled run pays
-              no prize and every stake, a recorded miss included, can be
-              claimed back.
+              The challenge&apos;s creator can cancel it any time before it
+              settles, including after SPOTTER has recorded results. A
+              cancelled challenge pays no share and every stake, a recorded
+              miss included, can be claimed back.
             </li>
           </ul>
           <p>
-            SPOTTER takes its last look a few hours after the run ends and then
+            SPOTTER takes its last look a few hours after the challenge ends and then
             records a miss on its own. A late sync still counts until that last
             look. A missing result never counts as a miss.
           </p>
@@ -251,51 +256,63 @@ export default function TermsPage() {
           <p>
             If SPOTTER never records a result for you (for example the wearable
             or the verifier did not answer in time), your stake is refunded
-            when the run settles. A missing result never counts as a miss.
+            when the challenge settles. A missing result never counts as a miss.
           </p>
           <p>
             Before a win is paid, SPOTTER may ask you to confirm the payout
             with World ID. If you decline or let the window close, the win is
-            not paid until you confirm. If the run settles before you confirm,
+            not paid until you confirm. If the challenge settles before you confirm,
             your stake comes back to you as a refund, not as a win.
           </p>
           <p>
-            A cancelled run refunds every stake, and each player claims their
-            refund from the run page.
+            A cancelled challenge refunds every stake, and each player claims
+            their refund from the challenge page.
           </p>
         </section>
 
         <section className="[&>*+*]:mt-3">
           <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
-            Sponsored runs and the leftover rule
+            Challenges with a friend, sponsors, and the leftover rule
           </h2>
           {/* REVIEW: sponsored runs made at /pools/create can use a fixed
               reward or a pro-rata split (bountyModel 0 or 1), where a missed
               stake stays in the pool and can be taken back by the creator.
               Nikki to confirm those models belong in the V4 beta at all. */}
           <p>
-            A sponsor can add money to a run, and a friend can add to a
-            challenge. In a commitment run that money is shared equally among the
-            players who hit the goal. If nobody hits, the stakes are refunded
-            and the added money stays in the pool.
+            In a challenge with a friend, you both stake the same amount. If
+            one of you hits and the other&apos;s miss is recorded, the one who
+            hit gets their stake back plus the other&apos;s stake. If you both
+            hit, you both get your own stake back. If nobody hits, every stake
+            is refunded.
           </p>
           <p>
-            Some sponsored runs pay differently, and the run page names the
-            payout before you join. A fixed-reward run pays each player who
-            hits a set amount, and whatever it does not pay out, missed stakes
-            included, stays in the pool. A split-the-pot run shares the whole
-            pot among the players who hit, in proportion to their results. In
-            either kind, if nobody hits, missed stakes stay in the pool; only a
-            stake with no recorded result is refunded.
+            Anyone can add extra money to a challenge&apos;s pot: a sponsor, a
+            friend backing you, or whoever started it. In a challenge where
+            everyone stakes the same, that extra is shared equally among the
+            players who hit the goal; if everyone hits, each gets their stake
+            back plus an equal share of the extra. If nobody hits, the stakes
+            are refunded and the extra stays in the contract for whoever
+            started the challenge.
           </p>
           <p>
-            Whatever is left in a pool after it settles, including added money
-            nobody won and any missed stakes that stayed in the pool, can only
-            be taken back by the person who created the run, through the
+            Some sponsored challenges pay differently, and the challenge page
+            names the payout before you join. A fixed-reward challenge pays each
+            player who hits a set amount, and whatever it does not pay out,
+            missed stakes included, stays in the contract. A split-the-pot
+            challenge shares the whole pot among the players who hit, in
+            proportion to their results. In either kind, if nobody hits, missed
+            stakes stay in the contract; only a stake with no recorded result is
+            refunded.
+          </p>
+          <p>
+            Whatever is left in a challenge after it settles, including extra
+            money nobody won and any missed stakes that stayed in the contract,
+            can only be taken back by the person who created the challenge,
+            through the
             contract&apos;s sweep. It is not split back to contributors. If you
             add to someone else&apos;s challenge, your contribution rewards the
             players who hit, and if nobody hits it belongs to the challenge&apos;s
-            creator, not to you. On a cancelled run the creator can take back
+            creator, not to you. On a cancelled challenge the creator can take back
             only what is left after every player has claimed their refund.
           </p>
         </section>
@@ -329,12 +346,12 @@ export default function TermsPage() {
           </h2>
           <p>
             How we handle your data, and what becomes public and permanent
-            on-chain (your wallet activity, run goal text, payouts, and any ENS
+            on-chain (your wallet activity, challenge goal text, payouts, and any ENS
             name you pick), is described in our{" "}
             <Link href="/privacy" className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4 hover:decoration-foreground">
               Privacy Policy
             </Link>
-            . Please read it before you create or join a run.
+            . Please read it before you create or join a challenge.
           </p>
         </section>
 

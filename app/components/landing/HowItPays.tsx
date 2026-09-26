@@ -73,7 +73,7 @@ export default function HowItPays({
     <div className="mt-[22px] grid gap-5 [grid-template-areas:'tabs'_'outcome'_'trust'] min-[900px]:mt-9 min-[900px]:grid-cols-[minmax(0,560px)_minmax(0,1fr)] min-[900px]:gap-x-[72px] min-[900px]:gap-y-0 min-[900px]:[grid-template-areas:'tabs_trust'_'outcome_trust']">
       <div
         role="tablist"
-        aria-label="How a run pays"
+        aria-label="How a challenge pays"
         className="grid grid-cols-3 gap-1 rounded-2xl bg-fill-quiet p-1 shadow-[inset_0_0_0_1px_var(--border)] [grid-area:tabs]"
       >
         {TABS.map((t, i) => {
@@ -144,7 +144,7 @@ export default function HowItPays({
           <VaultIcon className="mt-0.5 size-5 min-[900px]:mt-[5px] min-[900px]:size-[30px]" />
           <span>
             <b className="font-semibold text-foreground min-[900px]:font-medium">
-              Your stake sits in the run&apos;s contract, not with SPOTTER.
+              Your stake sits in the challenge&apos;s contract, not with SPOTTER.
             </b>{" "}
             {confirm
               ? "He reads your wearable's result, you confirm it's you with World ID, and the contract pays."
