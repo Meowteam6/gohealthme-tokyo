@@ -64,14 +64,14 @@ KEEP_MIN="${KEEP_MIN:-15000000}"          # never spend the deployer below 15 US
 # then permissionless, so each of these can be settled by SPOTTER minutes after
 # it ends: pool 1 Saturday evening, pools 2 and 3 Sunday morning around the
 # 09:00 JST submission deadline and the judging that follows.
-POOL1_END="${POOL1_END:-1790416800}"   # Sat 2026-09-26 19:00 JST (10:00 UTC)
+POOL1_END="${POOL1_END:-1790465400}"   # Sun 2026-09-27 08:30 JST (Sat 23:30 UTC); the first sleep run ended 19:00 Sat, before any night, and was cancelled
 POOL2_END="${POOL2_END:-1790463600}"   # Sun 2026-09-27 08:00 JST (Sat 23:00 UTC)
 POOL3_END="${POOL3_END:-1790472600}"   # Sun 2026-09-27 10:30 JST (01:30 UTC)
 
 # initiative = the short title the pool list shows; goalSpec = the text
 # app/lib/wearable-goal.ts classifies. No proof marker means wearable floor.
 # "for 1 night" / "for 1 day" sets goalDays = 1 so a one-day window can pay.
-POOL1_INIT="Sleep 7 hours tonight";  POOL1_GOAL="Sleep at least 7 hours for 1 night"     # sleep_hours 7
+POOL1_INIT="Sleep 7 hours Saturday night";  POOL1_GOAL="Sleep at least 7 hours for 1 night"     # sleep_hours 7 (replaced "Sleep 7 hours tonight", cancelled 2026-09-26: its window held no night)
 POOL2_INIT="One workout today";      POOL2_GOAL="Complete at least 1 workout for 1 day"  # workouts 1
 POOL3_INIT="Sleep efficiency 85 tonight"; POOL3_GOAL="Sleep efficiency 85% or better for 1 night"  # sleep_efficiency 85 (replaced the steps run, cancelled 2026-09-26: steps is not a launch goal)
 

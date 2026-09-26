@@ -55,6 +55,11 @@ project; both values are the new contract address, never `0x66815e3A…`):
 
 ### Deploy log
 <!-- tokyo-deploy-log -->
+- 2026-09-26 11:38 JST cancel: pool 1 "Sleep 7 hours tonight" (its window, 05:40 to 19:00 Sat JST, held no night). tx https://sepolia.basescan.org/tx/0x6df83898dab04a5a57a605813162af90486e68ab31fc2e285b4c3741f4fc78b7 ; refundLiability 1 USDC (one participant). Replaced by pool 5 "Sleep 7 hours Saturday night", ends Sun 08:30 JST.
+- 2026-09-26T02:39:25Z reuse: HealthPoolsV3 `0x0B6E8D477313599aBB746218a1AE45BAb333A12F` (seed-only run)
+- 2026-09-26T02:39:25Z pool 5: **Sleep 7 hours Saturday night** | goalSpec "Sleep at least 7 hours for 1 night" | model 2 (commitment) | entry 1000000 uUSDC | sponsor pot 2000000 uUSDC
+  - periodStart 1790390383 (Sat 2026-09-26 11:39 JST), periodEnd 1790465400 (Sun 2026-09-27 08:30 JST); settler-only until 1790551800 (Mon 2026-09-28 08:30 JST), then anyone
+  - create tx https://sepolia.basescan.org/tx/0x315ce7fc3e040aa99730553be0e34ae6bb62760161f21bd367221f8f96a64b74
 - 2026-09-26T00:03:49Z reuse: HealthPoolsV3 `0x0B6E8D477313599aBB746218a1AE45BAb333A12F` (seed-only run)
 - 2026-09-26T00:03:49Z pool 4: **Sleep efficiency 85 tonight** | goalSpec "Sleep efficiency 85% or better for 1 night" | model 2 (commitment) | entry 1000000 uUSDC | sponsor pot 2000000 uUSDC
   - periodStart 1790381042 (Sat 2026-09-26 09:04 JST), periodEnd 1790472600 (Sun 2026-09-27 10:30 JST); settler-only until 1790559000 (Mon 2026-09-28 10:30 JST), then anyone
