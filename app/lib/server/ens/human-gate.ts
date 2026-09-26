@@ -14,8 +14,14 @@
 // is written after a successful mint; a different wallet presenting the same
 // human is refused. The human <-> wallet bind (world/human.ts) already allows
 // one wallet per human; this record makes the name rule hold on its own.
+//
+// RE-PICK CAP: the record also counts distinct names minted for the human.
+// After ENS_NAMES_PER_HUMAN (default 3) a new name is refused before any mint;
+// re-claiming the current name never counts. namesLeft() lets the claim form
+// say so before the player types or signs anything.
 
 import { getAddress } from "viem";
+import { NAME_CAP_REACHED } from "@/lib/ens/names";
 import { readJson, writeJson } from "@/lib/server/store";
 import { worldNamespace, worldSetup } from "@/lib/server/world/config";
 import { getHumanRecord } from "@/lib/server/world/human";
@@ -24,6 +30,16 @@ export const NAME_HUMAN_REQUIRED = "Prove you are one human first, then pick you
 
 export const NAME_ONE_PER_HUMAN =
   "You already have a name on another wallet. One human, one name: sign in with that wallet to change it.";
+
+export { NAME_CAP_REACHED };
+
+const DEFAULT_NAMES_PER_HUMAN = 3;
+
+/** How many distinct gohealthme.eth names one human may mint. */
+export function namesPerHuman(): number {
+  const raw = Number.parseInt(process.env.ENS_NAMES_PER_HUMAN ?? "", 10);
+  return Number.isFinite(raw) && raw >= 1 ? raw : DEFAULT_NAMES_PER_HUMAN;
+}
 
 export interface NameHumanDeps {
   /** True when prove-human is on for this deployment. */
@@ -51,16 +67,24 @@ interface HumanNameRecord {
   address: string;
   label: string;
   at: string;
+  /** Distinct names minted for this human. Absent on older records: one. */
+  picks?: number;
+}
+
+function picksOf(record: HumanNameRecord | null): number {
+  if (record === null) return 0;
+  return record.picks ?? 1;
 }
 
 function recordFile(humanKey: string): string {
   return `ens-human-name-${humanKey}.json`;
 }
 
-/** Whether this wallet may take a name right now. */
+/** Whether this wallet may take this name right now. */
 export async function checkNameHuman(
   address: string,
   deps: NameHumanDeps = liveNameHumanDeps(),
+  label?: string,
 ): Promise<NameHumanCheck> {
   if (!deps.enforced()) return { ok: true, humanKey: null };
   const human = await deps.humanOf(address);
@@ -71,7 +95,27 @@ export async function checkNameHuman(
   if (held !== null && held.address.toLowerCase() !== address.toLowerCase()) {
     return { ok: false, status: 403, reason: NAME_ONE_PER_HUMAN };
   }
+  const isCurrent = held !== null && label !== undefined && held.label === label;
+  if (!isCurrent && picksOf(held) >= namesPerHuman()) {
+    return { ok: false, status: 403, reason: NAME_CAP_REACHED };
+  }
   return { ok: true, humanKey: human.key };
+}
+
+/**
+ * New names this wallet's human can still pick, or null when there is no cap
+ * (prove-human off) or no human yet (the human gate answers that case).
+ */
+export async function namesLeft(
+  address: string,
+  deps: NameHumanDeps = liveNameHumanDeps(),
+): Promise<number | null> {
+  if (!deps.enforced()) return null;
+  const human = await deps.humanOf(address);
+  if (human === null) return null;
+  const held = await readJson<HumanNameRecord | null>(recordFile(human.key), null);
+  if (held !== null && held.address.toLowerCase() !== address.toLowerCase()) return 0;
+  return Math.max(0, namesPerHuman() - picksOf(held));
 }
 
 /** Record which wallet holds this human's name. First wallet wins. */
@@ -84,9 +128,11 @@ export async function rememberNameHuman(
   if (humanKey === null) return;
   const held = await readJson<HumanNameRecord | null>(recordFile(humanKey), null);
   if (held !== null && held.address.toLowerCase() !== address.toLowerCase()) return;
+  const picks = held !== null && held.label === label ? picksOf(held) : picksOf(held) + 1;
   await writeJson<HumanNameRecord>(recordFile(humanKey), {
     address: getAddress(address),
     label,
     at: new Date(now()).toISOString(),
+    picks,
   });
 }

@@ -71,6 +71,7 @@ Measured cost at about 1.1 gwei: well under 0.01 ETH for the whole bootstrap inc
 | `ENS_PARENT_NAME` | Default `gohealthme.eth`. | Optional. |
 | `ENS_SEPOLIA_RPC_URL` | Default `https://ethereum-sepolia-rpc.publicnode.com`. | Optional; a keyed RPC is better for the sweep. |
 | `MAINNET_RPC_URL` | Ethereum mainnet RPC for checking linked own names. Default: viem's public mainnet transport. | Optional; a keyed RPC is steadier. |
+| `ENS_NAMES_PER_HUMAN` | How many distinct gohealthme.eth names one verified human may mint (re-claiming the current name never counts). Default 3. The claim form reads the count from `GET /api/ens/claim?address=` and says so before anyone signs. | Optional. |
 | `ENS_INDEX_FROM_BLOCK` | First block the name index scans; default is 200k blocks back. | Set to the bootstrap block. |
 
 ## How judges verify
