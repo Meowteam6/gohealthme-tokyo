@@ -129,7 +129,7 @@ export function PerchedHeader({
       {/* The title keeps the full width; he stands beside the lead, so a long
           title never wraps around him. */}
       <header>
-        {above}
+        {above !== undefined ? <div className="mb-4">{above}</div> : null}
         <h1 className={PAGE_TITLE}>{title}</h1>
         <div className="flex gap-3 min-[900px]:gap-8">
           <div className="min-w-0 flex-1 self-start pb-5 min-[900px]:pb-8">

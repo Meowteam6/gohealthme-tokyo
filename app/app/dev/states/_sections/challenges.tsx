@@ -15,6 +15,15 @@ import {
   StartAction,
   StartCard,
 } from "@/components/challenges/ChallengeCards";
+import {
+  BackerView,
+  ChallengeIntro,
+  ChallengeInvalid,
+  ChallengePausedCard,
+  RallyCard,
+} from "@/components/challenges/ChallengeLanding";
+import ChallengeInviteShare from "@/components/ChallengeInviteShare";
+import { PAGE_COLUMN } from "@/components/night/kit";
 import { Card, ErrorNote, Skeleton } from "@/components/ui";
 import type { PoolInfo } from "@/lib/contract";
 
@@ -169,6 +178,82 @@ export default function ChallengeStates({ meta }: SectionProps) {
             </Card>
           }
         />
+      </StateFrame>
+
+      <StateFrame name="challenge-accept" note="/c/[token]: the intro above the lobby, terms from chain">
+        <div className={PAGE_COLUMN}>
+          <ChallengeIntro
+            challengerName="mika.gohealthme.eth"
+            seed={5n * USDC}
+            targetHandle="andre"
+            message="You said you'd start Monday. It's Monday."
+            terms={{ entryFee: 1n * USDC, players: 1, sponsorPot: 5n * USDC }}
+            backers={["nikki.gohealthme.eth", "0x51f2...a90c"]}
+          />
+        </div>
+      </StateFrame>
+
+      <StateFrame name="challenge-accept-no-terms" note="a read missed: no invented terms, no seed figure">
+        <div className={PAGE_COLUMN}>
+          <ChallengeIntro
+            challengerName="0x8a39...6141"
+            seed={null}
+            targetHandle={null}
+            message={null}
+            terms={null}
+            backers={[]}
+          />
+        </div>
+      </StateFrame>
+
+      <StateFrame name="challenge-grow" note="/c/[token] under the lobby: chip in and rally, while it can pay">
+        <div className={`${PAGE_COLUMN} space-y-8`}>
+          <RallyCard token="fixture-token-0000000000000000" />
+        </div>
+      </StateFrame>
+
+      <StateFrame name="challenge-paused" note="the challenge cannot be paid on this build: no chip-in">
+        <div className={PAGE_COLUMN}>
+          <ChallengePausedCard reason="payouts" />
+        </div>
+      </StateFrame>
+
+      <StateFrame name="challenge-backer" note="/c/[token]?as=backer: chip in, never accept">
+        <BackerView
+          token="fixture-token-0000000000000000"
+          poolId={44n}
+          challengerName="mika.gohealthme.eth"
+          target="@andre"
+          message="You said you'd start Monday. It's Monday."
+          pot={{ prize: 7n * USDC, stakes: 1n * USDC, seed: 5n * USDC }}
+          backers={["nikki.gohealthme.eth"]}
+          canGrow
+        />
+      </StateFrame>
+
+      <StateFrame name="challenge-backer-closed" note="window closed, paid out, or cannot pay here">
+        <BackerView
+          token="fixture-token-0000000000000000"
+          poolId={44n}
+          challengerName="mika.gohealthme.eth"
+          target="their friend"
+          message={null}
+          pot={{ prize: null, stakes: null, seed: null }}
+          backers={[]}
+          canGrow={false}
+        />
+      </StateFrame>
+
+      <StateFrame name="challenge-invalid" note="a mistyped or vanished link">
+        <ChallengeInvalid />
+      </StateFrame>
+
+      <StateFrame name="challenge-invite" note="the creator's own invite link, before the one signature">
+        <div className={PAGE_COLUMN}>
+          <Card>
+            <ChallengeInviteShare poolId={44n} address="0x8a39000000000000000000000000000000006141" />
+          </Card>
+        </div>
       </StateFrame>
 
       <StateFrame name="challenges-signin-off" note="a build with sign-in off">

@@ -12,6 +12,7 @@ import { useState } from "react";
 import { fetchWithWalletAuth } from "@/lib/client-auth";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import ShareChallenge from "@/components/ShareChallenge";
+import { FIELD_HINT, Notice } from "@/components/night/kit";
 import { buttonClasses } from "@/components/ui";
 
 type Reveal =
@@ -82,19 +83,19 @@ export default function ChallengeInviteShare({
         type="button"
         onClick={() => void reveal()}
         disabled={state.kind === "loading"}
+        aria-busy={state.kind === "loading"}
         className={`${buttonClasses({ size: "sm" })}`}
       >
-        {state.kind === "loading"
-          ? "Getting your link..."
-          : "Get your invite link"}
+        {state.kind === "loading" ? "Getting your link" : "Get your invite link"}
       </button>
       {state.kind === "error" ? (
-        <p role="alert" className="text-sm text-warning">{state.message}</p>
+        <Notice tone="error" live>
+          {state.message}
+        </Notice>
       ) : (
-        <p className="text-sm text-muted">
-          Reveals your private invite link to share by text, email, or copy.
-          You&apos;ll sign once to prove the wallet is yours - nothing is
-          charged.
+        <p className={FIELD_HINT}>
+          Shows your private invite link to share by text, email or copy. You sign
+          once to prove the wallet is yours. Nothing is charged.
         </p>
       )}
     </div>
