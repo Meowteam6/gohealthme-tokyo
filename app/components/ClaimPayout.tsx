@@ -15,15 +15,19 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Address } from "viem";
 import { ArcTxLink, Button, Card, ErrorNote, Money, Stamp } from "@/components/ui";
 import GaslessBadge from "@/components/GaslessBadge";
+import Spotter from "@/components/spotter/Spotter";
 import { formatUsdc, readOwed } from "@/lib/contract";
 import { useWithdraw } from "@/lib/useWithdraw";
 
 export default function ClaimPayout({
   address,
   className = "",
+  quiet = false,
 }: {
   address: Address;
   className?: string;
+  /** Inside the paid Verdict: no second big number, just the claim. */
+  quiet?: boolean;
 }) {
   const queryClient = useQueryClient();
   const { status, busy, reset, gasless, withdraw } = useWithdraw();
@@ -54,27 +58,28 @@ export default function ClaimPayout({
   // guess.
   if (status.kind === "done") {
     return (
-      <Card pop className={`border-gold/40 ${className}`}>
+      <Card className={`border-gold/40 ${className}`}>
         <div className="flex items-center gap-4 sm:gap-5">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/spotter/spotter-payday.webp"
-            alt="SPOTTER the otter with your coin"
-            className="h-16 w-auto shrink-0 sm:h-20"
-          />
+          {quiet ? null : (
+            <Spotter pose="payday" size="xs" alt="SPOTTER handing you your coin" />
+          )}
           <div className="min-w-0">
             <Stamp tone="gold">Claimed</Stamp>
             <p className="mt-2">
-              <Money usd={formatUsdc(status.amount)} tone="gold" sign="+" size="xl" />
+              <Money
+                usd={formatUsdc(status.amount)}
+                sign="+"
+                size={quiet ? "lg" : "xl"}
+              />
             </p>
-            <p className="mt-1 text-sm font-semibold text-foreground">
+            <p className="mt-1 text-sm font-bold text-foreground">
               It is in your wallet now.
             </p>
             {status.txHash !== null ? (
               <p className="mt-2">
-                <ArcTxLink txHash={status.txHash} label="See the public receipt" />
+                <ArcTxLink txHash={status.txHash} label="See the receipt" />
                 <span className="mt-0.5 block text-xs text-muted">
-                  (anyone can check this - that&apos;s the point)
+                  Public on Base Sepolia. Anyone can check it.
                 </span>
               </p>
             ) : null}
@@ -104,44 +109,56 @@ export default function ClaimPayout({
   // been credited yet, and a wallet that already withdrew, both land here.
   if (owed <= 0n) return null;
 
-  return (
-    <Card pop className={`border-gold/40 ${className}`}>
-      <div className="flex items-start gap-4 sm:gap-5">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/spotter/spotter-payday.webp"
-          alt="SPOTTER the otter holding your coin"
-          className="h-16 w-auto shrink-0 sm:h-20"
+  const action = (
+    <div className="space-y-3">
+      <Button
+        type="button"
+        disabled={busy}
+        onClick={onClaim}
+        className="w-full sm:w-auto"
+      >
+        {busy ? "Claiming your USDC" : "Claim my USDC"}
+      </Button>
+      <GaslessBadge status={gasless} />
+      {status.kind === "error" ? (
+        <ErrorNote
+          title="Could not claim just yet"
+          detail={status.message}
+          raw={status.raw}
+          onRetry={reset}
         />
+      ) : null}
+    </div>
+  );
+
+  // Inside the paid Verdict the payout above is the screen's one big number,
+  // so the claim is a plain sentence and the button.
+  if (quiet) {
+    return (
+      <div className={`space-y-3 text-center sm:text-left ${className}`}>
+        <p className="text-sm text-foreground">
+          <Money usd={formatUsdc(owed)} size="sm" /> is ready to claim. One tap
+          pulls it into your wallet.
+        </p>
+        {action}
+      </div>
+    );
+  }
+
+  return (
+    <Card className={`border-gold/40 ${className}`}>
+      <div className="flex items-start gap-4 sm:gap-5">
+        <Spotter pose="payday" size="xs" alt="SPOTTER holding your coin" />
         <div className="min-w-0 flex-1">
           <Stamp tone="gold">Ready to claim</Stamp>
           <p className="mt-2">
-            <Money usd={formatUsdc(owed)} tone="gold" sign="+" size="xl" />
+            <Money usd={formatUsdc(owed)} sign="+" size="xl" />
           </p>
           <p className="mt-1 text-sm text-muted">
-            Settled and waiting. It is credited to you on-chain - one tap pulls it
-            into your wallet.
+            Settled and waiting. It is credited to you on chain, and one tap
+            pulls it into your wallet.
           </p>
-          <div className="mt-4 space-y-3">
-            <Button
-              type="button"
-              pop
-              disabled={busy}
-              onClick={onClaim}
-              className="w-full sm:w-auto"
-            >
-              {busy ? "Claiming your USDC" : "Claim your USDC"}
-            </Button>
-            <GaslessBadge status={gasless} />
-            {status.kind === "error" ? (
-              <ErrorNote
-                title="Could not claim just yet"
-                detail={status.message}
-                raw={status.raw}
-                onRetry={reset}
-              />
-            ) : null}
-          </div>
+          <div className="mt-4">{action}</div>
         </div>
       </div>
     </Card>

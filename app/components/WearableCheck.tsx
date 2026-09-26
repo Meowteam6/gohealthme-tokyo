@@ -66,7 +66,8 @@ import {
 import AgentReceipt from "@/components/AgentReceipt";
 import Countdown from "@/components/Countdown";
 import PayoutMoment from "@/components/PayoutMoment";
-import { ErrorNote, Skeleton, TAP_TARGET } from "@/components/ui";
+import { Button, ErrorNote, Skeleton, TAP_TARGET } from "@/components/ui";
+import Spotter from "@/components/spotter/Spotter";
 import SignInGate from "@/components/SignInGate";
 
 // Same cadence as the document flow, but wearable runs wait on provider data
@@ -507,8 +508,16 @@ function WearableCheckInner({
 
   if (status.kind === "starting") {
     return (
-      <div className="space-y-3">
-        <h3 className="text-lg font-semibold">Handing it to SPOTTER</h3>
+      <div className="space-y-3" aria-busy="true">
+        {verdictShown === true ? null : (
+          <Spotter
+            state="loading"
+            line="Reading the record. Give me a sec."
+            live
+            className="mx-auto"
+          />
+        )}
+        <h3 className="font-display text-xl font-bold tracking-display text-balance">Handing it to SPOTTER</h3>
         <p className="text-sm text-muted">
           SPOTTER is reading your synced wearable summary on its server and
           checking it against the goal. Your raw health data stays server-side
@@ -545,31 +554,31 @@ function WearableCheckInner({
   if (status.kind === "locked") {
     return (
       <div className="space-y-3">
-        <h3 className="text-lg font-semibold">This claim is private</h3>
-        <div className="rounded-xl border border-accent/40 bg-accent/20 p-4">
+        <h3 className="font-display text-xl font-bold tracking-display text-balance">This claim is private</h3>
+        <div className="rounded-2xl border border-edge bg-surface-raised p-4">
           <p className="text-sm text-foreground/80">{status.reason}</p>
         </div>
         {!authenticated || address === null ? (
           <SignInGate note="Sign in to see this claim.">
             {(openSignIn) => (
-              <button
+              <Button
                 type="button"
                 disabled={!ready}
                 onClick={openSignIn}
-                className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full"
               >
                 Sign in to see this claim
-              </button>
+              </Button>
             )}
           </SignInGate>
         ) : (
-          <button
+          <Button
             type="button"
             onClick={unlockClaim}
-            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
+            className="w-full"
           >
             Sign and show my claim
-          </button>
+          </Button>
         )}
       </div>
     );
@@ -604,20 +613,21 @@ function WearableCheckInner({
         {/* The run keeps going without a signature; only the rows are held
          *  back. Saying so beats a receipt that silently stops printing. */}
         {status.lockedReason !== null ? (
-          <div className="rounded-xl border border-accent/40 bg-accent/20 p-4">
+          <div className="rounded-2xl border border-edge bg-surface-raised p-4">
             <p className="text-base font-semibold">
               The receipt is hidden, not stopped
             </p>
             <p className="mt-1 text-sm text-foreground/80">
               {status.lockedReason} SPOTTER keeps working either way.
             </p>
-            <button
+            <Button
               type="button"
               onClick={unlockClaim}
-              className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
+              variant="ghost"
+              className="mt-3 w-full"
             >
               Sign and show the rows
-            </button>
+            </Button>
           </div>
         ) : null}
 
@@ -628,7 +638,7 @@ function WearableCheckInner({
         ) : null}
 
         {!verdictShown && status.runStatus === "recorded" ? (
-          <div className="rounded-xl border border-edge bg-surface-raised p-4">
+          <div className="rounded-2xl border border-edge bg-surface-raised p-4">
             <p className="text-base font-semibold">
               Verified and recorded on-chain.
             </p>
@@ -655,7 +665,7 @@ function WearableCheckInner({
 
         {failureMode === "evidence" ? (
           <div className="space-y-3">
-            <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
+            <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
               <p className="text-base font-semibold text-warning">
                 SPOTTER could not get a clean read
               </p>
@@ -665,28 +675,30 @@ function WearableCheckInner({
                 then run it back.
               </p>
             </div>
-            <button
+            <Button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
+              variant="ghost"
+              className="w-full"
             >
               Check again
-            </button>
+            </Button>
             {onSwitchToDocument !== undefined ? (
-              <button
+              <Button
                 type="button"
                 onClick={onSwitchToDocument}
-                className="w-full rounded-xl border border-edge px-5 py-3 text-sm font-semibold text-foreground hover:border-accent/50"
+                variant="secondary"
+                className="w-full"
               >
                 Upload proof instead
-              </button>
+              </Button>
             ) : null}
           </div>
         ) : null}
 
         {failureMode === "goal-missed" && !poolClosed ? (
           <div className="space-y-3">
-            <div className="rounded-xl border border-edge bg-surface-raised p-4">
+            <div className="rounded-2xl border border-edge bg-surface-raised p-4">
               <p className="text-base font-semibold">Not there yet.</p>
               <p className="mt-1 text-sm text-foreground/80">
                 The wearable data was read fine and the goal is not met so far.
@@ -694,17 +706,18 @@ function WearableCheckInner({
                 pool settles, so check again after your next sync.
               </p>
             </div>
-            <button
+            <Button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
+              variant="ghost"
+              className="w-full"
             >
               Check again
-            </button>
+            </Button>
           </div>
         ) : null}
         {failureMode === "goal-missed" && poolClosed ? (
-          <div className="rounded-xl border border-edge bg-surface-raised p-4">
+          <div className="rounded-2xl border border-edge bg-surface-raised p-4">
             <p className="text-base font-semibold">Not paid.</p>
             <p className="mt-1 text-sm text-foreground/80">
               The wearable data was read fine. It does not show the goal being
@@ -714,7 +727,7 @@ function WearableCheckInner({
         ) : null}
 
         {!verdictShown && status.runStatus === "cap-exceeded" ? (
-          <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
+          <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
             <p className="text-base font-semibold text-warning">
               SPOTTER hit its spending cap and stopped
             </p>
@@ -727,7 +740,7 @@ function WearableCheckInner({
 
         {status.runStatus === "blocked" ? (
           <div className="space-y-3">
-            <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
+            <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
               <p className="text-base font-semibold text-warning">
                 Join the pool first
               </p>
@@ -737,25 +750,27 @@ function WearableCheckInner({
                 check again.
               </p>
             </div>
-            <button
+            <Button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
+              variant="ghost"
+              className="w-full"
             >
               Try again
-            </button>
+            </Button>
           </div>
         ) : null}
 
         {status.runStatus === "error" ? (
           verdictShown ? (
-            <button
+            <Button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
-              className="w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
+              variant="ghost"
+              className="w-full"
             >
               Have SPOTTER try again
-            </button>
+            </Button>
           ) : (
             <ErrorNote
               title="The check hit a problem"
@@ -785,7 +800,7 @@ function WearableCheckInner({
   return (
     <div className="space-y-3">
       <WhoopReturnNote whoopConnected={connected} />
-      <h3 className="text-lg font-semibold">Verify from your wearable</h3>
+      <h3 className="font-display text-xl font-bold tracking-display text-balance">Verify from your wearable</h3>
       <p className="text-sm text-muted">
         {readableGoal === ""
           ? "SPOTTER reads your synced wearable summary and pays if the data shows the goal."
@@ -800,7 +815,7 @@ function WearableCheckInner({
        *  boundary and nothing but the pass/fail verdict and its confidence is
        *  written on-chain, but claiming a sealed enclave here would be a lie:
        *  the wearable summary transits the server. Say what is true. */}
-      <p className="rounded-xl border border-edge bg-surface-raised p-3 text-xs text-muted">
+      <p className="rounded-2xl border border-edge bg-surface-raised p-3 text-xs text-muted">
         Where your wearable data goes: SPOTTER reads your synced summary on its
         server to check the goal. That is the wearable path - not the sealed
         enclave the document path runs in. Your raw health data stays
@@ -811,14 +826,14 @@ function WearableCheckInner({
       {!authenticated || address === null ? (
         <SignInGate note="Sign in to run the check.">
           {(openSignIn) => (
-            <button
+            <Button
               type="button"
               disabled={!ready}
               onClick={openSignIn}
-              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full"
             >
               Sign in to run the check
-            </button>
+            </Button>
           )}
         </SignInGate>
       ) : providerQuery.isLoading ? (
@@ -831,7 +846,7 @@ function WearableCheckInner({
         // cannot help and the connect call itself 502s. Say what is wrong and
         // hand over the proof path that still works.
         <div className="space-y-3">
-          <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
+          <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
             <p className="text-base font-semibold text-warning">
               Wearable verification is down right now
             </p>
@@ -842,23 +857,24 @@ function WearableCheckInner({
             </p>
           </div>
           {onSwitchToDocument !== undefined ? (
-            <button
+            <Button
               type="button"
               onClick={onSwitchToDocument}
-              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
+              className="w-full"
             >
               Prove it with a document instead
-            </button>
+            </Button>
           ) : null}
-          <button
+          <Button
             type="button"
             onClick={() => {
               void providerQuery.refetch();
             }}
-            className="w-full rounded-xl border border-edge px-5 py-3 text-sm font-semibold text-foreground hover:border-accent/50"
+            variant="secondary"
+            className="w-full"
           >
             Check the provider again
-          </button>
+          </Button>
         </div>
       ) : providerAuth !== null ? (
         // Not an outage and not a missing device: the read is this wallet's
@@ -866,16 +882,16 @@ function WearableCheckInner({
         // connected" here would send someone to re-link a device that is
         // already linked.
         <div className="space-y-3">
-          <p className="rounded-xl border border-accent/40 bg-accent/20 p-3 text-sm text-foreground/80">
+          <p className="rounded-2xl border border-edge bg-surface-raised p-3 text-sm text-foreground/80">
             {providerAuth}
           </p>
-          <button
+          <Button
             type="button"
             onClick={unlockProvider}
-            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
+            className="w-full"
           >
             Sign and check my wearable
-          </button>
+          </Button>
         </div>
       ) : providerMetricUnavailable(providerState) ? (
         // Syncing, and this device does not produce the number this goal is
@@ -883,7 +899,7 @@ function WearableCheckInner({
         // read that cannot answer, and telling them to wait would be advice
         // that never comes true.
         <div className="space-y-3">
-          <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
+          <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
             <p className="text-base font-semibold text-warning">
               Your device does not measure this goal
             </p>
@@ -897,13 +913,13 @@ function WearableCheckInner({
             </p>
           </div>
           {onSwitchToDocument !== undefined ? (
-            <button
+            <Button
               type="button"
               onClick={onSwitchToDocument}
-              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
+              className="w-full"
             >
               Prove it with a document instead
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : providerAwaitingFirstSync(providerState) ? (
@@ -911,7 +927,7 @@ function WearableCheckInner({
         // would buy a read and return "0 days", which reads as a failure the
         // user did not earn. Every new user passes through this state.
         <div className="space-y-3">
-          <div className="rounded-xl border border-accent/30 bg-accent/15 p-4">
+          <div className="rounded-2xl border border-edge bg-surface-raised p-4">
             <p className="text-base font-semibold text-accent-deep">
               Waiting on your first sync
             </p>
@@ -922,31 +938,32 @@ function WearableCheckInner({
               while you wait.
             </p>
           </div>
-          <button
+          <Button
             type="button"
             onClick={() => void providerQuery.refetch()}
-            className="w-full rounded-xl border border-edge px-5 py-3.5 text-base font-semibold text-foreground hover:border-accent/50"
+            variant="secondary"
+            className="w-full"
           >
             Check again
-          </button>
+          </Button>
           {onSwitchToDocument !== undefined ? (
-            <button
+            <Button
               type="button"
               onClick={onSwitchToDocument}
-              className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
+              className="w-full"
             >
               Prove it with a document instead
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : !connected ? (
         <div className="space-y-3">
-          <p className="rounded-xl border border-dashed border-accent/30 bg-accent/20 p-3 text-sm text-accent-deep">
+          <p className="rounded-2xl border border-dashed border-edge bg-surface-raised p-3 text-sm text-foreground">
             No wearable connected yet - without one, SPOTTER has nothing to
             verify and will not pay. You can pick which device from the
             dashboard.
           </p>
-          <button
+          <Button
             type="button"
             onClick={() => {
               setConnectError(null);
@@ -970,30 +987,31 @@ function WearableCheckInner({
                 );
               });
             }}
-            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover"
+            className="w-full"
           >
             Connect a wearable
-          </button>
+          </Button>
           {connectFallbackUrl !== null ? (
             <a
               href={connectFallbackUrl}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setConnectFallbackUrl(null)}
-              className="block w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3.5 text-center text-base font-semibold text-accent-deep hover:bg-accent/10"
+              className="flex min-h-12 w-full items-center justify-center rounded-[18px] border-2 border-foreground px-5 py-3 text-center text-base font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
             >
               Your browser blocked the popup - tap here to connect
             </a>
           ) : null}
-          <button
+          <Button
             type="button"
             onClick={() => {
               void providerQuery.refetch();
             }}
-            className="w-full rounded-xl border border-edge px-5 py-3 text-sm font-semibold text-foreground hover:border-accent/50"
+            variant="secondary"
+            className="w-full"
           >
             I connected it, check again
-          </button>
+          </Button>
           {onSwitchToDocument !== undefined ? (
             <button
               type="button"
@@ -1005,16 +1023,16 @@ function WearableCheckInner({
           ) : null}
         </div>
       ) : (
-        <button
+        <Button
           type="button"
           disabled={!ready}
           onClick={() => {
             void run();
           }}
-          className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full"
         >
           Have SPOTTER check my wearable
-        </button>
+        </Button>
       )}
 
       {connectError !== null ? (
@@ -1059,7 +1077,7 @@ export default function WearableCheck({
 }) {
   if (!DYNAMIC_CONFIGURED) {
     return (
-      <p className="rounded-xl border border-edge bg-surface-raised p-4 text-sm text-foreground/80">
+      <p className="rounded-2xl border border-edge bg-surface-raised p-4 text-sm text-foreground/80">
         Sign-in is not switched on for this build, so SPOTTER has no wallet to
         check a wearable for.
       </p>

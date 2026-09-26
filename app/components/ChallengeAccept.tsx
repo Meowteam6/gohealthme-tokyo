@@ -2,7 +2,7 @@
 
 // The accept control inside the challenge link's run slip.
 //
-// Accepting a dare IS entering its run: this wraps the SAME JoinPool primitive
+// Accepting a challenge IS entering its run: this wraps the SAME JoinPool primitive
 // the pool page uses, with the pool's on-chain entry fee read live (never a
 // hardcoded amount; a zero fee would under-approve and the join would revert).
 // One wallet, one entry is enforced on-chain by joinPool exactly as everywhere
@@ -11,7 +11,7 @@
 // The run's lock is decided once, in lib/game/lobby.ts, from the same join gate
 // (lib/wearable-join-gate.ts) both staking surfaces must use. It used to be a
 // second copy of the pool page's five refusals; now it is the lobby's lock
-// panel with its fix, so the dare and the lobby can never word a limit
+// panel with its fix, so the challenge and the lobby can never word a limit
 // differently. The "sign so I can check your device" step is one tap here.
 
 import Link from "next/link";
@@ -47,7 +47,7 @@ export default function ChallengeAccept({
   returnTo,
 }: {
   poolId: string;
-  /** The challenge link, so a fix brings the player back to the dare. */
+  /** The challenge link, so a fix brings the player back to the challenge. */
   returnTo: string;
 }) {
   const view = useCharacter();
@@ -72,7 +72,7 @@ export default function ChallengeAccept({
     enabled: poolIdBig !== null,
   });
 
-  // Reflect an already-accepted dare so a returning player sees "you are in"
+  // Reflect an already-accepted challenge so a returning player sees "you are in"
   // and a route onward, instead of an ALREADY_JOINED revert.
   const participantQuery = useQuery({
     queryKey: ["participant", poolId, address],
@@ -85,7 +85,7 @@ export default function ChallengeAccept({
   });
   const joined = participantQuery.data?.joined === true;
 
-  // The same two cachedOnly reads the lobby makes: opening a dare never fires
+  // The same two cachedOnly reads the lobby makes: opening a challenge never fires
   // a wallet prompt. Unknown capability withholds the accept.
   const providerQuery = useQuery({
     queryKey: providerQueryKey(address),
@@ -118,7 +118,7 @@ export default function ChallengeAccept({
     // allowance. Say so and offer the re-read.
     return (
       <div className="space-y-2">
-        <p className="text-sm">I could not read the stake for this dare just now.</p>
+        <p className="text-sm">I could not read the stake for this challenge just now.</p>
         <button
           type="button"
           onClick={() => void poolQuery.refetch()}
@@ -134,7 +134,7 @@ export default function ChallengeAccept({
     // could revert ALREADY_JOINED after the wallet prompt.
     return (
       <div className="space-y-2">
-        <p className="text-sm">I could not check whether you are already in this dare.</p>
+        <p className="text-sm">I could not check whether you are already in this challenge.</p>
         <button
           type="button"
           onClick={() => void participantQuery.refetch()}
@@ -150,7 +150,7 @@ export default function ChallengeAccept({
     now === null ||
     (address !== null && participantQuery.isLoading)
   ) {
-    return <Skeleton className="h-12 w-full rounded-lg" />;
+    return <Skeleton className="h-12 w-full rounded-2xl" />;
   }
 
   const pool = poolQuery.data;
@@ -192,13 +192,13 @@ export default function ChallengeAccept({
       return (
         <Link
           href={`/pools/${poolId}`}
-          className={`w-full rounded-lg bg-foreground font-semibold text-background hover:bg-accent ${TAP_TARGET}`}
+          className={`w-full rounded-[18px] bg-foreground font-bold text-background hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 ${TAP_TARGET}`}
         >
           You are in. Go to your run
         </Link>
       );
     case "checking":
-      return <Skeleton className="h-12 w-full rounded-lg" />;
+      return <Skeleton className="h-12 w-full rounded-2xl" />;
     case "locked":
       return (
         <LockPanel
@@ -211,14 +211,14 @@ export default function ChallengeAccept({
     case "closed":
       return (
         <p className="text-sm text-foreground/80">
-          This dare has closed. If you were already in, your result settles on
+          This challenge has closed. If you were already in, your result settles on
           your run page.
         </p>
       );
     case "cannot-pay":
       return (
         <p className="text-sm text-foreground/80">
-          This dare was set up so even a verified result pays zero, so there is
+          This challenge was set up so even a verified result pays zero, so there is
           nothing to accept here.
         </p>
       );
@@ -231,7 +231,7 @@ export default function ChallengeAccept({
             it.
           </p>
           {slot.proof === "upload" ? (
-            <p className="rounded-lg border-2 border-warning/40 bg-warning/5 p-3 text-sm">
+            <p className="rounded-2xl border border-warning/40 bg-warning/5 p-3 text-sm">
               {uploadFallbackNote(pool.goalSpec)}
             </p>
           ) : null}

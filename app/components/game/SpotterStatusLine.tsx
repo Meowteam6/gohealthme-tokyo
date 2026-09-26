@@ -45,9 +45,9 @@ export default function SpotterStatusLine() {
       href="/agent"
       className="flex min-h-11 items-center gap-2 text-sm text-muted hover:text-foreground"
     >
-      <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-accent" />
+      <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-otter" />
       SPOTTER is checking, with{" "}
-      <span className="font-mono tabular-nums text-foreground">{balance} USDC</span>{" "}
+      <span className="font-bold tabular-nums text-gold-deep">{balance} USDC</span>{" "}
       to spend on proof
     </Link>
   );

@@ -21,13 +21,9 @@ export default function SpendMeter({
   return (
     <div>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-          SPOTTER spend
-        </p>
+        <p className="text-sm font-bold text-foreground">SPOTTER&apos;s spend</p>
         {atCap ? (
-          <span className="text-xs font-semibold uppercase tracking-wide text-warning">
-            at cap
-          </span>
+          <span className="text-sm font-bold text-warning">At the cap</span>
         ) : null}
       </div>
 
@@ -42,10 +38,10 @@ export default function SpendMeter({
         <div
           className={`h-full rounded-full ${
             planning
-              ? "w-1/3 animate-pulse bg-gold/40"
+              ? "w-1/3 animate-pulse bg-gold/40 motion-reduce:animate-none"
               : atCap
-                ? "bg-warning transition-[width] duration-500"
-                : "bg-gold transition-[width] duration-500"
+                ? "bg-warning transition-[width] duration-200 motion-reduce:transition-none"
+                : "bg-gold transition-[width] duration-200 motion-reduce:transition-none"
           }`}
           style={planning ? undefined : { width: `${pct}%` }}
         />

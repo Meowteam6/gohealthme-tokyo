@@ -312,7 +312,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       className="rounded-3xl border border-edge bg-surface p-5 sm:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold tracking-tight">Prove you&apos;re one human.</h2>
+        <h2 className="font-display text-2xl font-extrabold leading-display tracking-display text-balance">Prove you&apos;re one human.</h2>
         {mode === "mock" ? (
           <Badge tone="warning">Event mode: mocked proofs</Badge>
         ) : mode === "live" && config?.mode === "live" ? (
@@ -344,12 +344,12 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       ) : null}
 
       {phase.kind === "off" ? (
-        <div className="mt-4 rounded-xl border border-edge bg-surface-raised p-4">
+        <div className="mt-4 rounded-2xl border border-edge bg-surface-raised p-4">
           <p className="text-sm font-semibold">
             Prove-human is not enabled on this deployment.
           </p>
           <p className="mt-1 text-sm text-muted">
-            {phase.problem ?? "WORLD_VERIFY_MODE is unset, so this step is skipped and the closed-beta list decides access instead."}
+            {phase.problem ?? "It is not switched on for this build, so this step is skipped and the closed-beta list decides who can play."}
           </p>
         </div>
       ) : null}
@@ -357,7 +357,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       {phase.kind === "verified" ? (
         <div
           role="status"
-          className="mt-4 rounded-xl border border-accent/40 bg-accent/10 p-4"
+          className="mt-4 rounded-2xl border border-edge bg-surface-raised p-4"
         >
           <p className="text-base font-semibold text-accent-deep">
             Verified: one human.
@@ -444,7 +444,7 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
               onChange={(e) => setIdentity(e.target.value)}
               placeholder="e.g. andre"
               autoComplete="off"
-              className={`rounded-xl border border-edge bg-background px-3 ${TAP_TARGET} justify-start font-normal`}
+              className={`rounded-2xl border border-edge bg-background px-3 ${TAP_TARGET} justify-start font-normal`}
             />
           </label>
           <Button type="submit" pop disabled={phase.kind !== "idle"}>
