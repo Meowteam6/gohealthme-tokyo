@@ -22,11 +22,14 @@ import {
   type SponsoredCall,
 } from "@/lib/useGasSponsorship";
 import { useEnsureGas, withDripLine } from "@/lib/useEnsureGas";
-import { ErrorNote } from "@/components/ui";
+import { Button, ErrorNote } from "@/components/ui";
 import FundingHelp from "@/components/FundingHelp";
 import GaslessBadge from "@/components/GaslessBadge";
 import JoinMoment from "@/components/JoinMoment";
 import SignInGate from "@/components/SignInGate";
+import Spotter from "@/components/spotter/Spotter";
+import HoldCoin from "@/components/spotter/HoldCoin";
+import { joinCoinCopy, type JoinCoinPhase } from "@/components/join-coin";
 
 type JoinStatus =
   | { kind: "idle" }
@@ -52,6 +55,7 @@ function JoinPoolInner({
   const gasless = withDripLine(sponsorship, dripLine);
   const queryClient = useQueryClient();
   const [rawStatus, setStatus] = useState<JoinStatus>({ kind: "idle" });
+  const [coinKey, setCoinKey] = useState(0);
 
   // The on-chain participant read resolves async and after refresh. If it
   // confirms we are already a participant, show "You are in" instead of the
@@ -217,14 +221,14 @@ function JoinPoolInner({
   };
 
   if (status.kind === "joined") {
-    // Fresh join in this mount -> the celebratory takeover pops in. A returning
+    // Fresh join in this mount -> the receipt announces itself. A returning
     // participant surfaced by the alreadyJoined prop leaves rawStatus at idle,
-    // so it gets the calm receipt with no takeover. This reads local UI state
+    // so it gets the same calm receipt, silently. This reads local UI state
     // only; the join transaction logic above is untouched.
     return (
       <JoinMoment
         txHash={status.txHash}
-        celebrate={rawStatus.kind === "joined"}
+        fresh={rawStatus.kind === "joined"}
       />
     );
   }
@@ -246,57 +250,76 @@ function JoinPoolInner({
   }
 
   const busy = status.kind === "checking" || status.kind === "joining";
+  const coinPhase: JoinCoinPhase =
+    !ready || (authenticated && address === null)
+      ? "wallet-loading"
+      : status.kind === "checking"
+        ? "checking"
+        : status.kind === "joining"
+          ? "joining"
+          : status.kind === "error"
+            ? "retry"
+            : "idle";
+  const coin = joinCoinCopy(entryFee, coinPhase);
+
+  // The hold and its tap fallback both land here, on the same startJoin the
+  // old button called. HoldCoin commits once per mount, so every finished
+  // attempt remounts it: a failed or refused join can be held again, and the
+  // disabled reason covers the moments a join is already running.
+  const commit = () => {
+    void startJoin().finally(() => setCoinKey((k) => k + 1));
+  };
 
   return (
     <div className="space-y-3">
-      <SignInGate note="Sign in to join this pool.">
-        {(openSignIn) => (
-          <button
-            type="button"
-            disabled={!ready || busy}
-            onClick={() => {
-              if (!authenticated) {
-                openSignIn();
-                return;
+      <Spotter
+        state="commit"
+        size="lg"
+        line={
+          authenticated
+            ? "Hand it over. I hold it until your wearable says otherwise."
+            : "Sign in first. Then I hold your coin."
+        }
+        className="mx-auto"
+      />
+      <SignInGate note="Sign in to join this run.">
+        {(openSignIn) =>
+          authenticated ? (
+            <HoldCoin
+              key={coinKey}
+              onCommit={commit}
+              face={coin.face}
+              label={coin.label}
+              hint={coin.hint}
+              committedHint={
+                busy ? (coin.disabledReason ?? coin.committedHint) : coin.committedHint
               }
-              void startJoin();
-            }}
-            className="w-full rounded-xl bg-accent px-5 py-3.5 text-base font-semibold text-foreground hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {status.kind === "checking"
-              ? "Checking your balance..."
-              : status.kind === "joining"
-                ? "Joining..."
-                : authenticated
-                  ? "I'm in"
-                  : "Sign in to join"}
-          </button>
-        )}
+              disabled={coin.disabledReason !== null}
+              disabledReason={coin.disabledReason ?? undefined}
+            />
+          ) : (
+            <Button
+              type="button"
+              disabled={!ready}
+              onClick={openSignIn}
+              className="w-full"
+            >
+              {ready ? "Sign in to put money on yourself" : "Getting sign-in ready"}
+            </Button>
+          )
+        }
       </SignInGate>
       {authenticated ? <GaslessBadge status={gasless} /> : null}
-      <p className="text-xs text-muted">
+      <p className="text-center text-xs text-muted">
         One wallet, one entry. Sign in with an email - the wallet is created
         for you, no seed phrase and no app to install.
       </p>
       {status.kind === "error" ? (
-        <div className="space-y-2">
-          <ErrorNote
-            title={status.error.title}
-            detail={status.error.detail}
-            onRetry={() => setStatus({ kind: "idle" })}
-          />
-          {status.error.raw !== "" &&
-          status.error.raw !== status.error.detail ? (
-            <details className="rounded-xl border border-edge bg-surface/50 px-4 py-3">
-              <summary className="cursor-pointer text-xs font-medium text-muted">
-                Technical details
-              </summary>
-              <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-muted">
-                {status.error.raw}
-              </pre>
-            </details>
-          ) : null}
-        </div>
+        <ErrorNote
+          title={status.error.title}
+          detail={status.error.detail}
+          raw={status.error.raw}
+        />
       ) : null}
     </div>
   );
@@ -319,13 +342,13 @@ export default function JoinPool({
     return (
       <div
         role="note"
-        className="rounded-xl border border-dashed border-edge bg-surface/50 p-4"
+        className="rounded-2xl border border-dashed border-edge bg-surface-raised p-4"
       >
-        <p className="text-base font-semibold">
+        <p className="text-base font-bold">
           Joining is unavailable in this build
         </p>
         <p className="mt-1 text-sm text-muted">
-          This demo ships without a wallet signer, so it declines to join
+          Sign-in is not switched on for this build, so it declines to join
           rather than fake a signature.
         </p>
       </div>

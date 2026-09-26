@@ -7,7 +7,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import type { Address } from "viem";
-import { ArcTxLink, Button, ErrorNote } from "@/components/ui";
+import { ArcTxLink, Button, ErrorNote, Money } from "@/components/ui";
 import GaslessBadge from "@/components/GaslessBadge";
 import { formatUsdc } from "@/lib/contract";
 import { useClaimRefund } from "@/lib/useClaimRefund";
@@ -35,13 +35,13 @@ export default function RefundClaim({
 
   if (status.kind === "done") {
     return (
-      <div className="mt-3 rounded-2xl border border-accent/40 bg-accent/10 p-4 text-sm">
-        <p className="font-semibold text-foreground">
-          {formatUsdc(status.amount)} USDC credited back to you.
+      <div role="status" className="mt-3 rounded-3xl border border-edge bg-surface p-4 text-sm">
+        <p className="font-bold text-foreground">
+          <Money usd={formatUsdc(status.amount)} size="md" /> credited back to you.
         </p>
         <p className="mt-1 text-muted">
-          It is waiting in your claimable balance - the Claim your USDC card
-          above pulls it into your wallet.
+          It is waiting in your claimable balance. The Claim my USDC card pulls
+          it into your wallet.
         </p>
         <p className="mt-2">
           <ArcTxLink txHash={status.txHash} label="See the public receipt" />
@@ -51,14 +51,15 @@ export default function RefundClaim({
   }
 
   return (
-    <div className="mt-3 rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm">
-      <p className="font-semibold text-foreground">
-        This pool was cancelled. Your {formatUsdc(entryFee)} USDC stake is
-        yours to take back.
+    <div className="mt-3 rounded-3xl border border-edge bg-surface p-4 text-sm">
+      <p className="font-bold text-foreground">
+        This run was called off. Your{" "}
+        <Money usd={formatUsdc(entryFee)} size="sm" /> stake is yours to take
+        back.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Button onClick={onClaim} disabled={busy}>
-          {busy ? "Claiming..." : "Claim refund"}
+          {busy ? "Crediting your stake back" : "Credit my stake back"}
         </Button>
         <GaslessBadge status={gasless} />
       </div>
