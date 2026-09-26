@@ -1,28 +1,33 @@
-"use client";
-
-// The landing's one call to action. Signed out it starts character creation;
-// signed in it goes straight to the lobby. One button, never two sign-in flows
-// competing for the same tap.
+// The landing's one call to action, inside the featured run's card. It always
+// goes to the run itself: signed out, the run page is a read-only preview with
+// its terms and a sign-in; signed in, character creation runs there first if
+// the player has not finished it, and the stake comes after. A player already
+// in the run is taken back to it instead. Server-safe.
 
 import Link from "next/link";
-import { DYNAMIC_CONFIGURED } from "@/lib/config";
-import { useEmbeddedWallet } from "@/lib/wallet";
-import { ChevronLink, buttonClasses } from "@/components/ui";
+import { stakeWords } from "@/lib/game/landing";
+import { buttonClasses } from "@/components/ui";
 
-export default function LandingCta() {
-  const { ready, authenticated } = useEmbeddedWallet();
-  const signedIn = DYNAMIC_CONFIGURED && ready && authenticated;
+export default function LandingCta({
+  poolId,
+  entryFee,
+  joined = false,
+  locked = false,
+}: {
+  poolId: bigint;
+  entryFee: bigint;
+  /** The signed-in player is already in this run. */
+  joined?: boolean;
+  /** The wearable the visitor picked cannot check this run: the run page
+   *  says why and what works instead, so this only opens it. */
+  locked?: boolean;
+}) {
   return (
-    <div className="flex flex-col items-stretch gap-1">
-      <Link
-        href={signedIn ? "/pools" : "/character?next=%2Fpools"}
-        className={buttonClasses({ block: true })}
-      >
-        {signedIn ? "Go to the lobby" : "Make your player"}
-      </Link>
-      <ChevronLink href="/pools" className="self-center">
-        See the open runs first
-      </ChevronLink>
-    </div>
+    <Link
+      href={`/pools/${poolId.toString()}`}
+      className={buttonClasses({ block: true, variant: joined || locked ? "secondary" : "primary" })}
+    >
+      {joined ? "Open my run" : locked ? "See this run" : `Put ${stakeWords(entryFee)} USDC on myself`}
+    </Link>
   );
 }

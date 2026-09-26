@@ -6,22 +6,37 @@
 //
 // The gate logic is the existing join gate, evaluated once for the whole board
 // (lib/game/lobby.ts). What used to be five separate refusal screens at the
-// join is now a lock on the row, and the "sign so I can check your device"
-// step is one button at the top that unlocks every run at once.
+// join is a lock on the card, and the "sign so I can check your wearable" step
+// is one button at the top that unlocks every run at once.
 //
-// Riverbank (docs/DESIGN.md): rows over cards, stake to pot in gold, SPOTTER
-// peeking up from the bottom edge.
+// Night Shift (docs/DESIGN.md): runs are the landing's night cards (RunRow),
+// SPOTTER stands on the top card and nowhere else, and gold is only money.
+// Signed out, "What do you wear?" marks every run for a wearable before any
+// account, from the same capability table the landing reads.
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import Spotter from "@/components/spotter/Spotter";
-import { EmptyState, Skeleton, buttonClasses, TEXT_LINK } from "@/components/ui";
 import CharacterCard from "@/components/game/CharacterCard";
 import LockPanel from "@/components/game/LockPanel";
 import RunSlip from "@/components/game/RunSlip";
+import WearableChips from "@/components/game/WearableChips";
+import Perch from "@/components/spotter/Perch";
+import { Button, ButtonLink, Card, EmptyState, Fine, Skeleton, TEXT_LINK } from "@/components/ui";
+import { lobbyNeedsSensorCheck, type LobbyRow } from "@/lib/game/lobby";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useLobby } from "@/lib/game/useLobby";
-import { lobbyNeedsSensorCheck, type LobbyRow } from "@/lib/game/lobby";
+import { usePlayerCounts, usePoolsQuery } from "@/lib/game/useOpenRuns";
+import { useWearPick } from "@/lib/game/useWearPick";
+import {
+  brandFit,
+  brandHint,
+  type Fit,
+  type WearableAvailability,
+} from "@/lib/game/wearable-fit";
+
+// Columns follow the lobby's own width, not the viewport: /pools is the full
+// column, the challenge link hosts the lobby in a narrower one.
+const GRID = "m-0 grid list-none gap-2.5 p-0 @min-[40rem]:grid-cols-2 @min-[56rem]:grid-cols-3 @min-[56rem]:gap-4";
 
 function Section({
   title,
@@ -31,6 +46,8 @@ function Section({
   action,
   onRetry,
   onCheckSensor,
+  playersOf,
+  fitOf,
 }: {
   title: string;
   note?: ReactNode;
@@ -39,29 +56,52 @@ function Section({
   action?: ReactNode;
   onRetry?: () => void;
   onCheckSensor?: () => Promise<boolean>;
+  playersOf: (row: LobbyRow) => number | null;
+  fitOf: (row: LobbyRow) => Fit | null;
 }) {
   if (rows.length === 0) return null;
+  const id = `lobby-${title.toLowerCase().replace(/[^a-z]+/g, "-")}`;
   return (
-    <section className="space-y-3" aria-label={title}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
+    <section aria-labelledby={id}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+        <h2 id={id} className="type-title m-0 text-[2rem] min-[900px]:text-[2.5rem]">
           {title}
         </h2>
         {note}
       </div>
-      <div className="grid gap-2.5 lg:grid-cols-2">
+      <ul className={`${GRID} mt-3.5`}>
         {rows.map((row) => (
-          <RunSlip
-            key={row.pool.id.toString()}
-            row={row}
-            returnTo={returnTo}
-            action={row.highlighted ? action : undefined}
-            onRetry={onRetry}
-            onCheckSensor={onCheckSensor}
-          />
+          <li key={row.pool.id.toString()}>
+            <RunSlip
+              row={row}
+              returnTo={returnTo}
+              action={row.highlighted ? action : undefined}
+              onRetry={onRetry}
+              onCheckSensor={onCheckSensor}
+              players={playersOf(row)}
+              visitorFit={fitOf(row)}
+            />
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
+  );
+}
+
+function RowsLoading() {
+  return (
+    <div aria-busy="true">
+      <p className="sr-only" role="status">
+        Reading the runs
+      </p>
+      <ul className={GRID} aria-hidden="true">
+        {[0, 1, 2].map((i) => (
+          <li key={i}>
+            <Skeleton className="h-[132px] rounded-2xl" />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -70,13 +110,17 @@ export default function Lobby({
   returnTo = "/pools",
   intro,
   highlightAction,
+  availability,
 }: {
   highlightId?: string | null;
   returnTo?: string;
-  /** Replaces the lobby heading (the challenge link's dare header). */
+  /** Replaces the lobby heading (the challenge link's header). */
   intro?: ReactNode;
   /** The highlighted run's entry control (the challenge link's accept). */
   highlightAction?: ReactNode;
+  /** Which wearables this build can pair, read on the server. Given, a
+   *  signed-out visitor gets "What do you wear?"; absent, no picker. */
+  availability?: WearableAvailability;
 }) {
   const view = useCharacter();
   const { lobby, loading, error, retry, outage, retryChecks } = useLobby(view, highlightId);
@@ -84,71 +128,95 @@ export default function Lobby({
   const nothingOpen =
     lobby !== null && lobby.open.length === 0 && lobby.highlighted === null;
 
+  // The same ["pools"] query useLobby reads, so the player counts cost one
+  // batch of participantCount reads and nothing more.
+  const poolsQuery = usePoolsQuery();
+  const counts = usePlayerCounts(poolsQuery.data?.pools, poolsQuery.data?.asOfSeconds);
+  const playersOf = (row: LobbyRow): number | null => counts.data?.get(row.pool.id.toString()) ?? null;
+
+  const [picked, setPick] = useWearPick();
+  const picker = !signedIn && availability !== undefined ? availability : null;
+  const fitOf = (row: LobbyRow): Fit | null =>
+    picker !== null && picked !== null ? brandFit(picked, row.pool.goalSpec, picker) : null;
+  const openSpecs =
+    lobby === null
+      ? []
+      : [lobby.highlighted, ...lobby.open].filter((r): r is LobbyRow => r !== null).map((r) => r.pool.goalSpec);
+  const hint = picker !== null && picked !== null && lobby !== null ? brandHint(picked, openSpecs, picker) : null;
+
+  // One pose per screen: SPOTTER stands on the top card unless the empty
+  // state below brings its own, or the host page (the challenge link's
+  // intro) already has him.
+  const perched = intro === undefined && !nothingOpen && !(error && !loading);
+  const next = encodeURIComponent(returnTo);
+
+  const topCard = signedIn ? (
+    <CharacterCard view={view} variant="strip" />
+  ) : (
+    <Card>
+      {picker !== null ? (
+        <>
+          <WearableChips picked={picked} onPick={setPick} hint={hint} />
+          <div className="mt-4 border-t border-edge pt-4" />
+        </>
+      ) : null}
+      <div className="flex flex-col gap-3 min-[640px]:flex-row min-[640px]:items-center min-[640px]:justify-between min-[640px]:gap-6">
+        <p className="m-0 max-w-[52ch] text-[0.9375rem] leading-normal text-muted">
+          <b className="font-semibold text-foreground">Sign in and I check your own wearable against every run,</b>{" "}
+          before any stake. One email, and a wallet is made for you.
+        </p>
+        <ButtonLink href={`/character?next=${next}`} className="flex-none">
+          Sign in
+        </ButtonLink>
+      </div>
+    </Card>
+  );
+
   return (
-    <div className="space-y-8">
+    <div className="@container grid gap-8 min-[900px]:gap-12">
       {intro ?? (
-        <header className="space-y-3">
-          <h1 className="font-display text-[clamp(2.5rem,12vw,4rem)] font-extrabold leading-display tracking-[-0.03em]">
-            The lobby
-          </h1>
-          <p className="max-w-lg text-base text-foreground/85 sm:text-lg">
-            Put money on yourself. Everyone stakes the same and your wearable
-            decides: hit your goal and your stake comes back with a share of
-            the stakes that missed.
+        <header>
+          <h1 className="type-display m-0 text-[2.75rem] min-[900px]:text-[4rem]">The lobby</h1>
+          <p className="m-0 mt-3 max-w-[44ch] text-[1.0625rem] leading-[1.45] text-muted min-[900px]:text-[1.3125rem]">
+            Every open run, marked for your wearable before you stake.
           </p>
-          <p className="text-sm text-muted">Base Sepolia test money, beta. No real dollars.</p>
+          <Fine className="mt-2">Test USDC during beta. No real money moves.</Fine>
         </header>
       )}
 
-      {signedIn ? (
-        <CharacterCard view={view} variant="strip" />
-      ) : (
-        <div className="flex flex-col gap-3 rounded-[20px] border border-edge bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm">
-            Sign in to see which runs your wearable can play. One email, and a
-            wallet is made for you.
-          </p>
-          <Link
-            href={`/character?next=${encodeURIComponent(returnTo)}`}
-            className={`shrink-0 ${buttonClasses()}`}
+      <div className="grid gap-3">
+        {perched ? (
+          // From 900px the header's right side is empty, so SPOTTER stands in
+          // it (the perch lifts by its own reserve) instead of opening a gap.
+          <Perch
+            state="lobby"
+            width={[80, 120]}
+            side="right"
+            inset={[16, 32]}
+            decorative
+            className="min-[900px]:-mt-[calc(var(--perch-pad)-12px)]"
           >
-            Sign in
-          </Link>
-        </div>
-      )}
-
-      {lobby !== null && lobbyNeedsSensorCheck(lobby) ? (
-        <LockPanel
-          lock={{ kind: "sensor-unchecked" }}
-          returnTo={returnTo}
-          onCheckSensor={view.checkSensor}
-        />
-      ) : null}
-      {outage ? <LockPanel lock={{ kind: "outage" }} returnTo={returnTo} /> : null}
+            {topCard}
+          </Perch>
+        ) : (
+          topCard
+        )}
+        {lobby !== null && lobbyNeedsSensorCheck(lobby) ? (
+          <LockPanel lock={{ kind: "sensor-unchecked" }} returnTo={returnTo} onCheckSensor={view.checkSensor} />
+        ) : null}
+        {outage ? <LockPanel lock={{ kind: "outage" }} returnTo={returnTo} /> : null}
+      </div>
 
       {loading ? (
-        <div className="space-y-2.5" aria-busy="true">
-          <p className="sr-only" aria-live="polite">
-            Loading the runs
-          </p>
-          <Skeleton className="h-24 rounded-[20px]" />
-          <Skeleton className="h-24 rounded-[20px]" />
-          <Skeleton className="h-24 rounded-[20px]" />
-        </div>
+        <RowsLoading />
       ) : error || lobby === null ? (
-        <div
-          role="alert"
-          className="flex gap-3 rounded-[20px] border-2 border-danger/40 bg-surface p-4"
-        >
-          <Spotter state="error" size="inline" decorative className="shrink-0 self-start" />
-          <div className="min-w-0">
-            <p className="font-bold">I could not read the runs from Base Sepolia just now.</p>
-            <p className="mt-1 text-sm text-foreground/85">Nothing changed on your side.</p>
-            <button type="button" onClick={retry} className={`mt-3 ${buttonClasses({ variant: "secondary" })}`}>
-              Read the runs again
-            </button>
-          </div>
-        </div>
+        <Card role="alert">
+          <p className="m-0 text-lg font-semibold">I could not read the runs from Base Sepolia just now.</p>
+          <p className="m-0 mt-1 text-[0.9375rem] text-muted">Nothing changed on your side, and nothing was staked.</p>
+          <Button variant="secondary" size="sm" onClick={retry} className="mt-3">
+            Read the runs again
+          </Button>
+        </Card>
       ) : (
         <>
           {lobby.highlighted !== null ? (
@@ -159,12 +227,16 @@ export default function Lobby({
               returnTo={returnTo}
               onRetry={retryChecks}
               onCheckSensor={view.checkSensor}
+              playersOf={playersOf}
+              fitOf={fitOf}
             />
           ) : null}
           <Section
             title="Your runs"
             rows={lobby.mine}
             returnTo={returnTo}
+            playersOf={playersOf}
+            fitOf={fitOf}
             note={
               <Link href="/dashboard" className={TEXT_LINK}>
                 Open My runs
@@ -178,22 +250,20 @@ export default function Lobby({
               returnTo={returnTo}
               onRetry={retryChecks}
               onCheckSensor={view.checkSensor}
+              playersOf={playersOf}
+              fitOf={fitOf}
             />
           ) : null}
 
           {nothingOpen ? (
-            <div className="space-y-2">
+            <div className="grid gap-2">
               <EmptyState
                 title="No open runs right now"
                 line="Nothing running. I'm on break."
                 detail="Nobody has put a goal on the board. Start one and I will read the wearables."
-                action={
-                  <Link href="/pools/create" className={buttonClasses()}>
-                    Start a run
-                  </Link>
-                }
+                action={<ButtonLink href="/pools/create">Start a run</ButtonLink>}
               />
-              <p className="text-center">
+              <p className="m-0 text-center">
                 <Link href="/challenge/new" className={TEXT_LINK}>
                   Or challenge a friend into one
                 </Link>
@@ -201,46 +271,40 @@ export default function Lobby({
             </div>
           ) : (
             <div className="flex flex-wrap gap-3">
-              <Link href="/pools/create" className={buttonClasses({ variant: "secondary" })}>
+              <ButtonLink href="/pools/create" variant="secondary">
                 Start a run
-              </Link>
-              <Link href="/challenge/new" className={buttonClasses({ variant: "secondary" })}>
+              </ButtonLink>
+              <ButtonLink href="/challenge/new" variant="secondary">
                 Challenge a friend
-              </Link>
+              </ButtonLink>
             </div>
           )}
 
           {lobby.closed.length > 0 ? (
-            <details className="rounded-[20px] border border-edge bg-surface">
-              <summary className="flex min-h-12 cursor-pointer items-center px-4 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground">
-                Ended runs ({lobby.closed.length})
+            <details className="group rounded-2xl bg-surface shadow-[inset_0_0_0_1px_var(--border)]">
+              <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-foreground [&::-webkit-details-marker]:hidden">
+                <span className="num">Ended runs ({lobby.closed.length})</span>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                  className="flex-none text-haze transition-transform duration-[120ms] group-open:rotate-90"
+                >
+                  <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </summary>
-              <div className="grid gap-2.5 p-3 lg:grid-cols-2">
+              <ul className={`${GRID} px-3 pb-3`}>
                 {lobby.closed.map((row) => (
-                  <RunSlip
-                    key={row.pool.id.toString()}
-                    row={row}
-                    returnTo={returnTo}
-                  />
+                  <li key={row.pool.id.toString()}>
+                    <RunSlip row={row} returnTo={returnTo} />
+                  </li>
                 ))}
-              </div>
+              </ul>
             </details>
           ) : null}
         </>
       )}
-
-      {/* SPOTTER peeks up from the bottom edge of the lobby. His line is the
-          lobby's promise: locks are told before a stake, never after. */}
-      {intro === undefined && !nothingOpen ? (
-        <div className="-mb-8 flex justify-end">
-          <Spotter
-            state="lobby"
-            size="sm"
-            line="Locked means I tell you why before you stake a cent."
-            linePlacement="side"
-          />
-        </div>
-      ) : null}
     </div>
   );
 }

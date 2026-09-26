@@ -39,8 +39,7 @@ import {
   MAX_QUESTION_CHARS,
 } from "@/lib/server/help/knowledge";
 import SignInPanel from "@/components/SignInPanel";
-import Spotter from "@/components/spotter/Spotter";
-import { buttonClasses } from "@/components/ui";
+import { Chip, FOCUS_RING, buttonClasses } from "@/components/ui";
 
 type Tab = "coach" | "ask" | "feedback";
 type AskMessage = { role: "you" | "spotter"; text: string };
@@ -48,8 +47,16 @@ type Rating = "easy" | "confusing";
 
 const SESSION_KEY = "ghm-helper-session";
 
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
+/** Inputs sit on the deepest field with a hairline (docs/DESIGN.md). */
+const INPUT = `w-full resize-none rounded-control bg-surface-deep px-3 py-2.5 text-base text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)] placeholder:text-haze ${FOCUS_RING}`;
+
+/** The flat brand mark: an app control, not a second SPOTTER pose. */
+function Mark({ size }: { size: number }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/brand/mark.svg" width={size} height={size} alt="" className="block flex-none" />
+  );
+}
 
 /** A stable per-browser id for anonymous rate-limiting on Ask and Feedback. */
 function ensureSessionId(): string {
@@ -70,11 +77,11 @@ function ensureSessionId(): string {
 function CheckIcon() {
   return (
     <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-      <circle cx="10" cy="10" r="9" fill="var(--accent-deep)" />
+      <circle cx="10" cy="10" r="9" fill="var(--moonlight)" fillOpacity="0.15" />
       <path
         d="M6 10.5 9 13.5 14 7.5"
         fill="none"
-        stroke="var(--accent)"
+        stroke="var(--moonlight)"
         strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -84,7 +91,7 @@ function CheckIcon() {
 }
 
 function RingIcon({ gold }: { gold?: boolean }) {
-  const color = gold ? "var(--gold)" : "var(--accent)";
+  const color = gold ? "var(--gold)" : "var(--foreground)";
   return (
     <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
       <circle cx="10" cy="10" r="8" fill="none" stroke={color} strokeWidth="2" />
@@ -113,7 +120,7 @@ function Checklist({ step, rows }: { step: CoachStep; rows: ChecklistRow[] }) {
           <li
             key={row.id}
             aria-current={current ? "step" : undefined}
-            className={`flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm ${
+            className={`flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-sm ${
               current ? "bg-surface-raised" : ""
             }`}
           >
@@ -129,12 +136,12 @@ function Checklist({ step, rows }: { step: CoachStep; rows: ChecklistRow[] }) {
             <span
               className={`${
                 row.gold
-                  ? "text-gold-deep"
+                  ? "text-gold"
                   : current
                     ? "font-semibold text-foreground"
                     : done
                       ? "text-muted"
-                      : "text-muted/70"
+                      : "text-haze"
               }`}
             >
               {row.label}
@@ -177,8 +184,8 @@ function CoachTab({
 
   return (
     <div aria-live="polite">
-      <p className="text-base font-bold text-foreground">{headline}</p>
-      <p className="mt-1 text-sm leading-relaxed text-muted">{body}</p>
+      <p className="m-0 text-base font-semibold text-foreground">{headline}</p>
+      <p className="m-0 mt-1 text-sm leading-relaxed text-muted">{body}</p>
 
       {blocked !== null ? (
         <div className="mt-3">
@@ -303,7 +310,7 @@ function AskTab({ address }: { address: Address | null }) {
                 className={`inline-block max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
                   m.role === "you"
                     ? "bg-surface-raised text-foreground"
-                    : "border border-edge bg-background text-foreground"
+                    : "bg-background text-foreground shadow-[inset_0_0_0_1px_var(--border)]"
                 }`}
               >
                 {m.text}
@@ -334,10 +341,10 @@ function AskTab({ address }: { address: Address | null }) {
           rows={2}
           placeholder="How do I get paid?"
           aria-label="Your question"
-          className="w-full resize-none rounded-2xl border border-edge bg-surface-raised px-3 py-2 text-base text-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className={INPUT}
         />
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-xs text-muted">{left} of {ASK_PER_SESSION_CAP} left</span>
+          <span className="num text-xs text-haze">{left} of {ASK_PER_SESSION_CAP} left</span>
           <button
             type="button"
             onClick={() => void submit()}
@@ -401,11 +408,11 @@ function FeedbackTab({
 
   if (done) {
     return (
-      <div aria-live="polite" className="flex items-start gap-3 rounded-2xl border border-edge bg-surface-raised p-4">
-        <Spotter pose="thumbsup" size="inline" decorative />
+      <div aria-live="polite" className="flex items-start gap-3 rounded-control bg-surface-raised p-4 shadow-[inset_0_0_0_1px_var(--border)]">
+        <CheckIcon />
         <div className="min-w-0">
-          <p className="text-base font-bold text-foreground">Noted</p>
-          <p className="mt-1 text-sm text-muted">
+          <p className="m-0 text-base font-semibold text-foreground">Noted</p>
+          <p className="m-0 mt-1 text-sm text-muted">
             Your note went straight to the founders. It helps more than you know.
           </p>
         </div>
@@ -420,23 +427,13 @@ function FeedbackTab({
       </p>
       <div className="mt-3 flex gap-2">
         {(["easy", "confusing"] as Rating[]).map((r) => (
-          <button
-            key={r}
-            type="button"
-            onClick={() => setRating(r)}
-            aria-pressed={rating === r}
-            className={`min-h-11 flex-1 rounded-full border-2 px-3 py-2 text-sm font-bold capitalize ${FOCUS_RING} ${
-              rating === r
-                ? "border-foreground bg-foreground text-background"
-                : "border-edge bg-surface text-foreground hover:border-foreground/40"
-            }`}
-          >
+          <Chip key={r} selected={rating === r} onClick={() => setRating(r)} className="flex-1 capitalize">
             {r}
-          </button>
+          </Chip>
         ))}
       </div>
 
-      <label htmlFor="helper-feedback" className="mt-3 block text-sm font-bold text-foreground">
+      <label htmlFor="helper-feedback" className="mt-3 block text-sm font-semibold text-foreground">
         What tripped you up?
       </label>
       <textarea
@@ -446,7 +443,7 @@ function FeedbackTab({
         maxLength={1000}
         rows={3}
         placeholder="Optional - anything that was unclear"
-        className="mt-1 w-full resize-none rounded-2xl border border-edge bg-surface-raised px-3 py-2 text-base text-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        className={`mt-1 ${INPUT}`}
       />
 
       {error !== null ? (
@@ -562,13 +559,14 @@ function HelperWidgetPanel() {
         type="button"
         aria-label="Open the GoHealthMe helper"
         onClick={() => setOpen(true)}
-        className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 flex h-14 w-14 items-center justify-center overflow-visible rounded-full border-2 border-foreground bg-surface hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className={`fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 grid size-[52px] place-items-center rounded-full bg-surface-raised shadow-[inset_0_0_0_1px_var(--border-strong),0_12px_28px_-10px_rgba(0,0,0,0.7)] transition-[background-color,transform] duration-[90ms] hover:bg-surface-hover active:scale-[0.96] ${FOCUS_RING}`}
       >
-        <span className="block h-12 w-12 overflow-hidden rounded-full">
-          <Spotter pose="portrait" size="inline" decorative />
-        </span>
+        <Mark size={40} />
         {pending ? (
-          <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-foreground bg-accent" />
+          <span
+            aria-hidden="true"
+            className="absolute right-0.5 top-0.5 size-3 rounded-full bg-moonlight shadow-[0_0_0_3px_var(--surface-raised)]"
+          />
         ) : null}
       </button>
     );
@@ -581,38 +579,36 @@ function HelperWidgetPanel() {
       onKeyDown={(e) => {
         if (e.key === "Escape") close();
       }}
-      className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-[360px] flex-col rounded-3xl border-2 border-foreground bg-surface shadow-[0_18px_40px_rgba(15,42,46,0.22)]"
+      className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-[360px] flex-col rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] shadow-[inset_0_1px_0_rgba(246,228,182,0.12),inset_0_0_0_1px_var(--border-strong),0_28px_60px_-20px_rgba(0,0,0,0.8)]"
     >
       <div className="flex items-center justify-between border-b border-edge px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="block h-9 w-9 shrink-0 overflow-hidden rounded-full border border-edge">
-            <Spotter pose="portrait" size="row" decorative />
-          </span>
-          <span className="font-display text-lg font-bold text-foreground">
-            Getting started
-          </span>
+          <Mark size={32} />
+          <span className="type-heading text-xl text-foreground">Getting started</span>
         </div>
         <button
           type="button"
           aria-label="Close the helper"
           onClick={close}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-2xl leading-none text-muted hover:bg-surface-raised hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className={`grid size-11 place-items-center rounded-control text-muted hover:bg-fill-quiet hover:text-foreground ${FOCUS_RING}`}
         >
-          &times;
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
         </button>
       </div>
 
-      <div className="flex gap-1 px-3 pt-3">
+      <div className="mx-3 mt-3 grid grid-cols-3 gap-1 rounded-2xl bg-fill-quiet p-1 shadow-[inset_0_0_0_1px_var(--border)]">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             aria-pressed={tab === t.id}
-            className={`min-h-11 rounded-full px-4 text-sm font-bold ${FOCUS_RING} ${
+            className={`min-h-11 rounded-xl text-sm font-semibold transition-[background-color,color] duration-[120ms] ${FOCUS_RING} ${
               tab === t.id
-                ? "bg-foreground text-background"
-                : "text-muted hover:bg-surface-raised hover:text-foreground"
+                ? "bg-accent text-accent-foreground shadow-selected"
+                : "text-muted hover:text-foreground"
             }`}
           >
             {t.label}

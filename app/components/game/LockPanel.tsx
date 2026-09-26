@@ -1,15 +1,33 @@
 "use client";
 
 // A run's lock, with its fix, shown before any stake. The same panel on the
-// lobby row, the pool page and the challenge link, fed by lib/game/lobby.ts,
-// so the three surfaces can never word the same limit differently. SPOTTER's
-// detective pose sits inline with the reason (docs/DESIGN.md, locked run row).
+// lobby row, the run page and the challenge link, fed by lib/game/lobby.ts,
+// so the three surfaces can never word the same limit differently.
+//
+// Night Shift (docs/DESIGN.md): a raised well with a lock and the reason in
+// plain words, then the one action that fixes it. No SPOTTER here: the screen
+// around it already has its one pose. A lock is never a loss and never an
+// error, so nothing in it is red; a hardware limit no tap can fix reads a
+// shade brighter so it is not mistaken for a to-do.
 
-import Link from "next/link";
 import { useState } from "react";
 import { lockCopy, type RunLock } from "@/lib/game/lobby";
-import Spotter from "@/components/spotter/Spotter";
-import { buttonClasses } from "@/components/ui";
+import { Button, ButtonLink, Fine } from "@/components/ui";
+
+function LockGlyph({ wait }: { wait: boolean }) {
+  return wait ? (
+    // A clock: this clears on its own.
+    <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" className="mt-0.5 flex-none text-muted">
+      <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 4.8V8l2.2 1.4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ) : (
+    <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true" className="mt-0.5 flex-none text-muted">
+      <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M5.5 7V5.3a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
 
 export default function LockPanel({
   lock,
@@ -25,51 +43,51 @@ export default function LockPanel({
   onCheckSensor?: () => Promise<boolean>;
   /** Re-reads a failed join check. Absent where no retry can run. */
   onRetry?: () => void;
+  /** A row's lock: smaller type and a small secondary fix. */
   compact?: boolean;
 }) {
   const copy = lockCopy(lock, returnTo);
   const [checking, setChecking] = useState(false);
   const [declined, setDeclined] = useState(false);
-
-  // A lock is never a loss and never an error: a raised cream well, with
-  // warning ink only on the hardware limit no tap can fix.
-  const tone =
-    copy.tone === "hardware"
-      ? "border-warning/50 bg-surface-raised"
-      : copy.tone === "wait"
-        ? "border-edge bg-surface-raised"
-        : "border-foreground/25 bg-surface-raised";
-
   const fix = copy.fix;
+  // The full panel's fix is the screen's one action, so it wears the moon;
+  // on a row it is a small secondary so a board of locks stays quiet.
+  const look = compact ? ({ variant: "secondary", size: "sm" } as const) : ({ variant: "primary" } as const);
+
   return (
-    <div className={`flex gap-3 rounded-[20px] border-2 ${tone} ${compact ? "p-3" : "p-4"}`}>
-      <Spotter
-        state="locked-row"
-        size={compact ? "row" : "inline"}
-        decorative
-        className="shrink-0 self-start"
-      />
+    <div
+      className={`flex gap-3 rounded-control bg-surface-raised shadow-[inset_0_0_0_1px_var(--border)] ${
+        compact ? "px-3.5 py-3" : "p-4"
+      }`}
+    >
+      <LockGlyph wait={copy.tone === "wait"} />
       <div className="min-w-0 flex-1">
-        <p className={`font-bold ${copy.tone === "hardware" ? "text-warning" : "text-foreground"}`}>
+        <p
+          className={`m-0 font-semibold leading-snug ${compact ? "text-[0.9375rem]" : "text-base"} ${
+            copy.tone === "hardware" ? "text-warning" : "text-foreground"
+          }`}
+        >
           {copy.title}
         </p>
-        <p className="mt-1 text-sm text-foreground/85">{copy.detail}</p>
+        <p className={`m-0 mt-1 leading-[1.45] text-muted ${compact ? "text-[0.8125rem]" : "text-sm"}`}>
+          {copy.detail}
+        </p>
         {fix.kind === "link" ? (
-          <Link href={fix.href} className={`mt-3 ${buttonClasses({ variant: "secondary" })}`}>
+          <ButtonLink href={fix.href} {...look} className="mt-3">
             {fix.label}
-          </Link>
+          </ButtonLink>
         ) : fix.kind === "retry" ? (
           onRetry !== undefined ? (
-            <button type="button" onClick={onRetry} className={`mt-3 ${buttonClasses({ variant: "secondary" })}`}>
+            <Button variant="secondary" size="sm" onClick={onRetry} className="mt-3">
               {fix.label}
-            </button>
+            </Button>
           ) : (
-            <p className="mt-2 text-xs text-muted">Reload the page to check again.</p>
+            <Fine className="mt-2">Reload the page to check again.</Fine>
           )
         ) : fix.kind === "check-sensor" && onCheckSensor !== undefined ? (
           <div className="mt-3">
-            <button
-              type="button"
+            <Button
+              {...look}
               disabled={checking}
               onClick={() => {
                 setChecking(true);
@@ -79,15 +97,16 @@ export default function LockPanel({
                   .catch(() => setDeclined(true))
                   .finally(() => setChecking(false));
               }}
-              className={`${buttonClasses()} disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none`}
             >
               {checking ? "Waiting for your signature" : fix.label}
-            </button>
-            <p className="mt-2 text-xs text-muted" aria-live="polite">
-              {declined
-                ? "No signature, so I still cannot see it. Tap again when you are ready."
-                : "Signing costs nothing and sends no transaction."}
-            </p>
+            </Button>
+            <Fine className="mt-2">
+              <span aria-live="polite">
+                {declined
+                  ? "No signature, so I still cannot see it. Tap again when you are ready."
+                  : "Signing costs nothing and sends no transaction."}
+              </span>
+            </Fine>
           </div>
         ) : null}
       </div>

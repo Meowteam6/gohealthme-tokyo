@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { DEMO_CHROME, DYNAMIC_CONFIGURED } from "@/lib/config";
@@ -61,11 +61,26 @@ function NavLinks({
   );
 }
 
+/** How long the header waits for the wallet SDK before offering Sign in
+ *  anyway. A returning player's session usually resolves well inside this;
+ *  past it, a skeleton that may never resolve is worse than a working link. */
+const AUTH_SETTLE_MS = 2500;
+
+function useSettled(ms: number): boolean {
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(true), ms);
+    return () => clearTimeout(t);
+  }, [ms]);
+  return settled;
+}
+
 function AuthControls() {
   const pathname = usePathname();
   const { ready, authenticated, logout } = useEmbeddedWallet();
+  const settled = useSettled(AUTH_SETTLE_MS);
 
-  if (!ready) {
+  if (!ready && !settled) {
     return (
       <div
         aria-hidden="true"
@@ -74,9 +89,11 @@ function AuthControls() {
     );
   }
 
-  if (!authenticated) {
+  if (!ready || !authenticated) {
     // One way in. Character creation owns sign-in (email makes the wallet,
-    // your own wallet is a quiet link inside it).
+    // your own wallet is a quiet link inside it). A wallet SDK still loading
+    // after AUTH_SETTLE_MS lands here too, so the header never shows a
+    // placeholder forever; /character waits for the SDK itself.
     const next =
       pathname === "/character" ? "" : `?next=${encodeURIComponent(pathname)}`;
     return (
@@ -169,15 +186,39 @@ function MenuIcon({ open }: { open: boolean }) {
   );
 }
 
-export default function Header() {
-  // Signed out, the header is the brand, two links from 640px up, and Sign in:
-  // nothing to open on a phone. Signed in, five links do not fit beside the
-  // account controls below 1024px, so they collapse into a menu that also
-  // carries the wallet address and the test USDC chip. The menu is open FOR a
-  // path, so navigating anywhere closes it without an effect.
+export interface HeaderViewProps {
+  signedIn: boolean;
+  /** Sign in, Sign out, or the honest "sign-in is off" pill. */
+  auth: ReactNode;
+  /** The signed-in player's name and address, beside the controls from 1180px. */
+  wallet?: ReactNode;
+  /** The foot of the signed-in menu: name, address, the test USDC chip. */
+  menuFoot?: ReactNode;
+  /** The live header sticks and reads the scroll; the state gallery's copy
+   *  sits in the page and can start solid. */
+  sticky?: boolean;
+  solid?: boolean;
+}
+
+/**
+ * The header from props, so the state gallery can render it signed in
+ * without a wallet. Header (below) feeds it from the wallet hooks.
+ *
+ * Signed out, the header is the brand, two links from 640px up, and Sign in:
+ * nothing to open on a phone. Signed in, five links do not fit beside the
+ * account controls below 1024px, so they collapse into a menu that also
+ * carries the wallet address and the test USDC chip. The menu is open FOR a
+ * path, so navigating anywhere closes it without an effect.
+ */
+export function HeaderView({
+  signedIn,
+  auth,
+  wallet,
+  menuFoot,
+  sticky = true,
+  solid: forceSolid = false,
+}: HeaderViewProps) {
   const pathname = usePathname();
-  const { authenticated } = useEmbeddedWallet();
-  const signedIn = DYNAMIC_CONFIGURED && authenticated;
   const items = signedIn ? NAV_ITEMS : SIGNED_OUT_NAV_ITEMS;
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const menuOpen = signedIn && menuFor === pathname;
@@ -185,16 +226,17 @@ export default function Header() {
 
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
+    if (!sticky) return;
     const onScroll = () => setScrolled(window.scrollY > 8);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-  const solid = scrolled || menuOpen;
+  }, [sticky]);
+  const solid = forceSolid || scrolled || menuOpen;
 
   return (
     <header
-      className={`sticky top-0 z-40 border-b transition-[background-color,border-color] duration-[160ms] ease-out ${
+      className={`${sticky ? "sticky top-0" : "relative"} z-40 border-b transition-[background-color,border-color] duration-[160ms] ease-out ${
         solid
           ? "border-edge bg-[var(--header-scrolled)] backdrop-blur-[14px] backdrop-saturate-[1.2]"
           : "border-transparent"
@@ -214,12 +256,10 @@ export default function Header() {
           <NavLinks items={items} />
         </nav>
         <div className="ml-auto flex flex-none items-center gap-2 min-[640px]:ml-0">
-          {signedIn ? (
-            <div className="hidden max-w-[14rem] min-[1180px]:block">
-              <WalletNote />
-            </div>
+          {signedIn && wallet !== undefined ? (
+            <div className="hidden max-w-[14rem] min-[1180px]:block">{wallet}</div>
           ) : null}
-          <AuthOrPill />
+          {auth}
           {signedIn ? (
             <button
               type="button"
@@ -238,14 +278,33 @@ export default function Header() {
         <nav id="mobile-nav" aria-label="Main" className="border-t border-edge min-[1024px]:hidden">
           <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-1 px-gutter py-3">
             <NavLinks items={items} stacked onNavigate={() => setMenuOpen(false)} />
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-edge px-1 pt-3">
-              <WalletNote />
-              <TestUsdcChip />
-            </div>
+            {menuFoot !== undefined ? (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-edge px-1 pt-3">
+                {menuFoot}
+              </div>
+            ) : null}
           </div>
         </nav>
       ) : null}
       <SpotterStatusLine outageOnly />
     </header>
+  );
+}
+
+export default function Header() {
+  const { authenticated } = useEmbeddedWallet();
+  const signedIn = DYNAMIC_CONFIGURED && authenticated;
+  return (
+    <HeaderView
+      signedIn={signedIn}
+      auth={<AuthOrPill />}
+      wallet={<WalletNote />}
+      menuFoot={
+        <>
+          <WalletNote />
+          <TestUsdcChip />
+        </>
+      }
+    />
   );
 }
