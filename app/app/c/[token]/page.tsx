@@ -5,7 +5,8 @@ import ChallengeContribute from "@/components/ChallengeContribute";
 import ShareChallenge from "@/components/ShareChallenge";
 import SpotterSays from "@/components/SpotterSays";
 import Lobby from "@/components/game/Lobby";
-import { TAP_TARGET } from "@/components/ui";
+import Spotter from "@/components/spotter/Spotter";
+import { EmptyState, Money, TAP_TARGET } from "@/components/ui";
 import {
   fetchParticipants,
   fetchPool,
@@ -38,6 +39,15 @@ function nowUnixSeconds(): bigint {
   return BigInt(Math.floor(Date.now() / 1000));
 }
 
+// The coral pressable toy (components/ui Button) for a Link: coral fill, ink
+// text, the 4px deeper-coral bottom shadow that compresses on press.
+const PRIMARY_LINK = `rounded-[18px] bg-accent font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 motion-reduce:transition-none ${TAP_TARGET}`;
+
+// Display headline: Bricolage 800, tight, and wrapping (never overflowing) a
+// long @handle at 360px.
+const HEADLINE =
+  "break-words font-display text-[2.5rem] font-extrabold leading-display tracking-display sm:text-[4rem]";
+
 // This is a private, person-aimed link. It must never be indexed, and its
 // title/description must never leak the goal (which is health-adjacent) into a
 // search result or a link-preview card. The goal is visible ON the page only,
@@ -51,18 +61,20 @@ export const metadata: Metadata = {
  *  of whether any given token exists beyond "this one does not resolve". */
 function InvalidLink() {
   return (
-    <div className="mx-auto max-w-md py-12">
-      <h1 className="font-display text-5xl font-black leading-[0.95]">
+    <div className="mx-auto flex max-w-md flex-col items-center py-10 text-center">
+      <Spotter
+        state="confirmation-declined"
+        size="lg"
+        line="This link goes nowhere. I checked twice."
+      />
+      <h1 className="mt-6 break-words font-display text-[2.5rem] font-extrabold leading-display tracking-display">
         This dare link does not open
       </h1>
       <p className="mt-3 text-base text-foreground/80">
         It may have been mistyped, or the dare no longer exists. Ask whoever
         sent it for a fresh link.
       </p>
-      <Link
-        href="/pools"
-        className={`mt-6 rounded-lg bg-accent font-semibold text-foreground hover:bg-accent-hover ${TAP_TARGET}`}
-      >
+      <Link href="/pools" className={`mt-6 ${PRIMARY_LINK}`}>
         Go to the lobby
       </Link>
     </div>
@@ -79,10 +91,7 @@ function PrizeLine({ pot, backer }: { pot: DarePot; backer: boolean }) {
     pot.seed !== null && pot.prize > pot.seed ? pot.prize - pot.seed : 0n;
   return (
     <p className="text-base text-foreground/80">
-      Prize:{" "}
-      <span className="font-mono font-semibold text-foreground">
-        {formatUsdc(pot.prize)} USDC
-      </span>
+      Prize: <Money usd={formatUsdc(pot.prize)} size="md" />
       {fromFriends > 0n ? ` (${formatUsdc(fromFriends)} of it from backers)` : ""}
       {backer
         ? ", paid on top of their own lock-in when they hit the goal."
@@ -199,9 +208,11 @@ export default async function ChallengeLandingPage({
     ) : null;
 
   const rally = (
-    <div className="space-y-3 rounded-xl border-2 border-foreground/15 bg-surface p-5">
+    <div className="space-y-3 rounded-3xl border border-edge bg-surface p-5 sm:p-6">
       <div className="space-y-1">
-        <h2 className="font-display text-2xl font-extrabold">Rally your boys</h2>
+        <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display">
+          Rally your friends
+        </h2>
         <p className="text-sm text-muted">
           This link opens as a backer page: friends can chip in to grow the
           prize, and it never signs them up for the dare.
@@ -225,7 +236,7 @@ export default async function ChallengeLandingPage({
       <div className="mx-auto max-w-3xl space-y-8">
         <header className="space-y-4">
           <p className="text-sm font-semibold text-accent-deep">Back the dare</p>
-          <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl">
+          <h1 className={HEADLINE}>
             {challengerName} dared {target}
           </h1>
           {challenge.message !== null ? (
@@ -246,13 +257,16 @@ export default async function ChallengeLandingPage({
             {rally}
           </>
         ) : (
-          <div className="rounded-xl border border-edge bg-surface-raised p-5 text-sm">
-            <p className="font-semibold">This dare is not taking backers anymore</p>
-            <p className="mt-1 text-foreground/80">
-              Its window has closed or it has already paid out, so nothing can be
-              added. Nothing was charged.
-            </p>
-          </div>
+          <EmptyState
+            title="This dare is not taking backers anymore"
+            detail="Its window has closed, it has already paid out, or I cannot check or pay it on this build, so nothing can be added. Nothing was charged."
+            line="Pot's closed. I'm on break."
+            action={
+              <Link href="/pools" className={PRIMARY_LINK}>
+                Go to the lobby
+              </Link>
+            }
+          />
         )}
 
         <p className="text-sm text-muted">
@@ -274,9 +288,7 @@ export default async function ChallengeLandingPage({
   const intro = (
     <header className="space-y-4">
       <p className="text-sm font-semibold text-accent-deep">You have been dared</p>
-      <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight sm:text-6xl">
-        {headline}
-      </h1>
+      <h1 className={HEADLINE}>{headline}</h1>
       {challenge.targetHandle !== null ? (
         <p className="text-sm text-muted">For {challenge.targetHandle}</p>
       ) : null}
@@ -316,11 +328,29 @@ export default async function ChallengeLandingPage({
           {rally}
         </>
       ) : phase === "live" && canPay && paused ? (
-        <p className="rounded-xl border-2 border-foreground/15 bg-surface-raised p-4 text-sm">
-          Chipping in is paused too. I am not taking anyone&apos;s money for a
-          dare I cannot {verifierOff ? "check" : "pay out"} right now. Nothing has
-          been charged.
-        </p>
+        <div
+          role="status"
+          className="flex flex-col items-center gap-4 rounded-3xl border border-edge bg-surface-raised p-5 text-center sm:flex-row sm:items-end sm:text-left"
+        >
+          <Spotter
+            state="error"
+            size="sm"
+            line={verifierOff ? "My checker is off. So is the pot." : "I can't pay this out yet. So I'm not taking money for it."}
+          />
+          <div className="space-y-2 sm:pb-2">
+            <p className="font-display text-xl font-bold leading-display">
+              Chipping in is paused too
+            </p>
+            <p className="text-sm text-foreground/80">
+              I am not taking anyone&apos;s money for a dare I cannot{" "}
+              {verifierOff ? "check" : "pay out"} right now. Nothing has been
+              charged. Wearable runs in the lobby still work.
+            </p>
+            <Link href="/pools" className={`mt-1 ${PRIMARY_LINK}`}>
+              Find a wearable run
+            </Link>
+          </div>
+        </div>
       ) : null}
     </div>
   );

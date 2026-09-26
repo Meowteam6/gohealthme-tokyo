@@ -82,16 +82,16 @@ export default function ChallengeInviteShare({
         type="button"
         onClick={() => void reveal()}
         disabled={state.kind === "loading"}
-        className={`inline-flex items-center justify-center rounded-xl bg-accent font-semibold text-foreground hover:bg-accent-hover disabled:opacity-60 ${TAP_TARGET}`}
+        className={`inline-flex items-center justify-center rounded-[18px] bg-accent font-bold text-foreground shadow-[var(--shadow-pop)] hover:bg-accent-hover active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none ${TAP_TARGET}`}
       >
         {state.kind === "loading"
           ? "Getting your link..."
           : "Get your invite link"}
       </button>
       {state.kind === "error" ? (
-        <p className="text-xs text-warning">{state.message}</p>
+        <p role="alert" className="text-sm text-warning">{state.message}</p>
       ) : (
-        <p className="text-xs text-muted">
+        <p className="text-sm text-muted">
           Reveals your private invite link to share by text, email, or copy.
           You&apos;ll sign once to prove the wallet is yours - nothing is
           charged.
