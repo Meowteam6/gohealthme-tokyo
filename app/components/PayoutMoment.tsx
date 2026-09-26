@@ -19,6 +19,7 @@
 
 import { ArcTxLink, Money, Stamp } from "@/components/ui";
 import Spotter from "@/components/spotter/Spotter";
+import { paidBreakdown } from "@/lib/game/commitment-copy";
 
 const COIN_FLIP_CSS = `
 @keyframes ghm-coin-flip {
@@ -41,6 +42,7 @@ export default function PayoutMoment({
   txHash,
   selfReported = false,
   selfStaked = false,
+  entryFee,
   headline,
   headlineId,
   bleed = false,
@@ -55,6 +57,9 @@ export default function PayoutMoment({
    * the achiever's own stake back plus a share of the stakes left in the pot.
    */
   selfStaked?: boolean;
+  /** The run's stake, so a commitment payout reads as stake back plus the
+   *  rest (lib/game/commitment-copy.ts paidBreakdown). */
+  entryFee?: bigint;
   /** The Verdict passes its headline so the stage reads hero, stamp,
    *  headline, money, in that order. Standalone, SPOTTER's own line leads. */
   headline?: string;
@@ -117,9 +122,11 @@ export default function PayoutMoment({
         </span>
       </p>
       <p className="mx-auto mt-2 max-w-sm text-base text-foreground text-pretty">
-        {selfStaked
-          ? `${paidUsd} USDC is credited to you on chain: your stake back, plus a share of what the players who missed left in the pot.`
-          : `${paidUsd} USDC is credited to you on chain.`}{" "}
+        {selfStaked && entryFee !== undefined
+          ? `${paidBreakdown(paidUsd, entryFee)} Credited to you on chain.`
+          : selfStaked
+            ? `${paidUsd} USDC is credited to you on chain: your stake back, plus a share of what the players who missed left in the pot.`
+            : `${paidUsd} USDC is credited to you on chain.`}{" "}
         Claim it to pull it into your wallet.
       </p>
       {txHash !== null ? (

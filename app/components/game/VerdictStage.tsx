@@ -32,6 +32,7 @@ import { claimStepIndex, claimStepOf, type ClaimStep } from "@/lib/claim-rail";
 import { fetchGoalId, type PoolInfo } from "@/lib/contract";
 import { parseScreening, type ScreeningStatus } from "@/lib/game/lanes";
 import { useLaneProbe } from "@/lib/game/useLaneProbe";
+import { commitmentLostCopy } from "@/lib/game/commitment-copy";
 import {
   verdictCopy,
   verdictScreenOf,
@@ -105,6 +106,10 @@ export interface VerdictStageProps {
   goalId: string | null;
   screening: VerdictScreening;
   onApproval: (outcome: ApprovalOutcome) => void;
+  /** How many players hit, read from chain once the run settled; null while
+   *  that read is loading or before settle. A commitment run's lost screen
+   *  says where the stake went from it. */
+  settleAchievers?: number | null;
 }
 
 /** The approval and screening reads, plus the screen they produce. */
@@ -224,15 +229,32 @@ export default function VerdictStage({
   goalId,
   screening,
   onApproval,
+  settleAchievers = null,
 }: VerdictStageProps) {
-  const copy = verdictCopy(screen);
-  if (copy === null) return null;
+  const baseCopy = verdictCopy(screen);
+  if (baseCopy === null) return null;
 
   const step = claimStepOf(joined, hasClaim, runStatus);
   const selfStaked = pool.bountyModel === 2;
+  // A commitment run's miss says where the stake went: to the players who
+  // hit, or back to everyone when nobody hit (HealthPoolsV3 bountyModel 2).
+  const copy =
+    selfStaked && screen.kind === "lost"
+      ? {
+          ...baseCopy,
+          ...commitmentLostCopy({
+            entryFee: pool.entryFee,
+            stakeBack: screen.stakeBack,
+            achievers: settleAchievers,
+          }),
+        }
+      : baseCopy;
   const showScreening = screen.kind === "banked" || screen.kind === "won";
   const staging = verdictStagingOf(screen, copy.pose);
-  const line = spotterLineFor(screen);
+  const line =
+    selfStaked && screen.kind === "lost" && !screen.stakeBack && settleAchievers === 0
+      ? "Nobody made it. Every stake goes home."
+      : spotterLineFor(screen);
 
   return (
     <section
@@ -259,6 +281,7 @@ export default function VerdictStage({
               txHash={screen.txHash}
               selfReported={screen.selfReported}
               selfStaked={selfStaked}
+              entryFee={pool.entryFee}
               headline={copy.headline}
               headlineId="verdict-headline"
             />

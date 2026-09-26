@@ -93,8 +93,9 @@ export default function Lobby({
             The lobby
           </h1>
           <p className="max-w-lg text-base text-foreground/85 sm:text-lg">
-            Put money on yourself. Your wearable decides. SPOTTER pays you or it
-            does not.
+            Put money on yourself. Everyone stakes the same and your wearable
+            decides: hit your goal and your stake comes back with a share of
+            the stakes that missed.
           </p>
           <p className="text-sm text-muted">Base Sepolia test money, beta. No real dollars.</p>
         </header>
@@ -153,7 +154,7 @@ export default function Lobby({
         <>
           {lobby.highlighted !== null ? (
             <Section
-              title="Your dare"
+              title="Your challenge"
               rows={[lobby.highlighted]}
               action={highlightAction}
               returnTo={returnTo}
@@ -195,7 +196,7 @@ export default function Lobby({
               />
               <p className="text-center">
                 <Link href="/challenge/new" className={TEXT_LINK}>
-                  Or dare a friend into one
+                  Or challenge a friend into one
                 </Link>
               </p>
             </div>
@@ -205,7 +206,7 @@ export default function Lobby({
                 Start a run
               </Link>
               <Link href="/challenge/new" className={GHOST_LINK}>
-                Dare a friend
+                Challenge a friend
               </Link>
             </div>
           )}

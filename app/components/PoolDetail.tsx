@@ -81,6 +81,9 @@ import SweepLeftover from "@/components/SweepLeftover";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useDisplayNames } from "@/lib/use-display-names";
 import { darePot } from "@/lib/challenges";
+import HowThisRunPays from "@/components/game/HowThisRunPays";
+import type { CommitmentTerms } from "@/lib/game/commitment-copy";
+import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
 
 function formatDay(seconds: bigint): string {
   return new Date(Number(seconds) * 1000).toLocaleDateString("en-US", {
@@ -422,6 +425,7 @@ export default function PoolDetail({ id }: { id: string }) {
     enabled: poolId !== null && settledNow,
     staleTime: 60_000,
   });
+  const commitmentFee = useCommitmentFee(poolQuery.data?.pool.bountyModel === 2);
 
   // Resolve the funder address to a handle when it has claimed one. Called
   // unconditionally with whatever is known this render (empty until the pool
@@ -512,6 +516,20 @@ export default function PoolDetail({ id }: { id: string }) {
   }
 
   const participantCount = participantsQuery.data?.length ?? null;
+  // A commitment run's money terms, for the numbers every surface states.
+  // Only meaningful before settle: afterwards the balance tracks payouts.
+  const selfStaked = pool.bountyModel === 2;
+  const commitmentTerms: CommitmentTerms | null =
+    selfStaked && participantCount !== null && !pool.settled && !pool.cancelled
+      ? {
+          entryFee: pool.entryFee,
+          players: participantCount,
+          balance: pool.balance,
+          feeBps: commitmentFee.bps,
+        }
+      : null;
+  const settleAchievers =
+    resultsQuery.data !== undefined ? settleTallyOf(resultsQuery.data).achievers : null;
   const evidenceType = evidenceTypeOf(pool.goalSpec);
   const isDocGoal = evidenceType === "document";
   const goalTitle = displayGoalSpec(pool.goalSpec);
@@ -652,6 +670,7 @@ export default function PoolDetail({ id }: { id: string }) {
           goalId={verdict.goalId}
           screening={verdict.screening}
           onApproval={verdict.onApproval}
+          settleAchievers={settleAchievers}
         />
       ) : null}
       {showProofSurface && multiPath ? (
@@ -815,7 +834,8 @@ export default function PoolDetail({ id }: { id: string }) {
             cells={[
               {
                 // After a settle the balance is what was not paid out, not a prize.
-                label: over ? "Left in pool" : "Prize pool",
+                // A commitment run's balance is mostly the players' own stakes.
+                label: over ? "Left in pool" : selfStaked ? "In the pot" : "Prize pool",
                 value: formatUsdc(pool.balance),
                 tone: "money",
                 unit: "test USDC",
@@ -839,7 +859,7 @@ export default function PoolDetail({ id }: { id: string }) {
             signature. Public runs share from the block further down. */}
         {isChallenge && isCreator && address !== null ? (
           <div className="rounded-3xl border border-edge bg-surface p-4">
-            <h2 className="mb-2 font-display text-xl font-bold leading-display">Send the dare</h2>
+            <h2 className="mb-2 font-display text-xl font-bold leading-display">Send the challenge</h2>
             <ChallengeInviteShare poolId={pool.id} address={address} />
           </div>
         ) : null}
@@ -862,6 +882,15 @@ export default function PoolDetail({ id }: { id: string }) {
 
       {phase === "live" ? (
         <div className="space-y-4">
+          {/* The terms come before the coin, locked or not, so nobody stakes
+              without reading what a hit, a miss and nobody hitting pay. */}
+          {selfStaked && !joined && slot.kind !== "cannot-pay" ? (
+            <HowThisRunPays
+              terms={commitmentTerms}
+              entryFee={pool.entryFee}
+              loading={participantsQuery.isLoading || commitmentFee.loading}
+            />
+          ) : null}
           {slot.kind === "cannot-pay" ? (
             <section className="flex gap-3 rounded-3xl border-2 border-warning/50 bg-surface-raised p-4 sm:p-5">
               <Spotter state="locked-row" size="inline" decorative className="shrink-0 self-start" />
@@ -902,11 +931,11 @@ export default function PoolDetail({ id }: { id: string }) {
           ) : slot.kind === "playable" ? (
             <section className="rounded-3xl border-2 border-foreground bg-surface p-4 sm:p-6">
               <h2 className="font-display text-[clamp(1.75rem,8vw,2.5rem)] font-extrabold leading-display tracking-display">
-                {isChallenge ? "Take the dare" : "Enter the run"}
+                {isChallenge ? "Take the challenge" : "Enter the run"}
               </h2>
               <p className="mt-3 mb-4 text-sm text-foreground/80">
                 {pool.bountyModel === 2
-                  ? `Stake ${formatUsdc(pool.entryFee)} USDC. Hit the goal inside the run and your stake comes back plus a share of what the players who missed left behind. Miss it and your stake stays in the pool.`
+                  ? `Stake ${formatUsdc(pool.entryFee)} USDC, the same as everyone in the run. SPOTTER holds it until your wearable settles it.`
                   : isDocGoal
                     ? `Pay the ${formatUsdc(pool.entryFee)} USDC entry, then hand SPOTTER your record. The prize pays the moment the document checks out.`
                     : `Pay the ${formatUsdc(pool.entryFee)} USDC entry, hit the goal inside the run, and the prize pays the moment SPOTTER confirms it.`}
@@ -926,6 +955,7 @@ export default function PoolDetail({ id }: { id: string }) {
                 poolId={pool.id}
                 entryFee={pool.entryFee}
                 alreadyJoined={joined}
+                commitment={commitmentTerms}
               />
             </section>
           ) : null}
@@ -1042,6 +1072,7 @@ export default function PoolDetail({ id }: { id: string }) {
                 goalId={verdict.goalId}
                 screening={verdict.screening}
                 onApproval={verdict.onApproval}
+                settleAchievers={settleAchievers}
               />
               )}
             </>
@@ -1110,7 +1141,7 @@ export default function PoolDetail({ id }: { id: string }) {
               </div>
             ) : null}
             <div className="space-y-4">
-              <h2 className="font-display text-xl font-bold leading-display">Sweeten the pot</h2>
+              <h2 className="font-display text-xl font-bold leading-display">Add to the pot</h2>
               <Card>
                 <FundPool poolId={pool.id} />
               </Card>
