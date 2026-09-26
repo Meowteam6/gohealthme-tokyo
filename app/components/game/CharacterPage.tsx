@@ -2,14 +2,14 @@
 
 // /character: the player's card and every step, editable. The lobby's lock
 // fixes link here with ?step= and ?next=, so a fix always ends with the way
-// back to the run it unlocked.
+// back to the run it unlocked: "< Back to the run", as the run page opens
+// with "< Open runs".
 
-import Link from "next/link";
 import CharacterCreation from "@/components/game/CharacterCreation";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useOnboarding } from "@/lib/game/onboarding-store";
 import type { StepId } from "@/lib/game/character";
-import { buttonClasses } from "@/components/ui";
+import { BackLink } from "@/components/night/kit";
 
 export default function CharacterPage({
   focus,
@@ -21,15 +21,8 @@ export default function CharacterPage({
   const view = useCharacter();
   const onboarding = useOnboarding(view.address);
   return (
-    <div className="space-y-6">
-      {next !== null ? (
-        <Link
-          href={next}
-          className={`${buttonClasses({ variant: "secondary", size: "sm" })}`}
-        >
-          Back to the run
-        </Link>
-      ) : null}
+    <div className="[&>*+*]:mt-4">
+      {next !== null ? <BackLink href={next}>Back to the run</BackLink> : null}
       <CharacterCreation view={view} onboarding={onboarding} focus={focus} mode="page" />
     </div>
   );

@@ -259,7 +259,7 @@ const PRIVACY_POINTS: { icon: IconName; title: string; body: string }[] = [
   {
     icon: "fingerprint",
     title: "k-anonymous, always",
-    body: "Cohort numbers read as “Fewer than 5” until a pool is big enough that no figure can point at one person.",
+    body: "Cohort numbers read as “Fewer than 5” until a run is big enough that no figure can point at one person.",
   },
 ];
 

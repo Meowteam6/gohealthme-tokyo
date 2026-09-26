@@ -51,7 +51,7 @@ const STAGE_LABEL: Record<string, string> = {
   buy: "buying the check",
   attester: "reading the evidence",
   record: "recording the result on-chain",
-  settle: "settling the pool",
+  settle: "settling the run",
   approval: "the payout confirmation",
   other: "an internal step",
 };

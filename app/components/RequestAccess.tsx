@@ -23,7 +23,7 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { fetchWithWalletAuth, authBlockReason } from "@/lib/client-auth";
 import { Button } from "@/components/ui";
-import { FIELD, FIELD_HINT, FIELD_LABEL, Notice } from "@/components/night/kit";
+import { FIELD, FIELD_HINT, Notice } from "@/components/night/kit";
 import { stateBlockReason } from "@/lib/geo-blocklist";
 import type { AccessStatus } from "@/lib/useAccess";
 
