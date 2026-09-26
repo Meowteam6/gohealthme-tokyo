@@ -49,6 +49,7 @@ function outcomeOf(res: Response): string | null {
 }
 
 beforeEach(() => {
+  vi.stubEnv("WHOOP_ALLOWED_WALLETS", OWNER);
   vi.clearAllMocks();
   providerConfigured.mockReturnValue(true);
   readLinkTicket.mockReturnValue(OWNER);
@@ -182,5 +183,13 @@ describe("GET /api/whoop/login", () => {
     const first = buildAuthorizeUrl.mock.calls[0]?.[0] as string;
     const second = buildAuthorizeUrl.mock.calls[1]?.[0] as string;
     expect(first).not.toBe(second);
+  });
+
+  it("sends a wallet not on the WHOOP allowlist back without going to WHOOP", async () => {
+    vi.stubEnv("WHOOP_ALLOWED_WALLETS", VICTIM);
+    const res = await GET(new NextRequest("https://app.test/api/whoop/login?ticket=t"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("whoop=not-allowed");
+    expect(buildAuthorizeUrl).not.toHaveBeenCalled();
   });
 });

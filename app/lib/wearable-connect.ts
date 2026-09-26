@@ -409,6 +409,12 @@ export function whoopReturnMessage(
         message:
           "That connect link timed out before it came back. Start the connection again.",
       };
+    case "not-allowed":
+      return {
+        tone: "info",
+        message:
+          "WHOOP pairing is in private beta. Pair through Junction instead; it covers WHOOP straps too.",
+      };
     case "failed":
       return {
         tone: "error",

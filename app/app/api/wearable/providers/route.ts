@@ -26,6 +26,7 @@
 // is using. Null narrows nothing, so an upstream hiccup can never take pools
 // off somebody's board.
 
+import { whoopAllowedFor } from "@/lib/server/wearable/whoop-allowlist";
 import { type NextRequest } from "next/server";
 import { isAddress } from "viem";
 import { jsonError } from "@/lib/server/http";
@@ -47,7 +48,9 @@ export async function GET(request: NextRequest) {
         providers: PROVIDER_IDS.map((id) => ({
           id,
           label: providerById(id).label,
-          configured: providerConfigured(id),
+          // WHOOP pairing is allowlisted per wallet; with no address, nobody
+          // is on the list, so it is not offered.
+          configured: id === "whoop" ? false : providerConfigured(id),
           connected: false,
           metrics: providerById(id).metrics,
           capability: "declared",
@@ -99,10 +102,15 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        // WHOOP is offered only to allowlisted wallets (10-member sandbox cap);
+        // a wallet already linked keeps its link and reads either way.
+        const offered =
+          id === "whoop" ? configured && (whoopAllowedFor(address) || connected) : configured;
+
         return {
           id,
           label: provider.label,
-          configured,
+          configured: offered,
           connected,
           metrics: provider.metrics,
           capability: capability.kind,

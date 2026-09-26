@@ -27,6 +27,7 @@
 // that authorizes address binding, and `state` reaches WHOOP's request logs
 // and any referrer along the way.
 
+import { whoopAllowedFor } from "@/lib/server/wearable/whoop-allowlist";
 import { randomBytes } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { providerConfigured } from "@/lib/server/wearable";
@@ -79,6 +80,9 @@ export async function GET(request: NextRequest) {
       // Which of the four it was tells an attacker something and the user
       // nothing: their fix is the same either way.
       return backToDashboard(request, "expired", returnPath);
+    }
+    if (!whoopAllowedFor(address)) {
+      return backToDashboard(request, "not-allowed", returnPath);
     }
 
     const nonce = randomBytes(16).toString("hex");

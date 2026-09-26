@@ -87,6 +87,7 @@ function post(body: unknown, raw = false) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv("WHOOP_ALLOWED_WALLETS", USER);
   requireAddressSignature.mockResolvedValue({ ok: true, address: USER });
   providerIdFor.mockResolvedValue("junction");
   providerConfigured.mockReturnValue(true);
@@ -337,5 +338,13 @@ describe("POST /api/wearable/link", () => {
     expect(consoleError).toHaveBeenCalledOnce();
     expect(String(consoleError.mock.calls[0])).toContain("401");
     consoleError.mockRestore();
+  });
+
+  it("refuses the WHOOP path with a 403 for a wallet not on the allowlist, minting nothing", async () => {
+    vi.stubEnv("WHOOP_ALLOWED_WALLETS", "0x2222222222222222222222222222222222222222");
+    const res = await post({ address: USER, provider: "whoop" });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toMatch(/private beta/);
+    expect(mintLinkTicket).not.toHaveBeenCalled();
   });
 });

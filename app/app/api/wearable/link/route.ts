@@ -17,6 +17,7 @@
 // the OAuth redirect as a short-lived ticket (see lib/server/wearable/
 // link-ticket.ts), because a top-level navigation cannot send auth headers.
 
+import { whoopAllowedFor } from "@/lib/server/wearable/whoop-allowlist";
 import { isAddress } from "viem";
 import { errorMessage, jsonError, readJsonBody } from "@/lib/server/http";
 import { requireAddressSignature } from "@/lib/server/wallet-auth";
@@ -75,6 +76,14 @@ export async function POST(request: Request) {
     }
 
     if (providerId === "whoop") {
+      // WHOOP's sandbox app is capped at 10 members, so direct WHOOP pairing
+      // is allowlisted; everyone else pairs through Junction.
+      if (!whoopAllowedFor(address)) {
+        return jsonError(
+          403,
+          "WHOOP pairing is in private beta. Pair through Junction instead; it covers WHOOP straps too.",
+        );
+      }
       // NOT recorded here. WHOOP's flow has a callback that records the choice
       // only once tokens are actually stored, and writing it up front means a
       // user who opens WHOOP's consent screen and backs out has silently
