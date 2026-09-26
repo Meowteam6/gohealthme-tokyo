@@ -203,10 +203,10 @@ export function heroNote(terms: RunTerms): Segment[] {
       { text: formatUsdc(range.ifEveryone), strong: true },
       { text: " to " },
       { text: formatUsdc(range.ifOnlyYou), strong: true },
-      { text: ` back: your ${stake}, plus an equal share of the ${formatUsdc(pot)} pot. A miss here is refunded.` },
+      { text: ` back: your ${stake}, plus an equal share of the ${formatUsdc(pot)} sponsor pot. A miss here is refunded.` },
     ];
   }
-  const share = pot > 0n ? `an equal share of the ${formatUsdc(pot)} pot and any missed stakes` : "an equal share of any missed stakes";
+  const share = pot > 0n ? `an equal share of the ${formatUsdc(pot)} sponsor pot and any missed stakes` : "an equal share of any missed stakes";
   return [
     { text: `${playersIn(terms.players)}. Hit it and you get ` },
     { text: formatUsdc(range.ifEveryone), strong: true },

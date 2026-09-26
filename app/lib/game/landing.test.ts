@@ -129,7 +129,7 @@ describe("heroNote", () => {
     const terms = termsOf({ pool: workout, players: 1 }, 0, CUTOFF)!;
     const note = heroNote(terms);
     expect(segmentsText(note)).toBe(
-      "1 player in. Hit it and you get 2.00 to 4.00 back: your 1.00, plus an equal share of the 2.00 pot and any missed stakes.",
+      "1 player in. Hit it and you get 2.00 to 4.00 back: your 1.00, plus an equal share of the 2.00 sponsor pot and any missed stakes.",
     );
     expect(note.filter((s) => s.strong).map((s) => s.text)).toEqual(["2.00", "4.00"]);
   });
@@ -163,7 +163,7 @@ describe("heroNote", () => {
     expect(segmentsText(heroNote(two))).toBe("2 players in. Hit it and your 1.00 comes back. This run cannot record a miss, so a miss comes back too.");
     const withPot = termsOf({ pool: workout, players: 1 }, 0, null)!;
     expect(segmentsText(heroNote(withPot))).toBe(
-      "1 player in. Hit it and you get 2.00 to 3.00 back: your 1.00, plus an equal share of the 2.00 pot. A miss here is refunded.",
+      "1 player in. Hit it and you get 2.00 to 3.00 back: your 1.00, plus an equal share of the 2.00 sponsor pot. A miss here is refunded.",
     );
   });
 });
