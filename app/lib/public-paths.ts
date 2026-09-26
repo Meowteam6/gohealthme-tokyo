@@ -1,7 +1,8 @@
 // Which routes render without character creation in front of them.
 //
 // Browsing is public: the landing, the legal pages, public profiles, invite
-// links, the lobby (/pools, exact) and the payout feed (/feed). A signed-out
+// links, the lobby (/pools, exact), the payout feed (/feed) and History
+// (/agent, SPOTTER's public claims feed). A signed-out
 // visitor can read every open run and every payout before committing to
 // anything. Taking a position is not: the run page (/pools/<id>), the create
 // forms and every money surface stay behind the gate, and the server keeps
@@ -10,7 +11,7 @@
 // Kept in lib (not in the AccessGate client component) so the rule is testable
 // without pulling in the character-creation tree.
 
-const PUBLIC_EXACT = new Set(["/", "/privacy", "/terms", "/pools", "/feed"]);
+const PUBLIC_EXACT = new Set(["/", "/privacy", "/terms", "/pools", "/feed", "/agent"]);
 const PUBLIC_PREFIXES = ["/u/", "/c/"];
 
 export function isPublicPath(pathname: string): boolean {

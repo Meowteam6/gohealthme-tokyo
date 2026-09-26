@@ -16,9 +16,9 @@ import SpotterSays from "@/components/SpotterSays";
 import AgentFeed from "./AgentFeed";
 
 export const metadata: Metadata = {
-  title: "SPOTTER",
+  title: "History",
   description:
-    "The settlement agent's on-chain identity and every claim it has touched.",
+    "Your verdicts, World ID confirmations and payouts, everyone's claims, and the wallet SPOTTER settles from.",
   robots: NOINDEX,
 };
 
@@ -110,15 +110,27 @@ export default async function AgentPage() {
 
   return (
     <div className="space-y-8">
+      <header className="space-y-2">
+        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+          History
+        </h1>
+        <p className="text-sm text-muted">
+          Every verdict SPOTTER reached on your runs, your World ID
+          confirmations, and what it paid.
+        </p>
+      </header>
+
+      <AgentFeed />
+
       <Card pop className="bg-dot-grid">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 flex-1 space-y-4">
             <p className="font-display text-xs font-bold uppercase tracking-widest text-accent-strong">
               SPOTTER, settlement agent
             </p>
-            <h1 className="font-display text-2xl font-bold leading-tight sm:text-3xl">
+            <h2 className="font-display text-2xl font-bold leading-tight sm:text-3xl">
               The otter runs the money.
-            </h1>
+            </h2>
             {settler.kind === "ok" ? (
               <div className="space-y-2">
                 <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
@@ -189,8 +201,6 @@ export default async function AgentPage() {
           )}
         </div>
       </Card>
-
-      <AgentFeed />
     </div>
   );
 }

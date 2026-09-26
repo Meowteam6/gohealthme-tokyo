@@ -9,6 +9,10 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/feed")).toBe(true);
   });
 
+  it("lets a signed-out visitor read History (SPOTTER's public feed)", () => {
+    expect(isPublicPath("/agent")).toBe(true);
+  });
+
   it("keeps the run page, create forms and money surfaces gated", () => {
     for (const path of [
       "/pools/3",

@@ -6,9 +6,9 @@ import { EmptyState } from "@/components/ui";
 import { NOINDEX } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Wallet",
+  title: "Settings",
   description:
-    "Your GoHealthMe wallet: address, Base Sepolia balance, your name, your paired sensor and how to disconnect it, and how to back the wallet up.",
+    "Your GoHealthMe settings: wallet address, Base Sepolia balance, your name, your paired wearable and how to disconnect it, and how to back the wallet up.",
   robots: NOINDEX,
 };
 
@@ -18,11 +18,11 @@ export default function SettingsPage() {
       <header className="flex items-center justify-between gap-4">
         <div className="space-y-2">
           <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-            Wallet
+            Settings
           </h1>
           <p className="text-sm text-muted">
-            Where your USDC lives, the name you play under, and the sensor
-            SPOTTER reads.
+            Your wallet and where your USDC lives, the name you play under, and
+            the wearable SPOTTER reads.
           </p>
         </div>
         {/* SPOTTER holding your wallet - the mascot on the money page.

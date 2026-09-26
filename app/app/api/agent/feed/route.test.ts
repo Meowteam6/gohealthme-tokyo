@@ -140,3 +140,50 @@ describe("GET /api/agent/feed", () => {
     consoleError.mockRestore();
   });
 });
+
+// History (/agent) leads with the signed-in player's own entries. The address
+// is public (goalId is computeGoalId(pool, participant) on chain), so the
+// filter adds no new linkage; it never echoes anyone else's participant.
+describe("GET /api/agent/feed?for=<address>", () => {
+  const ME = "0x" + "a1".repeat(20);
+  const THEM = "0x" + "b2".repeat(20);
+  const MY_GOAL = "0x" + "01".repeat(32);
+  const THEIR_GOAL = "0x" + "02".repeat(32);
+
+  function ledgerFor(participant: string) {
+    return [
+      { kind: "plan", at: AT, capUsd: "1.00", steps: [], participant },
+      ...SENSITIVE_LEDGER.slice(1),
+    ];
+  }
+
+  beforeEach(() => {
+    listLedgerGoalIds.mockResolvedValue([
+      { goalId: THEIR_GOAL, at: AT },
+      { goalId: MY_GOAL, at: AT },
+    ]);
+    readLedger.mockImplementation(async (goalId: string) =>
+      ledgerFor(goalId === MY_GOAL ? "0x" + "A1".repeat(20) : THEM),
+    );
+  });
+
+  it("returns the player's own claims as mine, beside everyone's", async () => {
+    const res = await GET(new Request(`http://x/api/agent/feed?for=${ME}`));
+    const body = (await res.json()) as {
+      claims: { goalId: string }[];
+      mine: { goalId: string }[];
+    };
+    expect(body.claims.map((c) => c.goalId)).toEqual([THEIR_GOAL, MY_GOAL]);
+    expect(body.mine.map((c) => c.goalId)).toEqual([MY_GOAL]);
+    // Nobody's participant address rides along.
+    expect(JSON.stringify(body)).not.toContain(THEM.slice(2));
+  });
+
+  it("omits mine without an address, or with one that is not an address", async () => {
+    const plain = (await (await GET()).json()) as Record<string, unknown>;
+    expect("mine" in plain).toBe(false);
+    const junk = await GET(new Request("http://x/api/agent/feed?for=bob"));
+    expect(junk.status).toBe(200);
+    expect("mine" in ((await junk.json()) as Record<string, unknown>)).toBe(false);
+  });
+});
