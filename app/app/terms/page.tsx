@@ -196,6 +196,52 @@ export default function TermsPage() {
 
         <section className="[&>*+*]:mt-3">
           <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
+            Staking on yourself: hit, miss, and no data
+          </h2>
+          <p>
+            On a run where every player stakes on their own goal, the result
+            decides where each stake goes when the run settles:
+          </p>
+          <ul className="list-disc pl-5 marker:text-haze [&>*+*]:mt-1.5">
+            <li>
+              Hit the goal: you get your stake back plus an equal share of the
+              missed stakes and anything else in the pot, once your hit is
+              recorded. SPOTTER records a hit only after you open the run and
+              confirm it with World ID, and only before the run settles. A hit
+              that is not confirmed by then gets its stake back without a
+              share.
+            </li>
+            <li>
+              Miss it, with your wearable showing the miss: your stake goes to
+              the players who hit. This applies only on runs that can record a
+              miss: proven by wearable alone, measuring sleep or workouts, with
+              a goal SPOTTER can read one way, and opened after this rule
+              started. The run page says before you stake whether it can. On
+              every other run a miss is refunded at settle.
+            </li>
+            <li>
+              No wearable data for the run: SPOTTER records a miss only when
+              your wearable synced every day of the run. If it did not, or the
+              data provider could not be read, nothing is recorded and your
+              stake comes back.
+            </li>
+            <li>Nobody hits: every player&apos;s stake comes back.</li>
+            <li>
+              The run&apos;s creator can cancel it any time before it settles,
+              including after SPOTTER has recorded results. A cancelled run pays
+              no prize and every stake, a recorded miss included, can be
+              claimed back.
+            </li>
+          </ul>
+          <p>
+            SPOTTER takes its last look a few hours after the run ends and then
+            records a miss on its own. A late sync still counts until that last
+            look. A missing result never counts as a miss.
+          </p>
+        </section>
+
+        <section className="[&>*+*]:mt-3">
+          <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             When SPOTTER cannot decide, or you do not confirm
           </h2>
           <p>

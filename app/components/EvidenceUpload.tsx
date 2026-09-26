@@ -76,6 +76,7 @@ const MAX_POLLS = 375;
 const TERMINAL: RunStatus[] = [
   "paid",
   "no-pay",
+  "missed",
   "cap-exceeded",
   "blocked",
   "recorded",

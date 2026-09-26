@@ -98,6 +98,44 @@ Optional env (server only, wei; defaults in code):
 Per address: at most 3 drips per UTC day (429). Refusals carry plain copy that names the
 next step (wait, or the Base Sepolia ETH faucet at portal.cdp.coinbase.com/products/faucet).
 
+### Recorded misses (commitment model)
+
+On a self-staked pool (bountyModel 2) proven by wearable only, on a metric whose day is final
+(sleep score, sleep efficiency, sleep hours, workouts), SPOTTER records `verdict=false` for a
+joined player once `periodEnd + MISS_GRACE_HOURS` has passed, and only when the wearable
+covered every day of the run on the wearer's own calendar and shows the goal not met. Missing,
+partial or unreadable data records nothing and settle() refunds the stake (B-2). Rule:
+`app/lib/server/agent/miss.ts`; writes: `app/lib/server/agent/miss-record.ts`; driven by the
+`/api/agent/sweep` cron (every 2 min) and by the run route when a player opens a finished run.
+
+Such a pool settles only after the grace and after the sweep judged every player (store key
+`agent-miss-pool-<poolId>.json`, `done: true`), or 2h after the grace at the latest. Every
+other pool keeps its old timing. The operator route `/api/oracle/record` no longer writes a
+miss (409).
+
+Optional env (server, and inlined into the browser bundle by `app/next.config.ts` so the run
+page prints the same deadline):
+
+| Var | Default | Meaning |
+|---|---|---|
+| `MISS_GRACE_HOURS` | `6` | hours after periodEnd before a miss may be recorded; clamped to 1..18 so the miss and the settle land inside the contract's 24h settler-only window (`SETTLE_GRACE`); a non-number falls back to 6 and logs once |
+| `MISS_RULE_FROM_POOL_ID` | unset (rule off) | the first pool id that can record a miss (`app/lib/miss-rule.ts`). Pools below it were joined under the "a miss is refunded" copy and keep that promise; their run pages say "this run cannot record a miss". Set it to `poolCount() + 1` read at the moment this copy deploys (`poolCount()` on `0x0B6E8D47...` was 5 on 2026-09-26, so 6 unless a pool is created first). Pool ids are per contract: a redeployed HealthPoolsV3 needs its own value. Unset or not a positive integer, no pool records a miss and the sweep logs it once |
+
+A change needs a redeploy (the value is inlined at build time).
+
+Review fixes (2026-09-26): the rule also refuses goals whose count is ambiguous (`5 of 7
+nights`, `twice`, no count) or disagrees with the pass path's reading, reads the provider
+pinned at periodStart (a provider switch after the run cannot hide real data), treats a
+night with no-data time or only a nap/short sleep as uncovered, requires the source that
+records workouts (not any source) to report every day of the run and something dated after
+it, and never records a miss the pass path (now on the same local-calendar window) would
+pay. A player whose wearable shows the hit holds the pool until they confirm it or
+`holdUntil` (periodEnd + grace + 2h). `cancelPool()` has no time guard, so a creator can
+still cancel a run after misses are recorded and before settle; every stake then comes back
+through `claimRefund()` (pinned by `test_SpotterMiss_creatorCancelAfterRecordedMiss_refundsTheMiss`,
+disclosed in the Terms). The real fix is contract-side for any redeploy: refuse `cancelPool`
+once any result is recorded, or after periodStart.
+
 ## Tokyo 2026 (ENSv2 Sepolia)
 
 ENSv2 on Ethereum Sepolia (chain 11155111), the 2026-09-15 deployment. Pools stay on Base Sepolia.

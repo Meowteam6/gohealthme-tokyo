@@ -11,6 +11,7 @@ import {
   formatSettleMoment,
   gatewayRefOf,
   noteWithoutGatewayRef,
+  recordRowLabel,
   settleMomentLine,
 } from "@/components/AgentReceipt";
 import type { ReceiptRow } from "@/lib/agent-receipt";
@@ -145,6 +146,12 @@ describe("deferred settle copy", () => {
     expect(copy).not.toContain("settles this automatically at");
   });
 
+  it("never calls the settle moment the end of the pool period: on a run that can record a miss they differ by the sync grace", () => {
+    const copy = deferredSettleCopy(PAST_ISO, null);
+    expect(copy).not.toContain("pool period ended");
+    expect(copy).toMatch(/^settling opened at /);
+  });
+
   it("converts a recognizable epoch note and never renders the raw epoch", () => {
     const copy = deferredSettleCopy(undefined, EPOCH_NOTE_TEXT);
     expect(copy).not.toContain("1791000000");
@@ -182,5 +189,28 @@ describe("settle moments", () => {
   it("returns null for invalid dates end to end", () => {
     expect(formatSettleMoment(new Date("not-a-date"))).toBeNull();
     expect(settleMomentLine(new Date("not-a-date"))).toBeNull();
+  });
+});
+
+describe("a recorded miss on the receipt", () => {
+  it("labels a miss row as a miss, never as a plain recorded result", () => {
+    expect(
+      recordRowLabel({
+        kind: "record",
+        resultTx: "0xmiss",
+        registryTx: null,
+        verdict: false,
+        stakeUsd: "1.00",
+      }),
+    ).toBe("Miss recorded on chain");
+    expect(
+      recordRowLabel({
+        kind: "record",
+        resultTx: "0xr",
+        registryTx: null,
+        verdict: true,
+        stakeUsd: null,
+      }),
+    ).toBe("Recorded on chain");
   });
 });

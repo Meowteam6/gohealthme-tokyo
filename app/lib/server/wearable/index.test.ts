@@ -180,3 +180,55 @@ describe("provider contract", () => {
     expect(new Set(services).size).toBe(services.length);
   });
 });
+
+// F5 (fix/record-misses review): the miss rule reads the provider a wallet
+// had when the run began, so repointing the wallet afterwards (one signed
+// "Connect WHOOP" tap, abandoned at consent) cannot turn real data into none.
+const { pinnedProviderId } = await import("@/lib/server/wearable");
+const { writeJson } = await import("@/lib/server/store");
+
+describe("pinnedProviderId", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function at(iso: string): void {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(iso));
+  }
+  const sec = (iso: string) => BigInt(Date.parse(iso) / 1000);
+
+  it("keeps the provider stored at periodStart after a switch", async () => {
+    const address = nextAddress();
+    at("2026-09-25T00:00:00Z");
+    await setProviderId(address, "junction");
+    at("2026-09-27T12:00:00Z");
+    await setProviderId(address, "whoop");
+    expect(await storedProviderId(address)).toBe("whoop");
+    expect(await pinnedProviderId(address, sec("2026-09-26T02:39:43Z"))).toBe("junction");
+  });
+
+  it("pins the first choice made after periodStart when there was none before", async () => {
+    const address = nextAddress();
+    at("2026-09-26T05:00:00Z");
+    await setProviderId(address, "junction");
+    at("2026-09-27T12:00:00Z");
+    await setProviderId(address, "whoop");
+    expect(await pinnedProviderId(address, sec("2026-09-26T02:39:43Z"))).toBe("junction");
+  });
+
+  it("reads a record written before the history existed as its one choice", async () => {
+    const address = nextAddress();
+    await writeJson(`wearable-provider:${address.toLowerCase()}`, {
+      provider: "junction",
+      updatedAt: Date.parse("2026-09-20T00:00:00Z"),
+    });
+    at("2026-09-27T12:00:00Z");
+    await setProviderId(address, "whoop");
+    expect(await pinnedProviderId(address, sec("2026-09-26T02:39:43Z"))).toBe("junction");
+  });
+
+  it("is null for a wallet that never chose", async () => {
+    expect(await pinnedProviderId(nextAddress(), sec("2026-09-26T02:39:43Z"))).toBeNull();
+  });
+});

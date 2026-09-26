@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createCommitmentCopy } from "@/lib/commitment-copy";
 import { useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import {

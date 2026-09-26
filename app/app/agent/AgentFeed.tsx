@@ -22,6 +22,7 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import {
   defaultHistoryView,
   historyItems,
+  missLineOf,
   type HistoryView,
 } from "@/lib/agent-history";
 import { baseTxUrl } from "@/lib/chains";
@@ -90,7 +91,10 @@ const TONE_CLASS = {
 /** A tx link on a claim row: quiet, underlined, 44px tall. */
 const TX_LINK = `${TEXT_LINK} text-sm`;
 
-export function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
+export function ClaimCard({ claim, own = false }: { claim: PublicFeedClaim; own?: boolean }) {
+  // A recorded miss pays nobody on this claim: it says where the stake goes
+  // instead of leaving a bare "no pay" next to a tx link that reads like one.
+  const missLine = missLineOf(claim, own);
   const settle = claim.settle;
   const deferredLine =
     settle !== null &&
@@ -152,6 +156,7 @@ export function ClaimCard({ claim }: { claim: PublicFeedClaim }) {
             ) : null}
           </p>
         ) : null}
+        {missLine !== null ? <p className="m-0 text-foreground">{missLine}</p> : null}
         {approval !== null ? (
           <p className={`m-0 ${TONE_CLASS[approval.tone]}`}>{approval.text}</p>
         ) : null}
@@ -257,7 +262,7 @@ export default function AgentFeed() {
         ) : items.length > 0 ? (
           <ol className="m-0 list-none p-0">
             {items.map((claim) => (
-              <ClaimCard key={claim.goalId} claim={claim} />
+              <ClaimCard key={claim.goalId} claim={claim} own={view === "mine"} />
             ))}
           </ol>
         ) : feed.isError ? (

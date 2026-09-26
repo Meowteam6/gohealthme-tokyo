@@ -45,9 +45,10 @@ async function loadRun() {
   // sibling lambda by taking a lock or spending budget out from under it.
   const lock = await import("@/lib/server/agent/lock");
   const budget = await import("@/lib/server/agent/budget");
+  const missRecord = await import("@/lib/server/agent/miss-record");
   lock.resetLocalCoordinationState();
   budget.resetLocalBudgetState();
-  return { ...run, lock, budget };
+  return { ...run, lock, budget, missRecord };
 }
 
 function fakeExecutor() {
@@ -734,6 +735,47 @@ describe("runAgentForGoal", () => {
     expect(reasons.map((r) => r.decision)).toEqual(["no-pay", "pay"]);
   });
 
+  it("F10: re-decides when the sweep wrote the hit after the last decision, even with the same words", async () => {
+    // The sweep reads a hit the player has not opened and writes the pass
+    // path's own verdict row. When the player opens the run, the poll returns
+    // that same verdict; the old no-pay must not stand in front of it.
+    const { runAgentForGoal } = await loadRun();
+    const ledgerMod = await import("@/lib/server/agent/ledger");
+    const input = {
+      ...INPUT,
+      attesterId: "wearable-111",
+      evidenceKind: "wearable" as const,
+    };
+    const notMet = {
+      verified: false,
+      confidence: "high",
+      reason: "Junction reports 3 of 7 qualifying days.",
+    };
+    const met = {
+      verified: true,
+      confidence: "high",
+      reason: "Junction reports 7 qualifying days.",
+    };
+    const poll = vi.fn().mockResolvedValue({ status: "completed", verdict: notMet });
+    const deps = makeDeps({ poll });
+    (deps.spotter as { nowSeconds: () => bigint }).nowSeconds = () => 500n;
+    expect((await runAgentForGoal(deps, input)).status).toBe("no-pay");
+
+    await ledgerMod.appendLedger(GOAL, {
+      kind: "verdict",
+      ...met,
+      confidence: "high",
+      ref: "wearable-111",
+      selfReported: false,
+    });
+    poll.mockResolvedValue({ status: "completed", verdict: met });
+
+    const second = await runAgentForGoal(deps, input);
+    expect(second.status).toBe("recorded");
+    const reasons = second.ledger.filter((e) => e.kind === "reason");
+    expect(reasons.map((r) => r.decision)).toEqual(["no-pay", "pay"]);
+  });
+
   it("reconciles an already-settled pool against AchieverPaid instead of declaring it unpayable", async () => {
     // Multi-achiever pools settle everyone in ONE transaction: the second
     // claim swept finds the pool already settled and must recover its own
@@ -1217,5 +1259,272 @@ describe("runAgentForGoal on an oracle-only pool (healthVerdict() = 0x0)", () =>
       status: "settled",
       paidUsd: "50",
     });
+  });
+});
+
+// The miss rule inside the run loop: a player who opens the run page after it
+// ended, with a wearable that covered the whole run and shows the goal not
+// met, gets a recorded miss (verdict=false) instead of a silent refund. Only
+// ever after periodEnd + MISS_GRACE_HOURS, only once, never over a pass.
+describe("runAgentForGoal: recording a miss", () => {
+  const GRACE = 6n * 3600n;
+  const MISS_POOL = {
+    settled: false,
+    cancelled: false,
+    periodStart: 100n,
+    periodEnd: 1_000n,
+    bountyModel: 2,
+    goalSpec: "Sleep 7 hours for 1 night",
+    entryFee: 1_000_000n,
+  };
+  const MISS_INPUT = {
+    ...INPUT,
+    attesterId: "wearable-100",
+    evidenceKind: "wearable" as const,
+    goalSpec: MISS_POOL.goalSpec,
+  };
+  const notMetPoll = () =>
+    vi.fn().mockResolvedValue({
+      status: "completed",
+      verdict: {
+        verified: false,
+        confidence: "high",
+        reason: "Your wearable shows 0 of 1 qualifying days. The goal is not met yet.",
+      },
+    });
+
+  /** One night inside the run, synced, short of the 7 hours. */
+  function missProvider(values: Record<string, number> = { "1970-01-01": 5 }) {
+    return {
+      id: "junction",
+      label: "Junction",
+      readService: "junction-read",
+      readLabel: "wearable summary (Junction)",
+      readEstUsd: "0.01",
+      linkKind: "oauth",
+      metrics: ["sleep_score", "sleep_efficiency", "sleep_hours", "workouts"],
+      isConnected: vi.fn().mockResolvedValue(true),
+      getMissEvidence: vi.fn().mockResolvedValue({
+        values,
+        heartbeatDays: Object.keys(values),
+        tzOffsetSec: 0,
+      }),
+    };
+  }
+
+  function missSetup(
+    opts: {
+      now?: bigint;
+      after?: { resultRecorded: boolean; verdict: boolean };
+      provider?: ReturnType<typeof missProvider>;
+      readerOverrides?: Partial<ArcReader>;
+      legacyRecordResult?: ReturnType<typeof vi.fn>;
+      poll?: ReturnType<typeof vi.fn>;
+    } = {},
+  ) {
+    const participantResult = vi
+      .fn()
+      .mockResolvedValueOnce({ joined: true, resultRecorded: false, verdict: false })
+      .mockResolvedValue({
+        joined: true,
+        ...(opts.after ?? { resultRecorded: true, verdict: false }),
+      });
+    const reader = fakeReader({
+      getPoolState: vi.fn().mockResolvedValue(MISS_POOL),
+      participantResult,
+      ...opts.readerOverrides,
+    });
+    const provider = opts.provider ?? missProvider();
+    const now = opts.now ?? MISS_POOL.periodEnd + GRACE;
+    const legacyRecordResult =
+      opts.legacyRecordResult ?? vi.fn().mockResolvedValue("0xmiss" as Hex);
+    return { reader, provider, now, legacyRecordResult, poll: opts.poll ?? notMetPoll() };
+  }
+
+  async function missDeps(setup: ReturnType<typeof missSetup>) {
+    const loaded = await loadRun();
+    vi.stubEnv("MISS_GRACE_HOURS", "6");
+    const spotter = {
+      circle: fakeExecutor(),
+      reader: setup.reader,
+      nowSeconds: () => setup.now,
+    };
+    const missDepsValue = {
+      spotter,
+      legacyRecordResult: setup.legacyRecordResult,
+      read: {
+        pinnedProviderId: vi.fn().mockResolvedValue("junction"),
+        storedProviderId: vi.fn().mockResolvedValue("junction"),
+        providerConfigured: vi.fn().mockReturnValue(true),
+        providerById: vi.fn().mockReturnValue(setup.provider),
+      },
+      nowSeconds: () => setup.now,
+    };
+    const adjudicateMiss = vi.fn((input: { goalId: Hex; poolId: bigint; address: Address }) =>
+      loaded.missRecord.adjudicateMissUnlocked(
+        missDepsValue as unknown as Parameters<typeof loaded.missRecord.adjudicateMissUnlocked>[0],
+        input,
+      ),
+    );
+    const deps = makeDeps({
+      poll: setup.poll,
+      legacyRecordResult: setup.legacyRecordResult,
+      adjudicateMiss,
+    });
+    (deps as { spotter: unknown }).spotter = spotter;
+    return { ...loaded, deps, adjudicateMiss };
+  }
+
+  it("after the grace: writes exactly one false result and reports missed", async () => {
+    const setup = missSetup();
+    const { runAgentForGoal, deps } = await missDeps(setup);
+
+    const result = await runAgentForGoal(deps, MISS_INPUT);
+
+    expect(result.status).toBe("missed");
+    expect(setup.legacyRecordResult).toHaveBeenCalledTimes(1);
+    expect(setup.legacyRecordResult).toHaveBeenCalledWith(7n, USER, false, 0n);
+    const records = result.ledger.filter((e) => e.kind === "record");
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      verdict: false,
+      resultTx: "0xmiss",
+      registryStatus: "skipped",
+      stakeUsd: "1.00",
+    });
+    // No registry write, no payout screen, no settle for a miss.
+    expect(deps.legacyRecordVerdict).not.toHaveBeenCalled();
+    expect(result.ledger.some((e) => e.kind === "settle")).toBe(false);
+  });
+
+  it("before the grace: records nothing and reports no-pay", async () => {
+    const setup = missSetup({ now: MISS_POOL.periodEnd + GRACE - 1n });
+    const { runAgentForGoal, deps } = await missDeps(setup);
+
+    const result = await runAgentForGoal(deps, MISS_INPUT);
+
+    expect(result.status).toBe("no-pay");
+    expect(setup.legacyRecordResult).not.toHaveBeenCalled();
+    expect(setup.provider.getMissEvidence).not.toHaveBeenCalled();
+  });
+
+  it("a re-poll after the miss with late passing data writes nothing and stays missed", async () => {
+    const setup = missSetup();
+    const { runAgentForGoal, deps } = await missDeps(setup);
+    const first = await runAgentForGoal(deps, MISS_INPUT);
+    expect(first.status).toBe("missed");
+
+    setup.poll.mockResolvedValue({
+      status: "completed",
+      verdict: { verified: true, confidence: "high", reason: "late sync: 8 hours" },
+    });
+    const second = await runAgentForGoal(deps, MISS_INPUT);
+
+    expect(second.status).toBe("missed");
+    expect(second.ledger).toHaveLength(first.ledger.length);
+    expect(setup.legacyRecordResult).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispatches the miss through SPOTTER's wallet with verdict false and multiplier 0 when it holds the oracle role", async () => {
+    const setup = missSetup({
+      readerOverrides: { oracleAddress: vi.fn().mockResolvedValue(SPOTTER) },
+    });
+    const { runAgentForGoal, deps } = await missDeps(setup);
+
+    const result = await runAgentForGoal(deps, MISS_INPUT);
+
+    expect(result.status).toBe("missed");
+    expect(setup.legacyRecordResult).not.toHaveBeenCalled();
+    expect(deps.spotter.circle.createContractExecutionTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        abiFunctionSignature: "recordResult(uint256,address,bool,uint16)",
+        abiParameters: ["7", USER, false, 0],
+      }),
+    );
+    expect(result.ledger.find((e) => e.kind === "record")).toMatchObject({
+      verdict: false,
+      resultTx: "0xfeed",
+    });
+  });
+
+  it("ALREADY_RECORDED with a pass on chain never writes a false row", async () => {
+    const setup = missSetup({
+      after: { resultRecorded: true, verdict: true },
+      legacyRecordResult: vi
+        .fn()
+        .mockRejectedValue(new Error("execution reverted: ALREADY_RECORDED")),
+    });
+    const { runAgentForGoal, deps } = await missDeps(setup);
+
+    const result = await runAgentForGoal(deps, MISS_INPUT);
+
+    expect(result.status).toBe("no-pay");
+    expect(result.ledger.some((e) => e.kind === "record")).toBe(false);
+  });
+
+  it("a pool that settled under the write is terminal: no record row, no error loop", async () => {
+    const setup = missSetup({
+      legacyRecordResult: vi.fn().mockRejectedValue(new Error("execution reverted: SETTLED")),
+    });
+    const { runAgentForGoal, deps } = await missDeps(setup);
+
+    const result = await runAgentForGoal(deps, MISS_INPUT);
+
+    expect(result.status).toBe("no-pay");
+    expect(result.ledger.some((e) => e.kind === "record")).toBe(false);
+    expect(result.ledger.some((e) => e.kind === "error")).toBe(false);
+  });
+
+  it("a write the chain does not show as a recorded miss is an error, never a record row", async () => {
+    const setup = missSetup({ after: { resultRecorded: false, verdict: false } });
+    const { runAgentForGoal, deps } = await missDeps(setup);
+
+    const result = await runAgentForGoal(deps, MISS_INPUT);
+
+    expect(result.status).toBe("error");
+    expect(result.ledger.some((e) => e.kind === "record")).toBe(false);
+    expect(result.ledger.find((e) => e.kind === "error")).toMatchObject({ stage: "record" });
+  });
+
+  it("a partial read records nothing", async () => {
+    const setup = missSetup({ provider: missProvider({}) });
+    const { runAgentForGoal, deps } = await missDeps(setup);
+
+    const result = await runAgentForGoal(deps, MISS_INPUT);
+
+    expect(result.status).toBe("no-pay");
+    expect(setup.legacyRecordResult).not.toHaveBeenCalled();
+  });
+
+  it("an unreadable read (low confidence) never asks for a miss at all", async () => {
+    const setup = missSetup({
+      poll: vi.fn().mockResolvedValue({
+        status: "failed",
+        verdict: { verified: false, confidence: "low", reason: "provider down" },
+      }),
+    });
+    const { runAgentForGoal, deps, adjudicateMiss } = await missDeps(setup);
+
+    const result = await runAgentForGoal(deps, MISS_INPUT);
+
+    expect(result.status).toBe("no-pay");
+    expect(adjudicateMiss).not.toHaveBeenCalled();
+  });
+
+  it("a pass is unchanged: recorded true through the approval-free path, no miss asked", async () => {
+    const setup = missSetup({
+      poll: vi.fn().mockResolvedValue({
+        status: "completed",
+        verdict: { verified: true, confidence: "high", reason: "8 hours" },
+      }),
+      readerOverrides: { verdictRegistry: vi.fn().mockResolvedValue(null) },
+    });
+    const { runAgentForGoal, deps, adjudicateMiss } = await missDeps(setup);
+
+    const result = await runAgentForGoal(deps, MISS_INPUT);
+
+    expect(adjudicateMiss).not.toHaveBeenCalled();
+    expect(setup.legacyRecordResult).toHaveBeenCalledWith(7n, USER, true, expect.any(BigInt));
+    expect(result.ledger.find((e) => e.kind === "record")).not.toHaveProperty("verdict", false);
   });
 });

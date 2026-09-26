@@ -108,6 +108,55 @@ function parseGoalDays(goalSpec: string): number {
   return DEFAULT_GOAL_DAYS;
 }
 
+/** One explicit count in a goal's text, as the miss rule needs it. */
+export interface StrictGoalCount {
+  count: number;
+  /** True when the text counts sessions ("2 times", "4x", "3 workouts")
+   *  rather than days or nights. */
+  sessions: boolean;
+}
+
+/**
+ * The goal's count, read strictly, or null when the text does not say one
+ * number plainly.
+ *
+ * parseGoalDays above is generous on purpose: it feeds the PASS path, where a
+ * misread only withholds a payout. The miss rule moves a stake to other
+ * players, so it needs the text to say exactly one count: a digit followed by
+ * days/nights, or by times/x/workouts/sessions. Anything a reader could take
+ * two ways is refused and the miss is never recorded:
+ *   - "5 of 7 nights" / "5 out of 7": two readings of the same count
+ *   - word counts ("once", "twice", "one night"): parseGoalDays does not read
+ *     them and falls back to a week
+ *   - no count at all ("this week", "every night"): the default week
+ *   - two counts that disagree ("3 workouts in 5 days")
+ * Two counts that say the same number ("1 workout for 1 day") are one count.
+ */
+export function strictGoalCount(goalSpec: string): StrictGoalCount | null {
+  const text = goalSpec.toLowerCase();
+  if (/\d+\s*(?:out\s+)?of\s+(?:the\s+)?\d+/.test(text)) return null;
+  if (
+    /\b(?:once|twice|thrice|one|two|three|four|five|six|seven|eight|nine|ten|couple|several|few)\b/.test(
+      text,
+    )
+  ) {
+    return null;
+  }
+  const counts: StrictGoalCount[] = [];
+  for (const match of text.matchAll(/(\d+)[\s-]*(?:days?|nights?)\b/g)) {
+    counts.push({ count: Number(match[1]), sessions: false });
+  }
+  for (const match of text.matchAll(/(\d+)\s*(?:x|times|workouts?|sessions?)\b/g)) {
+    counts.push({ count: Number(match[1]), sessions: true });
+  }
+  if (counts.length === 0) return null;
+  const numbers = new Set(counts.map((c) => c.count));
+  if (numbers.size !== 1) return null;
+  const count = counts[0].count;
+  if (!Number.isInteger(count) || count < 1 || count > 60) return null;
+  return { count, sessions: counts.some((c) => c.sessions) };
+}
+
 /**
  * Classify a pool's free-form goal text into the wearable metric it measures,
  * plus the per-day threshold and qualifying-day count. Deterministic keyword +

@@ -6,9 +6,11 @@ import {
   type Hex,
   type Log,
 } from "viem";
+import { REFUND_CREDITED_ABI } from "@/lib/contract";
 import {
   ACHIEVER_PAID_ABI,
   payoutFromLogs,
+  settleLogsFrom,
   revertKind,
   settlePoolAsSpotter,
   settleDuePoolAsSpotter,
@@ -110,7 +112,7 @@ describe("settlePoolAsSpotter", () => {
       participant: USER,
     });
 
-    expect(result).toEqual({ status: "not-due", periodEnd: 1_000n });
+    expect(result).toEqual({ status: "not-due", periodEnd: 1_000n, dueAt: 1_000n });
     expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
   });
 
@@ -361,7 +363,7 @@ describe("settleDuePoolAsSpotter", () => {
       poolId: POOL,
     });
 
-    expect(result).toEqual({ status: "not-due", periodEnd: 1_000n });
+    expect(result).toEqual({ status: "not-due", periodEnd: 1_000n, dueAt: 1_000n });
     expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
   });
 
@@ -517,8 +519,17 @@ describe("revertKind", () => {
 
   it("does not confuse a different revert for one of these", () => {
     expect(revertKind(new Error("reverted: ALREADY_JOINED"))).toBeNull();
-    expect(revertKind(new Error("reverted: SETTLED"))).toBeNull();
     expect(revertKind(new Error("connection reset"))).toBeNull();
+  });
+
+  it("decodes a record write refused because the pool already settled", () => {
+    // recordResult reverts plain SETTLED; settle() reverts ALREADY_SETTLED.
+    // The two mean different things to a miss write and must not collide.
+    expect(revertKind(new Error("execution reverted: SETTLED"))).toBe("pool-settled");
+    expect(revertKind(new Error("execution reverted: ALREADY_SETTLED"))).toBe(
+      "already-settled",
+    );
+    expect(revertKind(new Error("PoolSettled event"))).toBeNull();
   });
 });
 
@@ -546,6 +557,27 @@ describe("payoutFromLogs", () => {
     expect(payoutFromLogs(logs, POOL, USER)).toEqual({
       txHash: "0xsettle",
       amount: 25_000_000n,
+    });
+  });
+
+  it("splits one settle transaction into what it paid and what it refunded", () => {
+    const other = "0x3333333333333333333333333333333333333333" as Address;
+    const refundLog = {
+      address: "0xc4274eF2cBe28f77Af31b980055Cc1171818390C",
+      topics: encodeEventTopics({
+        abi: REFUND_CREDITED_ABI,
+        eventName: "RefundCredited",
+        args: { poolId: POOL, participant: other },
+      }),
+      data: encodeAbiParameters([{ type: "uint256" }], [1_000_000n]),
+      transactionHash: "0xsettle",
+    } as unknown as Log;
+
+    expect(
+      settleLogsFrom([paidLog(POOL, USER, 2_000_000n), refundLog, paidLog(9n, other, 5n)], POOL),
+    ).toEqual({
+      paid: [{ participant: USER, amount: 2_000_000n }],
+      refunded: [{ participant: other, amount: 1_000_000n }],
     });
   });
 
@@ -921,5 +953,151 @@ describe("oracle-only pools (healthVerdict() = 0x0)", () => {
     ).rejects.toThrow(/oracle-only/);
     expect(reader.verdictRecorded).not.toHaveBeenCalled();
     expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
+  });
+});
+
+// A commitment pool proven by wearable can record misses, and settle()
+// refunds anyone without a result (B-2). If SPOTTER settled at periodEnd as
+// before, every miss would be refunded before it could be recorded. These
+// pools therefore settle only after periodEnd + MISS_GRACE_HOURS AND after the
+// sweep's miss phase judged every player (or, if that phase is stuck, after
+// holdUntil, so a stake is never stranded).
+describe("settlement timing on pools that can record a miss", () => {
+  const GRACE = 6n * 3600n;
+  const HOLD = 2n * 3600n;
+  const missPool = {
+    settled: false,
+    periodEnd: 1_000n,
+    periodStart: 100n,
+    bountyModel: 2,
+    goalSpec: "Sleep 7 hours for 1 night",
+  };
+
+  function missDeps(
+    nowSeconds: bigint,
+    missPhaseDone: boolean | undefined,
+    executor = fakeExecutor(),
+    readerOverrides: Partial<ArcReader> = {},
+  ): SpotterDeps {
+    return {
+      circle: executor,
+      reader: fakeReader({
+        getPoolState: vi.fn().mockResolvedValue(missPool),
+        ...readerOverrides,
+      }),
+      nowSeconds: () => nowSeconds,
+      ...(missPhaseDone === undefined
+        ? {}
+        : { missPhaseDone: vi.fn().mockResolvedValue(missPhaseDone) }),
+    };
+  }
+
+  it("the claim path is not due until periodEnd + grace, and says when it will be", async () => {
+    stubSpotterEnv();
+    vi.stubEnv("MISS_GRACE_HOURS", "6");
+    const executor = fakeExecutor();
+
+    const result = await settlePoolAsSpotter(missDeps(1_000n + GRACE, true, executor), {
+      poolId: POOL,
+      goalId: GOAL,
+      participant: USER,
+    });
+
+    expect(result).toEqual({ status: "not-due", periodEnd: 1_000n, dueAt: 1_000n + GRACE });
+    expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
+  });
+
+  it("the claim path holds while the miss phase has not judged every player", async () => {
+    stubSpotterEnv();
+    vi.stubEnv("MISS_GRACE_HOURS", "6");
+    const executor = fakeExecutor();
+
+    const result = await settlePoolAsSpotter(
+      missDeps(1_000n + GRACE + 1n, false, executor),
+      { poolId: POOL, goalId: GOAL, participant: USER },
+    );
+
+    expect(result).toEqual({ status: "held", dueAt: 1_000n + GRACE });
+    expect(executor.createContractExecutionTransaction).not.toHaveBeenCalled();
+  });
+
+  it("an eligible pool with no miss-phase reader injected is held, never settled early", async () => {
+    stubSpotterEnv();
+    vi.stubEnv("MISS_GRACE_HOURS", "6");
+    const executor = fakeExecutor();
+
+    const result = await settlePoolAsSpotter(
+      missDeps(1_000n + GRACE + 1n, undefined, executor),
+      { poolId: POOL, goalId: GOAL, participant: USER },
+    );
+
+    expect(result).toEqual({ status: "held", dueAt: 1_000n + GRACE });
+  });
+
+  it("the claim path settles once the miss phase is done", async () => {
+    stubSpotterEnv();
+    vi.stubEnv("MISS_GRACE_HOURS", "6");
+    const executor = fakeExecutor();
+
+    const result = await settlePoolAsSpotter(
+      missDeps(1_000n + GRACE + 1n, true, executor),
+      { poolId: POOL, goalId: GOAL, participant: USER },
+    );
+
+    expect(result.status).toBe("settled");
+    expect(executor.createContractExecutionTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("a stuck miss phase never strands the pool: past the hold it settles anyway", async () => {
+    stubSpotterEnv();
+    vi.stubEnv("MISS_GRACE_HOURS", "6");
+    const executor = fakeExecutor();
+
+    const result = await settlePoolAsSpotter(
+      missDeps(1_000n + GRACE + HOLD + 1n, false, executor),
+      { poolId: POOL, goalId: GOAL, participant: USER },
+    );
+
+    expect(result.status).toBe("settled");
+  });
+
+  it("the pool path follows the same timing: not due, held, then settled", async () => {
+    stubSpotterEnv();
+    vi.stubEnv("MISS_GRACE_HOURS", "6");
+    const settledAfter = vi
+      .fn()
+      .mockResolvedValueOnce(missPool)
+      .mockResolvedValueOnce({ ...missPool, settled: true });
+
+    expect(
+      await settleDuePoolAsSpotter(missDeps(1_000n + 60n, true), { poolId: POOL }),
+    ).toEqual({ status: "not-due", periodEnd: 1_000n, dueAt: 1_000n + GRACE });
+    expect(
+      await settleDuePoolAsSpotter(missDeps(1_000n + GRACE + 1n, false), { poolId: POOL }),
+    ).toEqual({ status: "held", dueAt: 1_000n + GRACE });
+    const executor = fakeExecutor();
+    expect(
+      await settleDuePoolAsSpotter(
+        missDeps(1_000n + GRACE + 1n, true, executor, { getPoolState: settledAfter }),
+        { poolId: POOL },
+      ),
+    ).toEqual({ status: "settled", txHash: "0xfeed" });
+  });
+
+  it("leaves pools that can never record a miss on their old timing", async () => {
+    stubSpotterEnv();
+    vi.stubEnv("MISS_GRACE_HOURS", "6");
+    const executor = fakeExecutor();
+
+    const result = await settlePoolAsSpotter(
+      missDeps(1_001n, undefined, executor, {
+        getPoolState: vi
+          .fn()
+          .mockResolvedValue({ ...missPool, goalSpec: "8000 steps for 1 day" }),
+      }),
+      { poolId: POOL, goalId: GOAL, participant: USER },
+    );
+
+    expect(result.status).toBe("settled");
   });
 });

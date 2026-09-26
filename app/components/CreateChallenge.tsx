@@ -3,8 +3,10 @@
 // Create a challenge. Two honest variants, one screen, one clear choice:
 //
 //   STAKE ON YOURSELF (commitment) — you put your OWN USDC on your OWN goal.
-//     Hit it, your stake comes back plus a cut of what everyone who flaked
-//     forfeited. Nobody hits, everyone is refunded. This is the pilot model.
+//     Hit it, your stake comes back plus a share of anything else in the pot.
+//     A challenge is document-proven (encodeGoal), so SPOTTER never records a
+//     miss on it (lib/miss-rule.ts): a miss is refunded at settle, and there
+//     are no forfeits to promise a cut of (lib/commitment-copy.ts).
 //
 //   DARE A FRIEND (reward) — you put up a reward for someone else. They stake a
 //     small lock-in to accept, hit the goal, and collect their lock-in back plus

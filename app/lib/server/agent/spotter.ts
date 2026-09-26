@@ -36,11 +36,16 @@ import type { CircleDeveloperControlledWalletsClient } from "@circle-fin/develop
 import { arcPublicClient, ttlCache } from "@/lib/server/arc-client";
 import { requireEnv, requireHealthPoolsAddress } from "@/lib/server/env";
 import { errorMessage } from "@/lib/server/http";
+import { readParticipants, REFUND_CREDITED_ABI } from "@/lib/contract";
 import { readJson, writeJson } from "@/lib/server/store";
 import type { Confidence } from "@/lib/server/judge";
 // --- foundation ---
 import { poolVerdictRegistry } from "@/lib/server/verdict";
 // --- end foundation ---
+// --- miss rule ---
+import { missSettleWindow } from "@/lib/server/agent/miss";
+import { missGraceSeconds } from "@/lib/miss-grace";
+// --- end miss rule ---
 // --- intercepta ---
 import {
   goalIdFor,
@@ -69,12 +74,18 @@ const CONFIDENCE_U8: Record<Confidence, number> = { low: 0, medium: 1, high: 2 }
 export type RevertKind =
   | "already-recorded"
   | "already-settled"
-  | "not-participant";
+  | "not-participant"
+  /** recordResult refused because settle() already ran (plain SETTLED).
+   *  Terminal for a miss write: the pool paid out without this result. */
+  | "pool-settled";
 
 const REVERT_PATTERNS: ReadonlyArray<[RegExp, RevertKind]> = [
   [/\bALREADY_RECORDED\b/, "already-recorded"],
   [/\bALREADY_SETTLED\b/, "already-settled"],
   [/\bNOT_PARTICIPANT\b/, "not-participant"],
+  // After ALREADY_SETTLED, and \b does not match inside it ("_" is a word
+  // character), so the two never collide.
+  [/\bSETTLED\b/, "pool-settled"],
 ];
 
 /** Decode a thrown chain error, or null when it is a real failure. */
@@ -91,13 +102,34 @@ export type SpotterExecutor = Pick<
   "createContractExecutionTransaction" | "getTransaction"
 >;
 
+/**
+ * The pool as the agent reads it. Everything past `periodEnd` is optional so
+ * pre-existing fakes keep compiling; the live reader always sets it. The miss
+ * rule needs bountyModel and goalSpec to know whether a pool can record a
+ * miss, and settlement timing follows from that (see settleReadiness).
+ */
+export interface PoolState {
+  settled: boolean;
+  periodEnd: bigint;
+  periodStart?: bigint;
+  bountyModel?: number;
+  goalSpec?: string;
+  cancelled?: boolean;
+  /** Entry fee in 6-decimal USDC base units. */
+  entryFee?: bigint;
+}
+
+/** What settle() did, read from its own transaction's events. */
+export interface SettleLogs {
+  paid: { participant: Address; amount: bigint }[];
+  refunded: { participant: Address; amount: bigint }[];
+}
+
 /** Chain reads the agent needs, injectable so tests never touch an RPC. */
 export interface ArcReader {
   /** periodStart is optional so pre-existing fakes keep compiling; the live
    *  reader always sets it. The run route needs it to key wearable claims. */
-  getPoolState(
-    poolId: bigint,
-  ): Promise<{ settled: boolean; periodEnd: bigint; periodStart?: bigint }>;
+  getPoolState(poolId: bigint): Promise<PoolState>;
   /** Pool ids run 1..poolCount and are never deleted, so this is the whole
    *  pool list in one read - the only way to find a pool no claim points at
    *  (see settleDuePoolAsSpotter). Required: the sweep's pool phase is a money
@@ -146,6 +178,21 @@ export interface ArcReader {
   achieverPayouts(txHash: Hex): Promise<
     { participant: Address; amount: bigint }[]
   >;
+  // --- miss rule ---
+  /** One participant's on-chain result. Optional so older fakes compile;
+   *  the miss rule refuses to run without it. */
+  participantResult?(
+    poolId: bigint,
+    user: Address,
+  ): Promise<{ joined: boolean; resultRecorded: boolean; verdict: boolean }>;
+  /** Every wallet that joined the pool, in join order. */
+  participants?(poolId: bigint): Promise<Address[]>;
+  /** The transaction that settled this pool, or null when it is not known. */
+  settleTxHash?(poolId: bigint): Promise<Hex | null>;
+  /** AchieverPaid and RefundCredited for this pool from one settle
+   *  transaction's receipt; throws when that transaction reverted. */
+  settleLogs?(txHash: Hex, poolId: bigint): Promise<SettleLogs>;
+  // --- end miss rule ---
 }
 
 /**
@@ -171,10 +218,23 @@ export interface SpotterDeps {
    *  a fake so no spotter test reaches the network. */
   screen?: PayeeScreener;
   // --- end intercepta ---
+  // --- miss rule ---
+  /** True once the sweep's miss phase judged every player in this pool.
+   *  Absent means not done: a pool that can record a miss is then held
+   *  until its hold deadline rather than settled under a pending miss. */
+  missPhaseDone?: (poolId: bigint) => Promise<boolean>;
+  /** MISS_GRACE_HOURS in seconds; absent reads the environment. */
+  graceSec?: number;
+  // --- end miss rule ---
 }
 
 export type SettleOutcome =
-  | { status: "not-due"; periodEnd: bigint }
+  /** dueAt is when settlement may run: periodEnd, or periodEnd + grace on a
+   *  pool that can record a miss. */
+  | { status: "not-due"; periodEnd: bigint; dueAt: bigint }
+  /** Past dueAt, but the miss phase has not judged every player yet. No
+   *  transaction was sent; the sweep retries on its next pass. */
+  | { status: "held"; dueAt: bigint }
   | { status: "already-settled" }
   /** Another claim in this pool holds the settle right now. No transaction was
    *  sent, no gas was spent, and nothing failed: one settle() pays every
@@ -245,6 +305,52 @@ async function executeAsSpotter(
 }
 
 /**
+ * Whether settle() may run now. A pool that can never record a miss keeps its
+ * old timing (due the second periodEnd passes). A pool that can (model 2,
+ * wearable only, a metric whose day is final; lib/server/agent/miss.ts) is
+ * not due until periodEnd + MISS_GRACE_HOURS, then held until the miss phase
+ * judged every player, and settles regardless once holdUntil passes so a
+ * stuck miss phase can never strand a stake.
+ */
+async function settleReadiness(
+  deps: SpotterDeps,
+  poolId: bigint,
+  state: PoolState,
+  now: bigint,
+): Promise<
+  | { status: "due" }
+  | { status: "not-due"; dueAt: bigint }
+  | { status: "held"; dueAt: bigint }
+> {
+  const window =
+    state.bountyModel === undefined || state.goalSpec === undefined
+      ? null
+      : missSettleWindow(
+          {
+            id: poolId,
+            bountyModel: state.bountyModel,
+            goalSpec: state.goalSpec,
+            periodEnd: state.periodEnd,
+          },
+          deps.graceSec ?? missGraceSeconds(),
+        );
+  if (window === null) {
+    return now <= state.periodEnd
+      ? { status: "not-due", dueAt: state.periodEnd }
+      : { status: "due" };
+  }
+  if (now <= window.dueAt) return { status: "not-due", dueAt: window.dueAt };
+  if (now > window.holdUntil) {
+    console.warn(
+      `[spotter] pool ${poolId}: miss phase did not finish by its hold deadline; settling anyway (the unjudged are refunded)`,
+    );
+    return { status: "due" };
+  }
+  const done = (await deps.missPhaseDone?.(poolId)) === true;
+  return done ? { status: "due" } : { status: "held", dueAt: window.dueAt };
+}
+
+/**
  * Settle a pool from SPOTTER's wallet.
  *
  * Preflights: pool due and unsettled, the pool-scoped settle lock free, the
@@ -270,9 +376,11 @@ export async function settlePoolAsSpotter(
   if (state.settled) {
     return { status: "already-settled" };
   }
-  if (now <= state.periodEnd) {
-    return { status: "not-due", periodEnd: state.periodEnd };
+  const ready = await settleReadiness(deps, input.poolId, state, now);
+  if (ready.status === "not-due") {
+    return { status: "not-due", periodEnd: state.periodEnd, dueAt: ready.dueAt };
   }
+  if (ready.status === "held") return { status: "held", dueAt: ready.dueAt };
 
   // --- intercepta ---
   // Screen the payee against mainnet risk data BEFORE the settle lock and
@@ -392,7 +500,8 @@ export async function settlePoolAsSpotter(
 }
 
 export type DuePoolOutcome =
-  | { status: "not-due"; periodEnd: bigint }
+  | { status: "not-due"; periodEnd: bigint; dueAt: bigint }
+  | { status: "held"; dueAt: bigint }
   | { status: "already-settled" }
   | { status: "busy" }
   | { status: "settled"; txHash: Hex };
@@ -429,9 +538,11 @@ export async function settleDuePoolAsSpotter(
 
   const state = await deps.reader.getPoolState(input.poolId);
   if (state.settled) return { status: "already-settled" };
-  if (now <= state.periodEnd) {
-    return { status: "not-due", periodEnd: state.periodEnd };
+  const ready = await settleReadiness(deps, input.poolId, state, now);
+  if (ready.status === "not-due") {
+    return { status: "not-due", periodEnd: state.periodEnd, dueAt: ready.dueAt };
   }
+  if (ready.status === "held") return { status: "held", dueAt: ready.dueAt };
 
   let lockToken: string | null = null;
   if (deps.settleLock !== undefined) {
@@ -779,6 +890,40 @@ export function payoutFromLogs(
   return { txHash: hit.transactionHash as Hex, amount: hit.args.amount };
 }
 
+/**
+ * Split one settle transaction's logs into what it paid (AchieverPaid) and
+ * what it refunded (RefundCredited), for one pool. The miss rule closes a
+ * recorded miss on exactly these events: refunded when nobody hit, forfeited
+ * when the pool paid achievers and refunded this player nothing.
+ */
+export function settleLogsFrom(logs: Log[], poolId: bigint): SettleLogs {
+  const paid = parseEventLogs({
+    abi: ACHIEVER_PAID_ABI,
+    logs,
+    eventName: "AchieverPaid",
+  })
+    .filter((e) => e.args.poolId === poolId)
+    .map((e) => ({ participant: e.args.participant, amount: e.args.amount }));
+  const refunded = parseEventLogs({
+    abi: REFUND_CREDITED_ABI,
+    logs,
+    eventName: "RefundCredited",
+  })
+    .filter((e) => e.args.poolId === poolId)
+    .map((e) => ({ participant: e.args.participant, amount: e.args.amount }));
+  return { paid, refunded };
+}
+
+const POOL_SETTLED_EVENT = {
+  type: "event",
+  name: "PoolSettled",
+  inputs: [
+    { name: "poolId", type: "uint256", indexed: true },
+    { name: "achieverCount", type: "uint256", indexed: false },
+    { name: "totalPaid", type: "uint256", indexed: false },
+  ],
+} as const;
+
 /** Live ArcReader over viem. Everything here is a read; no keys involved. */
 export function arcReader(
   settleTxCache: SettleTxCache = storeSettleTxCache(),
@@ -804,6 +949,73 @@ export function arcReader(
   };
   // --- end foundation ---
 
+  /**
+   * Every log of `event` for this pool in the first getLogs range that has
+   * any, scanning forward from the first block past periodEnd. The RPC caps
+   * eth_getLogs at 100k blocks, so an earliest-to-latest query is rejected
+   * outright; settle() can only land after periodEnd (block.timestamp gate),
+   * so binary-search that block and scan forward in capped ranges. In
+   * practice the settlement sits in the first range: the sweep settles
+   * pools within minutes of their period ending. Filtered by pool, NOT by
+   * participant: any match identifies the settle transaction, which is what
+   * callers cache so the next reader never runs this search at all.
+   */
+  const scanAfterPeriodEnd = async (
+    poolId: bigint,
+    event: (typeof ACHIEVER_PAID_ABI)[0] | typeof POOL_SETTLED_EVENT,
+  ): Promise<Log[]> => {
+    const pool = await client.readContract({
+      address: pools(),
+      abi: POOLS_READ_ABI,
+      functionName: "getPool",
+      args: [poolId],
+    });
+    const periodEnd = BigInt(pool.periodEnd);
+    const latest = await client.getBlock({ blockTag: "latest" });
+    if (latest.timestamp <= periodEnd) {
+      // A settled pool implies a block past periodEnd exists; a tip that
+      // disagrees is a stale or inconsistent RPC view. Unknown, not unpaid.
+      throw new Error(
+        `chain tip ${latest.number} predates pool ${poolId} periodEnd; cannot reconcile the payout yet`,
+      );
+    }
+    let lo = 0n;
+    let hi = latest.number;
+    while (lo < hi) {
+      const mid = (lo + hi) / 2n;
+      const block = await client.getBlock({ blockNumber: mid });
+      if (block.timestamp > periodEnd) {
+        hi = mid;
+      } else {
+        lo = mid + 1n;
+      }
+    }
+    const RANGE = 90_000n; // under the RPC's 100k getLogs window
+    const MAX_RANGES = 30;
+    let from = lo;
+    for (let i = 0; i < MAX_RANGES && from <= latest.number; i += 1) {
+      const to =
+        from + RANGE - 1n > latest.number ? latest.number : from + RANGE - 1n;
+      const logs = await client.getLogs({
+        address: pools(),
+        event,
+        args: { poolId },
+        fromBlock: from,
+        toBlock: to,
+      });
+      if (logs.length > 0) return logs as Log[];
+      from = to + 1n;
+    }
+    if (from <= latest.number) {
+      // The scan budget ran out before covering the tip. Refusing to
+      // answer beats declaring a possibly-paid participant unpaid.
+      throw new Error(
+        `${event.name} scan for pool ${poolId} exhausted its range budget before reaching the chain tip; refusing to declare the participant unpaid`,
+      );
+    }
+    return [];
+  };
+
   return {
     async getPoolState(poolId) {
       const pool = await client.readContract({
@@ -816,6 +1028,10 @@ export function arcReader(
         settled: pool.settled,
         periodEnd: BigInt(pool.periodEnd),
         periodStart: BigInt(pool.periodStart),
+        bountyModel: pool.bountyModel,
+        goalSpec: pool.goalSpec,
+        cancelled: pool.cancelled,
+        entryFee: pool.entryFee,
       };
     },
     async poolCount() {
@@ -912,73 +1128,52 @@ export function arcReader(
           // Unknown or pruned hash - fall through to the scan and re-cache.
         }
       }
-
-      // The RPC caps eth_getLogs at 100k blocks, so an earliest-to-latest
-      // query is rejected outright. settle() can only land after the pool's
-      // periodEnd (block.timestamp gate), so binary-search the first block
-      // past periodEnd and scan forward from there in capped ranges. In
-      // practice the settlement sits in the first range: the sweep settles
-      // pools within minutes of their period ending.
-      const pool = await client.readContract({
-        address: pools(),
-        abi: POOLS_READ_ABI,
-        functionName: "getPool",
-        args: [poolId],
-      });
-      const periodEnd = BigInt(pool.periodEnd);
-      const latest = await client.getBlock({ blockTag: "latest" });
-      if (latest.timestamp <= periodEnd) {
-        // A settled pool implies a block past periodEnd exists; a tip that
-        // disagrees is a stale or inconsistent RPC view. Unknown, not unpaid.
-        throw new Error(
-          `chain tip ${latest.number} predates pool ${poolId} periodEnd; cannot reconcile the payout yet`,
-        );
-      }
-      let lo = 0n;
-      let hi = latest.number;
-      while (lo < hi) {
-        const mid = (lo + hi) / 2n;
-        const block = await client.getBlock({ blockNumber: mid });
-        if (block.timestamp > periodEnd) {
-          hi = mid;
-        } else {
-          lo = mid + 1n;
+      const logs = await scanAfterPeriodEnd(poolId, ACHIEVER_PAID_ABI[0]);
+      if (logs.length > 0) {
+        const settleTx = logs[0].transactionHash;
+        if (settleTx !== null) {
+          await settleTxCache.write(poolId, settleTx as Hex);
         }
-      }
-      const RANGE = 90_000n; // under the RPC's 100k getLogs window
-      const MAX_RANGES = 30;
-      let from = lo;
-      for (let i = 0; i < MAX_RANGES && from <= latest.number; i += 1) {
-        const to =
-          from + RANGE - 1n > latest.number ? latest.number : from + RANGE - 1n;
-        // Filtered by pool, NOT by participant: any AchieverPaid from this
-        // pool identifies the settle transaction, which is what gets cached so
-        // the next participant never runs this search at all.
-        const logs = await client.getLogs({
-          address: pools(),
-          event: ACHIEVER_PAID_ABI[0],
-          args: { poolId },
-          fromBlock: from,
-          toBlock: to,
-        });
-        if (logs.length > 0) {
-          const settleTx = logs[0].transactionHash;
-          if (settleTx !== null) {
-            await settleTxCache.write(poolId, settleTx as Hex);
-          }
-          return payoutFromLogs(logs as Log[], poolId, participant);
-        }
-        from = to + 1n;
-      }
-      if (from <= latest.number) {
-        // The scan budget ran out before covering the tip. Refusing to
-        // answer beats declaring a possibly-paid participant unpaid.
-        throw new Error(
-          `AchieverPaid scan for pool ${poolId} exhausted its range budget before reaching the chain tip; refusing to declare the participant unpaid`,
-        );
+        return payoutFromLogs(logs as Log[], poolId, participant);
       }
       return null;
     },
+    // --- miss rule ---
+    async participantResult(poolId, user) {
+      const participant = await client.readContract({
+        address: pools(),
+        abi: POOLS_READ_ABI,
+        functionName: "getParticipant",
+        args: [poolId, user],
+      });
+      return {
+        joined: participant.joined,
+        resultRecorded: participant.resultRecorded,
+        verdict: participant.verdict,
+      };
+    },
+    async participants(poolId) {
+      return readParticipants(client, pools(), poolId);
+    },
+    async settleTxHash(poolId) {
+      const cached = await settleTxCache.read(poolId);
+      if (cached !== null) return cached;
+      // PoolSettled is emitted exactly once, by the settle transaction, so the
+      // first one past periodEnd is the settlement whoever sent it.
+      const logs = await scanAfterPeriodEnd(poolId, POOL_SETTLED_EVENT);
+      const settleTx = logs[0]?.transactionHash ?? null;
+      if (settleTx === null) return null;
+      await settleTxCache.write(poolId, settleTx as Hex);
+      return settleTx as Hex;
+    },
+    async settleLogs(txHash, poolId) {
+      const receipt = await client.getTransactionReceipt({ hash: txHash });
+      if (receipt.status !== "success") {
+        throw new Error(`settle tx ${txHash} reverted on Base Sepolia`);
+      }
+      return settleLogsFrom(receipt.logs, poolId);
+    },
+    // --- end miss rule ---
     async achieverPayouts(txHash) {
       const receipt = await client.waitForTransactionReceipt({ hash: txHash });
       if (receipt.status !== "success") {

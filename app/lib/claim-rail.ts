@@ -80,6 +80,7 @@ export function claimStepOf(
       return "paid";
     case "recorded":
     case "no-pay":
+    case "missed":
     case "cap-exceeded":
     case "blocked":
     case "error":

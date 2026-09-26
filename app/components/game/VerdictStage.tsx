@@ -27,6 +27,8 @@ import { Glyph } from "@/components/run/glyphs";
 import { ButtonLink, Card, Fine } from "@/components/ui";
 import { toUsd2, type LedgerEntry, type RunStatus } from "@/lib/agent-receipt";
 import { fetchGoalId, formatUsdc, readOwed, type PoolInfo } from "@/lib/contract";
+import { missConfirmByMs, missDeadlineMs } from "@/lib/miss-grace";
+import { missRulePool } from "@/lib/miss-rule";
 import { parseScreening, type ScreeningStatus } from "@/lib/game/lanes";
 import { useLaneProbe } from "@/lib/game/useLaneProbe";
 import { commitmentLostCopy, hitRange } from "@/lib/game/commitment-copy";
@@ -44,6 +46,7 @@ export function proofSurfaceNeeded(screen: VerdictScreen): boolean {
   switch (screen.kind) {
     case "won":
     case "lost":
+    case "missed":
     case "cancelled":
     case "settled-final":
       return false;
@@ -137,6 +140,16 @@ export function useVerdict(input: {
     ledger: input.ledger,
     localApproval: local,
     resultRecorded: input.resultRecorded,
+    // On a run that can record a miss, the not-yet screen names the moment
+    // SPOTTER takes its last look; later syncs no longer count.
+    missDeadlineMs: missRulePool(input.pool).ok
+      ? missDeadlineMs(input.pool.periodEnd)
+      : null,
+    // And the latest moment a hit can still be confirmed: the run settles by
+    // then, and an unconfirmed hit gets its stake back without a share.
+    missConfirmByMs: missRulePool(input.pool).ok
+      ? missConfirmByMs(input.pool.periodEnd)
+      : null,
   });
 
   return {
@@ -243,6 +256,23 @@ export function verdictHeadOf(input: {
         body: lost.body,
       };
     }
+    case "missed":
+      // A miss SPOTTER recorded on chain (lib/miss-rule.ts): where the stake
+      // went is the settle's outcome, said by verdictCopy.
+      return {
+        eyebrow: read,
+        headline:
+          screen.outcome === "refunded"
+            ? "Nobody hit it."
+            : screen.outcome === "cancelled"
+              ? "Run called off."
+              : goalShort === "the goal"
+                ? "You missed the goal."
+                : `You missed ${goalShort}.`,
+        body: base.body,
+      };
+    case "hit-unconfirmed":
+      return { eyebrow: "Not confirmed", headline: `${hit} Not confirmed in time.`, body: base.body };
     case "settled-final":
       return { eyebrow: "Run settled", headline: "Every result is final.", body: base.body };
     case "bad-read":
@@ -367,7 +397,11 @@ export default function VerdictStage({
     queryKey: ["owed", address],
     queryFn: () => readOwed(address),
     staleTime: 15_000,
-    enabled: screen.kind === "won" || screen.kind === "lost",
+    enabled:
+      screen.kind === "won" ||
+      screen.kind === "lost" ||
+      screen.kind === "missed" ||
+      screen.kind === "hit-unconfirmed",
   });
   const head = verdictHeadOf({
     screen,
@@ -455,12 +489,17 @@ export default function VerdictStage({
         screen.kind === "won" ||
           screen.kind === "settled-final" ||
           screen.kind === "lost" ||
+          screen.kind === "hit-unconfirmed" ||
+          (screen.kind === "missed" && screen.outcome === "refunded") ||
           (screen.kind === "approval-failed" && screen.settled) ? (
           <ClaimPayout address={address} quiet className="mt-4" />
         ) : null
       }
       actions={
-        screen.kind === "won" || screen.kind === "lost" ? (
+        screen.kind === "won" ||
+        screen.kind === "lost" ||
+        screen.kind === "missed" ||
+        screen.kind === "hit-unconfirmed" ? (
           <>
             <ButtonLink href={nextRunHref} variant={claimWaiting ? "secondary" : "primary"} block>
               Go again tonight

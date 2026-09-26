@@ -36,7 +36,9 @@ describe("runEndCopy", () => {
 
   it("never says anyone was paid when nobody hit it", () => {
     const copy = runEndCopy({ ...base, tally: tally(0, 3) });
-    expect(copy.headline).toBe("Settled. Nobody hit it");
+    // F10: a hit nobody confirmed is not recorded, so the chain cannot say
+    // nobody hit; it can say no hit was recorded.
+    expect(copy.headline).toBe("Settled. No hit was recorded");
     expect(copy.body).toContain("No prize went out");
     expect(copy.body).toContain("credited back");
     expect(`${copy.headline} ${copy.body}`).not.toMatch(/paid the verified achievers/);
@@ -56,6 +58,17 @@ describe("runEndCopy", () => {
     const copy = runEndCopy({ ...base, tally: tally(2, 1) });
     expect(copy.body).toContain("2 of 3 hit it");
     expect(copy.body).toContain("1 player with no recorded result got their stake back");
+  });
+
+  it("says the recorded misses went to the players who hit on a self-staked pool", () => {
+    const copy = runEndCopy({ ...base, bountyModel: 2, tally: tally(1, 1, 2) });
+    expect(copy.body).toContain("1 of 4 hit it");
+    expect(copy.body).toContain("The stakes of 2 recorded misses went to the players who hit.");
+    expect(copy.body).toContain("1 player with no recorded result got their stake back");
+    // A pool with no recorded miss says nothing about misses.
+    expect(runEndCopy({ ...base, bountyModel: 2, tally: tally(1, 1) }).body).not.toMatch(
+      /recorded miss/,
+    );
   });
 
   it("says nobody entered an empty run", () => {

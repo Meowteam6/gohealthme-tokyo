@@ -13,12 +13,14 @@ import { ttlCache } from "@/lib/server/arc-client";
 import {
   createLinkToken,
   getMetricProgress as junctionGetMetricProgress,
+  getMissEvidence as junctionGetMissEvidence,
   getProgress as junctionGetProgress,
   getRecent as junctionGetRecent,
   isConnected as junctionIsConnected,
 } from "@/lib/server/junction";
 import type {
   MetricProgress,
+  MissEvidence,
   ObservedCapability,
   WearableLink,
   WearableMetric,
@@ -38,6 +40,10 @@ const observedCache = ttlCache<ObservedCapability>({
   ttlMs: OBSERVED_TTL_MS,
   maxEntries: 512,
 });
+
+/** One run read serves the polls that land within this window. */
+const EVIDENCE_TTL_MS = 15_000;
+const evidenceCache = ttlCache<MissEvidence>({ ttlMs: EVIDENCE_TTL_MS, maxEntries: 512 });
 
 /** Whether the Junction path is configured at all. */
 export function junctionConfigured(): boolean {
@@ -181,6 +187,23 @@ export const junctionProvider: WearableProvider = {
       threshold,
       windowStartISO,
       windowEndISO,
+    );
+  },
+
+  /**
+   * The run's per-local-day read, shared by the pass path and the miss rule
+   * (lib/server/agent/miss.ts runProgress): Junction's calendar_date is
+   * already local. A workouts read is four requests (sleep, activity,
+   * workouts, linked sources) and the run page polls, so one read serves
+   * every poll for a few seconds; a failure is never cached.
+   */
+  getMissEvidence(
+    address: string,
+    metric: WearableMetric,
+    fromISO: string,
+  ): Promise<MissEvidence> {
+    return evidenceCache.get(`${address.toLowerCase()}|${metric}|${fromISO}`, () =>
+      junctionGetMissEvidence(address, metric, fromISO),
     );
   },
 

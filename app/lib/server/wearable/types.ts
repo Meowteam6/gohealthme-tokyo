@@ -74,6 +74,59 @@ export interface MetricProgress {
 }
 
 /**
+ * What SPOTTER reads once a run is over, to decide whether a miss may be
+ * recorded (lib/server/agent/miss.ts). Keyed to the WEARER'S own calendar
+ * days, because a night belongs to the local day it ended and a pool window
+ * judged in UTC days lands on the wrong night east or west of Greenwich.
+ *
+ * Privacy: per-day derived numbers only, never raw samples. Nothing here is
+ * written to the ledger or the chain; only the miss/skip decision is.
+ */
+export interface MissEvidence {
+  /**
+   * The metric's value per local day (YYYY-MM-DD): the best value of the
+   * sleep that ended that day (for hours, the larger of the best single sleep
+   * and the sum of that day's main sleeps, so a split night counts whole), or
+   * the number of workouts that day. A day with no value for this metric is
+   * absent, never zero-filled. The pass path reads these same values, so the
+   * two directions can never disagree about a day.
+   */
+  values: Record<string, number>;
+  /**
+   * Local days the source that records this metric reported anything at all
+   * for (a sleep of any state, a daily activity summary, a workout). This is
+   * what tells "no workout that day" from "the device did not sync that
+   * day". On a multi-source provider only that source's records count.
+   */
+  heartbeatDays: string[];
+  /**
+   * Local days with a record of the metric's own kind, carrying a value or
+   * not (for sleep: a night the device reported). Separates "nothing synced
+   * yet" from "the device does not report this number" on the pass path.
+   */
+  sourceDays?: string[];
+  /**
+   * Local days whose sleep is known to be incomplete: the strap recorded no
+   * data for part of the night, or the only sleep that day is a nap or a
+   * short sleep. A partial day is never covered for a miss (it still counts
+   * toward a pass when its value clears the bar).
+   */
+  partialDays?: string[];
+  /**
+   * Why this read cannot prove coverage at all, or null: a linked source is
+   * in an unusable state, or the source that records workouts cannot be
+   * pinned to one device. A miss is never recorded while this is set.
+   */
+  sourceProblem?: string | null;
+  /**
+   * The wearer's UTC offset in seconds, from their newest record that carries
+   * one. Null when no record says, and then no miss can be recorded: the
+   * window cannot be placed on the wearer's calendar.
+   */
+  tzOffsetSec: number | null;
+}
+
+/**
  * Derived, privacy-safe sleep-streak progress for the dashboard card.
  *
  * `streakDays` is a COUNT of qualifying days inside the window, not a strict
@@ -196,6 +249,17 @@ export interface WearableProvider {
     windowStartISO: string,
     windowEndISO: string,
   ): Promise<MetricProgress>;
+  /**
+   * Per-local-day evidence for the miss rule, from `fromISO` (a UTC date,
+   * inclusive) to now. Optional: a provider that cannot place its data on
+   * the wearer's calendar (Apple rows carry no timezone) does not implement
+   * it, and SPOTTER then never records a miss for its wallets.
+   */
+  getMissEvidence?(
+    address: string,
+    metric: WearableMetric,
+    fromISO: string,
+  ): Promise<MissEvidence>;
   /**
    * Sleep-streak progress for the dashboard card. When a window is given,
    * progress is scoped to [windowStartISO, min(windowEndISO, today)];

@@ -31,7 +31,7 @@ describe("claimStepOf", () => {
   });
 
   it("maps every non-paying terminal outcome to verdict", () => {
-    for (const status of ["no-pay", "cap-exceeded", "blocked", "error"] as const) {
+    for (const status of ["no-pay", "missed", "cap-exceeded", "blocked", "error"] as const) {
       expect(claimStepOf(true, true, status)).toBe("verdict");
     }
   });

@@ -52,13 +52,24 @@ export type ReceiptRow =
       selfReported: boolean;
     }
   | { kind: "reason"; decision: "pay" | "no-pay"; note: string }
-  | { kind: "record"; resultTx: string | null; registryTx: string | null }
+  | {
+      kind: "record";
+      resultTx: string | null;
+      registryTx: string | null;
+      /** false for a recorded miss; true for every pass (and every row
+       *  written before misses existed). */
+      verdict: boolean;
+      /** The stake a miss costs, two decimals; null on a pass. */
+      stakeUsd: string | null;
+    }
   | {
       kind: "settle";
-      status: "deferred" | "settled" | "already-settled";
+      status: "deferred" | "settled" | "already-settled" | "closed";
       txHash: string | null;
       paidUsd: string | null;
       note: string | null;
+      /** Closed rows only: what settle() did with a recorded miss's stake. */
+      outcome: "forfeited" | "refunded" | "cancelled" | null;
     }
   | { kind: "error"; stage: string; message: string }
   | {
@@ -186,6 +197,8 @@ export function projectReceipt(ledger: LedgerEntry[]): Receipt {
           kind: "record",
           resultTx: entry.resultTx ?? null,
           registryTx: entry.registryTx ?? null,
+          verdict: entry.verdict !== false,
+          stakeUsd: entry.stakeUsd ?? null,
         });
         break;
       }
@@ -199,6 +212,7 @@ export function projectReceipt(ledger: LedgerEntry[]): Receipt {
           txHash: entry.txHash ?? null,
           paidUsd: entry.paidUsd !== undefined ? toUsd2(entry.paidUsd) : null,
           note: entry.note ?? null,
+          outcome: entry.outcome ?? null,
         });
         break;
       }
@@ -421,6 +435,11 @@ export function failureModeOf(
  */
 export function runStatusFromLedger(ledger: LedgerEntry[]): RunStatus | null {
   if (ledger.length === 0) return null;
+  // A recorded miss is final: the run loop's fast path returns "missed" for
+  // it before anything else, and so does this.
+  if (ledger.some((e) => e.kind === "record" && e.verdict === false)) {
+    return "missed";
+  }
   if (ledger.some((e) => e.kind === "settle" && e.status === "settled")) {
     return "paid";
   }
@@ -463,8 +482,41 @@ export function runStatusFromLedger(ledger: LedgerEntry[]): RunStatus | null {
   }
   // --- end world-agents ---
   const reason = currentReasonEntry(ledger, currentAttesterIdOf(ledger));
-  if (reason !== undefined && reason.decision === "no-pay") return "no-pay";
+  if (reason !== undefined && reason.decision === "no-pay") {
+    // A verified read written AFTER that no-pay (the sweep read the hit once
+    // the run ended) is fresh evidence: the run loop re-decides on it, so the
+    // claim is not a no-pay any more. Mirrors run.ts (decisionIsStale).
+    const newest = lastVerdictIndex(ledger);
+    if (newest > ledger.lastIndexOf(reason) && verdictAt(ledger, newest)?.verified === true) {
+      return "verifying";
+    }
+    return "no-pay";
+  }
   return "verifying";
+}
+
+function lastVerdictIndex(ledger: LedgerEntry[]): number {
+  for (let i = ledger.length - 1; i >= 0; i--) {
+    if (ledger[i].kind === "verdict") return i;
+  }
+  return -1;
+}
+
+function verdictAt(ledger: LedgerEntry[], index: number): VerdictEntry | undefined {
+  const entry = ledger[index];
+  return entry !== undefined && entry.kind === "verdict" ? entry : undefined;
+}
+
+/**
+ * True when the newest wearable read on this ledger shows the goal met and
+ * nothing is recorded yet: a hit that is waiting on the player to open the
+ * run and confirm it. Every surface that would otherwise say "not met" or "no
+ * proof" asks this first.
+ */
+export function unconfirmedHitOf(ledger: LedgerEntry[] | null): boolean {
+  if (ledger === null || ledger.some((e) => e.kind === "record")) return false;
+  const newest = verdictAt(ledger, lastVerdictIndex(ledger));
+  return newest?.verified === true && newest.selfReported !== true;
 }
 
 // -------------------------------------------------- deferred settle timing

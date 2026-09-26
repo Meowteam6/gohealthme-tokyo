@@ -569,3 +569,9 @@ describe("declared versus unknown, the distinction that stops an outage from sta
     expect(result.kind).not.toBe("declared");
   });
 });
+
+describe("appleProvider and the miss rule", () => {
+  it("offers no miss evidence: its daily rows carry no timezone, so no miss is ever recorded from Apple", () => {
+    expect(appleProvider.getMissEvidence).toBeUndefined();
+  });
+});

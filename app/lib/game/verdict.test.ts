@@ -238,6 +238,56 @@ describe("verdictScreenOf", () => {
     ).toEqual({ kind: "lost", stakeBack: false });
   });
 
+  it("gives a player with a sync deadline the moment their last nights must land by", () => {
+    const ledger = [spend, verdict(false), reason("no-pay")];
+    expect(screenFor(ledger, { missDeadlineMs: 1_790_487_000_000 })).toEqual({
+      kind: "not-yet",
+      lastCheckMs: 1_790_487_000_000,
+    });
+  });
+
+  it("shows a recorded miss as missed, pending until the pool settles", () => {
+    const missRecord: LedgerEntry = {
+      kind: "record",
+      at: AT,
+      goalId: "0x01",
+      registryStatus: "skipped",
+      verdict: false,
+      stakeUsd: "1.00",
+    };
+    const ledger = [spend, verdict(false), reason("no-pay"), missRecord];
+    expect(screenFor(ledger)).toEqual({ kind: "missed", outcome: "pending", stakeUsd: "1.00" });
+    // Settled but not closed yet: still pending, never "lost" or "settled-final".
+    expect(screenFor(ledger, { poolSettled: true, resultRecorded: true })).toEqual({
+      kind: "missed",
+      outcome: "pending",
+      stakeUsd: "1.00",
+    });
+    const closed = (outcome: "forfeited" | "refunded"): LedgerEntry => ({
+      kind: "settle",
+      at: AT,
+      status: "closed",
+      outcome,
+      txHash: "0xs",
+    });
+    expect(screenFor([...ledger, closed("forfeited")], { poolSettled: true })).toEqual({
+      kind: "missed",
+      outcome: "forfeited",
+      stakeUsd: "1.00",
+    });
+    expect(screenFor([...ledger, closed("refunded")], { poolSettled: true })).toEqual({
+      kind: "missed",
+      outcome: "refunded",
+      stakeUsd: "1.00",
+    });
+  });
+
+  it("carries the claim tap only on a miss whose stake came back", () => {
+    expect(verdictShowsClaim({ kind: "missed", outcome: "refunded", stakeUsd: "1.00" })).toBe(true);
+    expect(verdictShowsClaim({ kind: "missed", outcome: "forfeited", stakeUsd: "1.00" })).toBe(false);
+    expect(verdictShowsClaim({ kind: "missed", outcome: "pending", stakeUsd: "1.00" })).toBe(false);
+  });
+
   it("never calls a bad read or a down verifier a loss", () => {
     const lowConfidence = [
       spend,
@@ -308,6 +358,25 @@ describe("runApprovalLine", () => {
     expect(runApprovalLine("unknown", open)?.text).toContain("could not check");
   });
 
+  it("F10: asks a player whose wearable shows the hit to open the run and confirm it, by when", () => {
+    const line = runApprovalLine("none", open, { confirmByMs: 1_790_494_200_000 });
+    expect(line?.openRun).toBe(true);
+    expect(line?.text).toMatch(/shows the goal met/);
+    expect(line?.text).toMatch(/confirm it with World ID/);
+    expect(line?.text).toContain(
+      new Date(1_790_494_200_000).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    );
+    // A pending ask already says it; the hit adds nothing there.
+    expect(runApprovalLine("pending", open, { confirmByMs: null })?.text).toContain(
+      "waiting on your OK",
+    );
+  });
+
   it("says nothing once recorded, settled or cancelled, or when nobody asked", () => {
     expect(runApprovalLine("pending", { ...open, resultRecorded: true })).toBeNull();
     expect(runApprovalLine("pending", { ...open, settled: true })).toBeNull();
@@ -331,6 +400,11 @@ describe("verdictCopy", () => {
     { kind: "banked", selfReported: true },
     { kind: "won", paidUsd: "1.00", txHash: null, selfReported: false },
     { kind: "not-yet" },
+    { kind: "not-yet", lastCheckMs: 1_790_487_000_000 },
+    { kind: "missed", outcome: "pending", stakeUsd: "1.00" },
+    { kind: "missed", outcome: "forfeited", stakeUsd: "1.00" },
+    { kind: "missed", outcome: "refunded", stakeUsd: "1.00" },
+    { kind: "missed", outcome: "pending", stakeUsd: null },
     { kind: "lost", stakeBack: true },
     { kind: "lost", stakeBack: false },
     { kind: "settled-final" },
@@ -386,6 +460,36 @@ describe("verdictCopy", () => {
     );
   });
 
+  it("says a miss plainly: what it costs and where the stake goes, never a lost bet", () => {
+    const pending = verdictCopy({ kind: "missed", outcome: "pending", stakeUsd: "1.00" });
+    expect(pending?.headline).toBe("Missed");
+    expect(pending?.body).toContain("Your 1.00 stake goes to the players who hit");
+    expect(pending?.body).toContain("If nobody hit, every stake comes back");
+    const forfeited = verdictCopy({ kind: "missed", outcome: "forfeited", stakeUsd: "1.00" });
+    expect(forfeited?.body).toContain("Your 1.00 stake went to the players who hit");
+    const refunded = verdictCopy({ kind: "missed", outcome: "refunded", stakeUsd: "1.00" });
+    expect(refunded?.body).toContain("nobody hit");
+    expect(refunded?.body).toContain("came back");
+    for (const copy of [pending, forfeited, refunded]) {
+      expect(`${copy?.headline} ${copy?.body}`).not.toMatch(/\bbet\b|lost a|lose|wager/i);
+    }
+  });
+
+  it("tells a player still short of the goal when their last nights must sync by", () => {
+    const withDeadline = verdictCopy({ kind: "not-yet", lastCheckMs: 1_790_487_000_000 });
+    expect(withDeadline?.body).toContain(
+      new Date(1_790_487_000_000).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    );
+    expect(withDeadline?.body).toMatch(/records a miss on its own/);
+    // Without a deadline (a run that can never record a miss) it stays general.
+    expect(verdictCopy({ kind: "not-yet" })?.body).toContain("before it settles");
+  });
+
   it("uses the words the game loop promised", () => {
     expect(verdictCopy({ kind: "cancelled", refunded: false })?.headline).toBe(
       "Run cancelled, take your stake back",
@@ -405,5 +509,68 @@ describe("verdictCopy", () => {
     const won = verdictCopy({ kind: "won", paidUsd: "1.00", txHash: null, selfReported: false });
     expect(won?.body).not.toMatch(/in your wallet now/);
     expect(won?.body).toContain("one tap pulls it into your wallet");
+  });
+});
+
+// F10 (fix/record-misses review): SPOTTER records a miss on its own, but a
+// hit only counts once the player opens the run and confirms it. The sweep
+// writes the hit it read to the ledger; every screen must then say "confirm
+// it", never "not met" or "no proof".
+describe("F10: a hit the sweep read but the player has not confirmed", () => {
+  const sweepHit = verdict(true, { reason: "Your wearable shows 1 qualifying days" });
+
+  it("a verified read newer than an old no-pay is not a no-pay any more", () => {
+    const ledger = [spend, verdict(false), reason("no-pay"), sweepHit];
+    expect(runStatusFromLedger(ledger)).toBe("verifying");
+    expect(screenFor(ledger).kind).not.toBe("not-yet");
+  });
+
+  it("after settle, says the hit was not confirmed, never that the goal was not met", () => {
+    for (const ledger of [
+      [spend, sweepHit],
+      [spend, verdict(false), reason("no-pay"), sweepHit],
+    ]) {
+      const screen = screenFor(ledger, { poolSettled: true });
+      expect(screen).toEqual({ kind: "hit-unconfirmed" });
+      const copy = verdictCopy(screen);
+      expect(`${copy?.headline} ${copy?.body}`).not.toMatch(/not met|no proof/i);
+      expect(copy?.body).toMatch(/confirm/i);
+    }
+  });
+
+  it("the not-yet screen says a hit must be confirmed, and by when", () => {
+    const ledger = [spend, verdict(false), reason("no-pay")];
+    const screen = screenFor(ledger, {
+      missDeadlineMs: 1_790_487_000_000,
+      missConfirmByMs: 1_790_494_200_000,
+    });
+    expect(screen).toEqual({
+      kind: "not-yet",
+      lastCheckMs: 1_790_487_000_000,
+      confirmByMs: 1_790_494_200_000,
+    });
+    const body = verdictCopy(screen)?.body ?? "";
+    expect(body).toMatch(/open the run and confirm/i);
+    expect(body).toContain(
+      new Date(1_790_494_200_000).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    );
+    expect(body).not.toMatch(/SPOTTER records what your wearable shows\./);
+  });
+
+  it("the confirm screen names the deadline on a run that can record a miss", () => {
+    const ledger = [
+      spend,
+      verdict(true),
+      reason("pay"),
+      { kind: "approval", at: AT, status: "requested", requestId: "r1" } as LedgerEntry,
+    ];
+    const screen = screenFor(ledger, { missConfirmByMs: 1_790_494_200_000 });
+    expect(screen).toEqual({ kind: "confirm-human", confirmByMs: 1_790_494_200_000 });
+    expect(verdictCopy(screen)?.body).toMatch(/before/);
   });
 });

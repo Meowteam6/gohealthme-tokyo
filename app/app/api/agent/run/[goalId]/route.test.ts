@@ -331,6 +331,17 @@ describe("POST /api/agent/run/[goalId]", () => {
     expect(input.evidenceKind).toBe("wearable");
   });
 
+  it("hands the run loop the miss adjudicator, so a player who opens the run after it ended can get a recorded miss", async () => {
+    fetchPool.mockResolvedValue(pool({ goalSpec: "sleep 7h for 5 nights" }));
+    const body: Record<string, unknown> = { ...GOOD_BODY, evidenceKind: "wearable" };
+    delete body.attesterId;
+
+    await post(GOAL, body);
+
+    const deps = runAgentForGoal.mock.calls[0][0] as { adjudicateMiss?: unknown };
+    expect(typeof deps.adjudicateMiss).toBe("function");
+  });
+
   it("rejects a wearable claim that supplies its own attesterId", async () => {
     fetchPool.mockResolvedValue(pool({ goalSpec: "sleep 7h for 5 nights" }));
     const res = await post(GOAL, { ...GOOD_BODY, evidenceKind: "wearable" });

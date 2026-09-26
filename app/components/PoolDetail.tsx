@@ -455,6 +455,9 @@ export default function PoolDetail({ id }: { id: string }) {
           return 2_500;
         case "recorded":
           return 10_000;
+        case "missed":
+          // Final on chain; only the closing row after settle is still to come.
+          return 30_000;
         case "paid":
         case "no-pay":
         case "cap-exceeded":
