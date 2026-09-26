@@ -74,6 +74,8 @@ import {
   TARGET_HANDLE_MAX,
 } from "@/lib/challenges";
 import { ArcTxLink, Button, Card, Chip, ErrorNote, Money, Skeleton } from "@/components/ui";
+import Spotter from "@/components/spotter/Spotter";
+import type { SpotterPose } from "@/lib/spotter-poses";
 import { useApprovalProbe } from "@/components/game/ApprovalNote";
 import {
   challengeCreateBlock,
@@ -105,7 +107,7 @@ const NAME_SUGGESTIONS = [
 
 // Trash-talk one-liners for the dare message. Ported from the golden design.
 const TRASH_TALK_SUGGESTIONS = [
-  "bet you can't. proving me wrong pays.",
+  "you won't. proving me wrong pays.",
   "put your steps where your mouth is.",
   "easy money for me. we'll see.",
   "i've seen you flake before. don't.",
@@ -118,9 +120,9 @@ const SECONDS_PER_DAY = 86_400;
 const SPOTTER_INTRO =
   "I'm SPOTTER. I hold the money, I check your proof, I pay you the second you hit it. No vibes, no chasing anyone for cash. Let's set one up.";
 const HONESTY_NOTE =
-  'Play-money testnet USDC, not a real-money bet. A selfie proves it to your friends - only wearable or enclave data counts as "verified" here.';
+  'Base Sepolia test USDC, not real money. A selfie proves it to your friends; only wearable or enclave data counts as "verified" here.';
 const FOOTER_NOTE =
-  "Testnet play-money USDC - a commitment device, not a bet. No house, no odds, just your money and your word.";
+  "Base Sepolia test money, beta. Your money, your word, and SPOTTER holding both.";
 
 const CHALLENGE_INITIATIVE = "challenge";
 // Both variants are commitment pools (bountyModel 2). See the compliance-lane
@@ -132,12 +134,12 @@ const CHALLENGE_BOUNTY_MODEL = 2;
 
 // A Next Link dressed as the shared candy Button. Button is a <button> and
 // cannot be a Link, so the post-create navigation matches its look here rather
-// than hand-rolling a one-off style: emerald pop for the go-do-it action, a
-// tan-filled secondary for the quieter "start another".
+// than hand-rolling a one-off style: the coral pressable for the go-do-it
+// action, the ink ghost for the quieter "start another".
 const CANDY_LINK_PRIMARY =
-  "inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-3 font-display text-sm font-bold text-foreground shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-hover active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "inline-flex min-h-12 items-center justify-center rounded-[18px] bg-accent px-5 py-3 text-base font-bold text-foreground shadow-[var(--shadow-pop)] transition-transform hover:bg-accent-hover active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const CANDY_LINK_SECONDARY =
-  "inline-flex min-h-11 items-center justify-center rounded-full border-2 border-edge bg-secondary px-5 py-2.5 font-display text-sm font-bold text-secondary-foreground transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "inline-flex min-h-12 items-center justify-center rounded-[18px] border-2 border-foreground bg-transparent px-5 py-3 text-base font-bold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 /** Which of the two honest variants the creator is building. */
 type Variant = "self" | "dare";
@@ -169,7 +171,7 @@ interface DareInvite {
 // public/spotter/ (the golden filenames were invented). SPOTTER never states a
 // number in its own speech - only the pose and the deadpan line react; the
 // amount lives in the input and the Money slot.
-type SpotterMood = { pose: string; alt: string; line: string };
+type SpotterMood = { pose: SpotterPose; alt: string; line: string };
 
 function getSpotterMoodForAmount(
   amount: number,
@@ -305,30 +307,21 @@ const IconLink = ({ className }: { className?: string }) => (
   </Icon>
 );
 
-// ----------------------------------------------------------------- SPOTTER bubble
-// The mood reaction: a framed SPOTTER pose plus an anchored speech bubble. Ported
-// from the golden spotter-bubble, using the real transparent PNGs (object-contain
-// so the cutout is never cropped) on a warm tan frame.
-function SpotterBubble({ mood }: { mood: SpotterMood }) {
+// ----------------------------------------------------------------- SPOTTER mood
+// The mood reaction: SPOTTER's pose plus his line in the speech bubble, drawn
+// through the shared Spotter so the art, alt text and Patrick Hand stay one
+// character. Announced politely, since it changes with the amount.
+function MoodSpotter({ mood }: { mood: SpotterMood }) {
   return (
-    <div className="flex items-end gap-3">
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-secondary p-1 sm:h-20 sm:w-20">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/spotter/spotter-${mood.pose}.webp`}
-          alt={mood.alt}
-          className="h-full w-full object-contain"
-        />
-      </div>
-      <div className="relative flex-1 rounded-2xl rounded-bl-sm border border-edge bg-surface px-4 py-3 shadow-sm">
-        <p className="text-sm leading-snug text-foreground sm:text-[15px]">
-          {mood.line}
-        </p>
-        <span className="mt-1 block text-[11px] font-bold uppercase tracking-wide text-accent-deep">
-          SPOTTER
-        </span>
-      </div>
-    </div>
+    <Spotter
+      pose={mood.pose}
+      size="xs"
+      alt={mood.alt}
+      line={mood.line}
+      linePlacement="side"
+      live
+      className="justify-end"
+    />
   );
 }
 
@@ -400,16 +393,11 @@ function AmountChips({
 function SuggestionRow({
   items,
   onPick,
-  tone = "accent",
 }: {
   items: string[];
   onPick: (value: string) => void;
-  tone?: "accent" | "coral";
 }) {
-  const hover =
-    tone === "coral"
-      ? "hover:border-[color:var(--coral-strong)] hover:text-[color:var(--coral-strong)]"
-      : "hover:border-accent/50 hover:text-accent-deep";
+  const hover = "hover:border-foreground/40";
   return (
     <div className="flex flex-wrap gap-2">
       {items.map((item) => (
@@ -417,7 +405,7 @@ function SuggestionRow({
           key={item}
           type="button"
           onClick={() => onPick(item)}
-          className={`min-h-11 rounded-full border border-edge bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground transition-colors ${hover}`}
+          className={`min-h-11 rounded-full border border-edge bg-surface px-4 py-1 text-sm font-medium text-foreground transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${hover}`}
         >
           {item}
         </button>
@@ -427,8 +415,8 @@ function SuggestionRow({
 }
 
 // ----------------------------------------------------------------- the type picker
-// The one clear choice, as two candy tiles. Emerald pop for staking on yourself
-// (the HERO MOVE, selected by default), coral pop for the human act of a dare.
+// The one clear choice, as two tiles. The selected one is ink-edged with an ink
+// press shadow (coral stays the one action colour, on the submit button).
 function TypePicker({
   value,
   onChange,
@@ -448,15 +436,13 @@ function TypePicker({
         role="radio"
         aria-checked={isSelf}
         onClick={() => onChange("self")}
-        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-          isSelf
-            ? "border-accent bg-accent/10 shadow-[var(--shadow-pop)]"
-            : "border-edge bg-surface shadow-[var(--shadow-pop-edge)] hover:border-accent/40"
+        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+          isSelf ? "border-foreground bg-surface shadow-[0_4px_0_0_var(--foreground)]" : "border-edge bg-surface hover:border-foreground/40"
         }`}
       >
         <span
           className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-            isSelf ? "bg-accent text-foreground" : "bg-secondary text-accent-deep"
+            isSelf ? "bg-foreground text-background" : "bg-surface-raised text-foreground"
           }`}
         >
           <IconCoins className="h-5 w-5" />
@@ -467,8 +453,8 @@ function TypePicker({
           everyone who flaked forfeited.
         </span>
         {isSelf ? (
-          <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-foreground">
-            Hero move
+          <span className="absolute right-3 top-3 rounded-full bg-foreground px-2.5 py-0.5 text-xs font-bold text-background">
+            Selected
           </span>
         ) : null}
       </button>
@@ -478,22 +464,25 @@ function TypePicker({
         role="radio"
         aria-checked={!isSelf}
         onClick={() => onChange("dare")}
-        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform hover:translate-y-px active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-          !isSelf
-            ? "border-[color:var(--coral-strong)] bg-secondary shadow-[var(--shadow-pop-coral)]"
-            : "border-edge bg-surface shadow-[var(--shadow-pop-edge)] hover:border-[color:var(--coral-strong)]/40"
+        className={`relative flex flex-col gap-2 rounded-3xl border-2 p-5 text-left transition-transform active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+          !isSelf ? "border-foreground bg-surface shadow-[0_4px_0_0_var(--foreground)]" : "border-edge bg-surface hover:border-foreground/40"
         }`}
       >
         <span
           className={`flex h-10 w-10 items-center justify-center rounded-xl ${
             !isSelf
-              ? "bg-coral-strong text-foreground"
-              : "bg-secondary text-[color:var(--coral-strong)]"
+              ? "bg-foreground text-background"
+              : "bg-surface-raised text-foreground"
           }`}
         >
           <IconSwords className="h-5 w-5" />
         </span>
         <span className="font-display text-lg font-bold">Dare a friend</span>
+        {!isSelf ? (
+          <span className="absolute right-3 top-3 rounded-full bg-foreground px-2.5 py-0.5 text-xs font-bold text-background">
+            Selected
+          </span>
+        ) : null}
         <span className="text-sm leading-snug text-muted">
           You put up the reward, they lock in a small stake. They hit it, they
           keep both. They flake, everyone gets their money back.
@@ -532,43 +521,35 @@ function PreviewCard({
   const displayTrash =
     trashTalk.trim() !== ""
       ? trashTalk.trim()
-      : "bet you can't. proving me wrong pays.";
+      : "you won't. proving me wrong pays.";
 
   return (
     <div className="relative overflow-visible">
       {/* Tan testnet sticker, deliberately NOT gold (gold is money in motion
           only). The tilt gives it the "made this to post" feel. */}
-      <div className="absolute -left-2 -top-3 z-10 -rotate-6 rounded-full border-2 border-edge bg-secondary px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-secondary-foreground shadow-sm">
-        Testnet USDC
+      <div className="absolute -left-2 -top-3 z-10 -rotate-6 rounded-full border-2 border-foreground bg-surface-raised px-3 py-1 text-xs font-bold text-foreground">
+        Base Sepolia test USDC
       </div>
 
-      <div className="relative rounded-3xl border-2 border-edge bg-surface p-6 shadow-[var(--shadow-pop-edge)]">
+      <div className="relative rounded-3xl border-2 border-edge bg-surface p-5 sm:p-6">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1">
+          <div className="flex items-center gap-1.5 rounded-full bg-surface-raised px-3 py-1">
             {isSelf ? (
-              <IconCoins className="h-3.5 w-3.5 text-accent-deep" />
+              <IconCoins className="h-3.5 w-3.5 text-foreground" />
             ) : (
-              <IconSwords className="h-3.5 w-3.5 text-[color:var(--coral-strong)]" />
+              <IconSwords className="h-3.5 w-3.5 text-foreground" />
             )}
-            <span className="text-xs font-semibold uppercase tracking-wide text-secondary-foreground">
-              {isSelf ? "Self-stake" : "Friend dare"}
+            <span className="text-sm font-bold text-foreground">
+              {isSelf ? "Stake on yourself" : "Friend dare"}
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-accent/10">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/spotter/spotter-watching.webp"
-                alt=""
-                aria-hidden="true"
-                className="h-full w-full object-contain"
-              />
-            </span>
-            <span className="text-xs font-medium text-muted">held by SPOTTER</span>
+          <div className="flex items-center gap-2">
+            <Spotter pose="watching" size="row" decorative />
+            <span className="text-sm text-muted">Held by SPOTTER</span>
           </div>
         </div>
 
-        <h3 className="mt-4 font-display text-2xl font-bold leading-tight text-balance sm:text-[26px]">
+        <h3 className="mt-4 break-words font-display text-[1.75rem] font-extrabold leading-display tracking-display text-balance">
           {displayTitle}
         </h3>
 
@@ -594,9 +575,9 @@ function PreviewCard({
           )}
         </p>
 
-        <div className="mt-4 flex items-end justify-between gap-3 rounded-2xl bg-secondary/70 px-4 py-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-3 rounded-2xl bg-surface-raised px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm text-muted">
               {isSelf ? "On the line" : "Reward if they hit it"}
             </p>
             <div className="mt-0.5">
@@ -604,12 +585,12 @@ function PreviewCard({
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+            <p className="text-sm text-muted">
               {isSelf ? "If you flake" : "Their lock-in"}
             </p>
             {isSelf ? (
-              <p className="font-display text-lg font-bold text-[color:var(--coral-strong)]">
-                you forfeit it
+              <p className="font-display text-lg font-bold text-dusk-ink">
+                You forfeit it
               </p>
             ) : (
               <div className="mt-0.5">
@@ -625,7 +606,7 @@ function PreviewCard({
           </p>
         </div>
 
-        <div className="mt-4 flex items-start gap-1.5 text-[11px] leading-snug text-muted">
+        <div className="mt-4 flex items-start gap-1.5 text-[13px] leading-snug text-muted">
           <IconShield className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{HONESTY_NOTE}</span>
         </div>
@@ -668,7 +649,7 @@ function CopyLink({ url }: { url: string }) {
         <span className="break-all">{url}</span>
         <span
           aria-live="polite"
-          className="shrink-0 font-sans text-xs font-semibold uppercase tracking-wide text-accent-deep"
+          className="shrink-0 font-sans text-sm font-bold text-accent-deep"
         >
           {state === "copied"
             ? "Copied"
@@ -686,9 +667,11 @@ function CopyLink({ url }: { url: string }) {
   );
 }
 
-// A framed SPOTTER cheer for the done screens. Reuses the mood-bubble language.
+// SPOTTER on the done screens: the pose large, his line above, one character.
 function DoneSpotter({ pose, alt, line }: SpotterMood) {
-  return <SpotterBubble mood={{ pose, alt, line }} />;
+  return (
+    <Spotter pose={pose} size="lg" alt={alt} line={line} className="mx-auto" />
+  );
 }
 
 function CreateChallengeInner() {
@@ -1148,9 +1131,9 @@ function CreateChallengeInner() {
         />
 
         <div className="space-y-3">
-          <p className="font-display text-xs font-bold uppercase tracking-wide text-muted">
+          <h2 className="font-display text-xl font-bold leading-display">
             Send it to them
-          </p>
+          </h2>
           {/* Web Share / Text / Email, prefilled with the dare, reward and
               link. CopyLink stays below as the desktop fallback. */}
           <ShareChallenge
@@ -1214,13 +1197,23 @@ function CreateChallengeInner() {
   }
   if (!inFlight && createBlock.kind === "paused") {
     return (
-      <div className="mx-auto max-w-xl space-y-4">
-        <Card className="space-y-2 border-warning/40">
-          <p className="font-display text-2xl font-extrabold">{createBlock.title}</p>
-          <p className="text-sm text-foreground/80">{createBlock.detail}</p>
-        </Card>
-        <Link href="/pools" className={CANDY_LINK_PRIMARY}>
-          See the open runs
+      <div
+        role="status"
+        className="mx-auto flex max-w-xl flex-col items-center py-6 text-center"
+      >
+        <Spotter
+          state="error"
+          size="lg"
+          line="Checker's off. I don't hold money I can't check."
+        />
+        <h1 className="mt-6 break-words font-display text-[2.5rem] font-extrabold leading-display tracking-display">
+          {createBlock.title}
+        </h1>
+        <p className="mt-3 max-w-md text-base text-foreground/80">
+          {createBlock.detail}
+        </p>
+        <Link href="/pools" className={`mt-6 ${CANDY_LINK_PRIMARY}`}>
+          Find a wearable run
         </Link>
       </div>
     );
@@ -1260,26 +1253,17 @@ function CreateChallengeInner() {
       {/* Centered header: the play-money pill, the SPOTTER hero, the two-tone
           headline, and SPOTTER's intro line. */}
       <header className="mb-10 flex flex-col items-center text-center">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-edge bg-surface px-3 py-1.5 shadow-sm">
-          <IconPaw className="h-3.5 w-3.5 text-accent-deep" />
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-            GoHealthMe · testnet play money
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-edge bg-surface px-3 py-1.5">
+          <IconPaw className="h-3.5 w-3.5 text-foreground" />
+          <span className="text-sm text-muted">
+            Base Sepolia test money, beta
           </span>
         </div>
 
-        <div className="otter-float mb-2 h-28 w-28 sm:h-32 sm:w-32">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/spotter/spotter-lounging.webp"
-            alt="SPOTTER, GoHealthMe's otter, floating on its back holding a coin"
-            className="h-full w-full object-contain drop-shadow-md"
-          />
-        </div>
+        <Spotter state="commit" size="lg" priority className="mb-4" />
 
-        <h1 className="font-display text-4xl font-extrabold leading-[1.05] text-balance sm:text-5xl">
-          Send a challenge.
-          <br />
-          <span className="text-accent-deep">Put money where your mouth is.</span>
+        <h1 className="break-words font-display text-[2.5rem] font-extrabold leading-display tracking-display text-balance sm:text-[4rem]">
+          Put money where your mouth is
         </h1>
         <p className="mt-3 max-w-md text-pretty text-base leading-relaxed text-muted">
           {SPOTTER_INTRO}
@@ -1292,7 +1276,7 @@ function CreateChallengeInner() {
         {/* form column */}
         <div className="space-y-8">
           <section className="space-y-3">
-            <h2 className="font-display text-xl font-bold">Pick your poison</h2>
+            <h2 className="font-display text-xl font-bold">Whose goal is it</h2>
             <TypePicker value={variant} onChange={selectVariant} />
           </section>
 
@@ -1339,7 +1323,7 @@ function CreateChallengeInner() {
                   : "Your stake in USDC"
               }
             />
-            <SpotterBubble mood={mood} />
+            <MoodSpotter mood={mood} />
             <p className="text-xs text-muted">
               {isDare
                 ? "Pulled from your wallet now and held in the pool. If the pool ends with no winner, you reclaim it."
@@ -1371,14 +1355,14 @@ function CreateChallengeInner() {
                   <span className="font-display text-base font-semibold">
                     Who&apos;s it for
                   </span>
-                  <div className="flex rounded-full border border-edge bg-secondary p-0.5">
+                  <div className="flex rounded-full border border-edge bg-surface-raised p-0.5">
                     <button
                       type="button"
                       onClick={() => setRecipientMode("handle")}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                      className={`min-h-11 rounded-full px-4 text-sm font-bold transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${
                         recipientMode === "handle"
-                          ? "bg-surface text-foreground shadow-sm"
-                          : "text-muted"
+                          ? "bg-foreground text-background"
+                          : "text-foreground"
                       }`}
                     >
                       @handle
@@ -1389,10 +1373,10 @@ function CreateChallengeInner() {
                         setRecipientMode("link");
                         setTarget("");
                       }}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                      className={`min-h-11 rounded-full px-4 text-sm font-bold transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${
                         recipientMode === "link"
-                          ? "bg-surface text-foreground shadow-sm"
-                          : "text-muted"
+                          ? "bg-foreground text-background"
+                          : "text-foreground"
                       }`}
                     >
                       Link
@@ -1421,7 +1405,7 @@ function CreateChallengeInner() {
                     </p>
                   </>
                 ) : (
-                  <div className="flex items-center gap-2 rounded-xl border-2 border-dashed border-edge bg-secondary/50 px-4 py-3">
+                  <div className="flex items-center gap-2 rounded-2xl border-2 border-dashed border-edge bg-surface px-4 py-3">
                     <IconLink className="h-4 w-4 shrink-0 text-muted" />
                     <span className="truncate text-sm text-muted">
                       A private link is minted when you hit send.
@@ -1439,7 +1423,7 @@ function CreateChallengeInner() {
                 </label>
                 <textarea
                   id="trash-talk"
-                  placeholder="bet you can't. proving me wrong pays."
+                  placeholder="you won't. proving me wrong pays."
                   value={message}
                   maxLength={MESSAGE_MAX}
                   onChange={(e) => setMessage(e.target.value)}
@@ -1449,7 +1433,6 @@ function CreateChallengeInner() {
                 <SuggestionRow
                   items={TRASH_TALK_SUGGESTIONS}
                   onPick={setMessage}
-                  tone="coral"
                 />
                 <p className="text-xs text-muted">
                   Shown on the challenge link only.
@@ -1500,7 +1483,7 @@ function CreateChallengeInner() {
         <div className="space-y-4 lg:sticky lg:top-6">
           <div className="flex items-center gap-1.5 px-1">
             <IconSparkle className="h-3.5 w-3.5 text-accent-deep" />
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+            <span className="text-sm font-bold text-muted">
               What they&apos;ll see
             </span>
           </div>
@@ -1654,7 +1637,7 @@ function CreateChallengeInner() {
             </div>
           ) : null}
 
-          <p className="px-1 text-center text-[11px] leading-snug text-muted">
+          <p className="px-1 text-center text-[13px] leading-snug text-muted">
             {FOOTER_NOTE}
           </p>
         </div>
