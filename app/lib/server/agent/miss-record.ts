@@ -518,6 +518,8 @@ export async function runMissPhase(
         if (outcome.status === "recorded") {
           record.evaluated[key] = "miss";
           report.missesRecorded += 1;
+          // Saved per player, so a sweep killed mid-pool keeps its progress.
+          await writeMissPool(poolId, { ...record, done: false });
         } else if (outcome.status === "skipped" && outcome.final) {
           record.evaluated[key] = outcome.basis;
           report.missSkips.push({
@@ -525,6 +527,7 @@ export async function runMissPhase(
             address: player,
             basis: outcome.basis,
           });
+          await writeMissPool(poolId, { ...record, done: false });
         } else {
           complete = false;
           if (outcome.status === "error") {

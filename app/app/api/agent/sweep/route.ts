@@ -118,6 +118,11 @@ export const maxDuration = 60;
  *  and the queue state is consistent instead of being killed mid-settle. */
 const SWEEP_BUDGET_MS = 45_000;
 
+/** The miss phase stops starting new players past this point of the sweep:
+ *  one player can cost three provider reads plus a chain write, and the pool
+ *  phase after it must still get its turn inside the window. */
+const MISS_PHASE_BUDGET_MS = 30_000;
+
 /** Above maxDuration, so a killed sweep's lock always expires. */
 const SWEEP_LOCK_TTL_MS = 75_000;
 const SWEEP_LOCK = "agent:sweep";
@@ -471,7 +476,7 @@ async function runSweep(): Promise<SweepCounts> {
         read: { storedProviderId, providerConfigured, providerById },
         poolsAddress: requireHealthPoolsAddress() as Address,
       },
-      { outOfTime },
+      { outOfTime: () => Date.now() - startedAt >= MISS_PHASE_BUDGET_MS },
     );
     counts.missesRecorded = misses.missesRecorded;
     counts.missesClosed = misses.missesClosed;

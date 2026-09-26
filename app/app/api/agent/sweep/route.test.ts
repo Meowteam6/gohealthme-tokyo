@@ -492,6 +492,31 @@ describe("sweep miss phase", () => {
     expect(typeof missOpts.outOfTime).toBe("function");
   });
 
+  it("stops the miss phase early enough that the pool phase still gets its turn", async () => {
+    const { POST } = await loadRoute();
+    const realNow = Date.now;
+    let clock = realNow();
+    vi.spyOn(Date, "now").mockImplementation(() => clock);
+    let missOutOfTime: boolean | null = null;
+    runMissPhase.mockImplementation(async (_deps: unknown, opts: { outOfTime: () => boolean }) => {
+      // A slow provider read eats 31s of the 45s window.
+      clock += 31_000;
+      missOutOfTime = opts.outOfTime();
+      return EMPTY_MISS_REPORT;
+    });
+    readerFake = {
+      poolCount: vi.fn(async () => 1n),
+      getPoolState: vi.fn(async () => ({ settled: false, periodEnd: endedSecondsAgo(80_000) })),
+    };
+    settleDuePoolAsSpotter.mockResolvedValue({ status: "settled", txHash: "0xabc" });
+
+    const res = await POST(req("POST", `Bearer ${SECRET}`));
+
+    expect(missOutOfTime).toBe(true);
+    expect(await res.json()).toMatchObject({ poolsSettled: 1 });
+    vi.mocked(Date.now).mockRestore();
+  });
+
   it("a miss phase that throws is reported, and the pool phase still runs", async () => {
     const { POST } = await loadRoute();
     runMissPhase.mockRejectedValue(new Error("store down"));
