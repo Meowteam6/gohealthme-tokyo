@@ -12,7 +12,8 @@ import WearableCheck from "@/components/WearableCheck";
 import ShareChallenge from "@/components/ShareChallenge";
 import ChallengeInviteShare from "@/components/ChallengeInviteShare";
 import SpotterSays from "@/components/SpotterSays";
-import SpotterMascot from "@/components/SpotterMascot";
+import Spotter from "@/components/spotter/Spotter";
+import { PRIMARY_LINK, TEXT_LINK } from "@/components/game/link-styles";
 import ClaimPayout from "@/components/ClaimPayout";
 import {
   Badge,
@@ -94,7 +95,7 @@ function BrowsePoolsLink({ label = "Browse live pools" }: { label?: string }) {
   return (
     <Link
       href="/pools"
-      className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-accent px-5 py-2.5 font-display text-sm font-bold text-foreground shadow-[var(--shadow-pop)] transition-transform hover:translate-y-px hover:bg-accent-hover active:translate-y-[3px] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className={`mt-4 ${PRIMARY_LINK}`}
     >
       {label}
     </Link>
@@ -497,8 +498,8 @@ export default function PoolDetail({ id }: { id: string }) {
     }
     return (
       <div className="mx-auto max-w-md py-12 text-center">
-        <SpotterMascot pose="watching" size="md" className="mx-auto" />
-        <h1 className="mt-4 font-display text-2xl font-bold tracking-tight">
+        <Spotter pose="watching" size="md" className="mx-auto justify-center" />
+        <h1 className="mt-4 font-display text-[1.75rem] font-extrabold leading-display tracking-display">
           This is a private challenge
         </h1>
         <p className="mt-3 text-sm text-muted">
@@ -659,7 +660,7 @@ export default function PoolDetail({ id }: { id: string }) {
             const selected = proofPath === m;
             const tone = selected
               ? m === "self-reported"
-                ? "border-warning/50 bg-warning/10 text-warning"
+                ? "border-warning/50 bg-surface-raised text-warning"
                 : "border-accent/50 bg-accent/10 text-accent-deep"
               : "border-edge bg-surface-raised text-muted hover:text-foreground";
             const label =
@@ -689,9 +690,9 @@ export default function PoolDetail({ id }: { id: string }) {
       {showProofSurface ? (
       <section
         id="proof-upload"
-        className="rounded-xl border-2 border-foreground/15 bg-surface p-4 sm:p-6"
+        className="rounded-3xl border border-edge bg-surface p-4 sm:p-6"
       >
-        <h2 className="mb-3 font-display text-3xl font-extrabold leading-tight">
+        <h2 className="mb-3 font-display text-[1.75rem] font-extrabold leading-display tracking-display">
           {verdictShown ? "SPOTTER's check" : "Prove tonight"}
         </h2>
         {!verdictShown ? (
@@ -779,7 +780,7 @@ export default function PoolDetail({ id }: { id: string }) {
             <Badge tone="warning">Your wearable cannot measure this</Badge>
           ) : null}
         </div>
-        <h1 className="font-display text-5xl font-black leading-[0.95] tracking-tight text-balance sm:text-6xl">
+        <h1 className="break-words font-display text-[clamp(2.25rem,10vw,3.5rem)] font-extrabold leading-display tracking-[-0.03em] text-balance">
           {goalTitle}
         </h1>
         {pool.bountyModel === 2 ? (
@@ -837,8 +838,8 @@ export default function PoolDetail({ id }: { id: string }) {
             walkable, so only the creator gets it, revealed after a one-tap
             signature. Public runs share from the block further down. */}
         {isChallenge && isCreator && address !== null ? (
-          <div className="rounded-xl border-2 border-foreground/15 bg-surface p-4">
-            <h2 className="mb-2 font-display text-2xl font-extrabold">Send the dare</h2>
+          <div className="rounded-3xl border border-edge bg-surface p-4">
+            <h2 className="mb-2 font-display text-xl font-bold leading-display">Send the dare</h2>
             <ChallengeInviteShare poolId={pool.id} address={address} />
           </div>
         ) : null}
@@ -856,14 +857,16 @@ export default function PoolDetail({ id }: { id: string }) {
       ) : null}
 
       {joined && address !== null ? (
-        <RunBoard pool={pool} address={address} promptForData={false} />
+        <RunBoard pool={pool} address={address} promptForData={false} showTitle={false} />
       ) : null}
 
       {phase === "live" ? (
         <div className="space-y-4">
           {slot.kind === "cannot-pay" ? (
-            <section className="rounded-xl border-2 border-warning/60 bg-warning/5 p-4 sm:p-5">
-              <h2 className="font-display text-3xl font-extrabold text-warning">
+            <section className="flex gap-3 rounded-3xl border-2 border-warning/50 bg-surface-raised p-4 sm:p-5">
+              <Spotter state="locked-row" size="inline" decorative className="shrink-0 self-start" />
+              <div className="min-w-0">
+              <h2 className="font-display text-[1.75rem] font-extrabold leading-display tracking-display text-warning">
                 This run cannot pay out
               </h2>
               <p className="mt-1 text-sm text-foreground/80">
@@ -872,6 +875,7 @@ export default function PoolDetail({ id }: { id: string }) {
                 that cannot pay.
               </p>
               <BrowsePoolsLink label="Back to the lobby" />
+              </div>
             </section>
           ) : address !== null && !joined && participantQuery.isError ? (
             // Unknown whether this wallet is already in: never offer a join
@@ -896,8 +900,8 @@ export default function PoolDetail({ id }: { id: string }) {
               onRetry={checks.retry}
             />
           ) : slot.kind === "playable" ? (
-            <section className="rounded-xl border-2 border-foreground bg-surface p-4 sm:p-6">
-              <h2 className="font-display text-4xl font-black leading-none">
+            <section className="rounded-3xl border-2 border-foreground bg-surface p-4 sm:p-6">
+              <h2 className="font-display text-[clamp(1.75rem,8vw,2.5rem)] font-extrabold leading-display tracking-display">
                 {isChallenge ? "Take the dare" : "Enter the run"}
               </h2>
               <p className="mt-3 mb-4 text-sm text-foreground/80">
@@ -911,7 +915,7 @@ export default function PoolDetail({ id }: { id: string }) {
                 <p className="mb-4 text-sm font-semibold">Nobody is in yet. You would be first.</p>
               ) : null}
               {slot.proof === "upload" ? (
-                <p className="mb-4 rounded-lg border-2 border-warning/40 bg-warning/5 p-3 text-sm">
+                <p className="mb-4 rounded-[18px] border-2 border-warning/40 bg-surface-raised p-3 text-sm">
                   {uploadFallbackNote(pool.goalSpec)}
                 </p>
               ) : null}
@@ -932,13 +936,9 @@ export default function PoolDetail({ id }: { id: string }) {
         <div className="space-y-4">
           <Card>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <SpotterMascot
-                pose="nature"
-                size="sm"
-                className="mx-auto sm:mx-0"
-              />
+              <Spotter pose="nature" size="sm" className="mx-auto sm:mx-0" />
               <div className="min-w-0">
-                <h2 className="font-display text-lg font-semibold">
+                <h2 className="font-display text-xl font-bold leading-display">
                   This pool has ended
                 </h2>
                 <p className="mt-1 text-sm text-muted">
@@ -962,9 +962,7 @@ export default function PoolDetail({ id }: { id: string }) {
 
           {joined ? (
             <>
-              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-                Your claim
-              </p>
+              <h2 className="font-display text-xl font-bold leading-display">Your claim</h2>
               {claimSection}
             </>
           ) : null}
@@ -989,13 +987,9 @@ export default function PoolDetail({ id }: { id: string }) {
             return (
               <Card>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                  <SpotterMascot
-                    pose="nature"
-                    size="sm"
-                    className="mx-auto sm:mx-0"
-                  />
+                  <Spotter pose="nature" size="sm" className="mx-auto sm:mx-0" />
                   <div className="min-w-0">
-                    <h2 className="font-display text-lg font-semibold">
+                    <h2 className="font-display text-xl font-bold leading-display">
                       {copy.headline}
                     </h2>
                     {endPhase === "settled" && resultsQuery.isLoading ? (
@@ -1030,9 +1024,7 @@ export default function PoolDetail({ id }: { id: string }) {
 
           {joined && address !== null ? (
             <>
-              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-                Your result
-              </p>
+              <h2 className="font-display text-xl font-bold leading-display">Your result</h2>
               {claimLedgerQuery.isLoading || participantQuery.isLoading ? (
                 // Hold until the ledger and the chain answer, so a winner
                 // never sees "Run settled" flip to "You won the run".
@@ -1062,7 +1054,7 @@ export default function PoolDetail({ id }: { id: string }) {
           {joined || isCreator ? (
             <Link
               href="/pools"
-              className={`inline-flex items-center text-sm font-semibold text-muted underline decoration-edge underline-offset-2 hover:text-foreground ${TAP_TARGET}`}
+              className={TEXT_LINK}
             >
               Find an open run
             </Link>
@@ -1100,7 +1092,7 @@ export default function PoolDetail({ id }: { id: string }) {
                 existing ShareChallenge for Text / Email / Copy. shareOrigin is
                 read on the client, so the row appears once mounted. */}
             {shareOrigin !== null ? (
-              <div className="rounded-3xl border-2 border-edge bg-surface p-5 shadow-[var(--shadow-pop-edge)] sm:p-7">
+              <div className="rounded-3xl border border-edge bg-surface p-5 sm:p-7">
                 <h2 className="mb-1 font-display text-xl font-extrabold">
                   Bring people in
                 </h2>
@@ -1118,9 +1110,7 @@ export default function PoolDetail({ id }: { id: string }) {
               </div>
             ) : null}
             <div className="space-y-4">
-              <p className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-                Sweeten the pot
-              </p>
+              <h2 className="font-display text-xl font-bold leading-display">Sweeten the pot</h2>
               <Card>
                 <FundPool poolId={pool.id} />
               </Card>

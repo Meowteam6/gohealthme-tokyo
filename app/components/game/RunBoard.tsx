@@ -71,6 +71,7 @@ export default function RunBoard({
   address,
   promptForData,
   showLink = false,
+  showTitle = true,
 }: {
   pool: PoolInfo;
   address: `0x${string}`;
@@ -78,6 +79,8 @@ export default function RunBoard({
    *  does not open a prompt on load. */
   promptForData: boolean;
   showLink?: boolean;
+  /** Off where the page's own heading already names the run. */
+  showTitle?: boolean;
 }) {
   const requestAuth = useWalletAuth();
   const now = useNowSeconds();
@@ -198,16 +201,20 @@ export default function RunBoard({
 
   return (
     <article className="space-y-4" aria-label={`Run: ${goal}`}>
+      {showTitle || showLink ? (
       <div className="flex flex-wrap items-end justify-between gap-x-3">
+        {showTitle ? (
         <h2 className="min-w-0 break-words font-display text-2xl font-extrabold leading-display tracking-display text-balance sm:text-3xl">
           {goal}
         </h2>
+        ) : null}
         {showLink ? (
           <Link href={`/pools/${pool.id.toString()}`} className={TEXT_LINK}>
             Open this run
           </Link>
         ) : null}
       </div>
+      ) : null}
 
       {night ? (
         <section
