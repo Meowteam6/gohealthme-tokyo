@@ -40,7 +40,20 @@ vi.mock("@/lib/server/agent/spotter", () => ({
   })),
   settleDuePoolAsSpotter: (...args: unknown[]) =>
     (settleDuePoolAsSpotter as (...a: unknown[]) => unknown)(...args),
-  storeSettleTxCache: vi.fn(() => ({ read: vi.fn(async () => null) })),
+  storeSettleTxCache: vi.fn(() => ({
+    read: vi.fn(async () => null),
+    write: vi.fn(async () => {}),
+  })),
+}));
+// The miss phase has its own suite; here it judges nothing.
+vi.mock("@/lib/server/agent/miss-record", () => ({
+  runMissPhase: vi.fn(async () => ({
+    missesRecorded: 0,
+    missesClosed: 0,
+    missSkips: [],
+    missErrors: [],
+    truncated: false,
+  })),
 }));
 
 // The record write is the run loop's job; the sweep's job is to drive it for
@@ -65,6 +78,7 @@ async function loadRoute() {
   vi.stubEnv("DATA_DIR", mkdtempSync(path.join(os.tmpdir(), "agent-sweep-wa-")));
   vi.stubEnv("CRON_SECRET", SECRET);
   vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+  vi.stubEnv("HEALTH_POOLS_ADDRESS", "0xc4274eF2cBe28f77Af31b980055Cc1171818390C");
   vi.resetModules();
   const route = await import("@/app/api/agent/sweep/route");
   const ledger = await import("@/lib/server/agent/ledger");

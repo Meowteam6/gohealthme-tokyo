@@ -50,6 +50,7 @@ import {
 } from "@/lib/server/wearable/streak";
 import type {
   MetricProgress,
+  MissEvidence,
   ObservedCapability,
   WearableLink,
   WearableMetric,
@@ -614,7 +615,10 @@ function efficiencyOf(record: SleepRecord): number | null {
  * boundary would pay one user and not the other. WHOOP ships
  * `timezone_offset` on every record precisely so this can be got right.
  */
-function dayOf(record: SleepRecord): string | null {
+function dayOf(record: {
+  end?: string;
+  timezone_offset?: string | null;
+}): string | null {
   if (typeof record.end !== "string" || record.end.length < 10) return null;
   const ended = Date.parse(record.end);
   if (Number.isNaN(ended)) return record.end.slice(0, 10);
@@ -640,6 +644,19 @@ function parseOffsetMs(offset: string | null | undefined): number {
   if (match === null) return 0;
   const sign = match[1] === "-" ? -1 : 1;
   return sign * (Number(match[2]) * 3_600_000 + Number(match[3]) * 60_000);
+}
+
+/**
+ * WHOOP's `timezone_offset` in seconds, or null when the record does not say.
+ * Unlike parseOffsetMs, absence is NOT read as UTC: the miss rule must know
+ * the wearer's calendar, and guessing it is how a night lands on the wrong day.
+ */
+function offsetSecOrNull(offset: string | null | undefined): number | null {
+  if (typeof offset !== "string") return null;
+  const value = offset.trim();
+  if (value === "Z" || value === "z") return 0;
+  if (!/^([+-])(\d{2}):?(\d{2})$/.test(value)) return null;
+  return parseOffsetMs(value) / 1000;
 }
 
 /** Only a scored main sleep counts. Naps and pending scores are skipped. */
@@ -781,6 +798,8 @@ interface WorkoutRecord {
   start?: string;
   end?: string;
   score_state?: string;
+  /** Same "+hh:mm" shape as on sleep records. */
+  timezone_offset?: string | null;
 }
 
 interface WorkoutPage {
@@ -790,9 +809,12 @@ interface WorkoutPage {
 
 /**
  * Workouts per calendar day, counted the way Junction counts them: a session
- * belongs to the day it ended, and the day's value is how many happened. A
- * "work out 4 times this week" goal is then a threshold of 1 over 4 qualifying
- * days, identical on both providers.
+ * belongs to the LOCAL day it ended (dayOf, the same key sleep uses and the
+ * miss rule reads), and the day's value is how many happened. A "work out 4
+ * times this week" goal is then a threshold of 1 over 4 qualifying days,
+ * identical on both providers. Keying by the UTC end date instead put a
+ * Tokyo morning session on the previous day for the pass path only, so the
+ * pass and the miss rule could read the same player differently.
  *
  * Unscored sessions still count. Unlike sleep, the score is not the evidence
  * here - the session happening is, and WHOOP records the session either way.
@@ -810,14 +832,22 @@ async function workoutsByDay(
   );
   const byDay = new Map<string, number>();
   for (const record of records) {
-    const day =
-      typeof record.end === "string" && record.end.length >= 10
-        ? record.end.slice(0, 10)
-        : null;
+    const day = dayOf(record);
     if (day === null) continue;
     byDay.set(day, (byDay.get(day) ?? 0) + 1);
   }
   return byDay;
+}
+
+/**
+ * True when a scored main sleep is known to be whole: the strap recorded the
+ * stage breakdown and reports no stretch without data. A night with any
+ * no-data time is partial for the miss rule (sleepHoursOf leaves that stretch
+ * out, so the hours read short), whatever its value.
+ */
+function isWholeNight(record: SleepRecord): boolean {
+  const noData = record.score?.stage_summary?.total_no_data_time_milli;
+  return typeof noData === "number" && noData === 0;
 }
 
 // ---------------------------------------------------------------- the provider
@@ -965,6 +995,104 @@ export const whoopProvider: WearableProvider = {
               windowEndISO,
               now,
             ),
+    };
+  },
+
+  /**
+   * Per-local-day evidence for the miss rule (lib/server/agent/miss.ts).
+   *
+   * Everything is keyed to the day it ENDED on the wearer's own calendar,
+   * workouts included, exactly as getMetricProgress keys them. Every sleep
+   * record, scored or not, nap or not, is a heartbeat: the strap reported
+   * that day. Only a scored main sleep carries a value (for hours, split
+   * main sleeps are summed), and a main sleep with any no-data time makes its
+   * day partial, which the miss rule never counts as covered. The offset
+   * comes from the newest record that states one; none stated means null,
+   * never UTC.
+   */
+  async getMissEvidence(
+    address: string,
+    metric: WearableMetric,
+    fromISO: string,
+  ): Promise<MissEvidence> {
+    if (!WHOOP_METRICS.includes(metric)) {
+      throw new WhoopMetricUnsupported(
+        `WHOOP cannot measure ${metric}. A WHOOP strap reports sleep and ` +
+          "workouts, not step counts or daily distance.",
+      );
+    }
+    const from = rfc3339(startOfDayUTC(fromISO));
+    const to = rfc3339(new Date());
+    const sleeps = await fetchSleep(address, from, to);
+    const workouts =
+      metric === "workouts"
+        ? await fetchPaged<WorkoutRecord, WorkoutPage>(
+            address,
+            "/v2/activity/workout",
+            from,
+            to,
+          )
+        : [];
+
+    const heartbeat = new Set<string>();
+    for (const record of [...sleeps, ...workouts]) {
+      const day = dayOf(record);
+      if (day !== null) heartbeat.add(day);
+    }
+
+    const values: Record<string, number> = {};
+    const partial = new Set<string>();
+    const sourced = new Set<string>();
+    if (metric === "workouts") {
+      for (const record of workouts) {
+        const day = dayOf(record);
+        if (day !== null) values[day] = (values[day] ?? 0) + 1;
+      }
+    } else {
+      const countable = sleeps.filter(isCountable);
+      const best = bestScorePerDay(
+        countable.map((record) => ({
+          day: dayOf(record),
+          value: sleepMetricValueOf(record, metric),
+        })),
+      );
+      for (const [day, value] of best) values[day] = value;
+      // Hours: a night WHOOP split into two main sleeps counts whole.
+      if (metric === "sleep_hours") {
+        const sums = new Map<string, number>();
+        for (const record of countable) {
+          const day = dayOf(record);
+          const hours = sleepHoursOf(record);
+          if (day === null || hours === null) continue;
+          sums.set(day, (sums.get(day) ?? 0) + hours);
+        }
+        for (const [day, sum] of sums) {
+          if (sum > (values[day] ?? 0)) values[day] = sum;
+        }
+      }
+      for (const record of countable) {
+        const day = dayOf(record);
+        if (day === null) continue;
+        sourced.add(day);
+        if (!isWholeNight(record)) partial.add(day);
+      }
+    }
+
+    const newestFirst = [...sleeps, ...workouts]
+      .filter((record) => typeof record.end === "string")
+      .sort((a, b) => Date.parse(b.end as string) - Date.parse(a.end as string));
+    let tzOffsetSec: number | null = null;
+    for (const record of newestFirst) {
+      tzOffsetSec = offsetSecOrNull(record.timezone_offset);
+      if (tzOffsetSec !== null) break;
+    }
+
+    return {
+      values,
+      heartbeatDays: [...heartbeat],
+      sourceDays: [...sourced],
+      partialDays: [...partial],
+      tzOffsetSec,
     };
   },
 

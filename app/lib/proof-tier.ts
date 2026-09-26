@@ -137,6 +137,6 @@ export function challengeAwaitingSettleStatus(tier: ProofTier | null): {
  *  self-reported deferred verdict never reads "Verified". */
 export function railDeferredCopy(selfReported: boolean): string {
   return selfReported
-    ? "Self-reported (unverified). Settles when the pool period ends."
-    : "Verified. Settles when the pool period ends.";
+    ? "Self-reported (unverified). Settles after the run ends."
+    : "Verified. Settles after the run ends.";
 }

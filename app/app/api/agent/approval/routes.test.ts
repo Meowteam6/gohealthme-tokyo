@@ -387,4 +387,21 @@ describe("GET /api/agent/approval/status", () => {
     );
     expect(response.status).toBe(400);
   });
+
+  it("F10: flags a hit SPOTTER read that the player has not confirmed yet", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    const { statusRoute, appendLedger } = await load();
+    await appendLedger(GOAL, {
+      kind: "verdict",
+      verified: true,
+      confidence: "high",
+      reason: "Your wearable shows 1 qualifying days",
+      ref: "wearable-100",
+      selfReported: false,
+    });
+    const response = await statusRoute(
+      new Request(`http://localhost/api/agent/approval/status?goalId=${GOAL}`),
+    );
+    expect(await response.json()).toEqual({ status: "none", mode: "mock", hit: true });
+  });
 });

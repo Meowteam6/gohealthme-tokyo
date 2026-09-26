@@ -3,8 +3,10 @@
 // Create a challenge. Two honest variants, one screen, one clear choice:
 //
 //   STAKE ON YOURSELF (commitment) — you put your OWN USDC on your OWN goal.
-//     Hit it, your stake comes back plus a cut of what everyone who flaked
-//     forfeited. Nobody hits, everyone is refunded. This is the pilot model.
+//     Hit it, your stake comes back plus a share of anything else in the pot.
+//     A challenge is document-proven (encodeGoal), so SPOTTER never records a
+//     miss on it (lib/miss-rule.ts): a miss is refunded at settle, and there
+//     are no forfeits to promise a cut of (lib/commitment-copy.ts).
 //
 //   DARE A FRIEND (reward) — you put up a reward for someone else. They stake a
 //     small lock-in to accept, hit the goal, and collect their lock-in back plus
@@ -81,6 +83,7 @@ import {
   verifierStateOf,
 } from "@/lib/game/join-checks";
 import { useDocumentProofQuery } from "@/lib/useProofStatus";
+import { challengeStakeCopy } from "@/lib/commitment-copy";
 
 const DURATION_OPTIONS: { label: string; days: number }[] = [
   { label: "1 week", days: 7 },
@@ -463,8 +466,8 @@ function TypePicker({
         </span>
         <span className="font-display text-lg font-bold">Stake on yourself</span>
         <span className="text-sm leading-snug text-muted">
-          Your own USDC on your own goal. Hit it, get it back plus a cut of what
-          everyone who flaked forfeited.
+          Your own USDC on your own goal. Hit it and it comes back; miss it
+          and it comes back at settle too.
         </span>
         {isSelf ? (
           <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
@@ -576,8 +579,8 @@ function PreviewCard({
           {isSelf ? (
             <>
               <span className="font-semibold text-foreground">You</span> vs.
-              yourself. Hit it, get your stake back plus a cut of the flakers&apos;
-              pot.
+              yourself. Hit it and your stake comes back; a miss is refunded at
+              settle.
             </>
           ) : (
             <>
@@ -1090,8 +1093,8 @@ function CreateChallengeInner() {
           <p className="text-sm text-foreground/80">
             Nothing left your wallet yet - you stake by joining your own pool.
             Put up your <Money usd={stake.trim() === "" ? "0" : stake.trim()} />{" "}
-            and you are in: hit the goal and it comes back with a cut of what
-            everyone who flaked forfeited.
+            and you are in: hit the goal and it comes back. This challenge
+            cannot record a miss, so a miss is refunded at settle.
           </p>
         </Card>
 
@@ -1343,7 +1346,7 @@ function CreateChallengeInner() {
             <p className="text-xs text-muted">
               {isDare
                 ? "Pulled from your wallet now and held in the pool. If the pool ends with no winner, you reclaim it."
-                : "Pulled from your wallet when you lock in. Hit the goal and it comes back with a cut of the forfeits; miss and it goes to whoever did."}
+                : challengeStakeCopy()}
             </p>
           </section>
 

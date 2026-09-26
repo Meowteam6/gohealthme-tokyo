@@ -77,6 +77,10 @@ describe("approval-client", () => {
 
   it("parses status responses and rejects unknown states", () => {
     expect(parseStatus({ status: "none", mode: "mock" })).toEqual({ status: "none" });
+    expect(parseStatus({ status: "none", mode: "mock", hit: true })).toEqual({
+      status: "none",
+      hit: true,
+    });
     expect(parseStatus({ status: "pending", requestId: "apr_x", expiresAt: "t" })).toEqual({
       status: "pending",
       requestId: "apr_x",

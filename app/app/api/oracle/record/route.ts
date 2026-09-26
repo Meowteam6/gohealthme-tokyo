@@ -8,6 +8,12 @@
 // addresses that never joined the pool on-chain, and submits
 // recordResult to HealthPools on Arc testnet.
 // Returns: { txHash, verdict, multiplierBps, streakDays }
+//
+// PASSES ONLY. The streak here is a rolling window with no pool period, no
+// sync grace and no coverage check. Under the commitment model a recorded
+// miss forfeits a stake, so a "not met" read is refused with 409 and nothing
+// is written: only SPOTTER's miss rule (lib/server/agent/miss.ts) records a
+// miss, after the run ends and only when the wearable covered all of it.
 
 import { timingSafeEqual } from "crypto";
 import { isAddress, type Address, type Hex } from "viem";
@@ -84,6 +90,13 @@ export async function POST(request: Request) {
 
     const progress = await provider.getProgress(address, threshold, goalDays);
     const verdict = progress.streakDays >= goalDays;
+    if (!verdict) {
+      return jsonError(
+        409,
+        `Not met on this read (${progress.streakDays} of ${goalDays} days). This route records passes only. ` +
+          "A miss is recorded by SPOTTER after the run ends, and only when the wearable covered the whole run.",
+      );
+    }
     const multiplierBps = deriveMultiplierBps(progress.baselineWeekAvg);
 
     // STEP 1 — the pool result. One-shot per participant per pool; an

@@ -42,9 +42,19 @@
 // (lib/server/agent/approved-record.ts), and its pool is held from the pool
 // phase meanwhile, so a confirmed win is never refunded as unadjudicated.
 //
+// THE MISS PHASE (commitment model, 2026-09-26). Between the claim phase and
+// the pool phase, every joined player of every pool that can record a miss
+// (model 2, wearable only, a metric whose day is final) is judged once after
+// periodEnd + MISS_GRACE_HOURS, whether or not they ever opened the app
+// (lib/server/agent/miss-record.ts runMissPhase). A skip writes nothing; a
+// miss is written on chain and asserted. Such a pool settles only after every
+// player in it was judged (the per-pool marker, passed to every settle as
+// missPhaseDone), and once it settles each miss gets its closing row.
+//
 // Response JSON:
 //   { swept: [...goalIds], settled, deferred, errors, recorded, truncated,
-//     poolsSettled, poolErrors, skipped? }
+//     poolsSettled, poolErrors, missesRecorded, missesClosed,
+//     missSkips: [{ poolId, address, basis }], missErrors, skipped? }
 
 import { timingSafeEqual } from "crypto";
 import { isAddress, type Address, type Hex } from "viem";
@@ -73,6 +83,17 @@ import {
   type SpotterDeps,
   type SpotterExecutor,
 } from "@/lib/server/agent/spotter";
+// --- miss rule ---
+import { runMissPhase } from "@/lib/server/agent/miss-record";
+import { missPhaseDone } from "@/lib/server/agent/miss-store";
+import { recordResult } from "@/lib/server/oracle";
+import {
+  providerById,
+  providerConfigured,
+  pinnedProviderId,
+  storedProviderId,
+} from "@/lib/server/wearable";
+// --- end miss rule ---
 import { liveBuyDeps } from "@/lib/server/agent/x402";
 import {
   approvedUnrecordedOf,
@@ -80,7 +101,7 @@ import {
   withinRecordHold,
   type ApprovedRecordTarget,
 } from "@/lib/server/agent/approved-record";
-import { requireEnv } from "@/lib/server/env";
+import { requireEnv, requireHealthPoolsAddress } from "@/lib/server/env";
 import { errorMessage, jsonError } from "@/lib/server/http";
 // --- ens ---
 import {
@@ -97,6 +118,11 @@ export const maxDuration = 60;
 /** Stop cleanly with this much of the window left, so the response is written
  *  and the queue state is consistent instead of being killed mid-settle. */
 const SWEEP_BUDGET_MS = 45_000;
+
+/** The miss phase stops starting new players past this point of the sweep:
+ *  one player can cost three provider reads plus a chain write, and the pool
+ *  phase after it must still get its turn inside the window. */
+const MISS_PHASE_BUDGET_MS = 30_000;
 
 /** Above maxDuration, so a killed sweep's lock always expires. */
 const SWEEP_LOCK_TTL_MS = 75_000;
@@ -134,6 +160,16 @@ interface SweepCounts {
   poolsSettled: number;
   /** One line per pool the pool phase could not settle. Never silent. */
   poolErrors: string[];
+  // --- miss rule ---
+  /** Misses written on chain this sweep (verdict=false, asserted). */
+  missesRecorded: number;
+  /** Recorded misses given their closing row after their pool settled. */
+  missesClosed: number;
+  /** Players judged with nothing recorded, and why (they are refunded). */
+  missSkips: { poolId: string; address: string; basis: string }[];
+  /** Miss-phase failures, one line each. Never silent. */
+  missErrors: string[];
+  // --- end miss rule ---
 }
 
 function authorized(request: Request): boolean {
@@ -166,6 +202,16 @@ async function eligibility(
   ledger: LedgerEntry[],
   nowMs: number,
 ): Promise<Eligibility> {
+  // --- miss rule ---
+  // A recorded miss pays this player nothing, so the claim settle (which
+  // asserts AchieverPaid for the participant) can never succeed for it. Drop
+  // it from the queue and do NOT claim its pool: the pool phase settles it
+  // once the miss phase is done, and the miss phase closes the row.
+  if (ledger.some((e) => e.kind === "record" && e.verdict === false)) {
+    await removePendingSettlement(goalId);
+    return { settle: false };
+  }
+  // --- end miss rule ---
   if (!ledger.some((e) => e.kind === "record")) {
     // World ID for Agents: the human confirmed, but the record write never
     // ran because nobody polled after the confirmation (tab closed). Record
@@ -265,6 +311,9 @@ async function sweepDuePools(
     circle,
     reader,
     settleLock: livePoolSettleLock(),
+    // A pool that can record a miss settles only after every player in it
+    // was judged; settleDuePoolAsSpotter reads this marker.
+    missPhaseDone,
   };
 
   const total = await reader.poolCount();
@@ -282,7 +331,12 @@ async function sweepDuePools(
       if (state.periodEnd >= cutoff) continue;
 
       const outcome = await settleDuePoolAsSpotter(deps, { poolId });
-      if (outcome.status === "settled") poolsSettled.count += 1;
+      if (outcome.status === "settled") {
+        poolsSettled.count += 1;
+        // The miss phase closes this pool's recorded misses from this
+        // transaction's own events; remember it so no log scan is needed.
+        await storeSettleTxCache().write(poolId, outcome.txHash);
+      }
       // --- ens ---
       // A pool settled for its own sake (refunds, no claim) still gets its
       // receipt on pool-<id>.gohealthme.eth; achievers are counted from the
@@ -333,6 +387,10 @@ async function runSweep(): Promise<SweepCounts> {
     truncated: false,
     poolsSettled: 0,
     poolErrors: [],
+    missesRecorded: 0,
+    missesClosed: 0,
+    missSkips: [],
+    missErrors: [],
   };
   const seen = new Set<string>();
   /** Pools the claim phase owns this tick; the pool phase must not touch them. */
@@ -410,6 +468,29 @@ async function runSweep(): Promise<SweepCounts> {
     await consider(goalId);
   }
 
+  // --- miss rule ---
+  try {
+    const misses = await runMissPhase(
+      {
+        spotter: { circle, reader: deps.spotter.reader },
+        legacyRecordResult: recordResult,
+        read: { pinnedProviderId, storedProviderId, providerConfigured, providerById },
+        poolsAddress: requireHealthPoolsAddress() as Address,
+      },
+      { outOfTime: () => Date.now() - startedAt >= MISS_PHASE_BUDGET_MS },
+    );
+    counts.missesRecorded = misses.missesRecorded;
+    counts.missesClosed = misses.missesClosed;
+    counts.missSkips = misses.missSkips;
+    counts.missErrors = misses.missErrors;
+    if (misses.truncated) counts.truncated = true;
+  } catch (err) {
+    // Never blocks the pool phase: an unjudged pool is held until its hold
+    // deadline and then settles, refunding whoever was not judged.
+    counts.missErrors.push(`miss phase: ${errorMessage(err)}`);
+  }
+  // --- end miss rule ---
+
   const pools = await sweepDuePools(
     circle,
     deps.spotter.reader,
@@ -458,6 +539,10 @@ async function sweep(): Promise<Response> {
     truncated: false,
     poolsSettled: 0,
     poolErrors: [],
+    missesRecorded: 0,
+    missesClosed: 0,
+    missSkips: [],
+    missErrors: [],
     skipped: "a sweep is already running",
   });
 }

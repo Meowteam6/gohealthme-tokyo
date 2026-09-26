@@ -229,6 +229,16 @@ export default function PrivacyPage() {
             is. If our server handling a summary matters to you, do not connect
             a wearable yet.
           </p>
+          <p>
+            On a run where you staked on yourself, SPOTTER also reads every
+            player&apos;s wearable summary once after the run ends, a few hours
+            after the last night, without you opening the app. That read is
+            what lets it record a miss, and it only does so when your wearable
+            synced every day of the run and shows the goal was not met. If the
+            data is missing or partial, nothing is recorded and your stake
+            comes back. The read is the same daily summary as above; only the
+            yes-or-no result goes on chain.
+          </p>
         </section>
 
         <section className="space-y-3">

@@ -83,24 +83,104 @@ export function availableProviders(): ProviderId[] {
   return PROVIDER_IDS.filter(providerConfigured);
 }
 
+interface StoredChoice {
+  provider?: unknown;
+  updatedAt?: unknown;
+  /** Every choice, oldest first: { provider, at (epoch ms) }. */
+  history?: unknown;
+}
+
+interface ChoiceEntry {
+  provider: ProviderId;
+  at: number;
+}
+
+/** Choices older than this are dropped from the history, except the newest
+ *  of them, which is still the answer for any run that began after it. */
+const HISTORY_KEEP_MS = 120 * 86_400_000;
+/** Hard bound on one wallet's history, whatever its age. */
+const HISTORY_MAX = 200;
+
+/** The choice history a stored record encodes, oldest first. A record from
+ *  before the history existed reads as its one choice, dated when it was
+ *  stored (0 when unknown, which reads as "before any run"). */
+function historyOf(record: StoredChoice | null): ChoiceEntry[] {
+  if (record === null) return [];
+  if (Array.isArray(record.history)) {
+    return record.history
+      .filter(
+        (entry): entry is ChoiceEntry =>
+          typeof entry === "object" &&
+          entry !== null &&
+          isProviderId((entry as ChoiceEntry).provider) &&
+          typeof (entry as ChoiceEntry).at === "number",
+      )
+      .sort((a, b) => a.at - b.at);
+  }
+  if (isProviderId(record.provider)) {
+    return [
+      {
+        provider: record.provider,
+        at: typeof record.updatedAt === "number" ? record.updatedAt : 0,
+      },
+    ];
+  }
+  return [];
+}
+
 /** The provider a wallet has explicitly chosen, or null when it has not. */
 export async function storedProviderId(
   address: string,
 ): Promise<ProviderId | null> {
-  const record = await readJson<{ provider?: unknown } | null>(
-    storeKey(address),
-    null,
-  );
+  const record = await readJson<StoredChoice | null>(storeKey(address), null);
   const value = record?.provider;
   return isProviderId(value) ? value : null;
 }
 
-/** Record a wallet's choice. Called when a link flow starts. */
+/**
+ * Record a wallet's choice. Called when a link flow starts (before consent)
+ * and when Apple data first arrives. The history is kept so the miss rule can
+ * read the provider the wallet had when a run began (pinnedProviderId): the
+ * current choice moves on one signed tap, and a run's evidence must not.
+ */
 export async function setProviderId(
   address: string,
   provider: ProviderId,
 ): Promise<void> {
-  await writeJson(storeKey(address), { provider, updatedAt: Date.now() });
+  const key = storeKey(address);
+  const now = Date.now();
+  const history = historyOf(await readJson<StoredChoice | null>(key, null));
+  history.push({ provider, at: now });
+  const cutoff = now - HISTORY_KEEP_MS;
+  const older = history.filter((entry) => entry.at < cutoff);
+  const kept = [
+    ...(older.length > 0 ? [older[older.length - 1]] : []),
+    ...history.filter((entry) => entry.at >= cutoff),
+  ].slice(-HISTORY_MAX);
+  await writeJson(key, { provider, updatedAt: now, history: kept });
+}
+
+/**
+ * The provider a run's evidence is read from: the wallet's choice at
+ * `atSec` (the run's periodStart), or, when it had none yet, the first choice
+ * it made after. Null when the wallet never chose one. A switch after that
+ * moment does not move the pin, so the miss rule keeps reading the data the
+ * run was played on.
+ */
+export async function pinnedProviderId(
+  address: string,
+  atSec: bigint,
+): Promise<ProviderId | null> {
+  const history = historyOf(
+    await readJson<StoredChoice | null>(storeKey(address), null),
+  );
+  if (history.length === 0) return null;
+  const atMs = Number(atSec) * 1000;
+  let pinned: ProviderId | null = null;
+  for (const entry of history) {
+    if (entry.at <= atMs) pinned = entry.provider;
+  }
+  return pinned ?? history[0].provider;
 }
 
 function defaultProviderId(): ProviderId {

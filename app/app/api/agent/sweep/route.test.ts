@@ -35,9 +35,24 @@ vi.mock("@/lib/server/agent/wallet", () => ({
 }));
 const settleDuePoolAsSpotter = vi.fn();
 let readerFake: Record<string, unknown> = {};
+const settleTxWrite = vi.fn(async () => {});
 vi.mock("@/lib/server/agent/spotter", () => ({
   arcReader: vi.fn(() => readerFake),
   settleDuePoolAsSpotter: (...args: unknown[]) => settleDuePoolAsSpotter(...args),
+  storeSettleTxCache: vi.fn(() => ({ read: vi.fn(async () => null), write: settleTxWrite })),
+}));
+// The miss phase has its own tests (lib/server/agent/miss-record.test.ts);
+// here only its place in the sweep and its report are pinned.
+const EMPTY_MISS_REPORT = {
+  missesRecorded: 0,
+  missesClosed: 0,
+  missSkips: [],
+  missErrors: [],
+  truncated: false,
+};
+const runMissPhase = vi.fn();
+vi.mock("@/lib/server/agent/miss-record", () => ({
+  runMissPhase: (...args: unknown[]) => runMissPhase(...args),
 }));
 vi.mock("@/lib/server/agent/x402", () => ({
   liveBuyDeps: vi.fn(() => ({})),
@@ -49,6 +64,7 @@ const USER = "0x1111111111111111111111111111111111111111";
 async function loadRoute() {
   vi.stubEnv("DATA_DIR", mkdtempSync(path.join(os.tmpdir(), "agent-sweep-")));
   vi.stubEnv("CRON_SECRET", SECRET);
+  vi.stubEnv("HEALTH_POOLS_ADDRESS", "0xc4274eF2cBe28f77Af31b980055Cc1171818390C");
   vi.resetModules();
   const route = await import("@/app/api/agent/sweep/route");
   const ledger = await import("@/lib/server/agent/ledger");
@@ -93,6 +109,7 @@ beforeEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
   readerFake = { poolCount: vi.fn(async () => 0n), getPoolState: vi.fn() };
+  runMissPhase.mockResolvedValue(EMPTY_MISS_REPORT);
 });
 
 /** now - seconds, as a bigint periodEnd. */
@@ -127,6 +144,10 @@ describe("sweep auth", () => {
       truncated: false,
       poolsSettled: 0,
       poolErrors: [],
+      missesRecorded: 0,
+      missesClosed: 0,
+      missSkips: [],
+      missErrors: [],
     });
   });
 });
@@ -181,6 +202,10 @@ describe("sweep eligibility", () => {
       truncated: false,
       poolsSettled: 0,
       poolErrors: [],
+      missesRecorded: 0,
+      missesClosed: 0,
+      missSkips: [],
+      missErrors: [],
     });
     expect(settleRecordedClaim).toHaveBeenCalledTimes(1);
     const [, input] = settleRecordedClaim.mock.calls[0] as [
@@ -392,6 +417,136 @@ describe("sweep pool phase", () => {
       poolsSettled: 0,
       poolErrors: ["pool 1: NOT_SETTLER"],
     });
+  });
+});
+
+describe("sweep miss phase", () => {
+  it("never sends a recorded miss to the claim settle, which would throw on 'no payout'", async () => {
+    const { POST, appendLedger, addPendingSettlement } = await loadRoute();
+    const missed = "0x" + "4d".repeat(32);
+    await appendLedger(missed, plan());
+    await appendLedger(missed, {
+      kind: "record",
+      goalId: missed,
+      registryStatus: "skipped",
+      verdict: false,
+      stakeUsd: "1.00",
+    });
+    await addPendingSettlement(missed, 1);
+    readerFake = {
+      poolCount: vi.fn(async () => 7n),
+      getPoolState: vi.fn(async () => ({ settled: false, periodEnd: endedSecondsAgo(80_000) })),
+    };
+    settleDuePoolAsSpotter.mockResolvedValue({ status: "settled", txHash: "0xabc" });
+
+    const res = await POST(req("POST", `Bearer ${SECRET}`));
+
+    expect(settleRecordedClaim).not.toHaveBeenCalled();
+    // Its pool is NOT claimed by the claim phase: the pool phase settles it.
+    const settledPools = settleDuePoolAsSpotter.mock.calls.map(
+      (c) => (c[1] as { poolId: bigint }).poolId,
+    );
+    expect(settledPools).toContain(7n);
+    expect((await res.json()).swept).toEqual([]);
+  });
+
+  it("runs between the claim phase and the pool phase, and reports what it did", async () => {
+    const { POST } = await loadRoute();
+    const order: string[] = [];
+    runMissPhase.mockImplementation(async () => {
+      order.push("miss");
+      return {
+        missesRecorded: 1,
+        missesClosed: 2,
+        missSkips: [{ poolId: "5", address: USER, basis: "coverage-gap" }],
+        missErrors: ["pool 4: rpc 429"],
+        truncated: false,
+      };
+    });
+    readerFake = {
+      poolCount: vi.fn(async () => 1n),
+      getPoolState: vi.fn(async () => ({ settled: false, periodEnd: endedSecondsAgo(80_000) })),
+    };
+    settleDuePoolAsSpotter.mockImplementation(async () => {
+      order.push("pool");
+      return { status: "held", dueAt: 1n };
+    });
+
+    const res = await POST(req("POST", `Bearer ${SECRET}`));
+
+    expect(order).toEqual(["miss", "pool"]);
+    expect(await res.json()).toMatchObject({
+      missesRecorded: 1,
+      missesClosed: 2,
+      missSkips: [{ poolId: "5", address: USER, basis: "coverage-gap" }],
+      missErrors: ["pool 4: rpc 429"],
+      poolsSettled: 0,
+      poolErrors: [],
+    });
+    const [missDeps, missOpts] = runMissPhase.mock.calls[0] as [
+      { spotter: { reader: unknown }; legacyRecordResult: unknown; read: unknown },
+      { outOfTime: () => boolean },
+    ];
+    expect(missDeps.spotter.reader).toBe(readerFake);
+    expect(typeof missDeps.legacyRecordResult).toBe("function");
+    expect(typeof missOpts.outOfTime).toBe("function");
+  });
+
+  it("stops the miss phase early enough that the pool phase still gets its turn", async () => {
+    const { POST } = await loadRoute();
+    const realNow = Date.now;
+    let clock = realNow();
+    vi.spyOn(Date, "now").mockImplementation(() => clock);
+    let missOutOfTime: boolean | null = null;
+    runMissPhase.mockImplementation(async (_deps: unknown, opts: { outOfTime: () => boolean }) => {
+      // A slow provider read eats 31s of the 45s window.
+      clock += 31_000;
+      missOutOfTime = opts.outOfTime();
+      return EMPTY_MISS_REPORT;
+    });
+    readerFake = {
+      poolCount: vi.fn(async () => 1n),
+      getPoolState: vi.fn(async () => ({ settled: false, periodEnd: endedSecondsAgo(80_000) })),
+    };
+    settleDuePoolAsSpotter.mockResolvedValue({ status: "settled", txHash: "0xabc" });
+
+    const res = await POST(req("POST", `Bearer ${SECRET}`));
+
+    expect(missOutOfTime).toBe(true);
+    expect(await res.json()).toMatchObject({ poolsSettled: 1 });
+    vi.mocked(Date.now).mockRestore();
+  });
+
+  it("a miss phase that throws is reported, and the pool phase still runs", async () => {
+    const { POST } = await loadRoute();
+    runMissPhase.mockRejectedValue(new Error("store down"));
+    readerFake = {
+      poolCount: vi.fn(async () => 1n),
+      getPoolState: vi.fn(async () => ({ settled: false, periodEnd: endedSecondsAgo(80_000) })),
+    };
+    settleDuePoolAsSpotter.mockResolvedValue({ status: "settled", txHash: "0xabc" });
+
+    const res = await POST(req("POST", `Bearer ${SECRET}`));
+
+    expect(await res.json()).toMatchObject({
+      missErrors: ["miss phase: store down"],
+      poolsSettled: 1,
+    });
+  });
+
+  it("the pool phase settles only through the miss-phase marker, and remembers the settle tx", async () => {
+    const { POST } = await loadRoute();
+    readerFake = {
+      poolCount: vi.fn(async () => 1n),
+      getPoolState: vi.fn(async () => ({ settled: false, periodEnd: endedSecondsAgo(80_000) })),
+    };
+    settleDuePoolAsSpotter.mockResolvedValue({ status: "settled", txHash: "0xabc" });
+
+    await POST(req("POST", `Bearer ${SECRET}`));
+
+    const [deps] = settleDuePoolAsSpotter.mock.calls[0] as [{ missPhaseDone?: unknown }];
+    expect(typeof deps.missPhaseDone).toBe("function");
+    expect(settleTxWrite).toHaveBeenCalledWith(1n, "0xabc");
   });
 });
 

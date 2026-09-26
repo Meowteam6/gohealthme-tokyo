@@ -80,6 +80,7 @@ import SweepLeftover from "@/components/SweepLeftover";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useDisplayNames } from "@/lib/use-display-names";
 import { darePot } from "@/lib/challenges";
+import { commitmentJoinCopy } from "@/lib/commitment-copy";
 
 function formatDay(seconds: bigint): string {
   return new Date(Number(seconds) * 1000).toLocaleDateString("en-US", {
@@ -363,6 +364,9 @@ export default function PoolDetail({ id }: { id: string }) {
           return 2_500;
         case "recorded":
           return 10_000;
+        case "missed":
+          // Final on chain; only the closing row after settle is still to come.
+          return 30_000;
         case "paid":
         case "no-pay":
         case "cap-exceeded":
@@ -902,7 +906,7 @@ export default function PoolDetail({ id }: { id: string }) {
               </h2>
               <p className="mt-3 mb-4 text-sm text-foreground/80">
                 {pool.bountyModel === 2
-                  ? `Stake ${formatUsdc(pool.entryFee)} USDC. Hit the goal inside the run and your stake comes back plus a share of what the players who missed left behind. Miss it and your stake stays in the pool.`
+                  ? commitmentJoinCopy(pool, formatUsdc(pool.entryFee))
                   : isDocGoal
                     ? `Pay the ${formatUsdc(pool.entryFee)} USDC entry, then hand SPOTTER your record. The prize pays the moment the document checks out.`
                     : `Pay the ${formatUsdc(pool.entryFee)} USDC entry, hit the goal inside the run, and the prize pays the moment SPOTTER confirms it.`}

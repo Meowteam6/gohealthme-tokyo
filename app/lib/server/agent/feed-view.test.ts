@@ -280,4 +280,58 @@ describe("toPublicFeedClaim", () => {
     ]);
     expect(recovered.problem).toBeUndefined();
   });
+
+  it("marks a recorded miss with its stake and closing outcome, and nothing else", () => {
+    const MISS_PROSE = "Your wearable synced every night of the run and shows 0 of 1";
+    const claim = toPublicFeedClaim(GOAL, AT, [
+      {
+        kind: "verdict",
+        at: AT,
+        verified: false,
+        confidence: "high",
+        reason: MISS_PROSE,
+        ref: "wearable-1",
+      },
+      { kind: "reason", at: AT, decision: "no-pay", note: "not met, and the run is over.", ref: "wearable-1" },
+      {
+        kind: "record",
+        at: AT,
+        goalId: GOAL,
+        resultTx: "0xmiss",
+        registryStatus: "skipped",
+        verdict: false,
+        stakeUsd: "1.00",
+      },
+      {
+        kind: "settle",
+        at: AT,
+        status: "closed",
+        outcome: "forfeited",
+        txHash: "0xsettle",
+        note: "settle paid 1 player who hit; this stake went to them",
+      },
+    ]);
+
+    expect(claim.missed).toBe(true);
+    expect(claim.stakeUsd).toBe("1.00");
+    expect(claim.recordTxs).toEqual({ resultTx: "0xmiss", registryTx: null });
+    expect(claim.settle).toEqual({
+      at: AT,
+      status: "closed",
+      outcome: "forfeited",
+      paidUsd: null,
+      txHash: "0xsettle",
+      periodEndIso: null,
+    });
+    const json = JSON.stringify(claim);
+    expect(json).not.toContain(MISS_PROSE);
+    expect(json).not.toContain("this stake went to them");
+  });
+
+  it("leaves a pass without any miss fields", () => {
+    const claim = toPublicFeedClaim(GOAL, AT, fullLedger());
+    expect(claim).not.toHaveProperty("missed");
+    expect(claim).not.toHaveProperty("stakeUsd");
+    expect(claim.settle).not.toHaveProperty("outcome");
+  });
 });

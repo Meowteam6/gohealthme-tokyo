@@ -16,7 +16,7 @@ export interface StatusLabel {
 }
 
 export function resultLabel(
-  pool: { settled: boolean; cancelled?: boolean },
+  pool: { settled: boolean; cancelled?: boolean; bountyModel?: number },
   p: {
     resultRecorded: boolean;
     verdict: boolean;
@@ -27,6 +27,9 @@ export function resultLabel(
    *  for. A settled refund after a pay decision is not "no proof": the proof
    *  passed and only the human confirmation was missing. */
   approval?: "approved" | "declined" | "expired" | "cancelled" | null,
+  /** SPOTTER read a hit on this run that was never confirmed (the approval
+   *  status route's hit flag). A settled refund then is not "no proof". */
+  hitUnconfirmed?: boolean,
 ): StatusLabel {
   // A cancelled pool owes every joiner their stake back; claimRefund() credits
   // it and flips `refunded`. Nothing about verification applies any more.
@@ -41,6 +44,9 @@ export function resultLabel(
         ? { text: "Refunded - result not recorded before settle", tone: "warning" }
         : { text: "Refunded - payout not confirmed", tone: "muted" };
     }
+    if (pool.settled && hitUnconfirmed === true) {
+      return { text: "Refunded - hit not confirmed before settle", tone: "muted" };
+    }
     return pool.settled
       ? { text: "Refunded - no proof was submitted", tone: "muted" }
       : { text: "Pending verification", tone: "warning" };
@@ -49,7 +55,11 @@ export function resultLabel(
     const multiplier = (p.multiplierBps / 10_000).toFixed(2);
     return { text: `Achieved at ${multiplier}x`, tone: "accent" };
   }
-  return pool.settled
-    ? { text: "Goal missed - stake forfeited", tone: "muted" }
-    : { text: "Goal missed", tone: "muted" };
+  if (!pool.settled) return { text: "Goal missed", tone: "muted" };
+  // Self-staked (model 2): a recorded miss goes to the players who hit, or
+  // comes back when nobody hit. Which one needs the pool's tally, which this
+  // label does not have; the run page says it.
+  return pool.bountyModel === 2
+    ? { text: "Goal missed - see the run for your stake", tone: "muted" }
+    : { text: "Goal missed - stake forfeited", tone: "muted" };
 }

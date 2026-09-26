@@ -821,7 +821,7 @@ export function shortAddress(address: string): string {
 export const BOUNTY_MODEL_LABELS: Record<number, string> = {
   0: "Fixed bounty per achiever",
   1: "Pro-rata pot split",
-  2: "Stake it, split the forfeits",
+  2: "Stake on yourself, hitters split the pot",
 };
 
 // -------------------------------------------------------- proof-modality policy

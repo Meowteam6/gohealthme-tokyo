@@ -91,9 +91,14 @@ import {
   recordVerdictAsSpotter,
   revertKind,
   settlePoolAsSpotter,
+  storeSettleTxCache,
   type PoolSettleLock,
   type SpotterDeps,
 } from "@/lib/server/agent/spotter";
+// --- miss rule ---
+import type { MissAdjudication } from "@/lib/server/agent/miss-record";
+import { missPhaseDone } from "@/lib/server/agent/miss-store";
+// --- end miss rule ---
 import {
   clampConfidenceForSelfReported,
   isFailId,
@@ -137,6 +142,19 @@ export interface RunDeps {
     attesterId: string,
     facets?: number,
   ) => Promise<RecordVerdictOutcome>;
+  // --- miss rule ---
+  /**
+   * Judge a wearable claim for a recorded miss once its read says "not met"
+   * (lib/server/agent/miss-record.ts adjudicateMissUnlocked, bound to live
+   * deps by the route). Called under this run's lock, so it must be the
+   * unlocked variant. Absent means this caller never records misses.
+   */
+  adjudicateMiss?: (input: {
+    goalId: Hex;
+    poolId: bigint;
+    address: Address;
+  }) => Promise<MissAdjudication>;
+  // --- end miss rule ---
 }
 
 export type RunStatus =
@@ -154,8 +172,13 @@ export type RunStatus =
   | "awaiting-approval"
   | "approval-declined"
   | "approval-expired"
-  | "approval-cancelled";
+  | "approval-cancelled"
   // --- end world-agents ---
+  // --- miss rule ---
+  // The run is over, the wearable covered it, the goal was not met, and the
+  // miss (verdict=false) is on chain. Nothing is paid to this player.
+  | "missed";
+  // --- end miss rule ---
 
 export interface RunResult {
   status: RunStatus;
@@ -494,8 +517,11 @@ async function attemptPurchase(
   }
 }
 
-async function spotterHoldsRole(
-  deps: RunDeps,
+/** Whether SPOTTER's own wallet holds the pool's oracle (or the registry's
+ *  attester) role right now. Exported for the miss path, which dispatches its
+ *  write the same way the pass below does. */
+export async function spotterHoldsRole(
+  deps: { spotter: SpotterDeps },
   role: "oracle" | "attester",
 ): Promise<boolean> {
   const spotterAddress = optionalEnv("SPOTTER_WALLET_ADDRESS", "");
@@ -510,7 +536,7 @@ async function spotterHoldsRole(
 /** Append one error entry unless the identical failure is already on record.
  *  Keeps a cron-driven retry loud on NEW failures without letting a repeating
  *  one grow the ledger without bound. */
-async function appendErrorOnce(
+export async function appendErrorOnce(
   goalId: Hex,
   ledger: LedgerEntry[],
   stage: string,
@@ -675,6 +701,9 @@ async function settleClaimUnlocked(
         // Injected here rather than by the routes: every caller of this block
         // gets pool-scoped exclusion without route code knowing it exists.
         settleLock: deps.spotter.settleLock ?? livePoolSettleLock(),
+        // Same for the miss phase's marker: a pool that can record a miss is
+        // settled only after every player in it was judged.
+        missPhaseDone: deps.spotter.missPhaseDone ?? missPhaseDone,
       },
       {
         poolId: input.poolId,
@@ -683,18 +712,24 @@ async function settleClaimUnlocked(
       },
     );
 
-    if (outcome.status === "not-due") {
+    if (outcome.status === "not-due" || outcome.status === "held") {
       // Queue it for the sweep, scored by the moment it becomes settleable, so
-      // the cron reads only claims that are actually due.
-      await addPendingSettlement(input.goalId, Number(outcome.periodEnd));
+      // the cron reads only claims that are actually due. A held claim is
+      // already due and waits only on the miss phase, so the sweep retries it
+      // every pass until that phase is done.
+      await addPendingSettlement(input.goalId, Number(outcome.dueAt));
       if (entryOf(ledger, "settle") === undefined) {
+        const waitsForSyncs =
+          outcome.status === "held" || outcome.dueAt > outcome.periodEnd;
         ledger = await appendLedger(input.goalId, {
           kind: "settle",
           status: "deferred",
           periodEndIso: new Date(
-            Number(outcome.periodEnd) * 1000 + settleRepollJitterMs(),
+            Number(outcome.dueAt) * 1000 + settleRepollJitterMs(),
           ).toISOString(),
-          note: "the pool period is still running; SPOTTER settles the moment it ends",
+          note: waitsForSyncs
+            ? "the run is over; SPOTTER waits for every wearable to sync and for every result to be judged, then settles"
+            : "the pool period is still running; SPOTTER settles the moment it ends",
         });
       }
       return { status: "deferred", ledger };
@@ -770,6 +805,11 @@ async function settleClaimUnlocked(
       return { status: "error", ledger };
     }
 
+    // --- miss rule ---
+    // Remember which transaction settled the pool, so the miss phase can
+    // close every recorded miss in it from that transaction's own events.
+    await storeSettleTxCache().write(input.poolId, outcome.txHash);
+    // --- end miss rule ---
     const verification = await chainReadVerification(
       deps,
       input.goalId,
@@ -852,6 +892,13 @@ async function runClaimUnlocked(
   if (settled !== undefined) {
     return { status: "paid", ledger };
   }
+  // --- miss rule ---
+  // Fast path: a miss is on chain for this claim. It is one-shot; a late
+  // sync cannot change it, so nothing is read, bought or re-decided.
+  if (entryOf(ledger, "record")?.verdict === false) {
+    return { status: "missed", ledger };
+  }
+  // --- end miss rule ---
 
   // The cheap read depends on the evidence: documents buy the TEE attester
   // read, wearables buy the participant's provider summary. Same plan-then-buy
@@ -1061,10 +1108,19 @@ async function runClaimUnlocked(
   // wearable poll that failed transiently after the payout was earned) would
   // print a no-pay the chain can no longer honor.
   const alreadyRecorded = entryOf(ledger, "record") !== undefined;
+  // A decision older than the newest verdict for this job is stale too, even
+  // when this poll's verdict matches that verdict word for word: the sweep's
+  // miss phase writes the hit it read (the pass path's own verdict row) for a
+  // player who has not opened the run, and their old no-pay must not stand
+  // in front of it (lib/server/agent/miss-record.ts writeMetRows).
+  const priorReason = reasonOf(ledger, input.attesterId);
+  const newestVerdict = verdictWithRef(ledger, input.attesterId);
+  const decisionIsStale =
+    priorReason !== undefined &&
+    newestVerdict !== undefined &&
+    ledger.lastIndexOf(newestVerdict) > ledger.lastIndexOf(priorReason);
   let reason =
-    verdictChanged && !alreadyRecorded
-      ? undefined
-      : reasonOf(ledger, input.attesterId);
+    (verdictChanged || decisionIsStale) && !alreadyRecorded ? undefined : priorReason;
   if (reason === undefined) {
     const plan = entryOf(ledger, "plan");
     const decided = await deps.reason({
@@ -1090,6 +1146,29 @@ async function runClaimUnlocked(
     reason = reasonOf(ledger, input.attesterId);
   }
   if (reason?.decision !== "pay") {
+    // --- miss rule ---
+    // A wearable read that came back legible and not met (high confidence,
+    // unverified) is the only no-pay that can become a recorded miss, and
+    // only once the run is over and the grace has passed; the adjudicator
+    // re-checks all of it against the chain and a local-calendar read. A
+    // skip writes nothing and the claim stays no-pay (refunded at settle).
+    if (
+      deps.adjudicateMiss !== undefined &&
+      input.evidenceKind === "wearable" &&
+      entryOf(ledger, "record") === undefined &&
+      !effective.verified &&
+      effective.confidence === "high"
+    ) {
+      const miss = await deps.adjudicateMiss({
+        goalId: input.goalId,
+        poolId: input.poolId,
+        address: input.address,
+      });
+      if (miss.status === "recorded") return { status: "missed", ledger: miss.ledger };
+      if (miss.status === "error") return { status: "error", ledger: miss.ledger };
+      return { status: "no-pay", ledger: miss.ledger };
+    }
+    // --- end miss rule ---
     return { status: "no-pay", ledger };
   }
 

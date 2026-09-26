@@ -83,6 +83,15 @@ import { arcReader, type ArcReader } from "@/lib/server/agent/spotter";
 import { liveBuyDeps } from "@/lib/server/agent/x402";
 import { geminiReason } from "@/lib/server/agent/reason";
 import { wearableEvidenceSource } from "@/lib/server/agent/wearable";
+// --- miss rule ---
+import { adjudicateMissUnlocked } from "@/lib/server/agent/miss-record";
+import {
+  providerById,
+  providerConfigured,
+  pinnedProviderId,
+  storedProviderId,
+} from "@/lib/server/wearable";
+// --- end miss rule ---
 import {
   attesterJobIsForClaim,
   goalSpecDiffers,
@@ -111,13 +120,28 @@ function liveDeps(
   reader: ArcReader,
   poll: (attesterId: string, goalSpec: string) => Promise<PollResult>,
 ): RunDeps {
+  const spotter = { circle: getCircleClient(), reader };
   return {
-    spotter: { circle: getCircleClient(), reader },
+    spotter,
     buy: liveBuyDeps(),
     reason: geminiReason,
     poll,
     legacyRecordResult: recordResult,
     legacyRecordVerdict: recordVerdict,
+    // --- miss rule ---
+    // A player who opens the run after it ended, whose wearable covered the
+    // run and shows the goal not met, gets the miss recorded here rather
+    // than waiting for the sweep. The run loop calls it under its own lock.
+    adjudicateMiss: (input) =>
+      adjudicateMissUnlocked(
+        {
+          spotter,
+          legacyRecordResult: recordResult,
+          read: { pinnedProviderId, storedProviderId, providerConfigured, providerById },
+        },
+        input,
+      ),
+    // --- end miss rule ---
   };
 }
 

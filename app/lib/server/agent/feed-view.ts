@@ -26,10 +26,13 @@ export interface PublicFeedSpend {
 
 export interface PublicFeedSettle {
   at: string;
-  status: "deferred" | "settled" | "already-settled";
+  status: "deferred" | "settled" | "already-settled" | "closed";
   paidUsd: string | null;
   txHash: string | null;
   periodEndIso: string | null;
+  /** Closed rows only (a recorded miss after settle): where the stake went.
+   *  A money fact from the settle transaction's events, never prose. */
+  outcome?: "forfeited" | "refunded" | "cancelled";
 }
 
 /** The payout screening verdict (Intercepta): machine facts only. The trait
@@ -77,6 +80,11 @@ export interface PublicFeedClaim {
   /** Newest human-confirmation state, or null when SPOTTER never asked. */
   approval: PublicFeedApproval | null;
   // --- end world-agents ---
+  /** Present only on a recorded miss (verdict=false on chain). Absent, not
+   *  false, on every other claim, so older feed shapes are unchanged. */
+  missed?: true;
+  /** The stake a recorded miss costs, two decimals. Misses only. */
+  stakeUsd?: string;
   /** Present only when SPOTTER hit an error on this claim and the claim has
    *  not settled since: the stage it stopped at (machine vocabulary: buy,
    *  attester, record, settle, approval), never the error prose. Without it a
@@ -113,6 +121,7 @@ export function toPublicFeedClaim(
   let selfReported = false;
   let screen: PublicFeedScreen | undefined;
   let problem: PublicFeedProblem | undefined;
+  let missStakeUsd: string | null | undefined;
   // --- world-agents ---
   let approval: PublicFeedApproval | null = null;
   // --- end world-agents ---
@@ -185,6 +194,8 @@ export function toPublicFeedClaim(
           resultTx: entry.resultTx ?? null,
           registryTx: entry.registryTx ?? null,
         };
+        // A miss is a machine state; the stake is a money fact.
+        if (entry.verdict === false) missStakeUsd = asString(entry.stakeUsd);
         break;
       case "settle": {
         // A settled entry is the claim's end state; never let a later
@@ -198,6 +209,14 @@ export function toPublicFeedClaim(
           txHash: asString(entry.txHash),
           periodEndIso: asString(widened.periodEndIso),
         };
+        if (
+          entry.status === "closed" &&
+          (entry.outcome === "forfeited" ||
+            entry.outcome === "refunded" ||
+            entry.outcome === "cancelled")
+        ) {
+          settle.outcome = entry.outcome;
+        }
         break;
       }
       case "error": {
@@ -232,6 +251,10 @@ export function toPublicFeedClaim(
     // --- end world-agents ---
   };
   if (screen !== undefined) claim.screen = screen;
+  if (missStakeUsd !== undefined) {
+    claim.missed = true;
+    if (missStakeUsd !== null) claim.stakeUsd = missStakeUsd;
+  }
   // A settled claim is done; an older error on its way there is history.
   if (problem !== undefined && settle?.status !== "settled") {
     claim.problem = problem;

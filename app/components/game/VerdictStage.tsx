@@ -23,6 +23,8 @@ import SpotterSays from "@/components/SpotterSays";
 import { toUsd2, type LedgerEntry, type RunStatus } from "@/lib/agent-receipt";
 import { claimStepIndex, claimStepOf, type ClaimStep } from "@/lib/claim-rail";
 import { fetchGoalId, type PoolInfo } from "@/lib/contract";
+import { missConfirmByMs, missDeadlineMs } from "@/lib/miss-grace";
+import { missRulePool } from "@/lib/miss-rule";
 import { parseScreening, type ScreeningStatus } from "@/lib/game/lanes";
 import { useLaneProbe } from "@/lib/game/useLaneProbe";
 import {
@@ -70,6 +72,7 @@ export function proofSurfaceNeeded(screen: VerdictScreen): boolean {
   switch (screen.kind) {
     case "won":
     case "lost":
+    case "missed":
     case "cancelled":
     case "settled-final":
       return false;
@@ -149,6 +152,16 @@ export function useVerdict(input: {
     ledger: input.ledger,
     localApproval: local,
     resultRecorded: input.resultRecorded,
+    // On a run that can record a miss, the not-yet screen names the moment
+    // SPOTTER takes its last look; later syncs no longer count.
+    missDeadlineMs: missRulePool(input.pool).ok
+      ? missDeadlineMs(input.pool.periodEnd)
+      : null,
+    // And the latest moment a hit can still be confirmed: the run settles by
+    // then, and an unconfirmed hit gets its stake back without a share.
+    missConfirmByMs: missRulePool(input.pool).ok
+      ? missConfirmByMs(input.pool.periodEnd)
+      : null,
   });
 
   return {
@@ -263,6 +276,7 @@ export default function VerdictStage({
             and says so when it cannot read that. */}
         {screen.kind === "settled-final" ||
         screen.kind === "lost" ||
+        (screen.kind === "missed" && screen.outcome === "refunded") ||
         (screen.kind === "approval-failed" && screen.settled) ? (
           <ClaimPayout address={address} />
         ) : null}
@@ -300,6 +314,14 @@ function spotterLineFor(screen: VerdictScreen): string {
       return "Not yet. Tonight still counts.";
     case "lost":
       return "The data said no. I do not round up.";
+    case "missed":
+      return screen.outcome === "refunded"
+        ? "Nobody hit, so every stake came home. Yours is below."
+        : screen.outcome === "cancelled"
+          ? "The creator called it off. Your stake is yours to claim."
+          : "Your wearable saw the whole run. The data said no.";
+    case "hit-unconfirmed":
+      return "You hit it. Nobody confirmed it before the books closed.";
     case "settled-final":
       return "Books are closed on this one. Whatever is yours is below.";
     case "bad-read":

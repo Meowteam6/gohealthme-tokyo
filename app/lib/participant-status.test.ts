@@ -42,6 +42,13 @@ describe("resultLabel", () => {
     });
   });
 
+  it("F10: never says 'no proof' when SPOTTER read the hit and it was not confirmed", () => {
+    expect(resultLabel({ settled: true }, p({}), null, true)).toEqual({
+      text: "Refunded - hit not confirmed before settle",
+      tone: "muted",
+    });
+  });
+
   it("never says 'no proof' when the proof passed and only the World ID OK was missing", () => {
     for (const approval of ["declined", "expired", "cancelled"] as const) {
       expect(resultLabel({ settled: true }, p({}), approval)).toEqual({
@@ -72,6 +79,15 @@ describe("resultLabel", () => {
     });
     expect(resultLabel({ settled: true }, p({ resultRecorded: true }))).toEqual({
       text: "Goal missed - stake forfeited",
+      tone: "muted",
+    });
+  });
+
+  it("never says forfeited on a self-staked run, where nobody hitting refunds every miss", () => {
+    // Model 2: a recorded miss goes to the players who hit, or comes back
+    // when nobody hit. This label cannot see the tally, so it says neither.
+    expect(resultLabel({ settled: true, bountyModel: 2 }, p({ resultRecorded: true }))).toEqual({
+      text: "Goal missed - see the run for your stake",
       tone: "muted",
     });
   });

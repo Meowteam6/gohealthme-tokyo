@@ -34,6 +34,9 @@ import {
 } from "@/lib/wearable-connect";
 import WhoopReturnNote from "@/components/WhoopReturnNote";
 import { classifyWearableGoal } from "@/lib/wearable-goal";
+import { missConfirmByMs, missDeadlineMs } from "@/lib/miss-grace";
+import { missRulePool } from "@/lib/miss-rule";
+import { missedScreenOf, verdictCopy } from "@/lib/game/verdict";
 import {
   deferredPeriodEndMs,
   failureModeOf,
@@ -84,6 +87,7 @@ const MAX_POLLS = 375;
 const TERMINAL: RunStatus[] = [
   "paid",
   "no-pay",
+  "missed",
   "cap-exceeded",
   "blocked",
   "recorded",
@@ -398,7 +402,8 @@ function WearableCheckInner({
       status.kind === "agent" &&
       (status.runStatus === "recorded" ||
         status.runStatus === "paid" ||
-        status.runStatus === "no-pay"),
+        status.runStatus === "no-pay" ||
+        status.runStatus === "missed"),
   });
 
   // The metric THIS pool is scored on, so the readiness read is about the goal
@@ -578,6 +583,19 @@ function WearableCheckInner({
   if (status.kind === "agent") {
     const failureMode =
       status.runStatus === "no-pay" ? failureModeOf(status.ledger) : null;
+    // On a run that can record a miss, SPOTTER's last look is periodEnd +
+    // MISS_GRACE_HOURS; later syncs no longer count (lib/miss-grace.ts).
+    const lastCheckMs =
+      poolQuery.data !== undefined && missRulePool(poolQuery.data).ok
+        ? missDeadlineMs(poolQuery.data.periodEnd)
+        : null;
+    // The latest a hit can be confirmed on such a run: it settles by then.
+    const confirmByMs =
+      poolQuery.data !== undefined && missRulePool(poolQuery.data).ok
+        ? missConfirmByMs(poolQuery.data.periodEnd)
+        : null;
+    const missed = status.runStatus === "missed" ? missedScreenOf(status.ledger) : null;
+    const missedCopy = missed !== null ? verdictCopy(missed) : null;
     // The contract records a late pass until the pool settles, so a miss is final only then.
     const poolClosed =
       poolQuery.data?.settled === true || poolQuery.data?.cancelled === true;
@@ -634,8 +652,7 @@ function WearableCheckInner({
             </p>
             {periodEndMs !== null ? (
               <p className="mt-1 text-sm text-foreground/80">
-                SPOTTER settles the payout when the pool period ends at{" "}
-                {formatLocalTime(periodEndMs)} (
+                SPOTTER settles the payout at {formatLocalTime(periodEndMs)} (
                 <Countdown
                   periodStart={0n}
                   periodEnd={BigInt(Math.floor(periodEndMs / 1000))}
@@ -645,7 +662,7 @@ function WearableCheckInner({
               </p>
             ) : (
               <p className="mt-1 text-sm text-foreground/80">
-                SPOTTER settles the payout the moment the pool period ends - no
+                SPOTTER settles the payout after the run ends - no
                 human involved. Come back after the period closes and the payout
                 appears here.
               </p>
@@ -684,14 +701,22 @@ function WearableCheckInner({
           </div>
         ) : null}
 
+        {!verdictShown && missedCopy !== null ? (
+          <div className="rounded-xl border border-edge bg-surface-raised p-4">
+            <p className="text-base font-semibold">{missedCopy.headline}.</p>
+            <p className="mt-1 text-sm text-foreground/80">{missedCopy.body}</p>
+          </div>
+        ) : null}
+
         {failureMode === "goal-missed" && !poolClosed ? (
           <div className="space-y-3">
             <div className="rounded-xl border border-edge bg-surface-raised p-4">
               <p className="text-base font-semibold">Not there yet.</p>
               <p className="mt-1 text-sm text-foreground/80">
                 The wearable data was read fine and the goal is not met so far.
-                Days inside the pool period still count if they sync before the
-                pool settles, so check again after your next sync.
+                {lastCheckMs !== null
+                  ? ` Days inside the run still count if your wearable syncs them by ${formatLocalTime(lastCheckMs)}. After that, SPOTTER records a miss on its own when your wearable covered the whole run and shows it; if it did not sync the whole run, nothing is recorded and your stake comes back. A hit only counts once you open the run and confirm it${confirmByMs !== null ? `, by ${formatLocalTime(confirmByMs)} at the latest` : " before it settles"}.`
+                  : " Days inside the pool period still count if they sync before the pool settles, so check again after your next sync."}
               </p>
             </div>
             <button
@@ -708,7 +733,8 @@ function WearableCheckInner({
             <p className="text-base font-semibold">Not paid.</p>
             <p className="mt-1 text-sm text-foreground/80">
               The wearable data was read fine. It does not show the goal being
-              met.
+              met. No miss was recorded on chain, so your stake comes back to
+              you.
             </p>
           </div>
         ) : null}

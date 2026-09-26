@@ -60,6 +60,8 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
 import { resultLabel } from "@/lib/participant-status";
+import { missConfirmByMs, missGraceSeconds } from "@/lib/miss-grace";
+import { missRulePool } from "@/lib/miss-rule";
 import {
   runApprovalLine,
   type RunApprovalLine,
@@ -100,7 +102,11 @@ function deferredUntil(entry: JoinedPool): bigint | null {
   const { pool, participant } = entry;
   if (pool.settled) return null;
   if (!participant.resultRecorded || !participant.verdict) return null;
-  return pool.periodEnd;
+  // A run that can record a miss settles only after MISS_GRACE_HOURS, once
+  // every player's wearable had time to sync (lib/miss-grace.ts).
+  return missRulePool(pool).ok
+    ? pool.periodEnd + BigInt(missGraceSeconds())
+    : pool.periodEnd;
 }
 
 function formatSettleMoment(periodEnd: bigint): string {
@@ -132,7 +138,7 @@ function DeferredNote({
   return (
     <p className={`mt-3 rounded-xl border border-dashed p-3 text-sm ${cls}`}>
       {lead} SPOTTER settles this {selfReported ? "self-reported claim " : ""}
-      when the pool period ends at {formatSettleMoment(settlesAt)} (
+      at {formatSettleMoment(settlesAt)} (
       <Countdown periodStart={0n} periodEnd={settlesAt} />). Nothing for you to
       do.
     </p>
@@ -169,14 +175,21 @@ function ApprovalRunNote({
   );
 }
 
+/** Where one run's World ID payout confirmation stands, and whether SPOTTER
+ *  read a hit on it that nobody confirmed yet. */
+interface RunApproval {
+  status: RunApprovalStatus;
+  hit: boolean;
+}
+
 /** Where each open run's World ID payout confirmation stands, keyed by pool
  *  id. The status route is public and machine-only; a failed read is
  *  "unknown", never silence. */
 async function fetchRunApprovals(
   address: `0x${string}`,
   runs: readonly JoinedPool[],
-): Promise<Map<string, RunApprovalStatus>> {
-  const map = new Map<string, RunApprovalStatus>();
+): Promise<Map<string, RunApproval>> {
+  const map = new Map<string, RunApproval>();
   await Promise.all(
     runs.map(async ({ pool }) => {
       const key = pool.id.toString();
@@ -187,17 +200,28 @@ async function fetchRunApprovals(
           { cache: "no-store" },
         );
         if (!response.ok) {
-          map.set(key, "unknown");
+          map.set(key, { status: "unknown", hit: false });
           return;
         }
         const parsed = parseStatus(await response.json().catch(() => null));
-        map.set(key, parsed?.status ?? "unknown");
+        map.set(key, { status: parsed?.status ?? "unknown", hit: parsed?.hit === true });
       } catch {
-        map.set(key, "unknown");
+        map.set(key, { status: "unknown", hit: false });
       }
     }),
   );
   return map;
+}
+
+/** The dashboard's hit line input: set only when SPOTTER read a hit on this
+ *  run that is not confirmed, with the latest moment it can be confirmed on a
+ *  run that can record a miss (lib/miss-grace.ts). */
+function hitOf(
+  approval: RunApproval | undefined,
+  pool: PoolInfo,
+): { confirmByMs: number | null } | undefined {
+  if (approval?.hit !== true) return undefined;
+  return { confirmByMs: missRulePool(pool).ok ? missConfirmByMs(pool.periodEnd) : null };
 }
 
 function finalApprovalOf(
@@ -927,13 +951,15 @@ export default function DashboardContent() {
             .filter(({ pool }) => !pool.settled && !pool.cancelled)
             .map((entry) => {
               const settlesAt = deferredUntil(entry);
+              const approval = approvalQuery.data?.get(entry.pool.id.toString());
               const approvalLine = runApprovalLine(
-                approvalQuery.data?.get(entry.pool.id.toString()) ?? "none",
+                approval?.status ?? "none",
                 {
                   settled: entry.pool.settled,
                   cancelled: entry.pool.cancelled,
                   resultRecorded: entry.participant.resultRecorded,
                 },
+                hitOf(approval, entry.pool),
               );
               return (
                 <div key={entry.pool.id.toString()} className="space-y-3">
@@ -963,10 +989,12 @@ export default function DashboardContent() {
                 .filter(({ pool }) => pool.settled || pool.cancelled)
                 .map((entry) => {
                   const { pool, participant } = entry;
+                  const approval = approvalQuery.data?.get(pool.id.toString());
                   const result = resultLabel(
                     pool,
                     participant,
-                    finalApprovalOf(approvalQuery.data?.get(pool.id.toString())),
+                    finalApprovalOf(approval?.status),
+                    approval?.hit === true,
                   );
                   return (
                     <div
