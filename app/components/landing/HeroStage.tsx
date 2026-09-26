@@ -57,11 +57,16 @@ export default function HeroStage({
 
   return (
     <div className="relative mt-[18px] min-[900px]:mt-0">
-      {/* Dimmed behind an awake SPOTTER: the one warm light stays, and the
-          run on the card is a day run. */}
-      <div className={night ? undefined : "opacity-40"}>
+      {night ? (
         <Moon className="absolute left-[calc(50%-16px)] top-0.5 z-0 min-[900px]:left-auto min-[900px]:right-[-8px] min-[900px]:top-[-18px]" />
-      </div>
+      ) : (
+        // A day run: the moon steps back, small and high, so the one warm
+        // light stays and SPOTTER, awake, owns the stage.
+        <Moon
+          diameter={[76, 120]}
+          className="absolute right-5 top-1 z-0 min-[900px]:right-8 min-[900px]:top-0"
+        />
+      )}
       <div className="night-perch" style={perch}>
         <button
           type="button"
