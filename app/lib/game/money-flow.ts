@@ -186,8 +186,10 @@ export function groupRunCopy(input: MoneyInput): MoneyCopy {
           ? `Miss: your ${stake} comes back. This run cannot record a miss.`
           : stakersAfter(input.players, input.includeJoiner) < 2
             ? // The chip says "stake back" while one staker is in; anyone can
-              // still join, so the change that follows is said before the stake.
-              `Miss: your ${stake} comes back while you are the only one in; once others stake, it goes to whoever hits.`
+              // still join, so the change that follows is said before the
+              // stake, with the case that undoes it (nobody hitting refunds
+              // every recorded stake, HealthPoolsV3 H = 0).
+              `Miss: your ${stake} comes back while you are the only one in; once others stake, it goes to whoever hits, or comes back if nobody does.`
             : `Miss: if anyone hits, your ${stake} goes to them; if nobody hits, it comes back.`,
       },
       confirmTerm(input, stake),
@@ -304,11 +306,19 @@ export function challengeCopy(
         ? `Hit: ${lockIn} back + ${usd(input.pot)}.`
         : `Hit: your ${lockIn} comes back.`
       : sharedHitTerm(input, lockIn);
-  const takeBack = input.pot > 0n ? `, and ${challengerMid} ${takes} back ${usd(input.pot)} after ${input.endsOn}` : "";
+  // What happens to the pot after this player's miss. Alone, a miss means
+  // nobody hit, so the challenger takes it back. With others in, another
+  // accepter can still hit and take it, so the take-back hangs on nobody
+  // hitting: on a run that records misses that clause is already there; on
+  // one that cannot, it is said as its own sentence.
+  const takeBack = input.pot > 0n ? `${challengerMid} ${takes} back ${usd(input.pot)} after ${input.endsOn}` : "";
+  const andTakeBack = takeBack !== "" ? `, and ${takeBack}` : "";
   const miss =
     accepters >= 2 && input.recordable
-      ? `Miss: if another player hits, your ${lockIn} goes to them; if nobody hits, it comes back${takeBack}.`
-      : `Miss: ${lockIn} comes back${takeBack}.`;
+      ? `Miss: if another player hits, your ${lockIn} goes to them; if nobody hits, it comes back${andTakeBack}.`
+      : accepters >= 2 && takeBack !== ""
+        ? `Miss: ${lockIn} comes back. If nobody hits, ${takeBack}.`
+        : `Miss: ${lockIn} comes back${andTakeBack}.`;
   const rule = input.recordable
     ? "if more than one, whoever misses pays whoever hits."
     : "this run cannot record a miss, so a miss comes back however many accept.";

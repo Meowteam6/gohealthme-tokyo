@@ -113,8 +113,9 @@ describe("F1 group run", () => {
       "Same stake: 1.00, nobody in yet.",
       "Hit: 1.00 back + a share, 3.00 right now.",
       // The first staker's chip reads "stake back"; the term says what changes
-      // once others join, before the stake.
-      "Miss: your 1.00 comes back while you are the only one in; once others stake, it goes to whoever hits.",
+      // once others join, before the stake, and that nobody hitting refunds
+      // every recorded stake (H = 0).
+      "Miss: your 1.00 comes back while you are the only one in; once others stake, it goes to whoever hits, or comes back if nobody does.",
       "Confirm your hit by Sep 27, 16:30, or you only get 1.00 back. Test money, beta.",
     ]);
   });
@@ -240,6 +241,19 @@ describe("F3 challenge a friend", () => {
     expect(copy.line).toBe("The pot holds 10.00 USDC. You stake 5.00: hit it and get up to 15.00.");
     expect(copy.terms[3].text).toBe(
       "2 people have accepted this link; this run cannot record a miss, so a miss comes back however many accept.",
+    );
+  });
+
+  it("two or more accepters on a run that cannot record a miss: the lock-in comes back, the reward only if nobody hits", () => {
+    // Another accepter can still hit and take the pot, so the challenger
+    // taking the reward back is not the consequence of this player's miss.
+    const copy = challengeCopy({ ...dare, recordable: false, players: 1 });
+    expect(copy.terms[2].text).toBe(
+      "Miss: 5.00 comes back. If nobody hits, @andre takes back 10.00 after Oct 26, 21:00.",
+    );
+    // Alone, a miss means nobody hit, so the reward does go back.
+    expect(challengeCopy({ ...dare, recordable: false }).terms[2].text).toBe(
+      "Miss: 5.00 comes back, and @andre takes back 10.00 after Oct 26, 21:00.",
     );
   });
 });
