@@ -415,7 +415,6 @@ function EarlierChecks({ checks, open }: { checks: CheckSummary[]; open: boolean
               {check.result !== null ? (
                 <p className="m-0 mt-0.5 break-words text-foreground">
                   {check.result.text}
-                  <span className="text-haze">, {check.result.confidence} confidence</span>
                 </p>
               ) : null}
               {check.decision !== null ? (
