@@ -1,41 +1,51 @@
 "use client";
 
 // The most protected surface in the build: SPOTTER's per-claim receipt.
-// Every row maps one-to-one onto a ledger entry via projectReceipt - planned
-// steps print before their prices, the escalation prints unplanned at its
-// chronological position, and the running total stands against the frozen
-// cap. Nothing renders here that did not go through the ledger first.
+// Nothing renders here that did not go through the ledger first.
 //
-// Two display rules on top of the projection: repeated errors of the same
-// stage and message collapse into one row with a count (the ledger is
-// append-only, so retries accumulate rows), and error rows lead with a calm
-// plain-language label - the raw message stays available behind a disclosure,
-// never as a wall of red.
+// It reads as checks (lib/receipt-summary.ts): the newest check in a few
+// plain lines - what the read showed, what SPOTTER decided, where the World ID
+// confirmation stands, and what landed on chain - and every earlier check one
+// tap away. The ledger is append-only, so a claim read twice carries both
+// reads; printing both in full put a stale "not verified" above the hit that
+// replaced it. Spend and privacy are one fine line each.
+//
+// Error rows lead with a calm plain-language label - the raw message stays
+// available behind a disclosure, never as a wall of red - and a transient
+// error the claim already moved past does not print at all.
 
+import type { ReactNode } from "react";
 import {
   projectReceipt,
   SCREEN_HELD_PREFIX,
+  toUsd2,
   type LedgerEntry,
   type ReceiptRow,
 } from "@/lib/agent-receipt";
-import { ArcTxLink, Money, Verdict } from "@/components/ui";
+import {
+  summarizeReceipt,
+  type ApprovalEntry,
+  type CheckError,
+  type CheckSummary,
+  type EvidenceKind,
+  type RecordEntry,
+  type SettleEntry,
+} from "@/lib/receipt-summary";
+import { ArcTxLink, FOCUS_RING, Money } from "@/components/ui";
+import { Glyph } from "@/components/run/glyphs";
 import PayoutScreening from "@/components/intercepta/PayoutScreening";
 import { credentialLabel } from "@/lib/world/credentials";
 import { missStakeLine } from "@/lib/agent-history";
 
-type SpendReceiptRow = Extract<ReceiptRow, { kind: "spend" }>;
-
 // settle.periodEndIso is an optional field newer ledgers carry on deferred
 // entries; widened locally so this file compiles whether or not the ledger
 // type has it yet.
-type SettleLedgerEntry = Extract<LedgerEntry, { kind: "settle" }> & {
-  periodEndIso?: string;
-};
+type SettleLedgerEntry = SettleEntry & { periodEndIso?: string };
 
 const GATEWAY_NOTE = /gateway tx (\S+)/;
 
 // The non-component helpers below are exported for the unit tests in
-// AgentReceipt.test.ts; nothing else imports them.
+// AgentReceipt.test.ts (and settleMomentLine for the agent feed).
 
 export function gatewayRefOf(note: string | null): string | null {
   if (note === null) return null;
@@ -169,157 +179,274 @@ export function errorPresentation(
   }
 }
 
-type DisplayItem =
-  | { kind: "row"; key: number; row: Exclude<ReceiptRow, { kind: "error" }> }
-  | {
-      kind: "errors";
-      key: number;
-      stage: string;
-      message: string;
-      count: number;
-    };
-
-/** Collapse consecutive error rows with the same stage and message into one
- *  item with a count; every other row passes through untouched. */
-export function collapseErrors(rows: ReceiptRow[]): DisplayItem[] {
-  const items: DisplayItem[] = [];
-  rows.forEach((row, index) => {
-    if (row.kind === "error") {
-      const last = items[items.length - 1];
-      if (
-        last !== undefined &&
-        last.kind === "errors" &&
-        last.stage === row.stage &&
-        last.message === row.message
-      ) {
-        last.count += 1;
-        return;
-      }
-      items.push({
-        kind: "errors",
-        key: index,
-        stage: row.stage,
-        message: row.message,
-        count: 1,
-      });
-      return;
-    }
-    items.push({ kind: "row", key: index, row });
-  });
-  return items;
+/** The World ID line for an approval row, in the player's words. */
+export function approvalLine(approval: ApprovalEntry): string {
+  switch (approval.status) {
+    case "requested":
+      return "Asked you to confirm with World ID";
+    case "approved":
+      return "You confirmed with World ID";
+    case "declined":
+      return "You declined the World ID confirmation";
+    case "expired":
+      return "The World ID request expired";
+    case "cancelled":
+      return "The World ID request was withdrawn";
+  }
 }
 
-function SpendRow({ row }: { row: SpendReceiptRow }) {
-  const gatewayRef = gatewayRefOf(row.note);
-  const note = noteWithoutGatewayRef(row.note);
-  return (
-    <li className="animate-rise-in">
-      {/* Both columns must be able to shrink at 375px. The left label carries
-          strings as long as "chain verification read (QuickNode, x402)" and
-          needs min-w-0 or it refuses to wrap and pushes the row wider than the
-          card; the right column must not be whitespace-nowrap for the same
-          reason. Only the amount itself stays unbreakable - a money figure
-          split across two lines is worse than a wrap anywhere else. */}
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="min-w-0 break-words text-sm font-medium">
-          {row.paidUsd !== null ? (
-            <span aria-hidden className="mr-2 font-mono text-moonlight">
-              [x]
-            </span>
-          ) : (
-            <span aria-hidden className="mr-2 font-mono text-muted">
-              [ ]
-            </span>
-          )}
-          {row.label}
-          {!row.planned ? (
-            <span className="ml-2 text-xs font-semibold text-foreground">
-              Unplanned
-            </span>
-          ) : null}
-        </span>
-        <span className="min-w-0 text-right text-sm">
-          {row.paidUsd !== null ? (
-            <>
-              <span className="whitespace-nowrap">
-                <Money usd={row.paidUsd} size="sm" />
-              </span>{" "}
-              {row.settlement === "x402" ? (
-                <span className="whitespace-nowrap text-xs text-muted">
-                  paid via x402
-                </span>
-              ) : row.settlement === "prepaid" ? (
-                <span className="text-xs text-muted">metered</span>
-              ) : null}
-            </>
-          ) : row.estUsd !== null ? (
-            <span className="whitespace-nowrap">
-              <span className="text-xs text-muted">est</span>{" "}
-              <Money usd={row.estUsd} size="sm" />
-            </span>
-          ) : null}
-        </span>
-      </div>
-      {/* The gateway reference gets its own line rather than trailing the
-          amount: a 15-character mono ref cannot fit beside a price inside a
-          311px content box, and it is a proof link, not a price. */}
-      {gatewayRef !== null ? (
-        <p className="mt-1 pl-7 text-xs text-muted">
-          gateway tx{" "}
-          <span className="break-all font-mono" title={gatewayRef}>
-            {shortRef(gatewayRef)}
-          </span>
-        </p>
-      ) : null}
-      {note !== null ? (
-        <p className="mt-1 break-words pl-7 text-sm text-muted">
-          {note}
-        </p>
-      ) : null}
-    </li>
-  );
-}
+/** Where to hang the text column: the result glyph (18px) plus its gap. */
+const INDENT = "pl-7";
 
-function ErrorRow({
-  stage,
-  message,
-  count,
-}: {
-  stage: string;
-  message: string;
-  count: number;
-}) {
-  const { label, transient } = errorPresentation(stage, message);
+function ErrorLine({ error }: { error: CheckError }) {
+  const { label, transient } = errorPresentation(error.stage, error.message);
   return (
-    <li className="animate-rise-in pl-7 text-sm">
+    <li className={`${INDENT} text-sm`}>
       <details>
         {/* min-h-11 keeps the disclosure a real 44px thumb target; the flex
             wrap lets the label and the "details" affordance stack at 375px
             instead of forcing the row wider than the card. */}
         <summary
-          className={`flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-2 [&::-webkit-details-marker]:hidden ${
+          className={`flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-2 [&::-webkit-details-marker]:hidden ${FOCUS_RING} ${
             transient ? "text-muted" : "text-danger"
           }`}
         >
           <span className="min-w-0 break-words">{label}</span>
-          {count > 1 ? (
-            <span className="text-xs text-muted">tried {count} times</span>
+          {error.count > 1 ? (
+            <span className="text-xs text-muted">tried {error.count} times</span>
           ) : null}
-          <span className="text-xs text-muted underline decoration-dotted">
-            details
-          </span>
+          <span className="text-xs text-muted underline decoration-dotted">details</span>
         </summary>
-        <p className="mt-1 break-words text-xs text-muted">
-          {stage}: {message}
+        <p className="m-0 mt-1 break-words text-xs text-muted">
+          {error.stage}: {error.message}
         </p>
       </details>
     </li>
   );
 }
 
+function ApprovalText({ approval }: { approval: ApprovalEntry }) {
+  const credential = approval.credential ?? null;
+  const proof =
+    approval.status === "approved" && approval.nullifierStub !== undefined
+      ? `${credential !== null ? `${credentialLabel(credential)}, ` : ""}nullifier ${approval.nullifierStub}…`
+      : null;
+  return (
+    <>
+      {approvalLine(approval)}
+      {proof !== null ? <span className="text-haze"> ({proof})</span> : null}
+      {approval.provider === "mock" ? (
+        <span className="text-haze"> (event mode, mocked proof)</span>
+      ) : null}
+    </>
+  );
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** What landed on chain for a recorded check, most advanced first. */
+function OnChainLine({
+  record,
+  settle,
+}: {
+  record: RecordEntry;
+  settle: SettleLedgerEntry | null;
+}) {
+  const recorded = recordRowLabel({
+    kind: "record",
+    resultTx: record.resultTx ?? null,
+    registryTx: record.registryTx ?? null,
+    verdict: record.verdict !== false,
+    stakeUsd: record.stakeUsd ?? null,
+  });
+  let line: ReactNode = recorded;
+  if (settle !== null) {
+    if (settle.status === "settled" && settle.paidUsd !== undefined) {
+      line = (
+        <>
+          Paid <Money usd={toUsd2(settle.paidUsd)} sign="+" size="sm" />
+        </>
+      );
+    } else if (settle.status === "closed" && settle.outcome !== undefined) {
+      line = missStakeLine(settle.outcome, record.stakeUsd ?? null, true);
+    } else if (settle.status === "deferred") {
+      line = `${recorded}. ${capitalize(deferredSettleCopy(settle.periodEndIso, settle.note ?? null))}.`;
+    } else if (settle.note !== undefined) {
+      line = `${recorded}. ${capitalize(settle.note)}`;
+    }
+  }
+  const links: { hash: string; label: string }[] = [];
+  if (record.resultTx !== undefined) links.push({ hash: record.resultTx, label: "result tx" });
+  if (record.registryTx !== undefined) {
+    links.push({ hash: record.registryTx, label: "verdict registry tx" });
+  }
+  if (settle?.txHash !== undefined) links.push({ hash: settle.txHash, label: "settle tx" });
+  return (
+    <li className={`${INDENT} text-sm`}>
+      <p className="m-0 font-medium text-foreground">{line}</p>
+      {links.length > 0 ? (
+        <p className="m-0 flex flex-wrap gap-x-4">
+          {links.map((l) => (
+            <ArcTxLink key={l.label} txHash={l.hash} label={l.label} />
+          ))}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+const READING: Record<EvidenceKind, string> = {
+  wearable: "SPOTTER is reading your wearable summary",
+  document: "SPOTTER is reading your document",
+  "self-reported": "SPOTTER is reading your photo",
+};
+
+const PRIVACY: Record<EvidenceKind, string> = {
+  wearable:
+    "Your wearable data stays on SPOTTER's server and never goes on chain. Only the verdict does.",
+  "self-reported":
+    "Your photo was read in the enclave and never stored. Self-reported proof is low-trust and never marked verified.",
+  document: "Your document never left the secure enclave. SPOTTER only ever saw the verdict.",
+};
+
+function ResultLine({ check, evidenceKind }: { check: CheckSummary; evidenceKind: EvidenceKind }) {
+  const result = check.result;
+  if (result === null) {
+    return (
+      <li className="flex items-start gap-2.5 text-[0.9375rem] text-muted">
+        <Glyph name="info" size={18} className="mt-0.5 text-haze" />
+        <span className="min-w-0">{READING[evidenceKind]}</span>
+      </li>
+    );
+  }
+  const split = result.text.indexOf(": ");
+  const lead = split === -1 ? result.text : result.text.slice(0, split);
+  const detail = split === -1 ? null : result.text.slice(split + 2);
+  const leadTone =
+    result.tone === "verified"
+      ? "text-moonlight"
+      : result.tone === "self-reported"
+        ? "text-warning"
+        : "text-foreground";
+  return (
+    <li className="flex items-start gap-2.5 text-[0.9375rem]">
+      <Glyph name={result.tone === "verified" ? "hit" : "miss"} size={18} className="mt-0.5" />
+      <span className="min-w-0 break-words">
+        <span className={`font-semibold ${leadTone}`}>{lead}</span>
+        {detail !== null ? <span className="text-foreground">: {detail}</span> : null}
+      </span>
+    </li>
+  );
+}
+
+/** Errors worth a line: anything still current, and any real failure even
+ *  after the claim moved on (money may have moved). */
+function errorsToShow(check: CheckSummary): CheckError[] {
+  return check.errors.filter(
+    (e) => e.current || !errorPresentation(e.stage, e.message).transient,
+  );
+}
+
+function LatestCheck({ check, evidenceKind }: { check: CheckSummary; evidenceKind: EvidenceKind }) {
+  const decisionTone =
+    check.decision?.tone === "pay" ? "text-foreground" : "text-dusk-ink";
+  const decision =
+    check.decision !== null && check.record === null ? (
+      <li className={`${INDENT} text-sm font-medium ${decisionTone}`}>{check.decision.text}</li>
+    ) : null;
+  const approval =
+    check.approval !== null ? (
+      <li className={`${INDENT} text-sm text-muted`}>
+        <ApprovalText approval={check.approval} />
+      </li>
+    ) : null;
+  return (
+    <ul className="m-0 mt-2.5 grid list-none gap-1.5 p-0" aria-label="Latest check">
+      <ResultLine check={check} evidenceKind={evidenceKind} />
+      {check.record !== null ? (
+        <>
+          {approval}
+          <OnChainLine record={check.record} settle={check.settle} />
+        </>
+      ) : (
+        <>
+          {decision}
+          {approval}
+        </>
+      )}
+      {check.screen !== null ? (
+        <li className={INDENT}>
+          <PayoutScreening status={check.screen.status} reason={check.screen.reason} />
+        </li>
+      ) : null}
+      {errorsToShow(check).map((error) => (
+        <ErrorLine key={`${error.stage}:${error.message}`} error={error} />
+      ))}
+    </ul>
+  );
+}
+
+function checkTime(check: CheckSummary): string | null {
+  return check.at !== null ? formatSettleMoment(new Date(check.at)) : null;
+}
+
+function EarlierChecks({ checks, open }: { checks: CheckSummary[]; open: boolean }) {
+  return (
+    <details className="group mt-2 border-t border-edge" open={open}>
+      <summary
+        className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-muted hover:text-foreground [&::-webkit-details-marker]:hidden ${FOCUS_RING}`}
+      >
+        Earlier checks ({checks.length})
+        <Glyph
+          name="chev"
+          className="text-haze transition-transform duration-[120ms] group-open:rotate-90 motion-reduce:transition-none"
+        />
+      </summary>
+      <ol className="m-0 grid list-none gap-3 p-0 pb-1">
+        {checks.map((check, index) => {
+          const time = checkTime(check);
+          return (
+            <li key={`${check.at ?? "none"}-${index}`} className="border-t border-edge pt-3 text-sm">
+              {time !== null ? (
+                <p className="num m-0 text-[0.8125rem] text-haze">{time}</p>
+              ) : null}
+              {check.result !== null ? (
+                <p className="m-0 mt-0.5 break-words text-foreground">
+                  {check.result.text}
+                  <span className="text-haze">, {check.result.confidence} confidence</span>
+                </p>
+              ) : null}
+              {check.decision !== null ? (
+                <p className="m-0 mt-0.5 text-muted">{check.decision.text}</p>
+              ) : null}
+              {check.decision?.note != null ? (
+                <p className="m-0 mt-0.5 break-words text-haze">SPOTTER: {check.decision.note}</p>
+              ) : null}
+              {check.approval !== null ? (
+                <p className="m-0 mt-0.5 text-muted">
+                  <ApprovalText approval={check.approval} />
+                </p>
+              ) : null}
+              {check.errors.map((error) => (
+                <p key={`${error.stage}:${error.message}`} className="m-0 mt-0.5 text-muted">
+                  {errorPresentation(error.stage, error.message).label}
+                  {error.count > 1 ? ` (tried ${error.count} times)` : ""}
+                </p>
+              ))}
+            </li>
+          );
+        })}
+      </ol>
+    </details>
+  );
+}
+
 export default function AgentReceipt({
   ledger,
   evidenceKind = "document",
+  earlierOpen = false,
 }: {
   ledger: LedgerEntry[];
   /** Which evidence path this receipt belongs to. Defaults to "document" so
@@ -329,187 +456,65 @@ export default function AgentReceipt({
    *  reads the Junction summary on SPOTTER's own server, so it must not claim
    *  otherwise. The self-reported path is the same enclave read but the footer
    *  states plainly that the proof is low-trust and unverified. */
-  evidenceKind?: "document" | "wearable" | "self-reported";
+  evidenceKind?: EvidenceKind;
+  /** Start with the earlier checks open (the state gallery). */
+  earlierOpen?: boolean;
 }) {
+  const summary = summarizeReceipt(ledger, evidenceKind);
   const receipt = projectReceipt(ledger);
-  const items = collapseErrors(receipt.rows);
-  const deferredEntry = ledger.find(
-    (e) => e.kind === "settle" && e.status === "deferred",
-  ) as SettleLedgerEntry | undefined;
-  const missRow = receipt.rows.find(
-    (r): r is Extract<ReceiptRow, { kind: "record" }> => r.kind === "record" && !r.verdict,
-  );
-  const missStakeUsd = missRow?.stakeUsd ?? null;
+  const latest: CheckSummary = summary?.latest ?? {
+    at: null,
+    result: null,
+    decision: null,
+    approval: null,
+    record: null,
+    settle: null,
+    screen: null,
+    errors: [],
+  };
+  const time = checkTime(latest);
+  // x402 purchases carry their Gateway reference; it is proof the payment
+  // happened, so it stays on the spend line rather than behind a tap.
+  const gatewayRefs = ledger.flatMap((e) => {
+    if (e.kind !== "spend") return [];
+    const ref = gatewayRefOf(e.note ?? null);
+    return ref !== null ? [ref] : [];
+  });
 
   return (
     <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
-      <p className="text-[1.0625rem] font-semibold">
-        SPOTTER&apos;s receipt
-      </p>
-      <ol className="mt-3 space-y-3">
-        {items.map((item) => {
-          if (item.kind === "errors") {
-            return (
-              <ErrorRow
-                key={item.key}
-                stage={item.stage}
-                message={item.message}
-                count={item.count}
-              />
-            );
-          }
-          const row = item.row;
-          switch (row.kind) {
-            case "spend":
-              return <SpendRow key={item.key} row={row} />;
-            case "verdict":
-              return (
-                <li key={item.key} className="animate-rise-in pl-7">
-                  <Verdict
-                    verified={row.verified}
-                    confidence={row.confidence}
-                    selfReported={row.selfReported}
-                  />
-                  <p className="mt-1 text-sm text-muted">
-                    {row.escalation ? "second opinion: " : ""}
-                    {row.reason}
-                  </p>
-                </li>
-              );
-            case "reason":
-              return (
-                <li key={item.key} className="animate-rise-in pl-7 text-sm">
-                  <span className="text-xs font-bold text-muted">
-                    Decision:
-                  </span>{" "}
-                  <span
-                    className={
-                      row.decision === "pay" ? "text-moonlight" : "text-dusk-ink"
-                    }
-                  >
-                    {row.decision}
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="m-0 text-sm font-semibold">Latest check</p>
+        {time !== null && latest.at !== null ? (
+          <time dateTime={latest.at} className="num text-[0.8125rem] text-haze">
+            {time}
+          </time>
+        ) : null}
+      </div>
+      <LatestCheck check={latest} evidenceKind={evidenceKind} />
+      <div className="mt-3 grid gap-1 border-t border-edge pt-3 text-[0.8125rem] leading-[1.45] text-haze">
+        {receipt.capUsd !== null ? (
+          <p className="num m-0 break-words">
+            Spent {receipt.spentUsd} of a {receipt.capUsd} USDC cap on this claim.
+            {gatewayRefs.length > 0 ? (
+              <>
+                {" "}Paid via x402, gateway tx{" "}
+                {gatewayRefs.map((ref, i) => (
+                  <span key={ref} className="break-all font-mono" title={ref}>
+                    {i > 0 ? ", " : ""}
+                    {shortRef(ref)}
                   </span>
-                  <p className="mt-1 text-muted">{row.note}</p>
-                </li>
-              );
-            case "record":
-              return (
-                <li key={item.key} className="animate-rise-in pl-7 text-sm">
-                  <span className="text-xs font-bold text-muted">
-                    {recordRowLabel(row)}
-                  </span>
-                  {!row.verdict ? (
-                    <p className="mt-1 text-foreground/80">
-                      {missStakeLine("pending", row.stakeUsd, true)}
-                    </p>
-                  ) : null}
-                  {row.resultTx !== null ? (
-                    <p className="mt-1">
-                      <ArcTxLink txHash={row.resultTx} label="result tx" />
-                    </p>
-                  ) : null}
-                  {row.registryTx !== null ? (
-                    <p className="mt-1">
-                      <ArcTxLink
-                        txHash={row.registryTx}
-                        label="verdict registry tx"
-                      />
-                    </p>
-                  ) : null}
-                </li>
-              );
-            case "screen":
-              return (
-                <li key={item.key} className="animate-rise-in pl-7 text-sm">
-                  <PayoutScreening status={row.status} reason={row.reason} />
-                </li>
-              );
-            case "settle":
-              return (
-                <li key={item.key} className="animate-rise-in pl-7 text-sm">
-                  {row.status === "settled" && row.paidUsd !== null ? (
-                    <span>
-                      settled: <Money usd={row.paidUsd} sign="+" size="sm" />{" "}
-                      paid
-                    </span>
-                  ) : row.status === "deferred" ? (
-                    <span className="text-muted">
-                      {deferredSettleCopy(
-                        deferredEntry?.periodEndIso,
-                        row.note,
-                      )}
-                    </span>
-                  ) : row.status === "closed" && row.outcome !== null ? (
-                    <span>
-                      {row.outcome === "cancelled" ? "run cancelled:" : "run settled:"}{" "}
-                      {missStakeLine(row.outcome, missStakeUsd, true)}
-                    </span>
-                  ) : (
-                    <span className="text-muted">
-                      {row.note ?? "settlement pending"}
-                    </span>
-                  )}
-                  {row.txHash !== null ? (
-                    <p className="mt-1">
-                      <ArcTxLink txHash={row.txHash} label="settle tx" />
-                    </p>
-                  ) : null}
-                </li>
-              );
-            // --- world-agents ---
-            // The human step. An approved row means one human consented to
-            // this payout; it says nothing about the goal, which the verdict
-            // row above already settled.
-            case "approval":
-              return (
-                <li key={item.key} className="animate-rise-in pl-7 text-sm">
-                  <span className="text-xs font-bold text-muted">
-                    {row.status === "requested"
-                      ? "Asked you to confirm"
-                      : row.status === "approved"
-                        ? "You confirmed"
-                        : row.status === "declined"
-                          ? "You declined"
-                          : row.status === "expired"
-                            ? "Request expired"
-                            : "Request withdrawn"}
-                  </span>
-                  {row.provider === "mock" ? (
-                    <span className="ml-2 text-xs text-muted">
-                      event mode, mocked proof
-                    </span>
-                  ) : null}
-                  {row.note !== null ? (
-                    <p className="mt-1 text-muted">{row.note}</p>
-                  ) : null}
-                  {row.nullifierStub !== null ? (
-                    <p className="mt-1 text-xs text-muted">
-                      World ID nullifier {row.nullifierStub}... (one human, one
-                      consent; no identity)
-                      {row.credential !== null
-                        ? `, verified with ${credentialLabel(row.credential)}`
-                        : ""}
-                    </p>
-                  ) : null}
-                </li>
-              );
-            // --- end world-agents ---
-          }
-        })}
-      </ol>
-      {receipt.capUsd !== null ? (
-        <p className="mt-4 border-t border-edge pt-3 text-sm">
-          Spent <Money usd={receipt.spentUsd} size="sm" /> of a{" "}
-          <Money usd={receipt.capUsd} size="sm" /> cap on this claim.
-        </p>
+                ))}
+                .
+              </>
+            ) : null}
+          </p>
+        ) : null}
+        <p className="m-0">{PRIVACY[evidenceKind]}</p>
+      </div>
+      {summary !== null && summary.earlier.length > 0 ? (
+        <EarlierChecks checks={summary.earlier} open={earlierOpen} />
       ) : null}
-      <p className="mt-2 text-xs text-muted">
-        {evidenceKind === "wearable"
-          ? "Your wearable data stayed server-side and was never written on-chain. Only the verdict was recorded."
-          : evidenceKind === "self-reported"
-            ? "Your photo went to the enclave only for the read and was never stored. Self-reported proof is low-trust and still in development: we cannot confirm it is real, recent, or yours, so it is never marked verified."
-            : "Your document never left the secure enclave. SPOTTER only ever saw the verdict."}
-      </p>
     </div>
   );
 }

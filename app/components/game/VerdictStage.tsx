@@ -366,7 +366,7 @@ export function VerdictView({
       {log !== undefined && log !== null ? (
         <details className="group mt-4 border-t border-edge pt-1">
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-muted hover:text-foreground [&::-webkit-details-marker]:hidden">
-            See SPOTTER&apos;s receipt for this run
+            See SPOTTER&apos;s receipt for this challenge
             <Glyph name="chev" className="text-haze transition-transform duration-[120ms] group-open:rotate-90" />
           </summary>
           <div className="pt-2">{log}</div>
