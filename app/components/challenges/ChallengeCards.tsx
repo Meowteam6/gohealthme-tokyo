@@ -305,7 +305,7 @@ export function Frame({
 }) {
   return (
     <div className={`${PAGE_COLUMN} [&>*+*]:mt-10`}>
-      <PerchedHeader title="Your challenges" lead={lead} pose={pose}>
+      <PerchedHeader title="Challenges with friends" lead={lead} pose={pose}>
         {first}
       </PerchedHeader>
       {children}

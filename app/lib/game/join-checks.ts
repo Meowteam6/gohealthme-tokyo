@@ -108,7 +108,7 @@ export function challengeCreateBlock(
     };
   }
   if (verifier === "error") return { kind: "retry", title: "I could not check my document checker just now" };
-  if (payouts === "error") return { kind: "retry", title: "I could not check how payouts run here just now" };
+  if (payouts === "error") return { kind: "retry", title: "I could not check how payouts work here just now" };
   if (verifier === "loading" || payouts === "loading") return { kind: "checking" };
   return { kind: "ok" };
 }
