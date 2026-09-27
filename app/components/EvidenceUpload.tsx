@@ -270,7 +270,7 @@ function EvidenceUploadInner({
           setStatus({
             kind: "error",
             message:
-              err instanceof Error ? err.message : "The agent run failed.",
+              err instanceof Error ? err.message : "SPOTTER's check failed.",
             ledger: receiptToKeep(screen),
           });
           return;
@@ -712,7 +712,7 @@ function EvidenceUploadInner({
             </p>
             {periodEndMs !== null ? (
               <p className="mt-1 text-sm text-foreground/80">
-                SPOTTER settles the payout when the pool period ends at{" "}
+                SPOTTER settles the payout when the challenge ends at{" "}
                 {formatLocalTime(periodEndMs)} (
                 <Countdown
                   periodStart={0n}
@@ -723,7 +723,7 @@ function EvidenceUploadInner({
               </p>
             ) : (
               <p className="mt-1 text-sm text-foreground/80">
-                SPOTTER settles the payout the moment the pool period ends —
+                SPOTTER settles the payout the moment the challenge ends —
                 no human involved. Come back after the period closes and the
                 payout appears here.
               </p>
@@ -752,7 +752,7 @@ function EvidenceUploadInner({
               </p>
               <p className="mt-1 text-sm text-foreground/80">
                 The photo is the problem, not you, and a check costs you nothing.
-                Shoot it again in actual light and run it back.
+                Shoot it again in actual light and send it again.
               </p>
             </div>
             <button
@@ -772,7 +772,7 @@ function EvidenceUploadInner({
               <p className="mt-1 text-sm text-foreground/80">
                 The document was read fine. It does not show the goal being met.
                 If you have a different record that does - the real one, not a
-                sample - submit it and SPOTTER runs the check again.
+                sample - submit it and SPOTTER checks again.
               </p>
             </div>
             {/* A rejected read is not a dead end: a fresh upload submits a new
@@ -794,7 +794,7 @@ function EvidenceUploadInner({
               SPOTTER hit its spending cap and stopped
             </p>
             <p className="mt-1 text-sm text-foreground/80">
-              Every claim runs under a hard per-claim budget. This one reached
+              Every claim has a hard per-claim budget. This one reached
               it before a verdict landed, so no more money moves.
             </p>
           </div>
@@ -804,11 +804,11 @@ function EvidenceUploadInner({
           <div className="space-y-3">
             <div className="rounded-xl border border-warning/40 bg-warning/10 p-4">
               <p className="text-base font-semibold text-warning">
-                Join the pool first
+                Join the challenge first
               </p>
               <p className="mt-1 text-sm text-foreground/80">
-                This wallet is not a participant in the pool on-chain, so
-                nothing can be recorded for it. Join the pool, then submit
+                This wallet is not a player in this challenge on-chain, so
+                nothing can be recorded for it. Join the challenge, then submit
                 again.
               </p>
             </div>
@@ -824,7 +824,7 @@ function EvidenceUploadInner({
 
         {status.runStatus === "error" && !attesterOffline ? (
           <ErrorNote
-            title="The run hit an error"
+            title="The check hit an error"
             detail="The receipt above shows exactly where it stopped. Nothing was paid that the ledger does not show."
             onRetry={() => setStatus({ kind: "idle" })}
           />
@@ -847,7 +847,7 @@ function EvidenceUploadInner({
         <p className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-xs text-foreground/80">
           This is the low-trust tier and still in development. We cannot confirm
           a photo is real, recent, or yours, so it is never marked verified. The
-          payout is capped and the pool creator chose to accept unverified
+          payout is capped and the challenge&apos;s creator chose to accept unverified
           proof.
         </p>
       ) : null}
@@ -876,7 +876,7 @@ function EvidenceUploadInner({
        *  screen. The load-bearing claim is that the document itself never
        *  comes back and is never kept. */}
       <p className="rounded-xl border border-edge bg-surface-raised p-3 text-xs text-muted">
-        Where this file goes: straight to the confidential enclave that runs
+        Where this file goes: straight to the confidential enclave that does
         the check. We do not store it. What comes back is the verdict — pass or
         fail, with a short note on why — never the document itself.
       </p>

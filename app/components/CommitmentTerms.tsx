@@ -45,10 +45,10 @@ export function CommitmentRangeLine({
         ) : (
           <>
             {" "}and up to <Money usd={formatUsdc(range.ifOnlyYou)} size="sm" /> with the
-            sponsor pot.
+            extra in the pot.
           </>
         )}{" "}
-        This run cannot record a miss, so a miss comes back when it settles too.
+        This challenge cannot record a miss, so a miss comes back when it settles too.
       </span>
     );
   }
@@ -103,12 +103,12 @@ export function CommitmentTermsList({
       body: recordsMisses ? (
         <>
           your stake back plus an equal share of the missed stakes and any
-          sponsor pot, up to <Money usd={formatUsdc(range.ifOnlyYou)} size="sm" /> right
+          extra in the pot, up to <Money usd={formatUsdc(range.ifOnlyYou)} size="sm" /> right
           now.
         </>
       ) : (
         <>
-          your stake back plus an equal share of any sponsor pot, up to{" "}
+          your stake back plus an equal share of any extra in the pot, up to{" "}
           <Money usd={formatUsdc(range.ifOnlyYou)} size="sm" /> right now.
         </>
       ),
@@ -116,8 +116,8 @@ export function CommitmentTermsList({
     {
       term: "You miss",
       body: recordsMisses
-        ? "your stake goes to the players who hit. If your wearable sends nothing for the run, that is not a miss, and your stake comes back."
-        : "this run cannot record a miss, so your stake comes back when it settles.",
+        ? "your stake goes to the players who hit. If your wearable sends nothing for the challenge, that is not a miss, and your stake comes back."
+        : "this challenge cannot record a miss, so your stake comes back when it settles.",
     },
     { term: "Nobody hits", body: "everyone gets their stake back." },
   ];

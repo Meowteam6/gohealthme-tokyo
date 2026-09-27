@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  challengeStakeCopy,
   commitmentJoinCopy,
   commitmentShortCopy,
   createCommitmentCopy,
@@ -48,7 +47,7 @@ describe("commitmentShortCopy (lobby match cards)", () => {
   it("branches on whether the pool can record a miss", () => {
     expect(commitmentShortCopy(miss, 1n)).toMatch(/goes to the players who hit/);
     expect(commitmentShortCopy({ ...miss, id: 2n }, 6n)).not.toMatch(/players who hit/);
-    expect(commitmentShortCopy({ ...miss, id: 2n }, 6n)).toMatch(/comes back when the run settles/);
+    expect(commitmentShortCopy({ ...miss, id: 2n }, 6n)).toMatch(/comes back when the challenge settles/);
   });
 });
 
@@ -85,10 +84,16 @@ describe("missConsequence (the miss chip)", () => {
   });
 });
 
-describe("challengeStakeCopy (self-staked challenges are document-proven)", () => {
-  it("never promises a cut of forfeits: a challenge cannot record a miss", () => {
-    const copy = challengeStakeCopy();
-    expect(copy).not.toMatch(/forfeit|goes to whoever|players who hit/);
-    expect(copy).toMatch(/comes back at settle/);
+describe("one vocabulary", () => {
+  it("a player joins a challenge, never a run or a pool", () => {
+    const text = [
+      commitmentJoinCopy(miss, "1.00", 1n),
+      commitmentJoinCopy({ ...miss, id: 5n }, "1.00", 6n),
+      commitmentShortCopy(miss, 1n),
+      commitmentShortCopy({ ...miss, id: 2n }, 6n),
+      createCommitmentCopy(SLEEP, 1n),
+      createCommitmentCopy(SLEEP, null),
+    ].join(" ");
+    expect(text).not.toMatch(/\b(run|runs|pool|pools|dare)\b/i);
   });
 });

@@ -7,9 +7,9 @@ import { TITLE_TEMPLATE } from "@/lib/site";
 // and canonical and inherit this description. The template is restated so
 // those child titles keep the " - GoHealthMe" suffix from the root.
 export const metadata: Metadata = {
-  title: { default: "Open runs", template: TITLE_TEMPLATE },
+  title: { default: "Open challenges", template: TITLE_TEMPLATE },
   description:
-    "Open health-goal runs: sleep, steps, workouts. Stake test USDC, hit the goal, get paid when the run settles. Base Sepolia testnet beta, play money.",
+    "Open health-goal challenges: sleep, steps, workouts. Stake test USDC, hit the goal, get paid when the challenge settles. Base Sepolia testnet beta, play money.",
   alternates: { canonical: "/pools" },
 };
 

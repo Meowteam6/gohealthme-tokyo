@@ -90,9 +90,9 @@ function readApproval(): ApprovalMode | "misconfigured" {
 function approvalLine(mode: ApprovalMode | "misconfigured"): string {
   switch (mode) {
     case "world":
-      return "Before SPOTTER records a player's hit, he asks them to confirm with World ID. No confirmation, no share: your stake still comes back when the run settles.";
+      return "Before SPOTTER records a player's hit, he asks them to confirm with World ID. No confirmation, no share: your stake still comes back when the challenge settles.";
     case "mock":
-      return "Before SPOTTER records a player's hit, he asks them to confirm with World ID. On this build that confirmation is mocked, not a real World ID check. No confirmation, no share: your stake still comes back when the run settles.";
+      return "Before SPOTTER records a player's hit, he asks them to confirm with World ID. On this build that confirmation is mocked, not a real World ID check. No confirmation, no share: your stake still comes back when the challenge settles.";
     case "misconfigured":
       return "Payout confirmation is not set up correctly on this deployment, so SPOTTER is holding every payout until it is fixed.";
     case "off":
@@ -112,7 +112,7 @@ export default async function AgentPage() {
     <div className={`${PAGE_COLUMN} [&>*+*]:mt-8`}>
       <PerchedHeader
         title="History"
-        lead="Every verdict SPOTTER reached on your runs, your World ID confirmations, and what each run paid."
+        lead="Every verdict SPOTTER reached on your challenges, your World ID confirmations, and what each challenge paid."
         pose="detective"
       >
         <AgentFeed />
@@ -128,8 +128,8 @@ export default async function AgentPage() {
           ) : null}
         </div>
         <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
-          SPOTTER reads each run&apos;s result and signs the settle. The run&apos;s
-          contract holds the stakes and pays the players who hit; this wallet only
+          SPOTTER reads each challenge&apos;s result and signs the settle. The
+          challenge&apos;s contract holds the stakes and pays the players who hit; this wallet only
           covers the network fee and buys the checks. {approvalLine(approval)}
         </p>
         {settler.kind === "ok" ? (
@@ -168,8 +168,8 @@ export default async function AgentPage() {
           </Notice>
         ) : (
           <Notice tone="limit">
-            Automatic payouts are not switched on for this deployment yet. Runs can
-            still be joined; nobody gets paid until SPOTTER&apos;s wallet is connected.
+            Automatic payouts are not switched on for this deployment yet. Challenges
+            can still be joined; nobody gets paid until SPOTTER&apos;s wallet is connected.
           </Notice>
         )}
         {broke ? (
@@ -177,7 +177,7 @@ export default async function AgentPage() {
             surface="agent-header"
             state="broke"
             bare
-            say="I am out of money for checks, so checks wait until I am topped up. Your stake stays in the run's contract."
+            say="I am out of money for checks, so checks wait until I am topped up. Your stake stays in the challenge's contract."
           />
         ) : (
           <SpotterSays

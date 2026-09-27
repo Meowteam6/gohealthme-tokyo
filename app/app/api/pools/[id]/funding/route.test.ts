@@ -49,7 +49,7 @@ describe("GET /api/pools/[id]/funding", () => {
     fetchPoolFunding.mockRejectedValue(new ContractNotConfiguredError());
     const res = await GET(request, ctx("7"));
     expect(res.status).toBe(503);
-    expect((await res.json()).error).toBe("Runs are not open on this build yet.");
+    expect((await res.json()).error).toBe("Challenges are not open on this build yet.");
   });
 
   it("answers 502 with no infrastructure detail when the scan fails", async () => {

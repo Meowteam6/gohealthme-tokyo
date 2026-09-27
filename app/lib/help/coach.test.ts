@@ -123,4 +123,20 @@ describe("coach copy", () => {
       }
     }
   });
+
+  it("says challenge, never run, pool or dare, and names the one create flow", () => {
+    const actions: CoachAction[] = ["signIn", "proveHuman", "pickName", "pairSensor", "enterRun"];
+    for (const mode of ["world", "allowlist"] as const) {
+      for (const row of coachChecklist(mode)) {
+        expect(row.label).not.toMatch(/\b(runs?|pools?|dares?)\b/i);
+      }
+      for (const id of actions) {
+        const copy = coachCopy(id, mode);
+        const text = `${copy.headline} ${copy.body} ${copy.primary ?? ""} ${copy.secondary ?? ""}`;
+        expect(text).not.toMatch(/\b(runs?|pools?|dares?)\b/i);
+      }
+    }
+    expect(coachChecklist("world")[4].label).toBe("Join a challenge");
+    expect(coachCopy("enterRun", "world").secondary).toBe("Start a challenge");
+  });
 });

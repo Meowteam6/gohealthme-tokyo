@@ -259,7 +259,7 @@ describe("createChallenge", () => {
     expect(result).toEqual({
       ok: false,
       status: 409,
-      reason: "A challenge already exists for this pool.",
+      reason: "This challenge already has its link.",
     });
   });
 

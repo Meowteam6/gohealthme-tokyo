@@ -229,7 +229,7 @@ export default function ChallengeAccept({
     case "in-run":
       return (
         <ButtonLink href={`/pools/${poolId}`} block>
-          You are in. Go to your run
+          You are in. Go to your challenge
         </ButtonLink>
       );
     case "checking":
@@ -247,7 +247,7 @@ export default function ChallengeAccept({
       return (
         <p className="m-0 text-[0.9375rem] text-muted">
           This challenge has closed. If you were already in, your result settles on
-          your run page.
+          the challenge page.
         </p>
       );
     case "cannot-pay":
@@ -270,8 +270,8 @@ export default function ChallengeAccept({
                   <MoneyTermsList copy={flowTerms} id="challenge-terms" />
                 ) : (
                   <StakeTermsPlain>
-                    Accepting stakes your {stake} USDC. Hit the goal and it comes back with
-                    your share on top; the challenger never keeps it.
+                    You stake {stake} USDC, the same as everyone in. Hit the goal and it comes
+                    back with your share on top; the challenger never keeps it.
                   </StakeTermsPlain>
                 )}
                 {slot.proof === "upload" ? (
@@ -301,7 +301,7 @@ export default function ChallengeAccept({
               closeClock: clockLabel(Number(pool.periodEnd)),
               action: (
                 <ButtonLink href={`/pools/${poolId}`} variant="secondary" block>
-                  Go to your run
+                  Go to your challenge
                 </ButtonLink>
               ),
             },

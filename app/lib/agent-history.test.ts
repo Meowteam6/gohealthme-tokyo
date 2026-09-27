@@ -53,7 +53,7 @@ describe("the History line for a recorded miss", () => {
 
   it("F7: a run the creator cancelled after the miss says the stake can be claimed back", () => {
     expect(missLineOf(miss({ status: "closed", outcome: "cancelled" }), true)).toBe(
-      "Missed, but the creator cancelled the run, so your 1.00 stake can be claimed back.",
+      "Missed, but the creator cancelled the challenge, so your 1.00 stake can be claimed back.",
     );
   });
 

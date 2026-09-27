@@ -11,7 +11,7 @@ import { GEMINI_MODEL, vertexClient } from "@/lib/server/agent/reason";
 import { ASK_MAX_OUTPUT_TOKENS, buildAskPrompt } from "@/lib/server/help/knowledge";
 
 const FALLBACK =
-  "the onboarding helper is offline right now. the Coach tab walks you through every step: sign in, grab test USDC, claim a handle, then create or join a pool and upload your proof.";
+  "the onboarding helper is offline right now. the Coach tab walks you through every step: sign in, prove you are one human, pick a name, pair your wearable, then join or start a challenge.";
 
 /** Answer one onboarding question. Returns prose; falls back on any failure. */
 export async function generateHelpAnswer(question: string): Promise<string> {

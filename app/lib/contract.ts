@@ -491,7 +491,7 @@ export interface ParticipantInfo {
 /** What a player reads when this build has no pools contract. Plain words:
  *  the env var name goes to the console, never onto the screen. */
 export const POOLS_NOT_CONFIGURED_COPY =
-  "Runs are not open on this build yet. Nothing was sent.";
+  "Challenges are not open on this build yet. Nothing was sent.";
 
 export class ContractNotConfiguredError extends Error {
   constructor() {

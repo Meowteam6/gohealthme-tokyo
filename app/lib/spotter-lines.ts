@@ -74,9 +74,9 @@ export const SPOTTER_LINES: SpotterLine[] = [
 
   // ── Empty states (dry — never a dead screen) ─────────────────────────────
   { id: "dash-e1", surface: "dashboard-empty", state: "empty", tone: "dry", text: { en: "Nothing on record yet. No streak to read." } },
-  { id: "dash-e2", surface: "dashboard-empty", state: "empty", tone: "dry", text: { en: "Empty. Go put your name on a pool." } },
+  { id: "dash-e2", surface: "dashboard-empty", state: "empty", tone: "dry", text: { en: "Empty. Go put your name on a challenge." } },
 
-  { id: "pools-e1", surface: "pools-empty", state: "empty", tone: "dry", text: { en: "No live pools right now. Even I'm just watching the river." } },
+  { id: "pools-e1", surface: "pools-empty", state: "empty", tone: "dry", text: { en: "No live challenges right now. Even I'm just watching the river." } },
   { id: "pools-e2", surface: "pools-empty", state: "empty", tone: "dry", text: { en: "Quiet out here. Nobody's staked a goal yet - could be you." } },
 
   { id: "agent-e1", surface: "agent-empty", state: "empty", tone: "dry", text: { en: "I've done nothing yet. Give me something to verify." } },
@@ -101,7 +101,7 @@ export const SPOTTER_LINES: SpotterLine[] = [
   // reserved for a verified payout. The point is landed dry: you showed up, the
   // work is still ahead.
   { id: "join-1", surface: "join", state: "joined", tone: "deadpan", text: { en: "You're in. Now go do the thing." } },
-  { id: "join-2", surface: "join", state: "joined", tone: "deadpan", text: { en: "Name's on the pool. The hard part is still yours." } },
+  { id: "join-2", surface: "join", state: "joined", tone: "deadpan", text: { en: "Name's on the challenge. The hard part is still yours." } },
   { id: "join-3", surface: "join", state: "joined", tone: "dry", text: { en: "One wallet, one entry. That's you now. Showing up doesn't pay, though." } },
   { id: "join-4", surface: "join", state: "joined", tone: "dry", text: { en: "Locked in. Come back when there's something for me to settle." } },
 

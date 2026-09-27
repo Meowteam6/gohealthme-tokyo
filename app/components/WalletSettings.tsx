@@ -214,7 +214,7 @@ function DeviceSection({
     body = (
       <>
         <p className="text-[0.9375rem] text-muted">
-          No wearable paired. Runs are checked against a paired wearable.
+          No wearable paired. Challenges are checked against a paired wearable.
         </p>
         <Link href="/character?step=sensor" className={`${buttonClasses({ size: "sm" })} mt-3`}>
           Pair my wearable
@@ -229,8 +229,8 @@ function DeviceSection({
           <span className="text-muted"> is paired to this wallet.</span>
         </p>
         <p className="mt-1 text-[0.9375rem] text-muted">
-          Disconnecting stops SPOTTER reading it. A run you are in can only be
-          checked while a wearable is paired.
+          Disconnecting stops SPOTTER reading it. A challenge you are in can only
+          be checked while a wearable is paired.
         </p>
         <DisconnectDeviceButton address={address} />
       </>

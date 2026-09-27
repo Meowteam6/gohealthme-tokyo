@@ -80,8 +80,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Some things are public for good:</strong> your wallet
-            address, the runs you join, payouts, the goal text of a run, and
-            any ENS name you pick.
+            address, the challenges you join, payouts, the goal text of a
+            challenge, and any ENS name you pick.
           </li>
           <li>
             <strong>Apple Health daily totals are deleted after 120 days</strong>{" "}
@@ -146,7 +146,7 @@ export default function PrivacyPage() {
             passport). We never get your name, your face, your iris data, or
             your email from World, and no biometric data reaches us. The
             binding is how we keep one human to one wallet and one entry per
-            run, and one human to one GoHealthMe name.
+            challenge, and one human to one GoHealthMe name.
           </p>
           <p>
             Before the settle pays a win, SPOTTER can ask you to confirm the
@@ -181,8 +181,8 @@ export default function PrivacyPage() {
             your wallet, we drop the link.
           </p>
           <p>
-            When SPOTTER settles a run, it writes a receipt on that run&apos;s
-            ENS name: the settle transaction, when it happened, which agent
+            When SPOTTER settles a challenge, it writes a receipt on that
+            challenge&apos;s ENS name: the settle transaction, when it happened, which agent
             wrote it, and how many people hit the goal. No player names and no
             health data.
           </p>
@@ -200,7 +200,7 @@ export default function PrivacyPage() {
           </h2>
           <p>
             A new wallet holds no test ETH, so it cannot pay the network fee to
-            join a run. When that happens, our treasury sends a small amount of
+            join a challenge. When that happens, our treasury sends a small amount of
             Base Sepolia test ETH to your wallet address. To keep the drip
             fair we count drips per wallet address per day. Test ETH has no
             monetary value.
@@ -236,7 +236,7 @@ export default function PrivacyPage() {
             decision (pay or no pay), payout amounts, transaction hashes, the
             screening result, and the World confirmation state. No reason
             text, no goal text and no health data. A goal id is derived from
-            the run and your wallet address, which are already public on
+            the challenge and your wallet address, which are already public on
             chain.
           </p>
         </section>
@@ -247,16 +247,16 @@ export default function PrivacyPage() {
           </h2>
           <p>
             If you create or accept a challenge, we store its metadata in
-            Supabase: an invite token, the pool id, your wallet address, an
+            Supabase: an invite token, the challenge&apos;s on-chain id, your wallet address, an
             optional handle for who the challenge is for, and an optional
             message. If you leave feedback, we store your rating, your message,
             the page you were on, and your wallet address if you were signed
             in. The feedback table holds no health data.
           </p>
           <p>
-            One thing to be clear about: the health goal text of a run (for
-            example, &quot;sleep 7 hours&quot;) is written on-chain in the
-            pool&apos;s goal description, not just in our database. See the
+            One thing to be clear about: the health goal text of a challenge
+            (for example, &quot;sleep 7 hours&quot;) is written on-chain in the
+            challenge&apos;s goal description, not just in our database. See the
             on-chain section below.
           </p>
         </section>
@@ -273,7 +273,7 @@ export default function PrivacyPage() {
           </p>
           <p>
             When SPOTTER decides whether a claim should be paid, it can also ask Gemini
-            to reason over the pool&apos;s public goal text and the
+            to reason over the challenge&apos;s public goal text and the
             verifier&apos;s yes-or-no verdict. It never sends your wearable
             data, your document, or your wallet address.
           </p>
@@ -284,15 +284,16 @@ export default function PrivacyPage() {
             Document proof
           </h2>
           <p>
-            Some runs are checked from an uploaded document or photo (a lab
-            result, a flu-shot record). Those runs only open on a build where
+            Some challenges are checked from an uploaded document or photo (a
+            lab result, a flu-shot record). Those challenges only open on a
+            build where
             the confidential verifier is switched on; otherwise the lobby shows
             them locked. When it is on, your file goes to the Chainlink
             Confidential AI Attester, which reads it inside a sealed enclave
             and returns a verdict. We do not keep the file, and it does not go
-            to Gemini or to any other model. If you joined a document run and
-            could not be verified, your stake is credited back when the run
-            settles.
+            to Gemini or to any other model. If you joined a document challenge
+            and could not be verified, your stake is credited back when the
+            challenge settles.
           </p>
         </section>
 
@@ -301,7 +302,7 @@ export default function PrivacyPage() {
             Wearable data, and what our server sees
           </h2>
           <p>
-            We use daily summaries only, for the one metric your run measures
+            We use daily summaries only, for the one metric your challenge measures
             (for example hours of sleep, sleep score, or steps). We never write
             health data to the blockchain. We store which wearable you paired,
             but not the readings we pull from Junction or WHOOP: our server
@@ -319,7 +320,7 @@ export default function PrivacyPage() {
             WHOOP gives us an access token for your account. We ask for the
             narrowest access that can answer a goal: your sleep and your
             workouts, nothing else. The token is stored encrypted (AES-256-GCM)
-            and used only to read the metric your run measures. WHOOP limits
+            and used only to read the metric your challenge measures. WHOOP limits
             how many people our app can connect while it is in review, so
             direct seats go first come, first served, and we keep a list of the
             wallet addresses holding a seat. When the seats are gone, WHOOP
@@ -349,11 +350,12 @@ export default function PrivacyPage() {
             check. If that matters to you, do not connect a wearable yet.
           </p>
           <p>
-            On a run where you staked on yourself, SPOTTER also reads every
-            player&apos;s wearable summary once after the run ends, a few hours
+            In a challenge where you staked on yourself, SPOTTER also reads
+            every player&apos;s wearable summary once after the challenge ends,
+            a few hours
             after the last night, without you opening the app. That read is
             what lets it record a miss, and it only does so when your wearable
-            synced every day of the run and shows the goal was not met. If the
+            synced every day of the challenge and shows the goal was not met. If the
             data is missing or partial, nothing is recorded and your stake
             comes back. The read is the same daily summary as above; only the
             yes-or-no result goes on chain.
@@ -366,9 +368,9 @@ export default function PrivacyPage() {
           </h2>
           <p>
             GoHealthMe settles on the Base Sepolia blockchain and names players
-            on Ethereum Sepolia. Wallet addresses, the runs you join, payouts,
-            ENS names and settlement receipts, and the goal text of every run
-            are recorded on-chain. Blockchain records are public and, by their
+            on Ethereum Sepolia. Wallet addresses, the challenges you join,
+            payouts, ENS names and settlement receipts, and the goal text of
+            every challenge are recorded on-chain. Blockchain records are public and, by their
             nature, permanent. We cannot edit or delete them. Do not put
             anything in a goal description or a name that you would not want
             to be public forever.
@@ -386,7 +388,7 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 marker:text-haze [&>*+*]:mt-1.5">
             <li>Dynamic (a Fireblocks company) - email sign-in and embedded wallets</li>
             <li>World (Tools for Humanity) - proof that you are one human, and the payout confirmation</li>
-            <li>ENS on Ethereum Sepolia - public player and run names, and settlement receipts</li>
+            <li>ENS on Ethereum Sepolia - public player and challenge names, and settlement receipts</li>
             <li>Web3 Antivirus, through Intercepta - screening of payout wallet addresses</li>
             <li>Circle - SPOTTER&apos;s agent wallet</li>
             <li>Chainlink Confidential AI Attester - reads uploaded documents inside an enclave, when document proof is on</li>
@@ -406,7 +408,7 @@ export default function PrivacyPage() {
               can see where the beta gets stuck. It sets no cookies and never
               receives your wallet address or health data.
             </li>
-            <li>Base Sepolia - the public test network where runs settle</li>
+            <li>Base Sepolia - the public test network where challenges settle</li>
             <li>Junction - wearable summaries, only if you connect a device through Junction</li>
             <li>WHOOP - sleep and workout summaries, only if you connect WHOOP directly</li>
             <li>Apple Health - daily totals, only through our iPhone app once it ships</li>

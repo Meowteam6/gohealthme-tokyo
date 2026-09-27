@@ -8,25 +8,25 @@ import { GallerySection, StateFrame, type SectionProps } from "../_kit";
 
 const INDEX: readonly { group: string; states: readonly { id: string; note: string }[] }[] = [
   {
-    group: "Lobby (/pools, /c/[token])",
+    group: "Challenges (/pools, /c/[token])",
     states: [
-      { id: "lobby-cards", note: "run cards by slot, signed in: playable, locked, joined, ended" },
-      { id: "lobby-signed-out-picked", note: "signed out with WHOOP picked: the step run reads locked" },
-      { id: "lobby-challenge-highlight", note: "the challenge link's run, marked, with its entry control" },
-      { id: "lobby-lock-sensor-check", note: "the one tap at the top of the lobby" },
+      { id: "lobby-cards", note: "challenge cards by slot, signed in: playable, locked, joined, completed" },
+      { id: "lobby-signed-out-picked", note: "signed out with WHOOP picked: the steps challenge reads locked" },
+      { id: "lobby-challenge-highlight", note: "the challenge from the link, marked, with its entry control" },
+      { id: "lobby-lock-sensor-check", note: "the one tap at the top of Challenges" },
       { id: "lobby-lock-hardware", note: "a hardware limit with the fix as the one action" },
       { id: "lobby-lock-paused", note: "a build-wide pause" },
-      { id: "landing-no-open-runs", note: "nothing live: start a run" },
+      { id: "landing-no-open-runs", note: "nothing live: start a challenge" },
     ],
   },
   {
-    group: "My runs (/dashboard)",
+    group: "My challenges (/dashboard)",
     states: [
       { id: "my-runs-signed-out", note: "sign in on the card SPOTTER stands on" },
-      { id: "my-runs-loading", note: "reading the runs" },
-      { id: "my-runs-empty", note: "in no run: one pose, one line, one action" },
-      { id: "my-runs-active", note: "in a live run: nights, If you hit, Who's in" },
-      { id: "my-runs-finished", note: "finished runs only" },
+      { id: "my-runs-loading", note: "reading the challenges" },
+      { id: "my-runs-empty", note: "in no challenge: one pose, one line, one action" },
+      { id: "my-runs-active", note: "in a live challenge: nights, If you hit, Who's in" },
+      { id: "my-runs-finished", note: "completed challenges only" },
       { id: "my-runs-error", note: "the read failed" },
     ],
   },
@@ -42,7 +42,7 @@ const INDEX: readonly { group: string; states: readonly { id: string; note: stri
 export default function LobbyStates({ meta }: SectionProps) {
   return (
     <GallerySection meta={meta}>
-      <StateFrame name="lobby-index" note="where each lobby, My runs and History state is rendered">
+      <StateFrame name="lobby-index" note="where each Challenges, My challenges and History state is rendered">
         <div className="grid gap-6 min-[900px]:grid-cols-3">
           {INDEX.map(({ group, states }) => (
             <div key={group}>

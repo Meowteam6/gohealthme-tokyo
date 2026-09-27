@@ -177,33 +177,33 @@ const RULES: readonly ErrorRule[] = [
   {
     pattern: /\bPERIOD_ENDED\b/,
     title: "Joining is closed",
-    detail: "This pool's period has ended - joining is closed.",
+    detail: "This challenge has ended - joining is closed.",
   },
   {
     pattern: /\bALREADY_JOINED\b/,
     title: "Already in",
-    detail: "This wallet already joined this pool.",
+    detail: "This wallet already joined this challenge.",
   },
   {
     pattern: /\bNULLIFIER_USED\b/,
     title: "Entry already used",
     detail:
-      "This entry was already used to join this pool - one wallet, one entry.",
+      "This entry was already used to join this challenge - one wallet, one entry.",
   },
   {
     pattern: /\bPOOL_FULL\b/,
-    title: "Pool is full",
-    detail: "This pool has reached its participant limit.",
+    title: "Challenge is full",
+    detail: "This challenge has reached its player limit.",
   },
   {
     pattern: /\b(?:ALREADY_)?SETTLED\b/,
-    title: "Pool already settled",
-    detail: "This pool has already settled - no further transactions are accepted.",
+    title: "Challenge already settled",
+    detail: "This challenge has already settled - no further transactions are accepted.",
   },
   {
     pattern: /\bNOT_PARTICIPANT\b/,
     title: "Not a participant",
-    detail: "This wallet has not joined this pool.",
+    detail: "This wallet has not joined this challenge.",
   },
   // Pull-payment claim reverts (withdraw / sweep / claimRefund on HealthPoolsV3).
   // NOT_SETTLED is distinct from the "already settled" rule above: the SETTLED
@@ -214,12 +214,12 @@ const RULES: readonly ErrorRule[] = [
     title: "Nothing to claim",
     detail:
       "Nothing to claim right now. Settled winnings show up here the moment a " +
-      "pool you won pays out.",
+      "challenge you won pays out.",
   },
   {
     pattern: /\bNOTHING_TO_SWEEP\b/,
     title: "Nothing to reclaim",
-    detail: "This pool has no leftover USDC to send back to you.",
+    detail: "This challenge has no leftover USDC to send back to you.",
   },
   {
     pattern: /\bREFUNDS_PENDING\b/,
@@ -230,34 +230,34 @@ const RULES: readonly ErrorRule[] = [
   },
   {
     pattern: /\bNOT_CREATOR\b/,
-    title: "Not the pool creator",
-    detail: "Only the wallet that created this pool can do that.",
+    title: "Not the challenge's creator",
+    detail: "Only the wallet that created this challenge can do that.",
   },
   {
     pattern: /\bNOT_CANCELLED\b/,
-    title: "Pool is not cancelled",
+    title: "Challenge is not cancelled",
     detail:
-      "Refunds are only available on a cancelled pool. This one is still " +
+      "Refunds are only available on a cancelled challenge. This one is still " +
       "running or already settled.",
   },
   {
     pattern: /\bALREADY_REFUNDED\b/,
     title: "Already refunded",
-    detail: "This wallet has already claimed its refund from this pool.",
+    detail: "This wallet has already claimed its refund from this challenge.",
   },
   {
     pattern: /\bNOT_SETTLED\b/,
-    title: "Pool has not settled yet",
+    title: "Challenge has not settled yet",
     detail:
-      "This pool has to settle before that can happen. It settles once its " +
+      "This challenge has to settle before that can happen. It settles once its " +
       "period ends.",
   },
   {
     // HealthPoolsV3 H-1: createPool requires entryFee > 0 for every model.
     pattern: /\bDEAD_CONFIG\b/,
-    title: "Pools need an entry fee",
+    title: "Challenges need an entry fee",
     detail:
-      "The pool contract requires an entry fee above zero - every participant " +
+      "The challenge contract requires an entry fee above zero - every participant " +
       "stakes it to join, so every winner is someone who staked. Set an entry " +
       "fee above zero and try again.",
   },
@@ -267,7 +267,7 @@ const RULES: readonly ErrorRule[] = [
     pattern: /\bBAD_PERIOD\b|\bPERIOD_IN_PAST\b/,
     title: "Check the dates",
     detail:
-      "The pool's end time must be after its start and in the future. Pick a " +
+      "The challenge's end time must be after its start and in the future. Pick a " +
       "duration and try again; if it keeps failing, check this device's clock.",
   },
   {
@@ -336,7 +336,7 @@ const RULES: readonly ErrorRule[] = [
     title: "Still waiting on the network",
     detail:
       "The network has not confirmed this transaction yet. It may still go " +
-      "through - give it a minute and check your pools before trying again, " +
+      "through - give it a minute and check your challenges before trying again, " +
       "so it does not happen twice.",
   },
   {

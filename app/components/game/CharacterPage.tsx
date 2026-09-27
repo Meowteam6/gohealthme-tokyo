@@ -11,6 +11,14 @@ import { useOnboarding } from "@/lib/game/onboarding-store";
 import type { StepId } from "@/lib/game/character";
 import { BackLink } from "@/components/night/kit";
 
+/** Where ?next= goes, in the one vocabulary: one challenge (its page or its
+ *  link), the challenges board, or anywhere else. */
+function backLabel(next: string): string {
+  if (/^\/(pools\/[^/?#]+|c\/)/.test(next)) return "Back to the challenge";
+  if (/^\/pools(?:[?#]|$)/.test(next)) return "Back to challenges";
+  return "Back";
+}
+
 export default function CharacterPage({
   focus,
   next,
@@ -26,7 +34,7 @@ export default function CharacterPage({
       onboarding={onboarding}
       focus={focus}
       mode="page"
-      above={next !== null ? <BackLink href={next}>Back to the run</BackLink> : undefined}
+      above={next !== null ? <BackLink href={next}>{backLabel(next)}</BackLink> : undefined}
     />
   );
 }

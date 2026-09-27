@@ -205,7 +205,7 @@ export function verdictHeadOf(input: {
     case "checking":
       return {
         eyebrow: `SPOTTER is reading your ${input.deviceName ?? "wearable"}`,
-        headline: "Checking the run.",
+        headline: "Checking the challenge.",
         body: base.body,
       };
     case "confirm-human":
@@ -223,9 +223,9 @@ export function verdictHeadOf(input: {
         body: screen.settled
           ? base.body
           : screen.outcome === "expired"
-            ? "The World ID request expired before you answered. You hit the goal, so ask again before the run settles."
+            ? "The World ID request expired before you answered. You hit the goal, so ask again before the challenge settles."
             : screen.outcome === "declined"
-              ? "You said not now, so nothing moved. You hit the goal, so ask again before the run settles if that was a slip."
+              ? "You said not now, so nothing moved. You hit the goal, so ask again before the challenge settles if that was a slip."
               : base.body,
       };
     case "banked":
@@ -267,7 +267,7 @@ export function verdictHeadOf(input: {
           screen.outcome === "refunded"
             ? "Nobody hit it."
             : screen.outcome === "cancelled"
-              ? "Run called off."
+              ? "Challenge called off."
               : goalShort === "the goal"
                 ? "You missed the goal."
                 : `You missed ${goalShort}.`,
@@ -276,7 +276,7 @@ export function verdictHeadOf(input: {
     case "hit-unconfirmed":
       return { eyebrow: "Not confirmed", headline: `${hit} Not confirmed in time.`, body: base.body };
     case "settled-final":
-      return { eyebrow: "Run settled", headline: "Every result is final.", body: base.body };
+      return { eyebrow: "Challenge settled", headline: "Every result is final.", body: base.body };
     case "bad-read":
       return {
         eyebrow: `SPOTTER tried your ${input.deviceName ?? "wearable"}`,
@@ -286,7 +286,7 @@ export function verdictHeadOf(input: {
     case "stopped":
       return { eyebrow: "The check stopped", headline: `${base.headline}.`, body: base.body };
     case "cancelled":
-      return { eyebrow: "Run called off", headline: screen.refunded ? "Your stake is back." : "Take your stake back.", body: base.body };
+      return { eyebrow: "Challenge called off", headline: screen.refunded ? "Your stake is back." : "Take your stake back.", body: base.body };
     case "none":
       return null;
   }
@@ -366,7 +366,7 @@ export function VerdictView({
       {log !== undefined && log !== null ? (
         <details className="group mt-4 border-t border-edge pt-1">
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-muted hover:text-foreground [&::-webkit-details-marker]:hidden">
-            See SPOTTER&apos;s receipt for this run
+            See SPOTTER&apos;s receipt for this challenge
             <Glyph name="chev" className="text-haze transition-transform duration-[120ms] group-open:rotate-90" />
           </summary>
           <div className="pt-2">{log}</div>
@@ -523,7 +523,7 @@ export default function VerdictStage({
                 variant={claimWaiting ? "tertiary" : "secondary"}
               />
             ) : (
-              <Fine>Tonight counts on its own. One night never follows you into the next run.</Fine>
+              <Fine>Tonight counts on its own. One night never follows you into the next challenge.</Fine>
             )}
           </>
         ) : null

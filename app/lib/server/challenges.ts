@@ -295,7 +295,7 @@ export async function createChallenge(params: {
     return { ok: false, status: 400, reason: "That is not a valid address." };
   }
   if (params.poolId <= 0n) {
-    return { ok: false, status: 400, reason: "That is not a valid pool id." };
+    return { ok: false, status: 400, reason: "That is not a valid challenge id." };
   }
   const messageCheck = checkMessage(params.rawMessage);
   if (!messageCheck.ok) {
@@ -345,7 +345,7 @@ export async function createChallenge(params: {
         return {
           ok: false,
           status: 409,
-          reason: "A challenge already exists for this pool.",
+          reason: "This challenge already has its link.",
         };
       }
       // Otherwise assume a token collision and loop to mint a new one.

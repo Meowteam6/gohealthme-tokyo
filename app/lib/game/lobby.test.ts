@@ -350,6 +350,24 @@ describe("lockCopy", () => {
   it("checks the sensor in place instead of sending the player away", () => {
     expect(lockCopy({ kind: "sensor-unchecked" }, "/pools").fix.kind).toBe("check-sensor");
   });
+
+  // One vocabulary (Andre, 2026-09-27): anything a player can join is a
+  // challenge, never a run, pool or dare.
+  it("calls what the player joins a challenge, never a run, pool or dare", () => {
+    // sensor-hold copy is the wearable lane's (lib/wearable-join-gate.ts).
+    for (const lock of all.filter((l) => l.kind !== "sensor-hold")) {
+      const copy = lockCopy(lock, "/pools");
+      const text = `${copy.title} ${copy.detail} ${"label" in copy.fix ? copy.fix.label : ""}`;
+      expect(text, lock.kind).not.toMatch(/\b(runs?|pools?|dares?)\b/i);
+    }
+    expect(lockCopy({ kind: "not-human" }, "/pools").detail).toContain("covers every challenge");
+    expect(lockCopy({ kind: "sensor-unchecked" }, "/pools").detail).toContain(
+      "unlocks every challenge at once",
+    );
+    expect(
+      lockCopy({ kind: "cannot-measure", metric: "steps", deviceLabel: "WHOOP" }, "/pools").detail,
+    ).toMatch(/^This challenge is scored on step count/);
+  });
 });
 
 describe("buildLobby", () => {

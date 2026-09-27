@@ -107,7 +107,7 @@ function JoinPoolInner({
       const poolsAddress = getHealthPoolsAddress();
       if (poolsAddress === null) {
         throw new Error(
-          "Runs are not switched on for this build yet.",
+          "Challenges are not switched on for this build yet.",
         );
       }
       const publicClient = getArcPublicClient();
@@ -303,7 +303,7 @@ function JoinPoolInner({
         retryLabel="Try the stake again"
       >
         <Button variant="tertiary" size="sm" onClick={() => setStatus({ kind: "idle" })} className="mt-1">
-          Back to the run&apos;s terms
+          Back to the challenge&apos;s terms
         </Button>
       </StakeFailed>
     );
@@ -356,7 +356,7 @@ function JoinPoolInner({
   return (
     <>
       {view.preamble}
-      <SignInGate note="Sign in to join this run.">
+      <SignInGate note="Sign in to join this challenge.">
         {(openSignIn) =>
           authenticated ? (
             <>

@@ -160,7 +160,7 @@ function SensorStepBody({
       <div className="[&>*+*]:mt-3">
         <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
           Sign once so I can see which wearable you have paired and what it
-          measures. Free, no transaction, and it covers every run.
+          measures. Free, no transaction, and it covers every challenge.
         </p>
         <Button
           type="button"
@@ -189,8 +189,8 @@ function SensorStepBody({
     return (
       <div className="[&>*+*]:mt-3">
         <Notice tone="limit" title="The wearable check is not answering">
-          I cannot pair anything this minute. Your runs stay locked until it is
-          back.
+          I cannot pair anything this minute. Your challenges stay locked until
+          it is back.
         </Notice>
         <Button type="button" variant="secondary" onClick={recheck}>
           Try the wearable check again
@@ -227,8 +227,8 @@ function SensorStepBody({
           </p>
           {cannot.length > 0 ? (
             <p className="m-0 mt-1">
-              It cannot measure {cannot.join(", ")}, so runs scored on those show
-              as locked for you in the lobby, before you stake anything.
+              It cannot measure {cannot.join(", ")}, so challenges scored on those
+              show as locked for you, before you stake anything.
             </p>
           ) : null}
         </Notice>
@@ -236,24 +236,24 @@ function SensorStepBody({
         <Notice tone="limit" title={`${holdLabel} is linked. Waiting on its first sync`} live>
           Nothing has come through from your device yet, so I cannot tell what
           it measures. Open your wearable&apos;s own app so it syncs, then check
-          again. Wearable runs stay locked until I can see it, so you never
-          stake on one your device cannot prove.
+          again. Wearable challenges stay locked until I can see it, so you
+          never stake on one your device cannot prove.
         </Notice>
       ) : sensor.kind === "unreadable" ? (
         <Notice tone="limit" title={`${sensor.label} is linked and I cannot read it right now`}>
-          Wearable runs stay locked until I can see what it measures. Nothing to
-          do on your side; check back shortly.
+          Wearable challenges stay locked until I can see what it measures.
+          Nothing to do on your side; check back shortly.
         </Notice>
       ) : (
         <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
-          Runs pay on what your wearable reports, so pick the one you wear. Each
-          option says what it can measure.
+          Challenges pay on what your wearable reports, so pick the one you
+          wear. Each option says what it can measure.
         </p>
       )}
 
       {offered.length === 0 ? (
         <Notice tone="limit" title="No wearable pairing on this build yet">
-          Wearable runs stay locked. You can still browse the lobby.
+          Wearable challenges stay locked. You can still browse them.
         </Notice>
       ) : (
         <ul className="m-0 grid list-none gap-3 p-0 sm:grid-cols-2">

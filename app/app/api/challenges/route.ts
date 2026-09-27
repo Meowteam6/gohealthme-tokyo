@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     // Proof 1: the signature must be for THIS address, not merely some address.
     const auth = await requireAddressSignature(request, address);
     if (!auth.ok) {
-      return jsonError(401, "Sign with the wallet that created this pool.");
+      return jsonError(401, "Sign with the wallet that started this challenge.");
     }
 
     // Closed-beta gate: the proven wallet must be approved. Fails closed.
@@ -100,12 +100,12 @@ export async function POST(request: Request) {
       canPay = poolCanPay(pool);
       goalIssue = challengeGoalIssue(pool.goalSpec);
     } catch {
-      return jsonError(404, "That pool could not be found on Base.");
+      return jsonError(404, "That challenge could not be found on Base.");
     }
     if (creator !== auth.address) {
       return jsonError(
         403,
-        "Only the wallet that created this pool can send a challenge for it.",
+        "Only the wallet that started this challenge can send it.",
       );
     }
     // A challenge that cannot pay its target is not worth minting a link for.
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
     if (!canPay) {
       return jsonError(
         409,
-        "This pool cannot pay out, so it cannot be sent as a challenge.",
+        "This challenge cannot pay out, so it cannot be sent.",
       );
     }
 

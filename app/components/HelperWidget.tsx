@@ -296,9 +296,9 @@ function AskTab({ address }: { address: Address | null }) {
       >
         {messages.length === 0 ? (
           <p className="text-sm leading-relaxed text-muted">
-            Ask anything about using GoHealthMe - signing in, test USDC, pools,
-            proof, getting paid, or how your data stays private. I only cover
-            using the app.
+            Ask anything about using GoHealthMe - signing in, test USDC,
+            challenges, proof, getting paid, or how your data stays private. I
+            only cover using the app.
           </p>
         ) : (
           messages.map((m, i) => (

@@ -111,8 +111,8 @@ function OutcomesUnavailable({ onRetry }: { onRetry: () => void }) {
         </button>
       }
     >
-      Your runs and their balances are below. Joins, completions and payouts show
-      again once the chain answers.
+      Your challenges and their pots are below. Joins, completions and payouts
+      show again once the chain answers.
     </Notice>
   );
 }
@@ -175,9 +175,9 @@ function PortfolioSummary({
   return (
     <section className="[&>*+*]:mt-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className={SECTION_TITLE}>Your runs at a glance</h2>
+        <h2 className={SECTION_TITLE}>Your challenges at a glance</h2>
         <Badge tone="muted">
-          {d.poolCount} {d.poolCount === 1 ? "run" : "runs"}
+          {d.poolCount} {d.poolCount === 1 ? "challenge" : "challenges"}
         </Badge>
       </div>
 
@@ -187,7 +187,7 @@ function PortfolioSummary({
             <StatTile
               icon="vault"
               chip="bg-accent/12 text-accent-deep"
-              label="In your runs"
+              label="In your challenges"
             >
               <Money usd={formatUsdc(d.totalBalanceUsdc)} />
             </StatTile>
@@ -199,7 +199,7 @@ function PortfolioSummary({
         <StatTile
           icon="vault"
           chip="bg-accent/12 text-accent-deep"
-          label="In your runs"
+          label="In your challenges"
         >
           <Money usd={formatUsdc(d.totalBalanceUsdc)} />
         </StatTile>
@@ -260,7 +260,7 @@ const PRIVACY_POINTS: { icon: IconName; title: string; body: string }[] = [
   {
     icon: "fingerprint",
     title: "k-anonymous, always",
-    body: "Cohort numbers read as “Fewer than 5” until a run is big enough that no figure can point at one person.",
+    body: "Cohort numbers read as “Fewer than 5” until a challenge is big enough that no figure can point at one person.",
   },
 ];
 
@@ -390,15 +390,15 @@ export default function SponsorConsole() {
   ) : (
     <Card className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <h2 className={CARD_TITLE}>Fund a new goal</h2>
+        <h2 className={CARD_TITLE}>Sponsor a challenge</h2>
         <p className="mt-1.5 max-w-md text-[0.9375rem] leading-[1.5] text-muted">
-          Name the goal, set the reward and put in test USDC. The run&apos;s
-          contract holds it and pays the players who hit the goal when the run
-          settles.
+          Name the goal, set the reward and put in test USDC. The challenge&apos;s
+          contract holds it and pays the players who hit the goal when the
+          challenge settles.
         </p>
       </div>
       <Button onClick={() => setShowCreate(true)} className="w-full shrink-0 sm:w-auto">
-        Create a run
+        Sponsor a challenge
       </Button>
     </Card>
   );
@@ -424,8 +424,9 @@ export default function SponsorConsole() {
           <div className="[&>*+*]:mt-3">
             <SignInPanel surface="card" />
             <Fine>
-              Creating and funding a run pulls USDC from your wallet, so the console
-              opens once you sign in. Your runs and their aggregate outcomes live here.
+              Creating and funding a challenge pulls USDC from your wallet, so the
+              console opens once you sign in. Your challenges and their aggregate
+              outcomes live here.
             </Fine>
           </div>,
         )}
@@ -447,13 +448,13 @@ export default function SponsorConsole() {
         </div>
       ) : consoleQuery.isError ? (
         <ErrorNote
-          title="Could not load your runs"
+          title="Could not load your challenges"
           detail={
             consoleQuery.error instanceof ContractNotConfiguredError
-              ? "Runs are off on this build, so there are no runs to show."
-              : "Base Sepolia did not answer. Your runs are safe on chain; try again in a moment."
+              ? "Challenges are off on this build, so there are none to show."
+              : "Base Sepolia did not answer. Your challenges are safe on chain; try again in a moment."
           }
-          retryLabel="Read my runs again"
+          retryLabel="Read my challenges again"
           onRetry={() => {
             void consoleQuery.refetch();
           }}
@@ -461,11 +462,11 @@ export default function SponsorConsole() {
       ) : myPools.length === 0 ? (
         showCreate ? null : (
           <EmptyCard
-            title="You have not funded a run yet"
-            detail="Create your first funded run and it shows up here with its aggregate outcomes as players join and get verified."
+            title="You have not sponsored a challenge yet"
+            detail="Sponsor your first challenge and it shows up here with its aggregate outcomes as players join and get verified."
             action={
               <Button size="sm" onClick={() => setShowCreate(true)}>
-                Create a run
+                Sponsor a challenge
               </Button>
             }
           />
@@ -480,7 +481,7 @@ export default function SponsorConsole() {
             }}
           />
           <section id="pools" className="[&>*+*]:mt-5">
-            <h2 className={SECTION_TITLE}>Your runs</h2>
+            <h2 className={SECTION_TITLE}>Your challenges</h2>
             <div className="grid gap-4 lg:grid-cols-2">
               {myPools.map((pool, i) => (
                 <SponsorPoolOutcome

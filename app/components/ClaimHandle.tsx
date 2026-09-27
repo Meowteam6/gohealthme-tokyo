@@ -126,8 +126,8 @@ function ClaimHandleInner() {
     return (
       <div role="status" className="[&>*+*]:mt-3">
         <Notice tone="ok" title={<span className="break-all">Handle claimed as @{status.handle}</span>}>
-          Your public page is up. It shows the runs you hit and what they paid,
-          never the health goal behind them.
+          Your public page is up. It shows the challenges you hit and what they
+          paid, never the health goal behind them.
         </Notice>
           <div className="flex flex-wrap gap-2">
             <Link href={`/u/${status.handle}`} className={buttonClasses({ size: "sm" })}>

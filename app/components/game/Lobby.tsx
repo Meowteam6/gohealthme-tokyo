@@ -93,7 +93,7 @@ function RowsLoading() {
   return (
     <div aria-busy="true">
       <p className="sr-only" role="status">
-        Reading the runs
+        Reading the challenges
       </p>
       <ul className={GRID} aria-hidden="true">
         {[0, 1, 2].map((i) => (
@@ -163,7 +163,7 @@ export default function Lobby({
       ) : null}
       <div className="flex flex-col gap-3 min-[640px]:flex-row min-[640px]:items-center min-[640px]:justify-between min-[640px]:gap-6">
         <p className="m-0 max-w-[52ch] text-[0.9375rem] leading-normal text-muted">
-          <b className="font-semibold text-foreground">Sign in and I check your own wearable against every run,</b>{" "}
+          <b className="font-semibold text-foreground">Sign in and I check your own wearable against every challenge,</b>{" "}
           before any stake. Base or one email, and a wallet is made for you.
         </p>
         <ButtonLink href={`/character?next=${next}`} className="flex-none">
@@ -173,7 +173,7 @@ export default function Lobby({
     </Card>
   );
 
-  const lead = "Every open run, marked for your wearable before you stake.";
+  const lead = "Every open challenge, marked for your wearable before you stake.";
   const fine = <Fine className="mt-2">Test USDC during beta. No real money moves.</Fine>;
   const top = (
     <div className="grid gap-3">
@@ -196,13 +196,13 @@ export default function Lobby({
         // Title and lead outside the card, SPOTTER beside the lead with his
         // feet on the top card: no empty band above it, and the first run
         // row reaches the first phone screen.
-        <PerchedHeader title="The lobby" lead={lead} below={fine} pose="wearable">
+        <PerchedHeader title="Challenges" lead={lead} below={fine} pose="wearable">
           {top}
         </PerchedHeader>
       ) : (
         <div className="grid gap-5">
           <header>
-            <h1 className={PAGE_TITLE}>The lobby</h1>
+            <h1 className={PAGE_TITLE}>Challenges</h1>
             <p className={PAGE_LEAD}>{lead}</p>
             {fine}
           </header>
@@ -214,10 +214,10 @@ export default function Lobby({
         <RowsLoading />
       ) : error || lobby === null ? (
         <Card role="alert">
-          <p className="m-0 text-lg font-semibold">I could not read the runs from Base Sepolia just now.</p>
+          <p className="m-0 text-lg font-semibold">I could not read the challenges from Base Sepolia just now.</p>
           <p className="m-0 mt-1 text-[0.9375rem] text-muted">Nothing changed on your side, and nothing was staked.</p>
           <Button variant="secondary" size="sm" onClick={retry} className="mt-3">
-            Read the runs again
+            Read the challenges again
           </Button>
         </Card>
       ) : (
@@ -235,14 +235,14 @@ export default function Lobby({
             />
           ) : null}
           <Section
-            title="Your runs"
+            title="Challenges you're in"
             rows={lobby.mine}
             returnTo={returnTo}
             playersOf={playersOf}
             fitOf={fitOf}
             note={
               <Link href="/dashboard" className={TEXT_LINK}>
-                Open My runs
+                Open My challenges
               </Link>
             }
           />
@@ -264,29 +264,29 @@ export default function Lobby({
                 title="No open challenges right now"
                 line="Nothing running. I'm on break."
                 detail="Nobody has put a goal on the board. Start one and I will read the wearables."
-                action={<ButtonLink href="/pools/create">Start a run</ButtonLink>}
+                action={<ButtonLink href="/challenge/new">Start a challenge</ButtonLink>}
               />
               <p className="m-0 text-center">
-                <Link href="/challenge/new" className={TEXT_LINK}>
-                  Or challenge a friend into one
+                <Link href="/challenges" className={TEXT_LINK}>
+                  Challenges with friends
                 </Link>
               </p>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-3">
-              <ButtonLink href="/pools/create" variant="secondary">
-                Start a run
-              </ButtonLink>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
               <ButtonLink href="/challenge/new" variant="secondary">
-                Challenge a friend
+                Start a challenge
               </ButtonLink>
+              <Link href="/challenges" className={TEXT_LINK}>
+                Challenges with friends
+              </Link>
             </div>
           )}
 
           {lobby.closed.length > 0 ? (
             <details className="group rounded-2xl bg-surface shadow-[inset_0_0_0_1px_var(--border)]">
               <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-foreground [&::-webkit-details-marker]:hidden">
-                <span className="num">Ended runs ({lobby.closed.length})</span>
+                <span className="num">Completed challenges ({lobby.closed.length})</span>
                 <svg
                   width="16"
                   height="16"

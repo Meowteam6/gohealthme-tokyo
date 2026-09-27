@@ -37,6 +37,7 @@ import {
   ErrorNote,
   FOCUS_RING,
   Skeleton,
+  TEXT_LINK,
   buttonClasses,
 } from "@/components/ui";
 import {
@@ -172,7 +173,7 @@ function ApprovalRunNote({
       action={
         line.openRun ? (
           <Link href={`/pools/${poolId.toString()}`} className={QUIET_ACTION}>
-            Open this run
+            Open this challenge
           </Link>
         ) : undefined
       }
@@ -856,7 +857,7 @@ export default function DashboardContent() {
   if (!ready) {
     return (
       <MyRunsFrame pose="detective">
-        <SignInLoadingCard label="Loading your runs">
+        <SignInLoadingCard label="Loading your challenges">
           <LoadingLines />
         </SignInLoadingCard>
       </MyRunsFrame>
@@ -871,7 +872,7 @@ export default function DashboardContent() {
     return (
       <MyRunsFrame
         pose="wave"
-        lead="Sign in to see your runs, your nights and your payouts. Base Sepolia test USDC."
+        lead="Sign in to see your challenges, your nights and your payouts. Base Sepolia test USDC."
       >
         <SignInPanel surface="card" />
       </MyRunsFrame>
@@ -903,23 +904,23 @@ export default function DashboardContent() {
           : "thumbsup";
 
   const firstCard = joinedQuery.isLoading ? (
-    <LoadingCard label="Reading your runs from Base Sepolia" />
+    <LoadingCard label="Reading your challenges from Base Sepolia" />
   ) : joinedQuery.isError ? (
     <Card>
       <ErrorNote
-        title="Could not read your runs"
-        detail="I could not read your runs from Base Sepolia just now. Nothing changed on your side."
-        retryLabel="Read my runs again"
+        title="Could not read your challenges"
+        detail="I could not read your challenges from Base Sepolia just now. Nothing changed on your side."
+        retryLabel="Read my challenges again"
         onRetry={() => void joinedQuery.refetch()}
       />
     </Card>
   ) : runs.length === 0 ? (
     <EmptyCard
-      title="You are not in a run yet"
-      detail="Pick a run in the lobby and put money on yourself. Your nights show up here."
+      title="You are not in a challenge yet"
+      detail="Pick a challenge and put money on yourself, or start one with a friend. Your nights show up here."
       action={
         <Link href="/pools" className={buttonClasses({ size: "sm" })}>
-          Find a run
+          Find a challenge
         </Link>
       }
     />
@@ -927,17 +928,27 @@ export default function DashboardContent() {
     <CharacterCard view={character} variant="strip" />
   );
 
+  // /challenges left the nav (2026-09-27); this is one of its two ways in.
+  const friendsLink = (
+    <p className="m-0 mt-2">
+      <Link href="/challenges" className={TEXT_LINK}>
+        Challenges with friends
+      </Link>
+    </p>
+  );
+
   return (
     <div className="[&>*+*]:mt-8">
       {headerPose !== null ? (
-        <PerchedHeader title="My runs" lead={MY_RUNS_LEAD} pose={headerPose}>
+        <PerchedHeader title="My challenges" lead={MY_RUNS_LEAD} below={friendsLink} pose={headerPose}>
           {firstCard}
         </PerchedHeader>
       ) : (
         <div className="[&>*+*]:mt-5">
           <header>
-            <h1 className={PAGE_TITLE}>My runs</h1>
+            <h1 className={PAGE_TITLE}>My challenges</h1>
             <p className={PAGE_LEAD}>{MY_RUNS_LEAD}</p>
+            {friendsLink}
           </header>
           {firstCard}
         </div>
@@ -989,7 +1000,7 @@ export default function DashboardContent() {
           {finishedRuns.length > 0 ? (
             <section aria-labelledby="finished-runs" className="[&>*+*]:mt-3">
               <h2 id="finished-runs" className={SECTION_TITLE}>
-                Finished runs
+                Completed challenges
               </h2>
               {finishedRuns.map((entry) => {
                 const { pool, participant } = entry;
@@ -1030,7 +1041,7 @@ export default function DashboardContent() {
   );
 }
 
-export const MY_RUNS_LEAD = "Every run you are in, night by night, and what each one paid.";
+export const MY_RUNS_LEAD = "Every challenge you are in, night by night, and what each one paid.";
 
 /** A finished run: its goal, the result the chain recorded, what is left in
  *  it, and the refund when it was cancelled. */
@@ -1058,7 +1069,7 @@ export function FinishedRunRow({
         <p className="num m-0 mt-1.5 text-[0.9375rem] text-haze">
           {/* After settle this is what was NOT paid out; calling it the prize
               read as if the player who hit won nothing. */}
-          Left in the run <span className={`font-semibold ${pool.balance > 0n ? "text-gold" : "text-dusk"}`}>{formatUsdc(pool.balance)}</span>{" "}
+          Left in the pot <span className={`font-semibold ${pool.balance > 0n ? "text-gold" : "text-dusk"}`}>{formatUsdc(pool.balance)}</span>{" "}
           test USDC
         </p>
       </Link>
@@ -1078,7 +1089,7 @@ export function MyRunsFrame({
   children: ReactNode;
 }) {
   return (
-    <PerchedHeader title="My runs" lead={lead} pose={pose}>
+    <PerchedHeader title="My challenges" lead={lead} pose={pose}>
       {children}
     </PerchedHeader>
   );

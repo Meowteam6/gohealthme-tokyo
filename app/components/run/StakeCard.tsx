@@ -13,7 +13,7 @@ import type { SoloLine, StakeTermsCopy } from "@/lib/game/run-page";
 /** The card itself: the right column on desktop, sticky under the header. */
 export function StakeCard({
   children,
-  label = "Stake on this run",
+  label = "Stake on this challenge",
   id = "stake",
   className = "",
 }: {
@@ -115,7 +115,7 @@ export function SoloNote({ line }: { line: SoloLine }) {
       {line.kind === "first" ? (
         <>
           Nobody&apos;s in yet. Hit it alone and <b>{line.total}</b> comes back: your {line.stake}
-          {line.pot !== null ? ` plus the ${line.pot} pot.` : "."}
+          {line.pot !== null ? ` plus the ${line.pot} extra in the pot.` : "."}
         </>
       ) : line.kind === "flat" ? (
         <>
@@ -186,7 +186,7 @@ export function StakeVault() {
   return (
     <p className="m-0 mt-3 flex items-start gap-2.5 text-[0.8125rem] leading-[1.45] text-haze">
       <Glyph name="vault" size={16} className="mt-px text-muted" />
-      <span>Your stake sits in the run&apos;s contract, not with SPOTTER. He reads the result; the contract pays.</span>
+      <span>Your stake sits in the challenge&apos;s contract, not with SPOTTER. He reads the result; the contract pays.</span>
     </p>
   );
 }

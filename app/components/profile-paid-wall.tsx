@@ -236,14 +236,14 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
           </span>
         }
         title={`@${profile.handle}`}
-        lead="Runs hit and what they paid, in test USDC on Base Sepolia."
+        lead="Goals hit and what they paid, in test USDC on Base Sepolia."
         pose={pose}
       >
         {/* A failed chain read replaces the figures with a plain note: zeros
             here would be a false statement. */}
         {!profile.readOk ? (
           <Card>
-            <Notice tone="limit" role="status" title="Could not read this player's runs from the chain right now">
+            <Notice tone="limit" role="status" title="Could not read this player's challenges from the chain right now">
               Refresh in a minute to try again.
             </Notice>
           </Card>
@@ -256,7 +256,7 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
                 tone={Number(profile.usdcEarned) > 0 ? "money" : "dusk"}
                 size="lg"
               />
-              <Stat label="Runs hit" value={profile.goalsHit} size="lg" />
+              <Stat label="Goals hit" value={profile.goalsHit} size="lg" />
               <Stat label="Hit streak" value={profile.winStreak} size="lg" />
             </StatRow>
             {/* The tier split. Only wins proven verified carry the check;
@@ -287,13 +287,13 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
           self-reported, never verified. */}
       <Card as="section" aria-labelledby="wins-heading">
         <h2 id="wins-heading" className={CARD_TITLE}>
-          Runs hit
+          Goals hit
         </h2>
         <div className="mt-4">
           {!profile.readOk ? (
             <p className="text-[0.9375rem] text-muted">They show here once the chain answers.</p>
           ) : profile.wins.length === 0 ? (
-            <p className="text-[0.9375rem] text-muted">No runs hit yet.</p>
+            <p className="text-[0.9375rem] text-muted">No goals hit yet.</p>
           ) : (
             <ul className="list-none">
               {profile.wins.map((win) => (
@@ -306,7 +306,7 @@ export function ProfilePaidWall({ profile }: { profile: ProfileData }) {
 
       <Fine className="text-center">
         GoHealthMe: stake on your own health goal and get paid in test USDC when the
-        run settles.
+        challenge settles.
       </Fine>
     </div>
   );

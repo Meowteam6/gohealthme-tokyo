@@ -267,7 +267,7 @@ export default function OnboardingStates({ meta }: SectionProps) {
           mode="gate"
         />
       </StateFrame>
-      <StateFrame name="player-card" note="the player card after onboarding: name + human stamp, challenges you can join, lobby">
+      <StateFrame name="player-card" note="the player card after onboarding: name + human stamp, challenges you can join, see all challenges">
         <CharacterCard
           view={view({
             gate: true,
@@ -292,41 +292,41 @@ export default function OnboardingStates({ meta }: SectionProps) {
       </StateFrame>
       <StateFrame name="my-runs-signed-out" note="/dashboard signed out: SPOTTER on the sign-in card">
         <div className={PAGE_COLUMN}>
-          <MyRunsFrame pose="wave" lead="Sign in to see your runs, your nights and your payouts. Base Sepolia test USDC.">
+          <MyRunsFrame pose="wave" lead="Sign in to see your challenges, your nights and your payouts. Base Sepolia test USDC.">
             <SignInPanel surface="card" />
           </MyRunsFrame>
         </div>
       </StateFrame>
-      <StateFrame name="my-runs-loading" note="reading the runs from Base Sepolia">
+      <StateFrame name="my-runs-loading" note="reading the challenges from Base Sepolia">
         <div className={PAGE_COLUMN}>
           <MyRunsFrame pose="detective">
-            <LoadingCard label="Reading your runs from Base Sepolia" />
+            <LoadingCard label="Reading your challenges from Base Sepolia" />
           </MyRunsFrame>
         </div>
       </StateFrame>
-      <StateFrame name="my-runs-empty" note="signed in, in no run: one pose, one line, one action">
+      <StateFrame name="my-runs-empty" note="signed in, in no challenge: one pose, one line, one action">
         <div className={PAGE_COLUMN}>
           <MyRunsFrame pose="meditate">
             <EmptyCard
-              title="You are not in a run yet"
-              detail="Pick a run in the lobby and put money on yourself. Your nights show up here."
+              title="You are not in a challenge yet"
+              detail="Pick a challenge and put money on yourself, or start one with a friend. Your nights show up here."
               action={
                 <Link href="/pools" className={buttonClasses({ size: "sm" })}>
-                  Find a run
+                  Find a challenge
                 </Link>
               }
             />
           </MyRunsFrame>
         </div>
       </StateFrame>
-      <StateFrame name="my-runs-error" note="the runs read failed; nothing changed">
+      <StateFrame name="my-runs-error" note="the challenges read failed; nothing changed">
         <div className={PAGE_COLUMN}>
           <MyRunsFrame pose="thinking">
             <Card>
               <ErrorNote
-                title="Could not read your runs"
-                detail="I could not read your runs from Base Sepolia just now. Nothing changed on your side."
-                retryLabel="Read my runs again"
+                title="Could not read your challenges"
+                detail="I could not read your challenges from Base Sepolia just now. Nothing changed on your side."
+                retryLabel="Read my challenges again"
                 onRetry={noop}
               />
             </Card>
@@ -335,12 +335,12 @@ export default function OnboardingStates({ meta }: SectionProps) {
       </StateFrame>
       <StateFrame
         name="my-runs-active"
-        note="in a live run: the board carries its own scene, so no pose in the header; night count, If you hit, Who's in"
+        note="in a live challenge: the board carries its own scene, so no pose in the header; night count, If you hit, Who's in"
       >
         <div className={`${PAGE_COLUMN} [&>*+*]:mt-8`}>
           <div className="[&>*+*]:mt-5">
             <header>
-              <h1 className={PAGE_TITLE}>My runs</h1>
+              <h1 className={PAGE_TITLE}>My challenges</h1>
               <p className={PAGE_LEAD}>{MY_RUNS_LEAD}</p>
             </header>
             <CharacterCard
@@ -356,9 +356,9 @@ export default function OnboardingStates({ meta }: SectionProps) {
           <ActiveRunBoard />
         </div>
       </StateFrame>
-      <StateFrame name="my-runs-finished" note="only finished runs: SPOTTER on the character strip, result rows below">
+      <StateFrame name="my-runs-finished" note="only completed challenges: SPOTTER on the character strip, result rows below">
         <div className={`${PAGE_COLUMN} [&>*+*]:mt-8`}>
-          <PerchedHeader title="My runs" lead={MY_RUNS_LEAD} pose="thumbsup">
+          <PerchedHeader title="My challenges" lead={MY_RUNS_LEAD} pose="thumbsup">
             <CharacterCard
               view={view({
                 name: "mika.gohealthme.eth",
@@ -370,7 +370,7 @@ export default function OnboardingStates({ meta }: SectionProps) {
             />
           </PerchedHeader>
           <section className="[&>*+*]:mt-3">
-            <h2 className="type-heading text-[1.625rem]">Finished runs</h2>
+            <h2 className="type-heading text-[1.625rem]">Completed challenges</h2>
             <FinishedRunRow pool={FIXTURE_POOL} result={{ text: "Paid", tone: "accent" }} />
             <FinishedRunRow
               pool={{ ...FIXTURE_POOL, id: 12n, goalSpec: "Complete at least 1 workout for 3 days", balance: 0n }}
@@ -383,7 +383,7 @@ export default function OnboardingStates({ meta }: SectionProps) {
         <div className={PAGE_COLUMN}>
           <PerchedHeader
             title="History"
-            lead="Every verdict SPOTTER reached on your runs, your World ID confirmations, and what each run paid."
+            lead="Every verdict SPOTTER reached on your challenges, your World ID confirmations, and what each challenge paid."
             pose="detective"
           >
             <Card className="[&>*+*]:mt-4">
@@ -405,11 +405,11 @@ export default function OnboardingStates({ meta }: SectionProps) {
       </StateFrame>
       <StateFrame name="history-empty" note="signed in, nothing checked yet">
         <div className={PAGE_COLUMN}>
-          <PerchedHeader title="History" lead="Every verdict SPOTTER reached on your runs." pose="detective">
+          <PerchedHeader title="History" lead="Every verdict SPOTTER reached on your challenges." pose="detective">
             <Card>
               <FeedEmpty
                 title="Nothing in your history yet"
-                detail="When SPOTTER checks one of your runs, its verdict, your World ID confirmation and the payout land here. Everyone's claims are one tap away."
+                detail="When SPOTTER checks one of your challenges, its verdict, your World ID confirmation and the payout land here. Everyone's claims are one tap away."
               />
             </Card>
           </PerchedHeader>

@@ -16,7 +16,7 @@ import { worldSetup } from "@/lib/server/world/config";
 import { isVerifiedHuman } from "@/lib/server/world/human";
 
 export const HUMAN_REQUIRED_REASON =
-  "Prove you're one human before playing this pool. Open your character card and complete the World ID step, then try again. Nothing was verified or paid.";
+  "Prove you're one human before playing this challenge. Open your character card and complete the World ID step, then try again. Nothing was verified or paid.";
 
 export type RequireHumanResult =
   | { ok: true; enforced: boolean }

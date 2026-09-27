@@ -210,7 +210,7 @@ export function sensorHoldCopy(
         title: "I cannot read your wearable right now",
         detail:
           `${capitalise(device)} is linked and nothing is wrong on your side. ` +
-          "It is not telling me what it measures this minute, so wearable runs " +
+          "It is not telling me what it measures this minute, so wearable challenges " +
           "stay locked until it answers. Check again shortly.",
         fix: { kind: "check-sensor", label: "Check my wearable" },
         tone: "wait",

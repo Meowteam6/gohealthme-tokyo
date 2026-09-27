@@ -49,21 +49,21 @@ export default function OpenRunsList({
         </ul>
       ) : status === "error" || status === "not-configured" ? (
         <div className="mt-3.5 rounded-2xl bg-surface px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--border)]" role="alert">
-          <p className="m-0 font-semibold">I could not read the runs just now.</p>
+          <p className="m-0 font-semibold">I could not read the challenges just now.</p>
           <p className="m-0 mt-1 text-sm text-muted">Nothing changed on your side.</p>
           {status === "error" && onRetry !== undefined ? (
             <Button variant="secondary" size="sm" onClick={onRetry} className="mt-3">
-              Read the runs again
+              Read the challenges again
             </Button>
           ) : null}
         </div>
       ) : runs.length === 0 ? (
         <div className="mt-3.5 rounded-2xl bg-surface px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--border)]">
-          <p className="m-0 font-semibold">No open runs right now.</p>
+          <p className="m-0 font-semibold">No open challenges right now.</p>
           <p className="m-0 mt-1 text-sm text-muted">
             Start one and I will read the wearables.{" "}
-            <Link href="/pools/create" className={TEXT_LINK}>
-              Start a run
+            <Link href="/challenge/new" className={TEXT_LINK}>
+              Start a challenge
             </Link>
           </p>
         </div>

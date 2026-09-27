@@ -45,16 +45,18 @@ export default function ChallengeContribute({
         </h2>
         <p className="m-0 mt-1.5 text-[0.9375rem] leading-[1.5] text-muted">{intro.lead}</p>
       </div>
+      {/* The extra beyond every stake. The Pot on this screen is the whole
+          balance, so this part is named for what it is. */}
       {prizeUsd !== null ? (
         <StatRow className="border-t border-edge pt-3">
-          <Stat label="In the pot now" value={prizeUsd} unit="USDC" tone="money" size="lg" />
+          <Stat label="Extra so far" value={prizeUsd} unit="USDC" tone="money" size="lg" />
         </StatRow>
       ) : null}
 
       <FundPool
         poolId={poolId}
         heading="How much to add"
-        description="Test USDC goes from your wallet into the run's contract, never to SPOTTER."
+        description="Test USDC goes from your wallet into the challenge's contract, never to SPOTTER."
         ctaLabel={intro.cta}
         chipIn={chipIn}
       />

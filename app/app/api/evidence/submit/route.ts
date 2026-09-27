@@ -121,19 +121,19 @@ export async function POST(request: Request) {
     // upload against the pool's own goal, not the caller's description of it.
     const pool = await loadClaimPool(BigInt(poolId));
     if (pool === null) {
-      return jsonError(400, "That pool does not exist.");
+      return jsonError(400, "That challenge does not exist.");
     }
 
     if (evidenceTypeOf(pool.goalSpec) !== "document") {
       return jsonError(
         400,
-        "That pool is not verified by document upload. Nothing was submitted.",
+        "That challenge is not verified by document upload. Nothing was submitted.",
       );
     }
     if (pool.settled) {
       return jsonError(
         409,
-        "That pool has already settled. Nothing was submitted.",
+        "That challenge has already settled. Nothing was submitted.",
       );
     }
 
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
     if (!(await participantJoined(BigInt(poolId), address as Address))) {
       return jsonError(
         403,
-        "Join this pool before submitting a record for it.",
+        "Join this challenge before submitting a record for it.",
       );
     }
 

@@ -556,8 +556,8 @@ export default function PoolDetail({ id }: { id: string }) {
         <BackLink />
         <div className="mt-3 max-w-xl">
           <ErrorNote
-            title="That run does not exist"
-            detail={`"${id}" is not a run number. Pick one from the open challenges.`}
+            title="That challenge does not exist"
+            detail={`"${id}" is not a challenge number. Pick one from the open challenges.`}
           />
           <ButtonLink href="/pools" variant="tertiary" className="mt-2">
             See the open challenges
@@ -575,16 +575,16 @@ export default function PoolDetail({ id }: { id: string }) {
         <BackLink />
         <div className="mt-3 max-w-xl">
           <ErrorNote
-            title="Could not load this run"
+            title="Could not load this challenge"
             detail={
               poolQuery.error instanceof ContractNotConfiguredError
-                ? "Runs are not switched on for this build yet."
-                : "I could not read this run from Base Sepolia just now. Nothing changed on your side."
+                ? "Challenges are not switched on for this build yet."
+                : "I could not read this challenge from Base Sepolia just now. Nothing changed on your side."
             }
             onRetry={() => {
               void poolQuery.refetch();
             }}
-            retryLabel="Read the run again"
+            retryLabel="Read the challenge again"
           />
           <ButtonLink href="/pools" variant="tertiary" className="mt-2">
             See the open challenges instead
@@ -856,7 +856,6 @@ export default function PoolDetail({ id }: { id: string }) {
     ) : (
       <StakeStats
         stakeLabel="Entry"
-        potLabel="Prize pool"
         stake={stake}
         pot={pot}
         players={participantCount}
@@ -891,8 +890,8 @@ export default function PoolDetail({ id }: { id: string }) {
     ) : (
       <StakeTermsPlain>
         {recordsMisses
-          ? "Hit it and your stake comes back with a share of the missed stakes and the sponsor pot. Miss it, as your wearable shows, and if anyone else hits your stake goes to them; no data from your wearable is not a miss. If nobody hits, every stake comes back."
-          : "Hit it and your stake comes back with a share of any sponsor pot. This run cannot record a miss, so a miss comes back at settle too. If nobody hits, every stake comes back."}
+          ? "Hit it and your stake comes back with a share of the missed stakes and any extra in the pot. Miss it, as your wearable shows, and if anyone else hits your stake goes to them; no data from your wearable is not a miss. If nobody hits, every stake comes back."
+          : "Hit it and your stake comes back with a share of any extra in the pot. This challenge cannot record a miss, so a miss comes back at settle too. If nobody hits, every stake comes back."}
       </StakeTermsPlain>
     )
   ) : flowTerms !== null ? (
@@ -909,8 +908,8 @@ export default function PoolDetail({ id }: { id: string }) {
   ) : (
     <StakeTermsPlain>
       {isDocGoal
-        ? `Pay the ${stake} USDC entry, then hand SPOTTER your record. The prize pays once the document checks out and the run allows.`
-        : `Pay the ${stake} USDC entry, hit the goal inside the run, and the prize pays once SPOTTER confirms it and the run allows.`}
+        ? `Pay the ${stake} USDC entry, then hand SPOTTER your record. The prize pays once the document checks out and the challenge allows.`
+        : `Pay the ${stake} USDC entry, hit the goal before the challenge ends, and the prize pays once SPOTTER confirms it and the challenge allows.`}
     </StakeTermsPlain>
   );
 
@@ -930,7 +929,7 @@ export default function PoolDetail({ id }: { id: string }) {
         glyph: "ok",
         children: (
           <>
-            <b>Your {deviceName}</b> tracks {metricLabel(headline.metric)}, so it can check this run
+            <b>Your {deviceName}</b> tracks {metricLabel(headline.metric)}, so it can check this challenge
           </>
         ),
       });
@@ -1036,7 +1035,7 @@ export default function PoolDetail({ id }: { id: string }) {
         </h2>
         <p className="m-0 mt-2 text-[0.9375rem] text-muted">
           I cannot read uploaded records right now: the verifier is not live.
-          Your stake is safe. If the run ends before it is back, you are
+          Your stake is safe. If the challenge ends before it is back, you are
           refunded automatically. Wearable goals still verify today.
         </p>
       </Card>
@@ -1096,14 +1095,14 @@ export default function PoolDetail({ id }: { id: string }) {
       body = (
         <>
           {statsFor(false)}
-          <p className="m-0 mt-4 text-[1.0625rem] font-semibold">This run cannot pay out</p>
+          <p className="m-0 mt-4 text-[1.0625rem] font-semibold">This challenge cannot pay out</p>
           <p className="m-0 mt-1 text-[0.9375rem] text-muted">
             It was set up with no reward per achiever, so even a verified result
             would pay you nothing. I am not letting anyone stake into it.
           </p>
           <StakeAction>
             <ButtonLink href={nextRunHref} block>
-              Find a run that pays
+              Find a challenge that pays
             </ButtonLink>
           </StakeAction>
         </>
@@ -1116,7 +1115,7 @@ export default function PoolDetail({ id }: { id: string }) {
           {statsFor(false)}
           <div className="mt-4">
             <StakeFailed
-              title="I could not check whether you are in this run"
+              title="I could not check whether you are in this challenge"
               detail="Nothing changed on your side."
               onRetry={() => {
                 void participantQuery.refetch();
@@ -1137,7 +1136,7 @@ export default function PoolDetail({ id }: { id: string }) {
           {statsFor(false)}
           <Skeleton className="mt-4 h-24" />
           <Skeleton className="mt-4 h-[60px]" />
-          <p className="m-0 mt-2 text-[0.8125rem] text-haze">Checking what this run needs from you.</p>
+          <p className="m-0 mt-2 text-[0.8125rem] text-haze">Checking what this challenge needs from you.</p>
         </div>
       );
     } else if (slot.kind === "locked" && slot.lock.kind === "sign-in") {
@@ -1149,7 +1148,7 @@ export default function PoolDetail({ id }: { id: string }) {
           {solo !== null ? <SoloNote line={solo} /> : null}
           <StakeAction
             id="stake-action"
-            fine="Sign in with Base or email, no seed phrase. You make your player once, then land back on this run."
+            fine="Sign in with Base or email, no seed phrase. You make your player once, then land back on this challenge."
           >
             <ButtonLink href={fix.kind === "link" ? fix.href : "/character"} block>
               Sign in to stake {stake} USDC
@@ -1212,14 +1211,14 @@ export default function PoolDetail({ id }: { id: string }) {
       body = null;
     }
     stakeCard = (
-      <StakeCard label={joined ? "Your stake" : "Stake on this run"}>
+      <StakeCard label={joined ? "Your stake" : "Stake on this challenge"}>
         {body}
         {unsupportedAfterJoin !== null ? (
           <p className="m-0 mt-3 flex items-start gap-2.5 text-sm leading-[1.45] text-foreground">
             <Glyph name="info" size={18} className="mt-px text-muted" />
             <span>
               {deviceName ?? "Your wearable"} does not report {metricLabel(unsupportedAfterJoin)}, so it
-              cannot prove this run. Pair the wearable you joined with to send SPOTTER in.
+              cannot prove this challenge. Pair the wearable you joined with to send SPOTTER in.
             </span>
           </p>
         ) : null}
@@ -1230,22 +1229,22 @@ export default function PoolDetail({ id }: { id: string }) {
       joined && verdictCard !== null && verdictShown ? (
         verdictCard
       ) : (
-        <StakeCard label="This run has ended">
+        <StakeCard label="This challenge has ended">
           {statsFor(joined)}
           <p className="m-0 mt-4 text-[1.0625rem] font-semibold">
-            {joined ? "Time is up. Send SPOTTER in." : "This run has ended"}
+            {joined ? "Time is up. Send SPOTTER in." : "This challenge has ended"}
           </p>
           <p className="m-0 mt-1 text-[0.9375rem] text-muted">
             {joined
-              ? `Joining closed at ${endClock}. Sync your ${deviceName ?? "wearable"} and send SPOTTER in below, before the run settles.`
+              ? `Joining closed at ${endClock}. Sync your ${deviceName ?? "wearable"} and send SPOTTER in below, before the challenge settles.`
               : participantCount === 0
                 ? "Nobody joined this one, so there is nothing here to pay out."
-                : "You are not in this run, so nothing here pays out for you."}
+                : "You are not in this challenge, so nothing here pays out for you."}
           </p>
           {!joined ? (
             <StakeAction>
               <ButtonLink href={nextRunHref} block>
-                Find an open run
+                Find an open challenge
               </ButtonLink>
             </StakeAction>
           ) : null}
@@ -1273,8 +1272,8 @@ export default function PoolDetail({ id }: { id: string }) {
         );
     } else {
       stakeCard = (
-        <StakeCard label="How this run ended">
-          <StakeStats stake={stake} pot={pot} potLabel="Left in pool" players={participantCount} stakeLabel={selfStaked ? "Stake" : "Entry"} />
+        <StakeCard label="How this challenge ended">
+          <StakeStats stake={stake} pot={pot} potLabel="Left in the pot" players={participantCount} stakeLabel={selfStaked ? "Stake" : "Entry"} />
           <p className="m-0 mt-4 text-[1.0625rem] font-semibold">{copy.headline}</p>
           {endPhase === "settled" && resultsQuery.isLoading ? (
             <Skeleton className="mt-2 h-10" />
@@ -1285,7 +1284,7 @@ export default function PoolDetail({ id }: { id: string }) {
             <div className="mt-3">
               <ErrorNote
                 title="Could not read who hit it"
-                detail="I could not read the results on this run from Base Sepolia just now. Nothing changed; anything credited to you is still claimable."
+                detail="I could not read the results on this challenge from Base Sepolia just now. Nothing changed; anything credited to you is still claimable."
                 onRetry={() => {
                   void resultsQuery.refetch();
                 }}
@@ -1294,9 +1293,9 @@ export default function PoolDetail({ id }: { id: string }) {
             </div>
           ) : null}
           {!isCreator ? (
-            <StakeAction fine="You were not in this run, so nothing here is yours.">
+            <StakeAction fine="You were not in this challenge, so nothing here is yours.">
               <ButtonLink href={nextRunHref} block>
-                Find an open run
+                Find an open challenge
               </ButtonLink>
             </StakeAction>
           ) : null}
@@ -1318,7 +1317,7 @@ export default function PoolDetail({ id }: { id: string }) {
   const device = deviceName ?? "wearable";
   const lockedCaption =
     slot.kind === "locked" && slot.lock.kind === "cannot-measure"
-      ? `${slot.lock.deviceLabel ?? "Your wearable"} can't send me ${metricLabel(slot.lock.metric)}. Pair a wearable that tracks it and I'll check this run.`
+      ? `${slot.lock.deviceLabel ?? "Your wearable"} can't send me ${metricLabel(slot.lock.metric)}. Pair a wearable that tracks it and I'll check this challenge.`
       : null;
   const caption = joined
     ? sleepRun && headline.goalDays === 1
@@ -1348,7 +1347,7 @@ export default function PoolDetail({ id }: { id: string }) {
       </>
     ) : (
       <>
-        The run closes at <b>{endClock}</b>
+        The challenge closes at <b>{endClock}</b>
         {left !== null ? `, in ${left}` : ""}. Only {sleepRun ? "nights" : "days"} your {device} has
         scored and synced count, so open {appName} before then.
       </>
@@ -1392,7 +1391,7 @@ export default function PoolDetail({ id }: { id: string }) {
       return sponsorPot > 0n ? (
         <>
           Each player stakes {stake}. A miss here comes back, so the players who hit share the{" "}
-          <b>{formatUsdc(sponsorPot)}</b> sponsor pot.
+          <b>{formatUsdc(sponsorPot)}</b> extra in the pot.
         </>
       ) : (
         <>Each player stakes {stake}. A miss here comes back, so a hit is your stake back.</>
@@ -1434,7 +1433,7 @@ export default function PoolDetail({ id }: { id: string }) {
   // so an address with no ENS name there says whose it is.
   const creatorShort = `${pool.creator.slice(0, 6)}...${pool.creator.slice(-4)}`;
   const creatorName =
-    creatorNameQuery.data ?? (isChallenge ? creatorShort : `the run's creator (${creatorShort})`);
+    creatorNameQuery.data ?? (isChallenge ? creatorShort : `the challenge's creator (${creatorShort})`);
   const chipIn: ChipInTerms = {
     bountyModel: pool.bountyModel,
     creator: { name: creatorName, you: isCreator },
@@ -1483,7 +1482,7 @@ export default function PoolDetail({ id }: { id: string }) {
         {!isChallenge ? (
           <AlsoOpen
             rows={alsoRows}
-            sub={deviceName !== null ? `Other runs your ${deviceName} can check` : "Other runs open now"}
+            sub={deviceName !== null ? `Other challenges your ${deviceName} can check` : "Other challenges open now"}
           />
         ) : null}
 
@@ -1515,8 +1514,8 @@ export default function PoolDetail({ id }: { id: string }) {
                 <div className="mt-2">
                   <FundPool
                     poolId={pool.id}
-                    heading="Add test USDC to this run's pot"
-                    description="Anyone can add to the pot. It is paid out when the run settles."
+                    heading="Add test USDC to this challenge's pot"
+                    description="Anyone can add to the pot. It is paid out when the challenge settles."
                     ctaLabel="Approve and add to the pot"
                     chipIn={chipIn}
                   />

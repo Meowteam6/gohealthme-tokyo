@@ -12,6 +12,6 @@ describe("pairing card line", () => {
     expect(
       countsLineFor(["sleep_score", "sleep_efficiency", "sleep_hours", "workouts"]),
     ).toBe("Counts sleep efficiency, hours of sleep and workouts.");
-    expect(countsLineFor(["sleep_score"])).toBe("Counts none of the current runs yet.");
+    expect(countsLineFor(["sleep_score"])).toBe("Counts none of the current challenges yet.");
   });
 });

@@ -92,7 +92,7 @@ export function paidBreakdown(paidUsd: string, entryFee: bigint): string {
   if (extra === 0n) {
     return `${stake} stake back. Everyone hit it, so there were no missed stakes to share.`;
   }
-  return `${stake} stake back + ${formatUsdc(extra)} from missed stakes and any sponsor pot.`;
+  return `${stake} stake back + ${formatUsdc(extra)} from missed stakes and any extra in the pot.`;
 }
 
 /**
@@ -108,7 +108,7 @@ export function commitmentLostCopy(input: {
   const stake = formatUsdc(input.entryFee);
   if (input.stakeBack) {
     return {
-      headline: "Run lost",
+      headline: "Challenge lost",
       body: `The goal was not met. No miss was written on chain, so the settle sent your ${stake} back. Claim it below.`,
     };
   }
@@ -120,12 +120,12 @@ export function commitmentLostCopy(input: {
   }
   if (input.achievers === null) {
     return {
-      headline: "Run lost",
+      headline: "Challenge lost",
       body: `The miss was recorded on chain. If anyone hit it, your ${stake} went to them; if nobody did, it comes back to you below.`,
     };
   }
   return {
-    headline: "Run lost",
+    headline: "Challenge lost",
     body: `Your ${stake} went to the players who hit.`,
   };
 }
@@ -137,13 +137,13 @@ export function commitmentLostCopy(input: {
  */
 export const COMMITMENT_FACTS = {
   effort: "Your result depends only on your own effort, verified by your wearable.",
-  hit: "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot.",
-  miss: "Miss it: if your wearable shows it, your stake goes to the players who hit. If your wearable sends nothing for the run, your stake comes back.",
+  hit: "Hit it: your stake back plus an equal share of the missed stakes and any extra in the pot.",
+  miss: "Miss it: if your wearable shows it, your stake goes to the players who hit. If your wearable sends nothing for the challenge, your stake comes back.",
   nobody: "Nobody hits: everyone gets their stake back.",
   /** A run that cannot record a miss (lib/miss-rule.ts): no missed stake is
    *  ever shared, so a hit is the stake back plus any sponsor pot. */
-  hitNoMiss: "Hit it: your stake back plus an equal share of any sponsor pot.",
-  missNoMiss: "Miss it: this run cannot record a miss, so your stake comes back when it settles.",
+  hitNoMiss: "Hit it: your stake back plus an equal share of any extra in the pot.",
+  missNoMiss: "Miss it: this challenge cannot record a miss, so your stake comes back when it settles.",
 } as const;
 
 /** The facts for one run: the miss line follows whether it can record one. */

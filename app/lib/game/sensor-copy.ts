@@ -17,7 +17,7 @@ export function launchGoalLabels(metrics: readonly string[]): string[] {
 /** "Counts X, Y and Z." for a device that reports `metrics`. */
 export function countsLineFor(metrics: readonly string[]): string {
   const labels = launchGoalLabels(metrics);
-  if (labels.length === 0) return "Counts none of the current runs yet.";
+  if (labels.length === 0) return "Counts none of the current challenges yet.";
   const list =
     labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
   return `Counts ${list}.`;

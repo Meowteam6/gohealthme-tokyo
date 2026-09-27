@@ -4,7 +4,7 @@ import { NOINDEX } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Your goal",
-  description: "Open health-goal runs matched to the goal you typed.",
+  description: "Open health-goal challenges matched to the goal you typed.",
   robots: NOINDEX,
 };
 

@@ -502,7 +502,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
   if (state.kind === "settled") {
     return (
       <div data-lane="world-agents" data-outcome="settled" role="status" className={QUIET_WELL}>
-        <p className="m-0 text-[0.9375rem] font-semibold">The run settled first, so there is nothing to confirm.</p>
+        <p className="m-0 text-[0.9375rem] font-semibold">The challenge settled first, so there is nothing to confirm.</p>
         <p className="m-0 mt-1 text-sm text-muted">
           Settle is one-shot, so this payout can no longer happen and there is
           nothing to ask again. The settle credited your stake back; claim it

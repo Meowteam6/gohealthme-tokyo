@@ -30,4 +30,4 @@ export function launchGoalsSentence(): string {
   return `${labels.slice(0, -1).join(", ")} or ${labels[labels.length - 1]}`;
 }
 
-export const COMING_LINE = "Coming: heart-zone runs and document proof.";
+export const COMING_LINE = "Coming: heart-zone challenges and document proof.";

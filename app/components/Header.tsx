@@ -277,7 +277,7 @@ export interface HeaderViewProps {
  *
  * Signed out, the header is the brand, two links from 640px up, and Sign in:
  * nothing to open on a phone. Signed in, one account pill stands for the
- * player, as in the approved mock. From 1024px the five links sit beside it
+ * player, as in the approved mock. From 1024px the four links sit beside it
  * and the pill (the avatar, plus the full name from 1280px, never cut off)
  * opens a small popover with the address and Sign out. Below 1024px the links
  * do not fit, so the pill is the avatar plus the menu glyph and opens the menu

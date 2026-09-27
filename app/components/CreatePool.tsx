@@ -132,8 +132,8 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
   if (poolsAddress === null) {
     return (
       <RunsOff
-        title="Runs are off on this build"
-        detail="Starting a run is not switched on for this build yet. Nothing is wrong on your side."
+        title="Challenges are off on this build"
+        detail="Starting a challenge is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
   }
@@ -214,7 +214,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
       // with a plain message instead of sending a doomed transaction.
       if (entryFeeUsdc <= 0n) {
         throw new Error(
-          "Set an entry fee above zero. Every player stakes it to join, and it comes back to them when they hit the goal. The contract does not allow free-to-join runs.",
+          "Set an entry fee above zero. Every player stakes it to join, and it comes back to them when they hit the goal. The contract does not allow free-to-join challenges.",
         );
       }
       fundingUsdc = parseUsdc(
@@ -262,7 +262,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
     // deployed contract would revert DEAD_CONFIG on the same condition.
     if (isEconomicallyDeadConfig(bountyModel, entryFeeUsdc)) {
       setFormError(
-        "Set an entry fee above zero. The contract does not allow free-to-join runs.",
+        "Set an entry fee above zero. The contract does not allow free-to-join challenges.",
       );
       return;
     }
@@ -297,13 +297,13 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
       : status.kind === "approving"
       ? "Approving USDC"
       : status.kind === "depositing"
-        ? "Creating the run"
+        ? "Creating the challenge"
         : redirecting
-          ? "Opening your run"
+          ? "Opening your challenge"
           : authenticated
             ? fundingIsZero
-              ? "Create the run"
-              : "Approve funding and create the run"
+              ? "Create the challenge"
+              : "Approve funding and create the challenge"
             : "Sign in to create";
 
   const floorOptions: { id: Modality; title: string; body: string; disabled?: boolean }[] = [
@@ -372,7 +372,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
     {
       id: 0,
       title: "Fixed bounty per player who hits",
-      body: "Each player who hits gets their stake times a multiplier, paid from your pot. A short pot scales every payout down, so a hit can pay less than the stake. A miss gets the stake back.",
+      body: "Each player who hits gets their stake times a multiplier, paid from the money you put in. If that is not enough, every payout scales down, so a hit can pay less than the stake. A miss gets the stake back.",
     },
     {
       id: 1,
@@ -465,7 +465,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
               onChange={(e) => setInitiative(e.target.value)}
               className={FIELD}
             />
-            <p className={FIELD_HINT}>A short tag shown on the run, for example sleep or workouts.</p>
+            <p className={FIELD_HINT}>A short tag shown on the challenge, for example sleep or workouts.</p>
           </div>
 
           <div className="[&>*+*]:mt-3">
@@ -506,7 +506,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
                   {goalNotice.text}
                 </Notice>
               ) : goalNotice.kind === "device-check" ? (
-                <AuthorCapabilityNotice goalSpec={goalSpec} noun="run" />
+                <AuthorCapabilityNotice goalSpec={goalSpec} noun="challenge" />
               ) : null
             ) : null}
             <p className={`${FIELD_HINT} !mt-0`}>
@@ -555,8 +555,8 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
               {/* Said once they have typed a zero, not on an empty field. */}
               {feeIsZero && entryFee.trim() !== "" ? (
                 <p className="m-0 mt-2 text-[0.8125rem] leading-[1.45] text-danger">
-                  Must be above zero. The contract does not allow free-to-join runs, so
-                  every player who hits is someone who staked.
+                  Must be above zero. The contract does not allow free-to-join challenges,
+                  so every player who hits is someone who staked.
                 </p>
               ) : null}
             </div>
@@ -581,15 +581,15 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
               </div>
               <p className={FIELD_HINT}>
                 {bountyModel === 2
-                  ? "Optional. USDC you add to the pot now, on top of the stakes. Pulled from your wallet."
+                  ? "Optional. Extra USDC you add to the pot now, on top of the stakes. Pulled from your wallet."
                   : "USDC you seed the bounty with now. Pulled from your wallet."}
               </p>
             </div>
           </div>
 
           <div className="[&>*+*]:mt-3 border-t border-edge pt-5">
-            <h2 className={SECTION_LABEL}>How long it runs</h2>
-            <div role="radiogroup" aria-label="How long it runs" className="flex flex-wrap gap-2">
+            <h2 className={SECTION_LABEL}>How long it lasts</h2>
+            <div role="radiogroup" aria-label="How long it lasts" className="flex flex-wrap gap-2">
               {DURATION_OPTIONS.map((opt) => (
                 <Chip
                   key={opt.days}
@@ -666,7 +666,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
           </fieldset>
 
           <div className="[&>*+*]:mt-3 border-t border-edge pt-5">
-            <SignInGate note="Sign in to create this run.">
+            <SignInGate note="Sign in to create this challenge.">
               {(openSignIn) => (
                 <Button
                   type="button"
@@ -694,13 +694,13 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
                 <Notice tone="info">
                   Step {status.kind === "approving" ? "1" : "2"} of 2:{" "}
                   {status.kind === "approving"
-                    ? "approving USDC for the run"
-                    : "creating the run on Base"}
+                    ? "approving USDC for the challenge"
+                    : "creating the challenge on Base"}
                 </Notice>
               ) : null}
 
               {status.kind === "done" ? (
-                <Notice tone="ok" title="Run created on Base Sepolia. Opening it now.">
+                <Notice tone="ok" title="Challenge created on Base Sepolia. Opening it now.">
                   {status.approveHash ? (
                     <ArcTxLink txHash={status.approveHash} label="View the approval tx" />
                   ) : null}
@@ -713,14 +713,14 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
               <ErrorNote
                 title="Check the form"
                 detail={formError}
-                retryLabel="Edit the run"
+                retryLabel="Edit the challenge"
                 onRetry={() => setFormError(null)}
               />
             ) : null}
 
             {status.kind === "error" ? (
               <ErrorNote
-                title="Could not create the run"
+                title="Could not create the challenge"
                 detail={status.message}
                 raw={status.raw}
                 retryLabel="Try again"
@@ -737,12 +737,12 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
   return (
     <div className={PAGE_COLUMN}>
       <PerchedHeader
-        title="Start a run"
+        title="Start a public challenge"
         lead="Set a goal and a stake. Everyone who joins puts up the same USDC on their own goal, and the players who hit it share the pot."
         pose="wearable"
         below={
           <Link href="/sponsor" className={`${QUIET_ACTION} mt-2`}>
-            Put up a prize pot instead
+            Sponsor a challenge instead
           </Link>
         }
       >
@@ -758,7 +758,7 @@ const SECTION_LABEL = "m-0 block p-0 text-[1.0625rem] font-semibold leading-tigh
 function RunsOff({ title, detail }: { title: string; detail: string }) {
   return (
     <div className={PAGE_COLUMN}>
-      <PerchedHeader title="Start a run" pose="meditate">
+      <PerchedHeader title="Start a public challenge" pose="meditate">
         <EmptyCard
           title={title}
           detail={detail}
@@ -778,7 +778,7 @@ export default function CreatePool({ embedded = false }: { embedded?: boolean } 
     return (
       <RunsOff
         title="Sign-in is off on this build"
-        detail="Starting a run needs sign-in, which is not switched on for this build yet. Nothing is wrong on your side."
+        detail="Starting a challenge needs sign-in, which is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
   }

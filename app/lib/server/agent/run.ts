@@ -728,8 +728,8 @@ async function settleClaimUnlocked(
             Number(outcome.dueAt) * 1000 + settleRepollJitterMs(),
           ).toISOString(),
           note: waitsForSyncs
-            ? "the run is over; SPOTTER waits for every wearable to sync and for every result to be judged, then settles"
-            : "the pool period is still running; SPOTTER settles the moment it ends",
+            ? "the challenge is over; SPOTTER waits for every wearable to sync and for every result to be judged, then settles"
+            : "the challenge is still going; SPOTTER settles the moment it ends",
         });
       }
       return { status: "deferred", ledger };
@@ -776,7 +776,7 @@ async function settleClaimUnlocked(
             input.goalId,
             ledger,
             "settle",
-            `the pool is settled but the AchieverPaid reconciliation read failed (${message}); retrying on the next pass`,
+            `the challenge is settled but the AchieverPaid reconciliation read failed (${message}); retrying on the next pass`,
           );
           return { status: "error", ledger };
         }
@@ -786,7 +786,7 @@ async function settleClaimUnlocked(
             status: "settled",
             txHash: payout.txHash,
             paidUsd: formatUnits(payout.amount, 6),
-            note: "the pool settled in one transaction covering every eligible achiever; this participant's AchieverPaid payout is in it",
+            note: "the challenge settled in one transaction covering every eligible achiever; this participant's AchieverPaid payout is in it",
           });
           await removePendingSettlement(input.goalId);
           return { status: "settled", ledger };

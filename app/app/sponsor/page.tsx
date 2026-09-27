@@ -6,9 +6,9 @@ import { EmptyCard, PAGE_COLUMN, PerchedHeader } from "@/components/night/kit";
 import { buttonClasses } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "Sponsor a health goal",
+  title: "Sponsor a challenge",
   description:
-    "Create and fund USDC health-goal runs and see privacy-safe aggregate outcomes. No player health data is ever shown. Base Sepolia testnet, play-money USDC.",
+    "Create and fund USDC health-goal challenges and see privacy-safe aggregate outcomes. No player health data is ever shown. Base Sepolia testnet, play-money USDC.",
   alternates: { canonical: "/sponsor" },
 };
 
@@ -22,7 +22,7 @@ export default function SponsorPage() {
       <PerchedHeader
         className={PAGE_COLUMN}
         title="Sponsor console"
-        lead="Create and fund USDC health-goal runs, and see privacy-safe aggregate outcomes."
+        lead="Create and fund USDC health-goal challenges, and see privacy-safe aggregate outcomes."
         pose="meditate"
       >
         <EmptyCard
@@ -30,7 +30,7 @@ export default function SponsorPage() {
           detail="This part is not switched on for this build yet. Nothing is wrong on your side."
           action={
             <Link href="/pools" className={buttonClasses({ size: "sm" })}>
-              See the open runs
+              See the open challenges
             </Link>
           }
         />

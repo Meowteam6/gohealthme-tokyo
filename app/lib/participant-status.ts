@@ -35,8 +35,8 @@ export function resultLabel(
   // it and flips `refunded`. Nothing about verification applies any more.
   if (pool.cancelled === true) {
     return p.refunded === true
-      ? { text: "Run called off - stake claimed back", tone: "muted" }
-      : { text: "Run called off - claim your stake back", tone: "warning" };
+      ? { text: "Challenge called off - stake claimed back", tone: "muted" }
+      : { text: "Challenge called off - claim your stake back", tone: "warning" };
   }
   if (!p.resultRecorded) {
     if (pool.settled && approval !== undefined && approval !== null) {
@@ -60,6 +60,6 @@ export function resultLabel(
   // comes back when nobody hit. Which one needs the pool's tally, which this
   // label does not have; the run page says it.
   return pool.bountyModel === 2
-    ? { text: "Goal missed - see the run for your stake", tone: "muted" }
+    ? { text: "Goal missed - see the challenge for your stake", tone: "muted" }
     : { text: "Goal missed - stake forfeited", tone: "muted" };
 }

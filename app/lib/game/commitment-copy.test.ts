@@ -49,7 +49,7 @@ describe("commitment copy", () => {
 
   it("the run board reminder states all three outcomes once two or more are staked", () => {
     expect(commitmentReminder({ recordable: true, players: 2 })).toBe(
-      "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot. Miss it: if your wearable shows it, your stake goes to the players who hit. If your wearable sends nothing for the run, your stake comes back. Nobody hits: everyone gets their stake back.",
+      "Hit it: your stake back plus an equal share of the missed stakes and any extra in the pot. Miss it: if your wearable shows it, your stake goes to the players who hit. If your wearable sends nothing for the challenge, your stake comes back. Nobody hits: everyone gets their stake back.",
     );
   });
 
@@ -57,7 +57,7 @@ describe("commitment copy", () => {
     // The player reading is already in, so `players` counts them. With one
     // staker a miss means nobody hit, and every stake comes back.
     expect(commitmentReminder({ recordable: true, players: 1 })).toBe(
-      "Hit it: your stake back plus an equal share of the missed stakes and any sponsor pot. Miss it: your stake comes back while you are the only one in; once others stake, it goes to whoever hits, or comes back if nobody does. Nobody hits: everyone gets their stake back.",
+      "Hit it: your stake back plus an equal share of the missed stakes and any extra in the pot. Miss it: your stake comes back while you are the only one in; once others stake, it goes to whoever hits, or comes back if nobody does. Nobody hits: everyone gets their stake back.",
     );
   });
 
@@ -70,7 +70,7 @@ describe("commitment copy", () => {
   it("a run that cannot record a miss never promises a missed stake, however many are in", () => {
     for (const players of [1, 2, 6, null]) {
       expect(commitmentReminder({ recordable: false, players })).toBe(
-        "Hit it: your stake back plus an equal share of any sponsor pot. Miss it: this run cannot record a miss, so your stake comes back when it settles. Nobody hits: everyone gets their stake back.",
+        "Hit it: your stake back plus an equal share of any extra in the pot. Miss it: this challenge cannot record a miss, so your stake comes back when it settles. Nobody hits: everyone gets their stake back.",
       );
     }
     expect(commitmentFacts(false).miss).not.toContain("players who hit");
@@ -78,7 +78,7 @@ describe("commitment copy", () => {
 
   it("paid breakdown splits the credited amount into stake back and the rest", () => {
     expect(paidBreakdown("3.00", ONE)).toBe(
-      "1.00 stake back + 2.00 from missed stakes and any sponsor pot.",
+      "1.00 stake back + 2.00 from missed stakes and any extra in the pot.",
     );
     expect(paidBreakdown("1.00", ONE)).toBe(
       "1.00 stake back. Everyone hit it, so there were no missed stakes to share.",
@@ -86,9 +86,26 @@ describe("commitment copy", () => {
     expect(paidBreakdown("0.5", ONE)).toBe("0.50 USDC paid out.");
   });
 
+  it("names the extra as part of the pot, and never says run or pool", () => {
+    const lines: string[] = [];
+    for (const recordable of [true, false]) {
+      lines.push(...Object.values(commitmentFacts(recordable)));
+      for (const players of [null, 1, 2]) lines.push(commitmentReminder({ recordable, players }));
+    }
+    lines.push(paidBreakdown("3", ONE), paidBreakdown("1", ONE));
+    for (const stakeBack of [true, false]) {
+      for (const achievers of [null, 0, 2]) {
+        const lost = commitmentLostCopy({ entryFee: ONE, stakeBack, achievers });
+        lines.push(lost.headline, lost.body);
+      }
+    }
+    for (const line of lines) expect(line).not.toMatch(/\b(runs?|pools?|dares?|sponsor pot)\b/i);
+    expect(commitmentFacts(true).hit).toContain("any extra in the pot");
+  });
+
   it("a miss says where the stake went, from what the chain recorded", () => {
     expect(commitmentLostCopy({ entryFee: ONE, stakeBack: false, achievers: 2 })).toEqual({
-      headline: "Run lost",
+      headline: "Challenge lost",
       body: "Your 1.00 went to the players who hit.",
     });
     expect(commitmentLostCopy({ entryFee: ONE, stakeBack: false, achievers: 0 })).toEqual({

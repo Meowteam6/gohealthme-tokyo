@@ -243,7 +243,7 @@ export async function POST(request: Request, ctx: Ctx) {
     // The pool is the authority on the goal and on how it is verified.
     const pool = await loadClaimPool(BigInt(poolId));
     if (pool === null) {
-      return jsonError(400, "That pool does not exist.");
+      return jsonError(400, "That challenge does not exist.");
     }
     const goalSpec = pool.goalSpec;
     const policy = proofPolicyOf(goalSpec);
@@ -261,7 +261,7 @@ export async function POST(request: Request, ctx: Ctx) {
         ? jsonError(400, `evidenceKind must be one of: ${MODALITIES.join(", ")}`)
         : jsonError(
             400,
-            `this pool accepts ${policy.accepted.join(", ")} evidence, not ${requested}`,
+            `this challenge accepts ${policy.accepted.join(", ")} evidence, not ${requested}`,
           );
     }
     const evidenceKind: Modality = resolved.modality;
@@ -302,7 +302,7 @@ export async function POST(request: Request, ctx: Ctx) {
     // paid from it, so running the loop for anyone else buys verification
     // nobody can be paid for.
     if (!(await participantJoined(BigInt(poolId), address as Address))) {
-      return jsonError(403, "That address has not joined this pool.");
+      return jsonError(403, "That address has not joined this challenge.");
     }
 
     // --- world-idkit ---
@@ -354,7 +354,7 @@ export async function POST(request: Request, ctx: Ctx) {
       ) {
         return jsonError(
           400,
-          "That verification job does not belong to this claim. Upload the record for this pool again.",
+          "That verification job does not belong to this claim. Upload the record for this challenge again.",
         );
       }
       // Bind the path goalId (which equals the on-chain computeGoalId) into the

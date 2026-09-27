@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     const plan = ledger.find((e) => e.kind === "plan");
     const poolId = plan?.kind === "plan" ? plan.poolId : undefined;
     if (poolId === undefined || !/^\d+$/.test(poolId)) {
-      return jsonError(409, "This claim has no pool linkage to confirm against.");
+      return jsonError(409, "This claim has no challenge linked to confirm against.");
     }
     // Only a pay decision needs a human; nothing to confirm otherwise. The
     // newest reason row is SPOTTER's current decision.
@@ -105,12 +105,12 @@ export async function POST(request: Request) {
       settled = (await arcReader().getPoolState(BigInt(poolId))).settled;
     } catch (err) {
       console.error(`[${cid}] pool ${poolId} state read failed: ${errorMessage(err)}`);
-      return jsonError(503, "I could not check this run on Base Sepolia just now. Try again in a moment.");
+      return jsonError(503, "I could not check this challenge on Base Sepolia just now. Try again in a moment.");
     }
     if (settled) {
       return Response.json(
         {
-          error: "This run already settled, so there is no payout left to confirm.",
+          error: "This challenge already settled, so there is no payout left to confirm.",
           code: "settled",
         },
         { status: 409 },

@@ -45,11 +45,11 @@ function slotLine(row: LobbyRow, visitorFit: Fit | null): ReactNode | undefined 
     case "closed":
       return slot.joined ? (
         <FitLine ok tone="in">
-          You were in this run
+          You were in this challenge
         </FitLine>
       ) : undefined;
     case "cannot-pay":
-      return <FitLine ok={false}>This run cannot pay out, so it takes no stakes</FitLine>;
+      return <FitLine ok={false}>This challenge cannot pay out, so it takes no stakes</FitLine>;
     case "locked":
       // Signed out, every run is "sign in"; the visitor's picked wearable
       // says more, and the sign-in itself sits once at the top of the lobby.
@@ -141,7 +141,7 @@ export default function RunSlip({
       entryFee={pool.entryFee}
       balance={pool.balance}
       stakeLabel={pool.bountyModel === 2 ? "Stake" : "Entry"}
-      eyebrow={row.highlighted ? "You were challenged into this run" : undefined}
+      eyebrow={row.highlighted ? "You were challenged to this one" : undefined}
       status={slot.kind === "closed" ? closedRunTag(row.phase) : undefined}
       tone={row.highlighted ? "highlight" : quiet ? "locked" : "default"}
       fit={
