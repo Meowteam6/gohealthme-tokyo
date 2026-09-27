@@ -1497,7 +1497,6 @@ export default function PoolDetail({ id }: { id: string }) {
                 poolId={pool.id}
                 // The prize net of every player's own stake, never raw balance.
                 prizeUsd={challengePrize !== null ? formatUsdc(challengePrize) : null}
-                kind={challengeKind}
                 chipIn={chipIn}
               />
             ) : null

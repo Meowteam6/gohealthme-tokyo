@@ -159,22 +159,14 @@ export default async function ChallengeLandingPage({
   const paused = pauseReason !== null;
   const canGrow = phase === "live" && canPay && !paused;
 
-  // Match the stake ("Match my stake" / "Back me") or an older reward
-  // challenge, told apart by the creator's own stake first
-  // (lib/game/money-sharing): a creator who staked is always match-the-stake,
-  // whatever extra is in the pot; with no creator stake, money the challenger
-  // put in at create (the seed where the funding read split it from backers'
-  // money, the pot net of stakes otherwise) is an older reward challenge.
-  // Decided once here; the headline, the chips and the terms all follow it.
+  // Every challenge is match the stake; the creator's own stake only says
+  // whether they are in yet (lib/game/money-sharing). Decided once here; the
+  // headline, the chips and the terms all follow it.
   // The chip-in warning names the creator: on a match-the-stake challenge,
   // the person backed.
   const creatorStaked =
     participants !== null && creatorStakedIn(pool.creator, participants);
-  const kind = challengeRunKindOf({
-    creatorStaked,
-    reward: pot.seed ?? pot.prize,
-    named: challenge.targetHandle !== null || challenge.message !== null,
-  });
+  const kind = challengeRunKindOf({ creatorStaked });
 
   // The commitment terms before the accept, only for a commitment pool
   // (bountyModel 2) that is live, can pay and is not paused, and only from
@@ -208,8 +200,6 @@ export default async function ChallengeLandingPage({
         })
       : null;
 
-  const target =
-    challenge.targetHandle !== null ? `@${challenge.targetHandle}` : "their friend";
   const chipIn = {
     bountyModel: pool.bountyModel,
     creator: { name: challengerName, you: false },
@@ -220,11 +210,9 @@ export default async function ChallengeLandingPage({
   if (backer) {
     return (
       <BackerView
-        kind={kind}
         token={token}
         poolId={poolIdBig}
         challengerName={challengerName}
-        target={target}
         message={challenge.message}
         pot={pot}
         backers={contributorNames}
@@ -246,7 +234,6 @@ export default async function ChallengeLandingPage({
           <ChallengeIntro
             kind={kind}
             challengerName={challengerName}
-            seed={pot.seed}
             targetHandle={challenge.targetHandle}
             message={challenge.message}
             terms={terms}
@@ -269,10 +256,9 @@ export default async function ChallengeLandingPage({
           <ChallengeContribute
             poolId={poolIdBig}
             prizeUsd={pot.prize !== null ? formatUsdc(pot.prize) : null}
-            kind={kind}
             chipIn={chipIn}
           />
-          <RallyCard token={token} kind={kind} name={challengerName} />
+          <RallyCard token={token} name={challengerName} />
         </>
       ) : phase === "live" && canPay && pauseReason !== null ? (
         <ChallengePausedCard reason={pauseReason} />

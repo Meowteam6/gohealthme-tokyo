@@ -18,12 +18,11 @@ import FundPool from "@/components/FundPool";
 import type { ChipInTerms } from "@/components/ChipInWarning";
 import { CARD_TITLE } from "@/components/night/kit";
 import { Card, Stat, StatRow } from "@/components/ui";
-import { chipInIntroOf, type ChallengeRunKind } from "@/lib/game/money-sharing";
+import { chipInIntroOf } from "@/lib/game/money-sharing";
 
 export default function ChallengeContribute({
   poolId,
   prizeUsd,
-  kind,
   chipIn,
 }: {
   poolId: bigint;
@@ -31,12 +30,10 @@ export default function ChallengeContribute({
    *  own stake (lib/challenges darePot), read live on the server. null when it
    *  cannot be stated honestly, and then no figure is shown. */
   prizeUsd: string | null;
-  /** Which flow this run is (lib/game/money-sharing challengeRunKindOf). */
-  kind: ChallengeRunKind;
   /** Who the warning names and how the run pays, read from chain. */
   chipIn: ChipInTerms;
 }) {
-  const intro = chipInIntroOf(kind, chipIn.creator);
+  const intro = chipInIntroOf(chipIn.creator);
   return (
     <Card as="section" aria-labelledby="add-to-pot" className="[&>*+*]:mt-4">
       <div>

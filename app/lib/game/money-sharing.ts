@@ -1,5 +1,5 @@
 // Who a challenge link is for, and what money added to a pot does, in words
-// (docs/MONEY-FLOWS.md F2, F3 and F5). Pure, so every sentence is tested.
+// (docs/MONEY-FLOWS.md F2 and F5). Pure, so every sentence is tested.
 //
 // A challenge (initiative "challenge", bountyModel 2) is equal stakes on the
 // same goal: the creator stakes S, friends match S, and anyone can add extra
@@ -9,12 +9,13 @@
 //   - "self": the creator staked. Friends either match the stake (the accept
 //     link) or back them (?as=backer). Extra in the pot, the creator's own at
 //     create or backers' later, never changes that.
-//   - "reward": an older challenge whose creator put money in at create and
-//     never staked. A friend accepts with a lock-in. No new challenge is made
-//     this way (the create form has one flow); these still render and pay.
-//   - "unstaked": the creator has not locked in yet and nothing else says it
-//     is an older reward challenge. No link is offered to the creator until
-//     they do; the chips already read as their own stake.
+//   - "unstaked": the creator has not locked in yet (between the create and
+//     their stake). Extra they added at create does not make it a different
+//     game: friends still land on "match the stake", and no link is offered
+//     to the creator until they lock in.
+// There is no reward-only challenge: the Tokyo contract never held one (all
+// six pools read 2026-09-27 are open group challenges), and the create form
+// has one flow.
 //
 // Money chipped in (fundPool) is recorded against nobody (HealthPoolsV3
 // C:336-342), so the warning says where it goes per bounty model and that it
@@ -22,7 +23,7 @@
 // back; never bet, wager or odds.
 
 
-export type ChallengeRunKind = "self" | "reward" | "unstaked";
+export type ChallengeRunKind = "self" | "unstaked";
 
 /** Whether the pool's creator is one of its stakers. */
 export function creatorStakedIn(creator: string, participants: readonly string[]): boolean {
@@ -31,30 +32,16 @@ export function creatorStakedIn(creator: string, participants: readonly string[]
 }
 
 /**
- * Which flow a challenge is. The creator's own stake decides first: a
- * creator who staked is a match-the-stake challenge, whatever extra is in the
- * pot. With no creator stake, money in the pot at create (`reward`, the pot
- * net of every stake and of backers' top-ups where those read, the pot net of
- * stakes alone where they did not) is an older reward challenge. `named` is
- * whether the challenge row names a target or carries a message: it keeps a
- * finished older reward challenge a reward once the pot no longer reads
- * (settled, cancelled, a read missed), and says nothing while the pot reads,
- * since the create form names a friend too.
+ * Which flow a challenge is: the creator's own stake decides. Money in the
+ * pot, theirs at create or backers' later, never changes the game.
  */
-export function challengeRunKindOf(input: {
-  creatorStaked: boolean;
-  reward: bigint | null;
-  named?: boolean;
-}): ChallengeRunKind {
-  if (input.creatorStaked) return "self";
-  if (input.reward !== null && input.reward > 0n) return "reward";
-  if (input.reward === null && input.named === true) return "reward";
-  return "unstaked";
+export function challengeRunKindOf(input: { creatorStaked: boolean }): ChallengeRunKind {
+  return input.creatorStaked ? "self" : "unstaked";
 }
 
 // ------------------------------------------------------------ share links
 
-export type ShareLinkKind = "match" | "back" | "challenge";
+export type ShareLinkKind = "match" | "back";
 
 export interface ShareLink {
   kind: ShareLinkKind;
@@ -85,25 +72,6 @@ const REVEAL_HINT_TAIL = "You sign once to prove the wallet is yours. Nothing is
 
 /** The creator's share card on their own challenge run, per flow. */
 export function inviteShareOf(kind: ChallengeRunKind): InviteShare {
-  if (kind === "reward") {
-    return {
-      kind: "links",
-      heading: "Send the challenge",
-      revealLabel: "Get the challenge link",
-      revealHint: `Shows your private link to send by text, email or copy. ${REVEAL_HINT_TAIL}`,
-      links: [
-        {
-          kind: "challenge",
-          label: "Send the challenge",
-          detail: "Whoever opens it can accept with their lock-in and go for the goal.",
-          backer: false,
-          title: "You've been challenged on GoHealthMe",
-          message: "I'm challenging you on GoHealthMe. Your wearable decides. Accept it here:",
-          emailSubject: "I'm challenging you on GoHealthMe",
-        },
-      ],
-    };
-  }
   if (kind === "unstaked") {
     return {
       kind: "blocked",
@@ -155,28 +123,18 @@ export function shareCardOf(input: { kind: ChallengeRunKind | null; live: boolea
 // ------------------------------------------------------------ /c/[token]
 
 /**
- * The tag and headline a friend lands on. A match-the-stake challenge leads
- * with the stake to match ("Match @andre's 10.00 USDC stake"); an older reward
- * challenge with a seed leads with the money instead ("{name} put 5.00 USDC
- * on you"), and this title is its fallback.
+ * The tag and headline a friend lands on: the stake to match ("Match
+ * @andre's 10.00 USDC stake"), or who they are backing.
  */
 export function challengeLandingHeadOf(input: {
-  kind: ChallengeRunKind;
   view: "accept" | "backer";
   /** The challenger, as displayNameFor shows them. */
   name: string;
-  /** "@handle" or "their friend", for a reward challenge's backer page. */
-  target: string;
   /** The stake to match, formatted ("10.00"), when it read. */
   stake?: string | null;
 }): { tag: string; title: string } {
-  const { kind, view, name, target } = input;
-  if (view === "backer") {
-    return kind === "reward"
-      ? { tag: "Back the challenge", title: `${name} challenged ${target}` }
-      : { tag: "Backing", title: `Back ${name}` };
-  }
-  if (kind === "reward") return { tag: "You have been challenged", title: `${name} challenged you` };
+  const { view, name } = input;
+  if (view === "backer") return { tag: "Backing", title: `Back ${name}` };
   const stake = input.stake ?? null;
   return {
     tag: "Match the stake",
@@ -186,20 +144,8 @@ export function challengeLandingHeadOf(input: {
 
 /** The rally card: the backer link, sent on from the accept or backer page. */
 export function rallyCopyOf(
-  kind: ChallengeRunKind,
   name: string,
 ): { heading: string; detail: string; title: string; message: string; emailSubject: string; shareLabel: string } {
-  if (kind === "reward") {
-    return {
-      heading: "Rally your friends",
-      detail:
-        "This link opens as a backer page: friends can add to the pot, and it never signs them up for the challenge.",
-      title: "Back this challenge on GoHealthMe",
-      message: "Back this challenge on GoHealthMe. Add test USDC to the pot:",
-      emailSubject: "Back this challenge",
-      shareLabel: "Rally friends",
-    };
-  }
   return {
     heading: `Rally backers for ${name}`,
     detail: `This link opens as a backer page: friends can add to the pot on ${name}'s challenge, and it never stakes them in.`,
@@ -283,17 +229,8 @@ export function chipInWarningOf(input: {
   return { title, lines };
 }
 
-/** The chip-in card's lead and button on a challenge run, per flow. */
-export function chipInIntroOf(
-  kind: ChallengeRunKind,
-  creator: ChipInParty,
-): { lead: string; cta: string } {
-  if (kind === "reward") {
-    return {
-      lead: "Anyone with this link can add to the reward. It grows what whoever hits collects when the challenge settles.",
-      cta: "Add to the reward",
-    };
-  }
+/** The chip-in card's lead and button on a challenge. */
+export function chipInIntroOf(creator: ChipInParty): { lead: string; cta: string } {
   return {
     lead: creator.you
       ? "Anyone with your links can add to the pot on your challenge. It is split among whoever hits when the challenge settles."

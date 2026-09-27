@@ -187,40 +187,11 @@ export default function ChallengeStates({ meta }: SectionProps) {
         />
       </StateFrame>
 
-      <StateFrame name="challenge-accept" note="/c/[token], reward challenge, nobody in yet: a lone miss comes back">
-        <div className={PAGE_COLUMN}>
-          <ChallengeIntro
-            kind="reward"
-            challengerName="mika.gohealthme.eth"
-            seed={5n * USDC}
-            targetHandle="andre"
-            message="You said you'd start Monday. It's Monday."
-            terms={{ entryFee: 1n * USDC, players: 0, sponsorPot: 5n * USDC, recordsMisses: true }}
-            backers={["nikki.gohealthme.eth", "0x51f2...a90c"]}
-          />
-        </div>
-      </StateFrame>
-
-      <StateFrame name="challenge-accept-forwarded" note="reward challenge whose link 2 people already accepted: a miss goes to who hits">
-        <div className={PAGE_COLUMN}>
-          <ChallengeIntro
-            kind="reward"
-            challengerName="mika.gohealthme.eth"
-            seed={5n * USDC}
-            targetHandle="andre"
-            message={null}
-            terms={{ entryFee: 1n * USDC, players: 2, sponsorPot: 5n * USDC, recordsMisses: true }}
-            backers={[]}
-          />
-        </div>
-      </StateFrame>
-
       <StateFrame name="challenge-accept-match" note="the Match my stake link: 10.00 each, 2.00 extra in the pot">
         <div className={PAGE_COLUMN}>
           <ChallengeIntro
             kind="self"
             challengerName="mika.gohealthme.eth"
-            seed={2n * USDC}
             targetHandle="andre"
             message={null}
             terms={{ entryFee: 10n * USDC, players: 1, sponsorPot: 2n * USDC, recordsMisses: true }}
@@ -236,7 +207,6 @@ export default function ChallengeStates({ meta }: SectionProps) {
           <ChallengeIntro
             kind="self"
             challengerName="mika.gohealthme.eth"
-            seed={0n}
             targetHandle={null}
             message={null}
             terms={{ entryFee: 5n * USDC, players: 1, sponsorPot: 0n, recordsMisses: false }}
@@ -247,18 +217,17 @@ export default function ChallengeStates({ meta }: SectionProps) {
         </div>
       </StateFrame>
 
-      <StateFrame name="challenge-accept-before-lock-in" note="the friend opens the link before the creator locked in">
+      <StateFrame name="challenge-accept-before-lock-in" note="the friend opens the link before the creator locked in, 2.00 extra already in: still match the stake">
         <div className={PAGE_COLUMN}>
           <ChallengeIntro
             kind="unstaked"
             challengerName="mika.gohealthme.eth"
-            seed={0n}
             targetHandle="andre"
             message={null}
-            terms={{ entryFee: 10n * USDC, players: 0, sponsorPot: 0n, recordsMisses: true }}
+            terms={{ entryFee: 10n * USDC, players: 0, sponsorPot: 2n * USDC, recordsMisses: true }}
             backers={[]}
             stake={10n * USDC}
-            potLine={potLineOf({ stake: 10n * USDC, stakers: 0, extra: 0n })}
+            potLine={potLineOf({ stake: 10n * USDC, stakers: 0, extra: 2n * USDC })}
           />
         </div>
       </StateFrame>
@@ -266,9 +235,8 @@ export default function ChallengeStates({ meta }: SectionProps) {
       <StateFrame name="challenge-accept-no-terms" note="a read missed: no invented terms, no seed figure">
         <div className={PAGE_COLUMN}>
           <ChallengeIntro
-            kind="reward"
+            kind="self"
             challengerName="0x8a39...6141"
-            seed={null}
             targetHandle={null}
             message={null}
             terms={null}
@@ -279,8 +247,7 @@ export default function ChallengeStates({ meta }: SectionProps) {
 
       <StateFrame name="challenge-grow" note="/c/[token] under the lobby: chip in and rally, while it can pay">
         <div className={`${PAGE_COLUMN} [&>*+*]:mt-8`}>
-          <RallyCard token="fixture-token-0000000000000000" kind="reward" name="mika.gohealthme.eth" />
-          <RallyCard token="fixture-token-0000000000000000" kind="self" name="mika.gohealthme.eth" />
+          <RallyCard token="fixture-token-0000000000000000" name="mika.gohealthme.eth" />
         </div>
       </StateFrame>
 
@@ -300,13 +267,11 @@ export default function ChallengeStates({ meta }: SectionProps) {
         </div>
       </StateFrame>
 
-      <StateFrame name="challenge-backer" note="/c/[token]?as=backer on a reward challenge: chip in, never accept">
+      <StateFrame name="challenge-backer" note="/c/[token]?as=backer: chip in, never accept">
         <BackerView
-          kind="reward"
           token="fixture-token-0000000000000000"
           poolId={44n}
           challengerName="mika.gohealthme.eth"
-          target="@andre"
           message="You said you'd start Monday. It's Monday."
           pot={{ prize: 7n * USDC, stakes: 1n * USDC, seed: 5n * USDC }}
           backers={["nikki.gohealthme.eth"]}
@@ -317,11 +282,9 @@ export default function ChallengeStates({ meta }: SectionProps) {
 
       <StateFrame name="challenge-backer-self" note="the Back me link: Back {name}, and a lone staker gets the chip-in hit or miss">
         <BackerView
-          kind="self"
           token="fixture-token-0000000000000000"
           poolId={45n}
           challengerName="mika.gohealthme.eth"
-          target="their friend"
           message={null}
           pot={{ prize: 2n * USDC, stakes: 1n * USDC, seed: 0n }}
           backers={["nikki.gohealthme.eth"]}
@@ -332,11 +295,9 @@ export default function ChallengeStates({ meta }: SectionProps) {
 
       <StateFrame name="challenge-backer-closed" note="window closed, paid out, or cannot pay here">
         <BackerView
-          kind="reward"
           token="fixture-token-0000000000000000"
           poolId={44n}
           challengerName="mika.gohealthme.eth"
-          target="their friend"
           message={null}
           pot={{ prize: null, stakes: null, seed: null }}
           backers={[]}
@@ -366,17 +327,6 @@ export default function ChallengeStates({ meta }: SectionProps) {
             <h2 className="m-0 text-[1.0625rem] font-semibold">{inviteShareOf("self").heading}</h2>
             <div className="mt-3">
               <InviteLinks links={selfLinks} token="fixture-token-0000000000000000" />
-            </div>
-          </Card>
-        </div>
-      </StateFrame>
-
-      <StateFrame name="challenge-invite-reward" note="reward challenge, the one accept link">
-        <div className={PAGE_COLUMN}>
-          <Card>
-            <h2 className="m-0 text-[1.0625rem] font-semibold">{inviteShareOf("reward").heading}</h2>
-            <div className="mt-3">
-              <ChallengeInviteShare poolId={44n} address="0x8a39000000000000000000000000000000006141" kind="reward" />
             </div>
           </Card>
         </div>

@@ -5,8 +5,6 @@
 //   F1 Group challenge      model 2, public, everyone stakes the same
 //   F2 Match the stake      the one challenge flow: the creator stakes S,
 //                           friends match S, anyone adds extra to the pot
-//   F3 Reward challenge     an older challenge whose creator put money in and
-//                           never staked; the friend stakes a lock-in
 //   F4 Sponsored challenge  model 0 or 1, a sponsor puts up the money
 //   F5 Chip in              adding to someone else's pot (the backer page)
 //
@@ -25,7 +23,7 @@ import { missConsequence, type MissChip } from "@/lib/commitment-copy";
 import { formatUsdc } from "@/lib/contract";
 import { challengeRunKindOf, type ChallengeRunKind } from "@/lib/game/money-sharing";
 
-export type FlowId = "F1" | "F2" | "F3" | "F4" | "F5";
+export type FlowId = "F1" | "F2" | "F4" | "F5";
 
 export interface FlowKind {
   flow: FlowId;
@@ -40,15 +38,8 @@ export interface FlowContext {
   players: number | null;
   /** Whether the creator staked in their own run. Null when unread. */
   creatorStaked: boolean | null;
-  /** The creator's seed at create (R), or the pot net of every stake where
-   *  the seed cannot be split from backers' money; null or absent while
-   *  unread. Money decides first (challengeRunKindOf): a seed above zero is
-   *  a challenge with a reward (F3) even when the challenger also joined;
-   *  otherwise it is a stake on yourself (F2), locked in or not yet. */
-  seed?: bigint | null;
   /** The flow a surface already decided from the same rule (the link page
-   *  decides once for its headline, the create form by the creator's own
-   *  choice). Derived from creatorStaked and seed when absent. */
+   *  decides once for its headline). Derived from creatorStaked when absent. */
   kind?: ChallengeRunKind;
   /** "@handle" or a short address. */
   creatorName: string;
@@ -73,12 +64,6 @@ export function flowKindOf(
   }
   if (pool.initiative !== CHALLENGE_INITIATIVE) {
     return { flow: "F1", name: "Group challenge", chip: "Group challenge" };
-  }
-  const kind =
-    ctx.kind ??
-    challengeRunKindOf({ creatorStaked: ctx.creatorStaked === true, reward: ctx.seed ?? null });
-  if (kind === "reward") {
-    return { flow: "F3", name: "Challenge with a reward", chip: `Challenge from ${creator}` };
   }
   // The creator's own stake on their own goal, locked in or about to be:
   // friends match it.
@@ -146,7 +131,6 @@ export interface MoneyInput {
 }
 
 const usd = (v: bigint): string => formatUsdc(v);
-const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
 
 /** Term 2 for a run where hitters share: the live range, or no number
  *  when the fee did not read. */
@@ -372,105 +356,6 @@ export function selfStakeCopy(
 }
 
 /**
- * F3 An older challenge with a reward. The challenger put up the reward R and
- * did not stake (no new challenge is made this way); whoever accepts stakes the lock-in L. With one accepter a miss has
- * nobody to go to, so L comes back; anyone holding the link can accept, and
- * with two or more, on a run that can record a miss, whoever misses pays
- * whoever hits.
- */
-export function challengeCopy(
-  input: MoneyInput & {
-    /** "@handle", or "You" when the challenger is reading. */
-    challengerName: string;
-    challengerIsYou: boolean;
-    /** "@handle", "You" when the challenged player is reading, or null when
-     *  the challenge went out as a bare link. */
-    targetName: string | null;
-    targetIsYou: boolean;
-    /** R alone when it can be told from backers' money; null says the pot. */
-    reward: bigint | null;
-    /** The run's end, formatted: the challenger takes R + B back after it. */
-    endsOn: string;
-  },
-): MoneyCopy {
-  const lockIn = usd(input.entryFee);
-  const accepters = stakersAfter(input.players, input.includeJoiner);
-  const challenger = input.challengerIsYou ? "You" : input.challengerName;
-  const challengerMid = input.challengerIsYou ? "you" : input.challengerName;
-  const takes = input.challengerIsYou ? "take" : "takes";
-  const target = input.targetIsYou ? "You" : (input.targetName ?? "Whoever accepts");
-  const stakes = input.targetIsYou ? "stake" : "stakes";
-
-  const opening =
-    input.reward !== null
-      ? `${challenger} put up ${usd(input.reward)} USDC.`
-      : `${usd(input.pot)} USDC extra is in the pot.`;
-  let getLine: string;
-  if (accepters <= 1) {
-    // One accepter who hits takes the whole pot: L + R + B.
-    const alone = commitmentOutcome({
-      entryFee: input.entryFee,
-      players: 1,
-      achievers: 1,
-      sponsorPot: input.pot,
-      feeBps: input.feeBps ?? 0,
-    });
-    const total = alone.kind === "paid" ? alone.perAchiever : alone.refundEach;
-    getLine = `hit it and get ${usd(total)}.`;
-  } else if (input.feeBps !== null) {
-    const range = commitmentRange({
-      entryFee: input.entryFee,
-      players: input.players,
-      sponsorPot: input.pot,
-      feeBps: input.feeBps,
-      includeJoiner: input.includeJoiner,
-      recordsMisses: input.recordable,
-    });
-    getLine = `hit it and get up to ${usd(range.ifOnlyYou)}.`;
-  } else {
-    getLine = "hit it and get a share of the extra.";
-  }
-
-  const hit =
-    accepters <= 1
-      ? input.pot > 0n
-        ? `Hit: ${lockIn} back + ${usd(input.pot)}.`
-        : `Hit: your ${lockIn} comes back.`
-      : sharedHitTerm(input, lockIn);
-  // What happens to the pot after this player's miss. Alone, a miss means
-  // nobody hit, so the challenger takes it back. With others in, another
-  // accepter can still hit and take it, so the take-back hangs on nobody
-  // hitting: on a run that records misses that clause is already there; on
-  // one that cannot, it is said as its own sentence.
-  const takeBack = input.pot > 0n ? `${challengerMid} ${takes} back ${usd(input.pot)} after ${input.endsOn}` : "";
-  const andTakeBack = takeBack !== "" ? `, and ${takeBack}` : "";
-  const miss =
-    accepters >= 2 && input.recordable
-      ? `Miss: if your wearable shows it and another player hits, your ${lockIn} goes to them; if nobody hits, it comes back${andTakeBack}.`
-      : accepters >= 2 && takeBack !== ""
-        ? `Miss: ${lockIn} comes back. If nobody hits, ${takeBack}.`
-        : `Miss: ${lockIn} comes back${andTakeBack}.`;
-  const rule = input.recordable
-    ? "if more than one, whoever misses pays whoever hits."
-    : "this challenge cannot record a miss, so a miss comes back however many accept.";
-  const accepted =
-    input.players === 0
-      ? `Nobody has accepted this link yet; ${rule}`
-      : `${input.players} ${plural(input.players, "person has", "people have")} accepted this link; ${rule}`;
-
-  return {
-    flow: "F3",
-    line: `${opening} ${target} ${stakes} ${lockIn}: ${getLine}`,
-    terms: [
-      { key: "stake", text: `Accepting stakes ${lockIn}.` },
-      { key: "hit", text: hit },
-      { key: "miss", text: miss },
-      { key: "accepted", text: accepted },
-    ],
-  };
-}
-
-/**
  * F4 Sponsored run (models 0 and 1). A miss is never recorded on these, so it
  * comes back; a hit can pay less than the stake when the pot is short.
  */
@@ -529,15 +414,10 @@ export function runMoneyOf(input: {
   pool: { bountyModel: number; initiative: string };
   flow: FlowContext;
   numbers: MoneyInput;
-  /** F3 only: the challenged player, and whether they are reading. */
-  targetName?: string | null;
-  targetIsYou?: boolean;
-  /** F3 and F4: the creator's own money R, where it can be told from
-   *  backers' money (the create form, the link page's funding read). Absent
-   *  on a live run page, whose line then names the pot. */
+  /** F4: the sponsor's own money R, where it can be told from backers'
+   *  money (the create form). Absent on a live run page, whose line then
+   *  names the pot. */
   reward?: bigint | null;
-  /** F3 only: the run's end, formatted. */
-  endsOn?: string;
 }): RunMoney {
   const kind = flowKindOf(input.pool, input.flow);
   const n = input.numbers;
@@ -553,7 +433,7 @@ export function runMoneyOf(input: {
       // so by its kind ("unstaked" is before the creator locks in).
       const kindNow =
         input.flow.kind ??
-        challengeRunKindOf({ creatorStaked: input.flow.creatorStaked === true, reward: input.flow.seed ?? null });
+        challengeRunKindOf({ creatorStaked: input.flow.creatorStaked === true });
       copy = selfStakeCopy({
         ...n,
         creatorName: input.flow.creatorName,
@@ -562,17 +442,6 @@ export function runMoneyOf(input: {
       });
       break;
     }
-    case "F3":
-      copy = challengeCopy({
-        ...n,
-        challengerName: input.flow.creatorName,
-        challengerIsYou: you,
-        targetName: input.targetName ?? null,
-        targetIsYou: input.targetIsYou === true,
-        reward: input.reward ?? null,
-        endsOn: input.endsOn ?? "the challenge ends",
-      });
-      break;
     case "F4":
       copy = sponsoredCopy({
         bountyModel: input.pool.bountyModel,

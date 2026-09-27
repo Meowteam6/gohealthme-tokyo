@@ -102,15 +102,13 @@ export function ChallengeInvalid() {
 /** Rally more friends: the backer link, which never signs anyone up. */
 export function RallyCard({
   token,
-  kind,
   name,
 }: {
   token: string;
-  kind: ChallengeRunKind;
   /** The challenger, as displayNameFor shows them. */
   name: string;
 }) {
-  const copy = rallyCopyOf(kind, name);
+  const copy = rallyCopyOf(name);
   return (
     <Card as="section" aria-labelledby="rally" className="[&>*+*]:mt-4">
       <div>
@@ -146,14 +144,10 @@ function ChallengeTermsList({
   terms,
   kind,
   challengerName,
-  seed,
-  targetHandle,
 }: {
   terms: ChallengeTerms;
   kind: ChallengeRunKind;
   challengerName: string;
-  seed: bigint | null;
-  targetHandle: string | null;
 }) {
   const money = runMoneyOf({
     pool: { bountyModel: 2, initiative: "challenge" },
@@ -173,9 +167,6 @@ function ChallengeTermsList({
       includeJoiner: true,
       confirmBy: null,
     },
-    targetName: targetHandle !== null ? `@${targetHandle}` : null,
-    targetIsYou: true,
-    reward: seed,
   });
   return (
     <div className="[&>*+*]:mt-3.5">
@@ -198,14 +189,12 @@ export interface ChallengeTerms {
 
 /**
  * The invited player's intro above the lobby: who is asking ("Match @andre's
- * 10.00 USDC stake", or an older reward challenge that put money on them),
- * their words, the Pot with its parts, and the terms before the accept, with
+ * 10.00 USDC stake"), their words, the Pot with its parts, and the terms before the accept, with
  * SPOTTER on the terms card.
  */
 export function ChallengeIntro({
   kind,
   challengerName,
-  seed,
   targetHandle,
   message,
   terms,
@@ -216,8 +205,6 @@ export function ChallengeIntro({
   /** Which flow this challenge is (lib/game/money-sharing challengeRunKindOf). */
   kind: ChallengeRunKind;
   challengerName: string;
-  /** The challenger's seed, when it can be stated. */
-  seed: bigint | null;
   targetHandle: string | null;
   message: string | null;
   /** Null when a read missed or the challenge cannot take stakes: no invented terms. */
@@ -230,22 +217,12 @@ export function ChallengeIntro({
   potLine?: string | null;
 }) {
   const head = challengeLandingHeadOf({
-    kind,
     view: "accept",
     name: challengerName,
-    target: "",
     stake: stake !== null ? formatUsdc(stake) : null,
   });
   const headline: ReactNode =
-    kind === "reward" ? (
-      seed !== null && seed > 0n ? (
-        <>
-          {challengerName} put <HeadlineMoney usd={formatUsdc(seed)} /> on you
-        </>
-      ) : (
-        head.title
-      )
-    ) : stake !== null ? (
+    stake !== null ? (
       <>
         Match {challengerName}&apos;s <HeadlineMoney usd={formatUsdc(stake)} /> stake
       </>
@@ -271,21 +248,11 @@ export function ChallengeIntro({
           <p className="num m-0 text-[0.9375rem] leading-[1.45] text-muted">{potLine}</p>
         ) : null}
         {terms !== null ? (
-          <ChallengeTermsList
-            terms={terms}
-            kind={kind}
-            challengerName={challengerName}
-            seed={seed}
-            targetHandle={targetHandle}
-          />
+          <ChallengeTermsList terms={terms} kind={kind} challengerName={challengerName} />
         ) : null}
         <BackedBy names={backers} />
         <SpotterCaption
-          line={
-            kind === "reward"
-              ? "Accept and your lock-in goes in. I read your wearable; only the yes or no result goes on chain, never your data."
-              : "Match it and your stake goes in. I read your wearable; only the yes or no result goes on chain, never your data."
-          }
+          line="Match it and your stake goes in. I read your wearable; only the yes or no result goes on chain, never your data."
         />
         <p className="m-0 text-[0.8125rem] leading-[1.45] text-haze">Test USDC during beta.</p>
       </Card>
@@ -323,24 +290,18 @@ export function ChallengePausedCard({ reason }: { reason: "checker" | "payouts" 
  * never "challenged their friend".
  */
 export function BackerView({
-  kind,
   token,
   poolId,
   challengerName,
-  target,
   message,
   pot,
   backers,
   canGrow,
   chipIn,
 }: {
-  /** Which flow this challenge is (lib/game/money-sharing challengeRunKindOf). */
-  kind: ChallengeRunKind;
   token: string;
   poolId: bigint;
   challengerName: string;
-  /** "@handle" or "their friend". */
-  target: string;
   message: string | null;
   pot: DarePot;
   backers: string[];
@@ -349,7 +310,7 @@ export function BackerView({
   /** Who the chip-in warning names and how the run pays. */
   chipIn: ChipInTerms;
 }) {
-  const head = challengeLandingHeadOf({ kind, view: "backer", name: challengerName, target });
+  const head = challengeLandingHeadOf({ view: "backer", name: challengerName });
   return (
     <div className={`${PAGE_COLUMN} [&>*+*]:mt-6`}>
       <PerchedHeader
@@ -372,7 +333,6 @@ export function BackerView({
           <ChallengeContribute
             poolId={poolId}
             prizeUsd={pot.prize !== null ? formatUsdc(pot.prize) : null}
-            kind={kind}
             chipIn={chipIn}
           />
         ) : (
@@ -387,14 +347,14 @@ export function BackerView({
           />
         )}
       </PerchedHeader>
-      {canGrow ? <RallyCard token={token} kind={kind} name={challengerName} /> : null}
+      {canGrow ? <RallyCard token={token} name={challengerName} /> : null}
       <p className="m-0 text-[0.9375rem] text-muted">
-        {kind === "reward" ? "Are you the one who got challenged? " : "Want to stake alongside them instead? "}
+        Want to stake alongside them instead?{" "}
         <Link
           href={`/c/${token}`}
           className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4"
         >
-          {kind === "reward" ? "Open the challenge to accept it" : "Open the challenge to match the stake"}
+          Open the challenge to match the stake
         </Link>
       </p>
     </div>

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  challengeCopy,
   challengePreviewOf,
   flowKindOf,
   groupRunCopy,
@@ -43,12 +42,12 @@ describe("flowKindOf", () => {
     // The creator lands on /pools/<id> before staking: nothing in the pot,
     // nobody in. It is their own stake on themselves, the same flow as after
     // they lock in.
-    expect(flowKindOf(pool, { ...ctx, players: 0, creatorStaked: false, seed: 0n, viewerIsCreator: true })).toEqual({
+    expect(flowKindOf(pool, { ...ctx, players: 0, creatorStaked: false, viewerIsCreator: true })).toEqual({
       flow: "F2",
       name: "Match the stake",
       chip: "On yourself",
     });
-    expect(flowKindOf(pool, { ...ctx, players: 0, creatorStaked: false, seed: 0n }).chip).toBe("Match @andre");
+    expect(flowKindOf(pool, { ...ctx, players: 0, creatorStaked: false }).chip).toBe("Match @andre");
   });
 
   it("a stake on yourself by the creator's own stake, with no seed", () => {
@@ -61,34 +60,22 @@ describe("flowKindOf", () => {
     expect(flowKindOf(pool, { ...ctx, players: 2, creatorStaked: true }).chip).toBe("@andre + 1");
   });
 
-  it("the creator's own stake makes it a match-the-stake challenge, extra in the pot or not", () => {
+  it("extra in the pot before the creator locks in is still match the stake, never a reward challenge", () => {
+    // The gap this pins (2026-09-27): the creator added extra at create and
+    // had not staked yet; money first read that as a reward challenge.
     const pool = { bountyModel: 2, initiative: "challenge" };
-    // The one challenge flow: the creator stakes S and may add extra E at
-    // create. Extra in the pot never turns it into a reward challenge.
-    expect(flowKindOf(pool, { ...ctx, creatorStaked: true, seed: 2n * ONE, viewerIsCreator: true }).chip).toBe(
+    expect(flowKindOf(pool, { ...ctx, players: 0, creatorStaked: false })).toEqual({
+      flow: "F2",
+      name: "Match the stake",
+      chip: "Match @andre",
+    });
+    expect(flowKindOf(pool, { ...ctx, players: 0, creatorStaked: false, viewerIsCreator: true }).chip).toBe(
       "On yourself",
     );
-    expect(flowKindOf(pool, { ...ctx, creatorStaked: true, seed: 2n * ONE }).chip).toBe("Match @andre");
-  });
-
-  it("a seed with no creator stake is an older challenge with a reward", () => {
-    const pool = { bountyModel: 2, initiative: "challenge" };
-    expect(flowKindOf(pool, { ...ctx, creatorStaked: false, seed: 10n * ONE })).toEqual({
-      flow: "F3",
-      name: "Challenge with a reward",
-      chip: "Challenge from @andre",
-    });
-    expect(flowKindOf(pool, { ...ctx, creatorStaked: false, seed: 10n * ONE, viewerIsCreator: true }).chip).toBe(
-      "Challenge from you",
-    );
-    // The seed did not read and the creator's stake is unknown: a stake on
-    // yourself until the money says otherwise, never a challenge nobody funded.
-    expect(flowKindOf(pool, { ...ctx, seed: null }).flow).toBe("F2");
   });
 
   it("takes the flow a surface already decided, from the same rule", () => {
     const pool = { bountyModel: 2, initiative: "challenge" };
-    expect(flowKindOf(pool, { ...ctx, kind: "reward" }).flow).toBe("F3");
     expect(flowKindOf(pool, { ...ctx, kind: "self" }).flow).toBe("F2");
     expect(flowKindOf(pool, { ...ctx, kind: "unstaked", viewerIsCreator: true }).chip).toBe("On yourself");
   });
@@ -361,69 +348,6 @@ describe("potLineOf: one Pot number, its parts in words", () => {
     expect(potLineOf({ stake: ONE, stakers: 1, extra: 0n })).toBe("Pot 1.00: 1.00 from 1 player.");
     expect(potLineOf({ stake: ONE, stakers: 0, extra: 2n * ONE, extraFrom: "@andre" })).toBe(
       "Pot 2.00: nobody has staked yet, plus 2.00 extra from @andre.",
-    );
-  });
-});
-
-describe("F3 an older challenge with a reward", () => {
-  const dare = {
-    ...base,
-    entryFee: 5n * ONE,
-    pot: 10n * ONE,
-    challengerName: "@andre",
-    challengerIsYou: false,
-    targetName: "@nikki",
-    targetIsYou: true,
-    reward: 10n * ONE,
-    endsOn: "Oct 26, 21:00",
-  };
-
-  it("the challenged player, first to accept", () => {
-    const copy = challengeCopy(dare);
-    expect(copy.line).toBe("@andre put up 10.00 USDC. You stake 5.00: hit it and get 15.00.");
-    expect(texts(copy.terms)).toEqual([
-      "Accepting stakes 5.00.",
-      "Hit: 5.00 back + 10.00.",
-      "Miss: 5.00 comes back, and @andre takes back 10.00 after Oct 26, 21:00.",
-      "Nobody has accepted this link yet; if more than one, whoever misses pays whoever hits.",
-    ]);
-  });
-
-  it("the challenger's preview, before anyone accepts", () => {
-    const copy = challengeCopy({ ...dare, challengerIsYou: true, targetIsYou: false, includeJoiner: true });
-    expect(copy.line).toBe("You put up 10.00 USDC. @nikki stakes 5.00: hit it and get 15.00.");
-    expect(copy.terms[2].text).toBe("Miss: 5.00 comes back, and you take back 10.00 after Oct 26, 21:00.");
-  });
-
-  it("a forwarded link: one already in, a second about to accept", () => {
-    const copy = challengeCopy({ ...dare, players: 1, targetName: null, targetIsYou: false });
-    expect(copy.line).toBe("@andre put up 10.00 USDC. Whoever accepts stakes 5.00: hit it and get up to 20.00.");
-    expect(texts(copy.terms)).toEqual([
-      "Accepting stakes 5.00.",
-      "Hit: 5.00 back + a share, 10.00 to 20.00 right now.",
-      "Miss: if your wearable shows it and another player hits, your 5.00 goes to them; if nobody hits, it comes back, and @andre takes back 10.00 after Oct 26, 21:00.",
-      "1 person has accepted this link; if more than one, whoever misses pays whoever hits.",
-    ]);
-  });
-
-  it("names the pot when the reward cannot be told from backers' money", () => {
-    const copy = challengeCopy({ ...dare, reward: null, recordable: false, players: 2, includeJoiner: false });
-    expect(copy.line).toBe("10.00 USDC extra is in the pot. You stake 5.00: hit it and get up to 15.00.");
-    expect(copy.terms[3].text).toBe(
-      "2 people have accepted this link; this challenge cannot record a miss, so a miss comes back however many accept.",
-    );
-  });
-
-  it("two or more accepters on a challenge that cannot record a miss: the lock-in comes back, the reward only if nobody hits", () => {
-    // Another accepter can still hit and take the pot, so the challenger
-    // taking the reward back is not the consequence of this player's miss.
-    const copy = challengeCopy({ ...dare, recordable: false, players: 1 });
-    expect(copy.terms[2].text).toBe(
-      "Miss: 5.00 comes back. If nobody hits, @andre takes back 10.00 after Oct 26, 21:00.",
-    );
-    // Alone, a miss means nobody hit, so the reward does go back.
-    expect(challengeCopy({ ...dare, recordable: false }).terms[2].text).toBe(
-      "Miss: 5.00 comes back, and @andre takes back 10.00 after Oct 26, 21:00.",
     );
   });
 });
