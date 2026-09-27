@@ -75,7 +75,7 @@ The thesis, in one line each. Do not reframe the product; add the mechanism.
 
 ## Design System
 
-Always read `docs/DESIGN.md` (SPOTTER's Riverbank, adopted 2026-09-26) before any visual or UI decision. Fonts, colors, spacing, SPOTTER pose per state and voice are defined there. Do not deviate without Andre's approval. In QA, flag any screen that does not match it. The previous system is at git tag `pre-redesign-2026-09-26`.
+Always read `docs/DESIGN.md` (Night Shift, adopted 2026-09-26 over Riverbank) before any visual or UI decision. Fonts, colors, spacing, SPOTTER pose per state and voice are defined there. Do not deviate without Andre's approval. In QA, flag any screen that does not match it. The previous system is at git tag `pre-redesign-2026-09-26`.
 
 ## Research-first
 
