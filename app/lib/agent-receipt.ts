@@ -414,6 +414,9 @@ export function failureModeOf(
   if (hasAttesterErrorForAttempt(ledger, id)) return "attester-offline";
   const reason = currentReasonEntry(ledger, id);
   if (reason === undefined || reason.decision === "pay") return null;
+  // A verified read newer than the no-pay is being re-decided: it has no
+  // failure mode, and an older low read must not speak for it.
+  if (noPayOverturned(ledger)) return null;
   if (verdict === undefined) return "evidence";
   // A confident read that still says unverified means the document was
   // legible and the goal simply is not shown; anything low-confidence means
@@ -493,6 +496,20 @@ export function runStatusFromLedger(ledger: LedgerEntry[]): RunStatus | null {
     return "no-pay";
   }
   return "verifying";
+}
+
+/**
+ * True when the current decision is a no-pay and a verified read landed after
+ * it: fresh evidence the run loop re-decides on, so every client surface
+ * follows the newest read instead of the old no-pay. The same rule as the
+ * staleness check in runStatusFromLedger, for callers that hold a status
+ * which may lag the ledger.
+ */
+export function noPayOverturned(ledger: LedgerEntry[]): boolean {
+  const reason = currentReasonEntry(ledger, currentAttesterIdOf(ledger));
+  if (reason === undefined || reason.decision !== "no-pay") return false;
+  const newest = lastVerdictIndex(ledger);
+  return newest > ledger.lastIndexOf(reason) && verdictAt(ledger, newest)?.verified === true;
 }
 
 function lastVerdictIndex(ledger: LedgerEntry[]): number {

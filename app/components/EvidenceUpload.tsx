@@ -40,11 +40,13 @@ import {
 import { fetchWithWalletAuth } from "@/lib/client-auth";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import {
+  claimMoved,
   claimScreenOf,
   claimVisibilityOf,
   emptyClaimScreen,
   nextClaimScreen,
   receiptToKeep,
+  type ClaimMark,
   type ClaimScreen,
 } from "@/lib/claim-restore";
 import AgentReceipt from "@/components/AgentReceipt";
@@ -236,6 +238,7 @@ function EvidenceUploadInner({
       // Seeded from the screen, never from nothing: rows already shown survive
       // both a poll that comes back withheld and a poll that fails outright.
       let screen = screenRef.current;
+      let seen: ClaimMark | null = null;
       for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
         let body: RunResponse;
         try {
@@ -294,6 +297,13 @@ function EvidenceUploadInner({
           ledger: screen.ledger,
           lockedReason: screen.lockedReason,
         });
+        // Mid-run moves too (a World ID ask after an earlier no-pay is not
+        // terminal here): the rail stopped polling at that no-pay.
+        const mark = { status: last, length: screen.ledger.length };
+        if (!TERMINAL.includes(last) && claimMoved(seen, mark)) {
+          void queryClient.invalidateQueries({ queryKey: ["claim-ledger"] });
+        }
+        seen = mark;
 
         if (TERMINAL.includes(last)) {
           // A resubmit lands its fresh terminal here. PoolDetail's claim rail

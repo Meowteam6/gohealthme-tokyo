@@ -1,11 +1,10 @@
-// The receipt's display rules, pinned as pure functions: repeated errors
-// collapse only when stage AND message match, calm labels map to the real
+// The receipt's display rules, pinned as pure functions: calm labels map to the real
 // messages run.ts and spotter.ts emit, gateway refs round-trip out of spend
 // notes, and a deferred settle row never renders a raw epoch.
 
 import { describe, it, expect } from "vitest";
 import {
-  collapseErrors,
+  approvalLine,
   deferredSettleCopy,
   errorPresentation,
   formatSettleMoment,
@@ -14,53 +13,10 @@ import {
   recordRowLabel,
   settleMomentLine,
 } from "@/components/AgentReceipt";
-import type { ReceiptRow } from "@/lib/agent-receipt";
+import type { LedgerEntry } from "@/lib/agent-receipt";
 
 const SETTLE_PREFLIGHT =
   "canSettle(0x9f3a) is false - settling now would pay this participant nothing. Record the verdict first.";
-
-function errorRow(stage: string, message: string): ReceiptRow {
-  return { kind: "error", stage, message };
-}
-
-describe("collapseErrors", () => {
-  it("collapses consecutive identical errors into one item with a count", () => {
-    const rows: ReceiptRow[] = [
-      { kind: "reason", decision: "pay", note: "paying" },
-      errorRow("settle", SETTLE_PREFLIGHT),
-      errorRow("settle", SETTLE_PREFLIGHT),
-      errorRow("settle", SETTLE_PREFLIGHT),
-    ];
-
-    const items = collapseErrors(rows);
-
-    expect(items).toHaveLength(2);
-    expect(items[1]).toMatchObject({
-      kind: "errors",
-      stage: "settle",
-      message: SETTLE_PREFLIGHT,
-      count: 3,
-    });
-  });
-
-  it("never merges errors that differ in stage or message", () => {
-    const items = collapseErrors([
-      errorRow("settle", SETTLE_PREFLIGHT),
-      errorRow("settle", "rpc timeout"),
-      errorRow("record", "rpc timeout"),
-    ]);
-
-    expect(items).toHaveLength(3);
-    expect(items.every((i) => i.kind === "errors" && i.count === 1)).toBe(true);
-  });
-
-  it("passes non-error rows through untouched, keying by original index", () => {
-    const reason: ReceiptRow = { kind: "reason", decision: "pay", note: "ok" };
-    const items = collapseErrors([errorRow("buy", "x"), reason]);
-
-    expect(items[1]).toEqual({ kind: "row", key: 1, row: reason });
-  });
-});
 
 describe("errorPresentation", () => {
   it("reads a settle preflight as calm waiting, not failure", () => {
@@ -212,5 +168,26 @@ describe("a recorded miss on the receipt", () => {
         stakeUsd: null,
       }),
     ).toBe("Recorded on chain");
+  });
+});
+
+describe("the World ID line", () => {
+  function approval(status: Extract<LedgerEntry, { kind: "approval" }>["status"]) {
+    return {
+      kind: "approval",
+      at: "2026-09-27T08:41:00.000Z",
+      status,
+      requestId: "req-1",
+      action: "settle:0x01:1",
+      provider: "world",
+    } as Extract<LedgerEntry, { kind: "approval" }>;
+  }
+
+  it("says where the confirmation stands in the player's words, one line each", () => {
+    expect(approvalLine(approval("requested"))).toBe("Asked you to confirm with World ID");
+    expect(approvalLine(approval("approved"))).toBe("You confirmed with World ID");
+    expect(approvalLine(approval("declined"))).toBe("You declined the World ID confirmation");
+    expect(approvalLine(approval("expired"))).toBe("The World ID request expired");
+    expect(approvalLine(approval("cancelled"))).toBe("The World ID request was withdrawn");
   });
 });

@@ -1,8 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ButtonLink, Fine } from "@/components/ui";
+import { Button, ButtonLink, Card, Fine } from "@/components/ui";
+import AgentReceipt from "@/components/AgentReceipt";
 import PayoutMoment from "@/components/PayoutMoment";
+import type { LedgerEntry } from "@/lib/agent-receipt";
 import PayoutScreening from "@/components/intercepta/PayoutScreening";
 import { VerdictView, verdictHeadOf } from "@/components/game/VerdictStage";
 import { ApprovalAsk, ApprovalOutcomeView } from "@/components/world/HumanApprovalCard";
@@ -60,15 +62,98 @@ function Page({
   spotter,
   card,
   rows,
+  proof,
 }: {
   spotter: SpotterScreenState | null;
   card: ReactNode;
   rows: RosterRow[];
+  /** The proof card, in the main column above Who's in, as on the pool page. */
+  proof?: ReactNode;
 }) {
   return (
     <RunLayout hero={<RunHeroFixture spotter={spotter} ended />} stake={card}>
+      {proof}
       <WhosIn rows={rows} />
     </RunLayout>
+  );
+}
+
+// SPOTTER's receipt on the proof card, with the ledger shapes the server
+// writes (lib/server/agent/wearable.ts reasons, reason.ts fixed-rule notes).
+// The pool-2 shape from 2026-09-27: a "still syncing" read and its no-pay,
+// then the hit, the pay decision and the World ID ask.
+const R_AT = "2026-09-27T08:12:00+09:00";
+const R_LATER = "2026-09-27T08:41:00+09:00";
+const R_REF = "wearable-1790348400";
+const FIXED = "Checked by SPOTTER's fixed rule.";
+const SYNCING =
+  "Your wearable is connected but has not synced any sleep data for this period yet. Give it a few minutes to sync, then run the check again.";
+const HIT =
+  "Your wearable shows 1 qualifying days (7+ hours of sleep) inside this pool period, meeting the 1-day goal.";
+const SHORT =
+  "Your wearable shows 0 of 1 qualifying days (7+ hours of sleep) inside this pool period. The goal is not met yet.";
+
+const R_START: LedgerEntry[] = [
+  {
+    kind: "plan",
+    at: R_AT,
+    steps: [{ service: "whoop-read", label: "WHOOP sleep read", estUsd: "0.00" }],
+    capUsd: "1.00",
+  },
+  {
+    kind: "spend",
+    at: R_AT,
+    service: "whoop-read",
+    label: "WHOOP sleep read",
+    amountUsd: "0.00",
+    ref: R_REF,
+    settlement: "prepaid",
+  },
+  { kind: "verdict", at: R_AT, verified: false, confidence: "low", reason: SYNCING, ref: R_REF },
+  { kind: "reason", at: R_AT, decision: "no-pay", note: `${FIXED} not paying: ${SYNCING}`, ref: R_REF },
+];
+
+const HIT_AFTER_BAD_READ: LedgerEntry[] = [
+  ...R_START,
+  { kind: "verdict", at: R_LATER, verified: true, confidence: "high", reason: HIT, ref: R_REF },
+  {
+    kind: "reason",
+    at: R_LATER,
+    decision: "pay",
+    note: `${FIXED} verified, high confidence. paying.`,
+    ref: R_REF,
+  },
+  {
+    kind: "approval",
+    at: R_LATER,
+    status: "requested",
+    requestId: "req-1",
+    action: "settle:0x01:1",
+    provider: "world",
+  },
+];
+
+const NOT_YET: LedgerEntry[] = [
+  ...R_START,
+  { kind: "verdict", at: R_LATER, verified: false, confidence: "high", reason: SHORT, ref: R_REF },
+  { kind: "reason", at: R_LATER, decision: "no-pay", note: `${FIXED} not paying: ${SHORT}`, ref: R_REF },
+];
+
+/** PoolDetail's proof card once a verdict shows: the receipt, then the
+ *  buttons that live with it. */
+function ProofCard({ ledger, open = false, retry = false }: { ledger: LedgerEntry[]; open?: boolean; retry?: boolean }) {
+  return (
+    <Card as="section" aria-label="SPOTTER's check">
+      <h2 className="m-0 text-[1.0625rem] font-semibold">SPOTTER&apos;s check</h2>
+      <div className="mt-4 space-y-4">
+        <AgentReceipt ledger={ledger} evidenceKind="wearable" earlierOpen={open} />
+        {retry ? (
+          <Button type="button" variant="ghost" className="w-full">
+            Check again
+          </Button>
+        ) : null}
+      </div>
+    </Card>
   );
 }
 
@@ -120,6 +205,48 @@ export default function VerdictStates({ meta }: SectionProps) {
             />
           }
         />
+      </StateFrame>
+
+      <StateFrame
+        name="receipt-hit-after-a-bad-read"
+        note="pool 2, 2026-09-27: a still-syncing read, then the hit. Card and receipt both follow the newest read; the old one folds away"
+      >
+        <Page
+          spotter="verdict-confirm"
+          rows={[ME_MISSED]}
+          card={
+            <VerdictView
+              kind="confirm-human"
+              head={head({ kind: "confirm-human" })}
+              money={{ stake: STAKE, get, range: range !== null && range.low !== range.high }}
+              approval={
+                <ApprovalAsk
+                  secondsLeft={540}
+                  mocked={false}
+                  error={null}
+                  verifying={false}
+                  confirmLabel="Confirm with World ID"
+                  onConfirm={() => {}}
+                  onDecline={() => {}}
+                />
+              }
+            />
+          }
+          proof={<ProofCard ledger={HIT_AFTER_BAD_READ} />}
+        />
+      </StateFrame>
+
+      <StateFrame name="receipt-not-yet" note="read fine, goal not met so far: the latest check in three lines, Check again under it">
+        <Page
+          spotter="verdict-lost"
+          rows={[ME_MISSED]}
+          card={<VerdictView kind="not-yet" head={head({ kind: "not-yet" })} />}
+          proof={<ProofCard ledger={NOT_YET} retry />}
+        />
+      </StateFrame>
+
+      <StateFrame name="receipt-earlier-open" note="the Earlier checks disclosure opened: time, the read with its confidence, the decision" phone>
+        <ProofCard ledger={HIT_AFTER_BAD_READ} open />
       </StateFrame>
 
       <StateFrame name="verdict-paid" note="settled: the paper receipt with the settle's split, time and Basescan; SPOTTER on the paper">

@@ -17,7 +17,7 @@
 // live in server modules that must stay out of the client bundle - the same
 // rule agent-receipt.ts follows for the attester-read name.
 
-import type { LedgerEntry } from "@/lib/agent-receipt";
+import type { LedgerEntry, RunStatus } from "@/lib/agent-receipt";
 import { authBlockReason, type ClientAuth } from "@/lib/client-auth";
 
 export type ProofPath = "wearable" | "document" | "self-reported";
@@ -213,4 +213,26 @@ export function mergeRunLedger(
   body: ClaimReadBody,
 ): LedgerEntry[] {
   return Array.isArray(body.ledger) ? (body.ledger as LedgerEntry[]) : previous;
+}
+
+/** Where a claim stood after one poll of the run loop. */
+export interface ClaimMark {
+  status: RunStatus;
+  length: number;
+}
+
+/**
+ * Whether a poll moved the claim. The pool page's claim rail (the verdict
+ * card's only input) reads the ledger on its own query and stops polling at a
+ * terminal status such as no-pay, and focus refetch is off app-wide. The proof
+ * client's run loop keeps writing after that - a check run again, a verified
+ * read, a World ID ask - so it tells the rail to re-read every time this is
+ * true, and only then: an identical 800ms poll must not fire a read.
+ */
+export function claimMoved(previous: ClaimMark | null, next: ClaimMark): boolean {
+  return (
+    previous === null ||
+    previous.status !== next.status ||
+    previous.length !== next.length
+  );
 }

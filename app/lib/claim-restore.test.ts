@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  claimMoved,
   claimProofPathOf,
   claimScreenOf,
   claimVisibilityOf,
@@ -310,5 +311,36 @@ describe("mergeRunLedger", () => {
     // signature aged out mid-run.
     const shown = [plan("junction-read"), spend("junction-read", "w-1")];
     expect(mergeRunLedger(shown, { hasLedger: true })).toBe(shown);
+  });
+});
+
+// The pool page's claim rail reads the ledger on its own query and stops
+// polling once it reads a terminal no-pay (focus refetch is off app-wide).
+// The proof client's run loop keeps writing after that - a Check again, a
+// verified read, a World ID ask - so it must tell the rail every time the
+// claim moves, or the verdict card keeps showing the old no-pay.
+describe("claimMoved", () => {
+  it("moves when the status changes, including a no-pay turning into a World ID ask", () => {
+    expect(
+      claimMoved({ status: "no-pay", length: 3 }, { status: "awaiting-approval", length: 6 }),
+    ).toBe(true);
+    expect(claimMoved({ status: "verifying", length: 2 }, { status: "no-pay", length: 2 })).toBe(true);
+  });
+
+  it("moves when rows land under the same status", () => {
+    expect(claimMoved({ status: "verifying", length: 2 }, { status: "verifying", length: 3 })).toBe(true);
+  });
+
+  it("stays put on an identical poll, so an 800ms loop does not re-read every tick", () => {
+    expect(
+      claimMoved(
+        { status: "awaiting-approval", length: 6 },
+        { status: "awaiting-approval", length: 6 },
+      ),
+    ).toBe(false);
+  });
+
+  it("moves on the first poll of a loop", () => {
+    expect(claimMoved(null, { status: "verifying", length: 0 })).toBe(true);
   });
 });

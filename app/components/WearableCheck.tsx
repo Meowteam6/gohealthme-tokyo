@@ -59,11 +59,13 @@ import { fetchWithWalletAuth, type WalletAuthRequester } from "@/lib/client-auth
 import { useWalletAuth } from "@/lib/useWalletAuth";
 
 import {
+  claimMoved,
   claimScreenOf,
   claimVisibilityOf,
   emptyClaimScreen,
   nextClaimScreen,
   receiptToKeep,
+  type ClaimMark,
   type ClaimScreen,
 } from "@/lib/claim-restore";
 import AgentReceipt from "@/components/AgentReceipt";
@@ -226,6 +228,7 @@ function WearableCheckInner({
       // request of a resumed run (or of the deferred settle re-poll) must not
       // blank a receipt that already lists money SPOTTER spent.
       let screen = screenRef.current;
+      let seen: ClaimMark | null = null;
       for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
         let body: RunResponse;
         try {
@@ -283,6 +286,15 @@ function WearableCheckInner({
           ledger: screen.ledger,
           lockedReason: screen.lockedReason,
         });
+        // The verdict card reads the ledger on its own query, which stops at
+        // a no-pay. Without this nudge a check run again from here printed a
+        // verified read and a World ID ask in the receipt while the card kept
+        // saying it could not get a clean read, with no confirm button.
+        const mark = { status: last, length: screen.ledger.length };
+        if (claimMoved(seen, mark)) {
+          void queryClient.invalidateQueries({ queryKey: ["claim-ledger"] });
+        }
+        seen = mark;
 
         if (TERMINAL.includes(last)) {
           if (last === "recorded") {
@@ -641,8 +653,8 @@ function WearableCheckInner({
         ) : null}
 
         {status.runStatus === "verifying" ? (
-          <p className="text-sm text-muted">
-            SPOTTER is working. Rows print as they happen.
+          <p className="text-sm text-muted" aria-live="polite">
+            SPOTTER is working. The check updates on its own.
           </p>
         ) : null}
 
@@ -673,16 +685,20 @@ function WearableCheckInner({
 
         {failureMode === "evidence" ? (
           <div className="space-y-3">
-            <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border-strong)]">
-              <p className="text-base font-semibold text-foreground">
-                SPOTTER could not get a clean read
-              </p>
-              <p className="mt-1 text-sm text-muted">
-                The data is the problem, not you, and a check costs you nothing.
-                Make sure your wearable is connected and has synced the period,
-                then check again.
-              </p>
-            </div>
+            {/* The verdict card above already says this; here it would be
+                the same sentence twice. The buttons stay: they live here. */}
+            {!verdictShown ? (
+              <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border-strong)]">
+                <p className="text-base font-semibold text-foreground">
+                  SPOTTER could not get a clean read
+                </p>
+                <p className="mt-1 text-sm text-muted">
+                  The data is the problem, not you, and a check costs you nothing.
+                  Make sure your wearable is connected and has synced the period,
+                  then check again.
+                </p>
+              </div>
+            ) : null}
             <Button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}
@@ -713,15 +729,17 @@ function WearableCheckInner({
 
         {failureMode === "goal-missed" && !poolClosed ? (
           <div className="space-y-3">
-            <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
-              <p className="text-base font-semibold">Not there yet.</p>
-              <p className="mt-1 text-sm text-muted">
-                The wearable data was read fine and the goal is not met so far.
-                {lastCheckMs !== null
-                  ? ` Days inside the challenge still count if your wearable syncs them by ${formatLocalTime(lastCheckMs)}. After that, SPOTTER records a miss on its own when your wearable covered the whole challenge and shows it; if it did not sync the whole challenge, nothing is recorded and your stake comes back. A hit only counts once you open the challenge and confirm it${confirmByMs !== null ? `, by ${formatLocalTime(confirmByMs)} at the latest` : " before it settles"}.`
-                  : " Days inside the challenge still count if they sync before the challenge settles, so check again after your next sync."}
-              </p>
-            </div>
+            {!verdictShown ? (
+              <div className="rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]">
+                <p className="text-base font-semibold">Not there yet.</p>
+                <p className="mt-1 text-sm text-muted">
+                  The wearable data was read fine and the goal is not met so far.
+                  {lastCheckMs !== null
+                    ? ` Days inside the challenge still count if your wearable syncs them by ${formatLocalTime(lastCheckMs)}. After that, SPOTTER records a miss on its own when your wearable covered the whole challenge and shows it; if it did not sync the whole challenge, nothing is recorded and your stake comes back. A hit only counts once you open the challenge and confirm it${confirmByMs !== null ? `, by ${formatLocalTime(confirmByMs)} at the latest` : " before it settles"}.`
+                    : " Days inside the challenge still count if they sync before the challenge settles, so check again after your next sync."}
+                </p>
+              </div>
+            ) : null}
             <Button
               type="button"
               onClick={() => setStatus({ kind: "idle" })}

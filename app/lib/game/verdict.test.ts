@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runStatusFromLedger, type LedgerEntry } from "@/lib/agent-receipt";
+import { failureModeOf, runStatusFromLedger, type LedgerEntry } from "@/lib/agent-receipt";
 import {
   payDecidedOf,
   runApprovalLine,
@@ -595,5 +595,65 @@ describe("pollWhileLive", () => {
     expect(pollWhileLive("verifying")).toBe(5_000);
     expect(pollWhileLive("no-pay")).toBe(false);
     expect(pollWhileLive(null)).toBe(false);
+  });
+});
+
+// Andre's pool-2 hit (2026-09-27): the first read was a low-confidence
+// "still syncing" no-pay, the next read verified the goal, SPOTTER decided to
+// pay and asked for World ID. The card must follow that newest read. A stale
+// earlier no-pay is never allowed to put "I could not get a clean read" next
+// to a receipt that says Verified.
+describe("the verdict follows the newest read, never a stale earlier no-pay", () => {
+  const WEARABLE = "wearable-1790400000";
+  const junction: LedgerEntry = {
+    kind: "spend",
+    at: AT,
+    service: "junction-read",
+    label: "wearable summary (Junction)",
+    amountUsd: "0.00",
+    ref: WEARABLE,
+    settlement: "prepaid",
+  };
+  const syncing = verdict(false, {
+    confidence: "low",
+    reason:
+      "Your wearable is connected but has not synced any workout data for this period yet. Give it a few minutes to sync, then run the check again.",
+    ref: WEARABLE,
+  });
+  const hit = verdict(true, {
+    reason:
+      "Your wearable shows 1 qualifying days (1+ workout) inside this pool period, meeting the 1-day goal.",
+    ref: WEARABLE,
+  });
+  const noPay: LedgerEntry = { kind: "reason", at: AT, decision: "no-pay", note: "n", ref: WEARABLE };
+  const pay: LedgerEntry = { kind: "reason", at: AT, decision: "pay", note: "n", ref: WEARABLE };
+  const asked: LedgerEntry = {
+    kind: "approval",
+    at: AT,
+    status: "requested",
+    requestId: "req-1",
+    action: "settle:0x01:1",
+    provider: "world",
+  } as LedgerEntry;
+
+  it("a low no-pay, then a verified read and a World ID ask, asks the player to confirm", () => {
+    const ledger = [junction, syncing, noPay, hit, pay, asked];
+    expect(failureModeOf(ledger)).toBeNull();
+    expect(screenFor(ledger)).toEqual({ kind: "confirm-human" });
+    // Even when a status read lags the ledger, the newest read wins.
+    expect(screenFor(ledger, { runStatus: "no-pay" }).kind).not.toBe("bad-read");
+  });
+
+  it("a verified read after a low no-pay is not a bad read, even before SPOTTER re-decides", () => {
+    const ledger = [junction, syncing, noPay, hit];
+    expect(failureModeOf(ledger)).toBeNull();
+    expect(screenFor(ledger).kind).toBe("checking");
+    expect(screenFor(ledger, { runStatus: "no-pay" }).kind).toBe("checking");
+  });
+
+  it("still says bad read when the newest read is the low-confidence one", () => {
+    const ledger = [junction, hit, pay, syncing, noPay];
+    expect(failureModeOf(ledger)).toBe("evidence");
+    expect(screenFor(ledger).kind).toBe("bad-read");
   });
 });

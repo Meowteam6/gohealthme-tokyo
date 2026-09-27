@@ -16,6 +16,7 @@ import {
   currentAttesterIdOf,
   currentReasonEntry,
   failureModeOf,
+  noPayOverturned,
   unconfirmedHitOf,
   type LedgerEntry,
   type RunStatus,
@@ -137,7 +138,13 @@ function freshLocal(input: VerdictInput): LocalApproval["outcome"] | null {
   return length <= input.localApproval.ledgerLength ? input.localApproval.outcome : null;
 }
 
-export function verdictScreenOf(input: VerdictInput): VerdictScreen {
+export function verdictScreenOf(raw: VerdictInput): VerdictScreen {
+  // A no-pay status that lags its own ledger (a verified read landed after
+  // the no-pay) follows the newest read: SPOTTER is re-deciding it.
+  const input: VerdictInput =
+    raw.runStatus === "no-pay" && raw.ledger !== null && noPayOverturned(raw.ledger)
+      ? { ...raw, runStatus: "verifying" }
+      : raw;
   if (!input.joined) return { kind: "none" };
   if (input.poolCancelled) return { kind: "cancelled", refunded: input.refunded };
 
