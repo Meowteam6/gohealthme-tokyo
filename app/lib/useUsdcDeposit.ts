@@ -164,7 +164,7 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
         const bountyModel = call.args[5];
         if (isEconomicallyDeadConfig(bountyModel, entryFee)) {
           const message =
-            "The contract requires a stake above zero for every challenge - each player stakes it to join, so every winner has real skin in the game. Set a stake above zero.";
+            "Every challenge needs a stake above zero, because each player puts it in to join. Set a stake above zero.";
           setStatus({ kind: "error", message });
           throw new Error(message);
         }
@@ -351,8 +351,9 @@ export function useUsdcDeposit(): UseUsdcDepositResult {
           hash: depositHash,
         });
         if (depositReceipt.status !== "success") {
+          const what = call.functionName === "createPool" ? "new challenge" : "top-up";
           throw new Error(
-            `The ${call.functionName} transaction ${depositHash} reverted on Base Sepolia.`,
+            `The ${what} transaction ${depositHash} reverted on Base Sepolia.`,
           );
         }
 

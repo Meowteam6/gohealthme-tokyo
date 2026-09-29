@@ -405,7 +405,7 @@ export async function recordVerdict(
     }
     throw new Error(
       `recordVerdict failed after ${RECORD_ATTEMPTS} attempts for goal ${goalId} ` +
-        `(pool ${poolId}, user ${user}): ${msg}`,
+        `(challenge ${poolId}, user ${user}): ${msg}`,
     );
   }
 }

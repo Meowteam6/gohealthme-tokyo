@@ -50,4 +50,28 @@ describe("SPOTTER voice — honesty", () => {
     const ids = SPOTTER_LINES.map((l) => l.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it("speaks the player's vocabulary: never run, pool or dare, as a noun or a verb", () => {
+    // "running" as exercise is allowed; the word boundary keeps it out.
+    for (const line of SPOTTER_LINES) {
+      for (const [locale, text] of Object.entries(line.text)) {
+        expect(
+          /\b(runs?|pools?|dares?)\b/i.test(text),
+          `${line.id} [${locale}]: "${text}"`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it("keeps the voice: no dashes, no exclamation marks, no betting words", () => {
+    // A spaced hyphen reads as a dash, so it is held to the same rule.
+    for (const line of SPOTTER_LINES) {
+      for (const [locale, text] of Object.entries(line.text)) {
+        expect(
+          /\s-\s|[–—]|!|\b(bets?|wager\w*|odds|luck\w*|winners?|gambl\w*)\b/i.test(text),
+          `${line.id} [${locale}]: "${text}"`,
+        ).toBe(false);
+      }
+    }
+  });
 });

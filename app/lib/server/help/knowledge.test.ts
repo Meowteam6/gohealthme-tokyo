@@ -110,6 +110,7 @@ describe("challenge facts", () => {
 
   it("speaks the player's vocabulary: challenge and pot, never run, pool, dare or bet", () => {
     // The WORDING line names the banned words so the model avoids them.
+    expect(HELP_KB).toContain('Do not use "run" as a verb either');
     const lines = HELP_SYSTEM_PROMPT.split("\n").filter((line) => !line.startsWith("WORDING:"));
     for (const line of lines) {
       expect(line, line).not.toMatch(

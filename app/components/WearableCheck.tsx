@@ -318,7 +318,7 @@ function WearableCheckInner({
       setStatus({
         kind: "error",
         message:
-          "Verification is taking longer than expected. Nothing is lost - your claim is saved, and this page picks it up where it left off.",
+          "Verification is taking longer than expected. Nothing is lost. Your claim is saved, and this page picks it up where it left off.",
         ledger: receiptToKeep(screen),
       });
     },
@@ -529,7 +529,7 @@ function WearableCheckInner({
         <p className="text-sm text-muted">
           SPOTTER is reading your synced wearable summary on its server and
           checking it against the goal. Your raw health data stays server-side
-          and never goes on-chain - only the pass or fail verdict does.
+          and never goes on-chain. Only the pass or fail verdict does.
         </p>
       </div>
     );
@@ -670,12 +670,12 @@ function WearableCheckInner({
                   periodStart={0n}
                   periodEnd={BigInt(Math.floor(periodEndMs / 1000))}
                 />
-                ). Leave this page open and the payout appears here on its own -
-                no human involved.
+                ). Leave this page open and the payout appears here on its own.
+                Nothing more for you to do.
               </p>
             ) : (
               <p className="mt-1 text-sm text-muted">
-                SPOTTER settles the payout after the challenge ends - no
+                SPOTTER settles the payout after the challenge ends, no
                 human involved. Come back after it closes and the payout
                 appears here.
               </p>
@@ -852,10 +852,10 @@ function WearableCheckInner({
        *  the wearable summary transits the server. Say what is true. */}
       <p className="rounded-control bg-fill-quiet p-3 shadow-[inset_0_0_0_1px_var(--border)] text-xs text-muted">
         Where your wearable data goes: SPOTTER reads your synced summary on its
-        server to check the goal. That is the wearable path - not the sealed
+        server to check the goal. That is the wearable path, not the sealed
         enclave the document path uses. Your raw health data stays
         server-side, is never written on-chain, and is never shared. Only the
-        verdict - pass or fail, with its confidence - is recorded on-chain.
+        verdict (pass or fail, with its confidence) is recorded on-chain.
       </p>
 
       {!authenticated || address === null ? (
@@ -994,7 +994,7 @@ function WearableCheckInner({
       ) : !connected ? (
         <div className="space-y-3">
           <p className="rounded-control bg-fill-quiet p-3 shadow-[inset_0_0_0_1px_var(--border)] text-sm text-foreground">
-            No wearable connected yet - without one, SPOTTER has nothing to
+            No wearable connected yet. Without one, SPOTTER has nothing to
             verify and will not pay. You can pick which device from the
             dashboard.
           </p>
@@ -1034,7 +1034,7 @@ function WearableCheckInner({
               onClick={() => setConnectFallbackUrl(null)}
               className={`${buttonClasses({ variant: "secondary" })} flex w-full text-center`}
             >
-              Your browser blocked the popup - tap here to connect
+              Your browser blocked the popup. Tap here to connect
             </a>
           ) : null}
           <Button

@@ -61,6 +61,7 @@ import { isAddress, type Address, type Hex } from "viem";
 import {
   settleRecordedClaim,
   livePoolSettleLock,
+  LEGACY_SETTLE_UNPAYABLE_MESSAGE,
   SETTLE_UNPAYABLE_MESSAGE,
   type SettleClaimDeps,
 } from "@/lib/server/agent/run";
@@ -236,12 +237,14 @@ async function eligibility(
     return { settle: false };
   }
   // Terminal: the pool settled without this claim; retrying cannot help.
+  // Ledgers stored before the 2026-09-30 wording pass carry the legacy text.
   if (
     ledger.some(
       (e) =>
         e.kind === "error" &&
         e.stage === "settle" &&
-        e.message === SETTLE_UNPAYABLE_MESSAGE,
+        (e.message === SETTLE_UNPAYABLE_MESSAGE ||
+          e.message === LEGACY_SETTLE_UNPAYABLE_MESSAGE),
     )
   ) {
     await removePendingSettlement(goalId);

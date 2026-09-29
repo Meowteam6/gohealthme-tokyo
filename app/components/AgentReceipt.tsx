@@ -167,7 +167,10 @@ export function errorPresentation(
       if (message.includes("canSettle")) {
         return { label: "settlement is waiting on the chain", transient: true };
       }
-      if (message.includes("pool settled before this claim completed")) {
+      // run.ts SETTLE_UNPAYABLE_MESSAGE. Stored ledgers carry it as "pool
+      // settled before..." (before 2026-09-30) or "the challenge settled
+      // before...", so match the part both wordings share.
+      if (message.includes("settled before this claim completed")) {
         return {
           label: "the challenge settled before this claim finished",
           transient: false,

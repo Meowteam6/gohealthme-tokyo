@@ -296,7 +296,7 @@ function AskTab({ address }: { address: Address | null }) {
       >
         {messages.length === 0 ? (
           <p className="text-sm leading-relaxed text-muted">
-            Ask anything about using GoHealthMe - signing in, test USDC,
+            Ask anything about using GoHealthMe: signing in, test USDC,
             challenges, proof, getting paid, or how your data stays private. I
             only cover using the app.
           </p>
@@ -442,7 +442,7 @@ function FeedbackTab({
         onChange={(e) => setMessage(e.target.value)}
         maxLength={1000}
         rows={3}
-        placeholder="Optional - anything that was unclear"
+        placeholder="Optional: anything that was unclear"
         className={`mt-1 ${INPUT}`}
       />
 

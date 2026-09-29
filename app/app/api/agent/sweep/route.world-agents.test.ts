@@ -18,6 +18,8 @@ vi.mock("@/lib/server/agent/run", () => ({
     release: vi.fn(),
   })),
   SETTLE_UNPAYABLE_MESSAGE:
+    "the challenge settled before this claim completed; a one-shot settle cannot pay it retroactively",
+  LEGACY_SETTLE_UNPAYABLE_MESSAGE:
     "pool settled before this claim completed; a one-shot settle cannot pay it retroactively",
 }));
 vi.mock("@/lib/server/agent/wallet", () => ({

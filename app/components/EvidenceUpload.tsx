@@ -326,7 +326,7 @@ function EvidenceUploadInner({
       setStatus({
         kind: "error",
         message:
-          "Verification is taking longer than usual. Nothing is lost — your " +
+          "Verification is taking longer than usual. Nothing is lost. Your " +
           "claim is saved. Come back in a few minutes and this page will " +
           "pick up where it left off.",
         ledger: receiptToKeep(screen),
@@ -708,7 +708,7 @@ function EvidenceUploadInner({
 
         {status.runStatus === "verifying" ? (
           <p className="text-sm text-muted">
-            SPOTTER is working — this usually takes about half a minute. Rows
+            SPOTTER is working. This usually takes about half a minute. Rows
             print as they happen; you can keep this open.
           </p>
         ) : null}
@@ -729,12 +729,12 @@ function EvidenceUploadInner({
                   periodEnd={BigInt(Math.floor(periodEndMs / 1000))}
                 />
                 ). Leave this page open and the payout appears here on its
-                own — no human involved.
+                own. Nothing more for you to do.
               </p>
             ) : (
               <p className="mt-1 text-sm text-foreground/80">
-                SPOTTER settles the payout the moment the challenge ends —
-                no human involved. Come back after the period closes and the
+                SPOTTER settles the payout the moment the challenge ends.
+                Nothing more for you to do. Come back after the period closes and the
                 payout appears here.
               </p>
             )}
@@ -747,7 +747,7 @@ function EvidenceUploadInner({
               The verification service is unreachable
             </p>
             <p className="mt-1 text-sm text-foreground/80">
-              Your document is fine — this is not about your file. Nothing was
+              Your document is fine. This is not about your file. Nothing was
               recorded and SPOTTER did not pay out. Try again later, once the
               service is back.
             </p>
@@ -781,8 +781,8 @@ function EvidenceUploadInner({
               <p className="text-base font-semibold">Not paid.</p>
               <p className="mt-1 text-sm text-foreground/80">
                 The document was read fine. It does not show the goal being met.
-                If you have a different record that does - the real one, not a
-                sample - submit it and SPOTTER checks again.
+                If you have a different record that does (the real one, not a
+                sample), submit it and SPOTTER checks again.
               </p>
             </div>
             {/* A rejected read is not a dead end: a fresh upload submits a new
@@ -887,8 +887,8 @@ function EvidenceUploadInner({
        *  comes back and is never kept. */}
       <p className="rounded-xl border border-edge bg-surface-raised p-3 text-xs text-muted">
         Where this file goes: straight to the confidential enclave that does
-        the check. We do not store it. What comes back is the verdict — pass or
-        fail, with a short note on why — never the document itself.
+        the check. We do not store it. What comes back is the verdict (pass or
+        fail, with a short note on why), never the document itself.
       </p>
 
       <input

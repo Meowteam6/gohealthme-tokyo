@@ -71,7 +71,7 @@ export default function JoinMoment({
           </a>
         ) : null}
         {icsHref !== null ? (
-          <a href={icsHref} download="gohealthme-run-close.ics" className={`${TEXT_LINK} text-[0.9375rem]`}>
+          <a href={icsHref} download="gohealthme-challenge-close.ics" className={`${TEXT_LINK} text-[0.9375rem]`}>
             Add the {closeClock ?? "close"} close to my calendar
           </a>
         ) : null}

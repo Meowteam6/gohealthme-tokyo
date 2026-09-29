@@ -874,7 +874,7 @@ export const whoopProvider: WearableProvider = {
     // very response that redirects. Only a route handler can do that, so
     // /api/wearable/link builds it there and this method is never the path.
     throw new Error(
-      "WHOOP linking runs through the OAuth redirect at /api/whoop/login.",
+      "WHOOP linking goes through the OAuth redirect at /api/whoop/login.",
     );
   },
 

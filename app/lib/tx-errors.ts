@@ -213,7 +213,7 @@ const RULES: readonly ErrorRule[] = [
     pattern: /\bNOTHING_OWED\b/,
     title: "Nothing to claim",
     detail:
-      "Nothing to claim right now. Settled winnings show up here the moment a " +
+      "Nothing to claim right now. Settled payouts show up here the moment a " +
       "challenge you won pays out.",
   },
   {
@@ -238,7 +238,7 @@ const RULES: readonly ErrorRule[] = [
     title: "Challenge is not cancelled",
     detail:
       "Refunds are only available on a cancelled challenge. This one is still " +
-      "running or already settled.",
+      "going or already settled.",
   },
   {
     pattern: /\bALREADY_REFUNDED\b/,
@@ -258,7 +258,7 @@ const RULES: readonly ErrorRule[] = [
     title: "Challenges need an entry fee",
     detail:
       "The challenge contract requires an entry fee above zero - every participant " +
-      "stakes it to join, so every winner is someone who staked. Set an entry " +
+      "stakes it to join, so everyone paid out is someone who staked. Set an entry " +
       "fee above zero and try again.",
   },
   {
@@ -275,7 +275,7 @@ const RULES: readonly ErrorRule[] = [
     pattern: /\bNOT_ALLOWLISTED\b/,
     title: "This is a closed test",
     detail:
-      "Real-money staking is limited to an invited test group right now, and " +
+      "Staking is limited to an invited test group right now, and " +
       "this wallet is not on the list yet.",
   },
   {
@@ -348,7 +348,7 @@ const RULES: readonly ErrorRule[] = [
     pattern: /\breverted\b/i,
     title: "Transaction reverted",
     detail:
-      "That didn't go through. Nothing was taken from your account — try again.",
+      "That didn't go through. Nothing was taken from your account, so try again.",
   },
 ];
 

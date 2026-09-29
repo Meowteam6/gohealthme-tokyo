@@ -106,7 +106,7 @@ export interface DeferredLead {
 export function dashboardDeferredLead(tier: ProofTier | null): DeferredLead {
   if (tier === "self-reported") {
     return {
-      lead: "Self-reported — not verified, but recorded on-chain.",
+      lead: "Self-reported. Not verified, but recorded on-chain.",
       tone: "warning",
       selfReported: true,
     };

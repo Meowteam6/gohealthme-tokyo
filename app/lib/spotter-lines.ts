@@ -76,8 +76,8 @@ export const SPOTTER_LINES: SpotterLine[] = [
   { id: "dash-e1", surface: "dashboard-empty", state: "empty", tone: "dry", text: { en: "Nothing on record yet. No streak to read." } },
   { id: "dash-e2", surface: "dashboard-empty", state: "empty", tone: "dry", text: { en: "Empty. Go put your name on a challenge." } },
 
-  { id: "pools-e1", surface: "pools-empty", state: "empty", tone: "dry", text: { en: "No live challenges right now. Even I'm just watching the river." } },
-  { id: "pools-e2", surface: "pools-empty", state: "empty", tone: "dry", text: { en: "Quiet out here. Nobody's staked a goal yet - could be you." } },
+  { id: "pools-e1", surface: "pools-empty", state: "empty", tone: "dry", text: { en: "No open challenges right now. Even I'm just watching the river." } },
+  { id: "pools-e2", surface: "pools-empty", state: "empty", tone: "dry", text: { en: "Quiet out here. Nobody's staked a goal yet. Could be you." } },
 
   { id: "agent-e1", surface: "agent-empty", state: "empty", tone: "dry", text: { en: "I've done nothing yet. Give me something to verify." } },
   { id: "agent-e2", surface: "agent-empty", state: "empty", tone: "dry", text: { en: "Idle otter. Feed me a claim." } },
@@ -91,7 +91,7 @@ export const SPOTTER_LINES: SpotterLine[] = [
   { id: "ev-v3", surface: "evidence", state: "verifying", tone: "deadpan", text: { en: "Working. This is the part you're paying me for." } },
 
   // ── Payout: verified win (LOUD — only here) ──────────────────────────────
-  { id: "pay-v1", surface: "payout", state: "won-verified", tone: "loud", text: { en: "Absolute unit. Run it back." } },
+  { id: "pay-v1", surface: "payout", state: "won-verified", tone: "loud", text: { en: "Absolute unit. Go again." } },
   { id: "pay-v2", surface: "payout", state: "won-verified", tone: "loud", text: { en: "That happened. I saw it, the contract paid it." } },
   { id: "pay-v3", surface: "payout", state: "won-verified", tone: "loud", text: { en: "Clean proof. Money's already moving." } },
 
@@ -111,7 +111,7 @@ export const SPOTTER_LINES: SpotterLine[] = [
 
   // ── Broke, streak-nudge, error (state-reactive elsewhere) ────────────────
   { id: "broke-1", surface: "agent-header", state: "broke", tone: "warn", negatesTrust: true, text: { en: "Out of budget. Not verifying anything until topped up." } },
-  { id: "broke-2", surface: "agent-header", state: "broke", tone: "warn", text: { en: "Wallet's dry. I don't run on vibes, I run on USDC." } },
+  { id: "broke-2", surface: "agent-header", state: "broke", tone: "warn", text: { en: "Wallet's dry. Vibes don't buy proof. USDC does." } },
 
   { id: "streak-1", surface: "dashboard-header", state: "streak-nudge", tone: "dry", text: { en: "Streak's still breathing. Don't make me write the sad version." } },
   { id: "streak-2", surface: "dashboard-header", state: "streak-nudge", tone: "dry", text: { en: "One more day keeps the money coming. I'm just saying." } },

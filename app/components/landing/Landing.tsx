@@ -97,7 +97,7 @@ function HeroMore({ status, count, human, className }: { status: OpenRunsStatus;
         : `See all ${count} open challenges`;
   return (
     <div className={`flex-col items-start ${className}`}>
-      <ChevronLink href="#runs" className="num">
+      <ChevronLink href="#open-challenges" className="num">
         {label}
       </ChevronLink>
       <ul className="m-0 flex list-none flex-wrap gap-x-[18px] gap-y-1 p-0 text-[0.8125rem] leading-[1.3] text-haze min-[900px]:gap-x-[22px] min-[900px]:text-sm">
@@ -184,8 +184,8 @@ export function LandingView({
         <HowItPays terms={terms} confirm={flags.confirm} missRule={flags.missRule} initial={outcome} />
       </section>
 
-      <section id="runs" aria-labelledby="runs-h" className="scroll-mt-20 pb-10 min-[900px]:pb-[88px]">
-        <h2 id="runs-h" className="type-title m-0 text-[2rem] min-[900px]:text-[3rem]">
+      <section id="open-challenges" aria-labelledby="open-challenges-h" className="scroll-mt-20 pb-10 min-[900px]:pb-[88px]">
+        <h2 id="open-challenges-h" className="type-title m-0 text-[2rem] min-[900px]:text-[3rem]">
           Open challenges
         </h2>
         <OpenRunsList

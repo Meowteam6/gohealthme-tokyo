@@ -281,7 +281,7 @@ export async function POST(request: Request, ctx: Ctx) {
     } else if (body.attesterId !== undefined) {
       return jsonError(
         400,
-        "wearable claims take no attesterId; the server derives the ref from the pool period",
+        "wearable claims take no attesterId; the server derives the ref from the challenge period",
       );
     }
 
@@ -329,7 +329,7 @@ export async function POST(request: Request, ctx: Ctx) {
       if (state.periodStart === undefined) {
         return jsonError(
           500,
-          `pool ${poolId} has no readable period start on-chain`,
+          `challenge ${poolId} has no readable period start on-chain`,
         );
       }
       attesterId = `wearable-${state.periodStart.toString()}`;

@@ -294,7 +294,7 @@ export async function screenAddress(
       address,
       toxicScore: null,
       traits: [],
-      reason: "INTERCEPTA_API_KEY is not set on this deployment; no payout screening ran.",
+      reason: "INTERCEPTA_API_KEY is not set on this deployment, so no payout was screened.",
       rule,
       checkedAt,
       cached: false,

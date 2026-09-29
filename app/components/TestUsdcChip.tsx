@@ -105,7 +105,7 @@ export default function TestUsdcChip() {
   return (
     <div className="flex flex-wrap items-center gap-2 py-1">
       <span
-        title="Not real money — for trying things out, never charged."
+        title="Not real money. For trying things out, never charged."
         className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-edge bg-surface px-3 text-xs text-muted"
       >
         <span className="font-semibold">Practice money</span>
@@ -119,7 +119,7 @@ export default function TestUsdcChip() {
         onClick={() => {
           void run();
         }}
-        title="Add practice money to your account. Not real money — never charged."
+        title="Add practice money to your account. Not real money, never charged."
         className={`${buttonClasses({ variant: "secondary", size: "sm" })} px-3`}
       >
         {label}
@@ -131,8 +131,8 @@ export default function TestUsdcChip() {
       ) : null}
       {state.kind === "enough" ? (
         <span className="text-[11px] text-muted sm:text-xs" aria-live="polite">
-          you already have enough to play - the faucet tops up wallets that run
-          low
+          you already have enough to play - the faucet only tops up wallets
+          that are low
         </span>
       ) : null}
       {state.kind === "capped" ? (

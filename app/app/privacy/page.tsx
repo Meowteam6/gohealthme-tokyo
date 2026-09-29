@@ -55,8 +55,8 @@ export default function PrivacyPage() {
         <h1 className="type-title text-[2.5rem] min-[900px]:text-[3.25rem]">Privacy Policy</h1>
         <p className="max-w-[60ch] text-[1.0625rem] leading-[1.5] text-muted text-pretty">
           Last updated {LAST_UPDATED}. This covers GoHealthMe V4, the beta
-          built at ETHGlobal Tokyo 2026 and running on Base Sepolia test
-          money. It says what happens to your data before you try the app.
+          built at ETHGlobal Tokyo 2026 on Base Sepolia test money. It says
+          what happens to your data before you try the app.
         </p>
       </header>
 
@@ -70,7 +70,7 @@ export default function PrivacyPage() {
         <ul className="mt-3 list-disc pl-5 text-muted marker:text-haze [&>*+*]:mt-2.5 [&_strong]:font-semibold [&_strong]:text-foreground">
           <li>
             <strong>Health data never goes on chain.</strong> Our server reads
-            daily summaries from your wearable to run the check; only
+            daily summaries from your wearable to check your goal; only
             SPOTTER&apos;s yes-or-no verdict is written to the blockchain.
           </li>
           <li>
@@ -97,7 +97,7 @@ export default function PrivacyPage() {
 
       <div className="mt-6 rounded-control bg-surface-raised p-4 text-[0.9375rem] leading-[1.55] text-muted shadow-[inset_0_0_0_1px_var(--border-strong)] [&_strong]:font-semibold [&_strong]:text-foreground">
         This is not legal advice. It is an honest, good-faith description of a
-        beta that runs on test money, not a finished legal policy. Before any
+        beta that uses test money only, not a finished legal policy. Before any
         real-money launch it will be replaced by a policy reviewed by a lawyer.
       </div>
 
@@ -107,7 +107,7 @@ export default function PrivacyPage() {
             This is a testnet beta
           </h2>
           <p>
-            GoHealthMe V4 runs on Base Sepolia, a test network. All USDC here
+            GoHealthMe V4 is built on Base Sepolia, a test network. All USDC here
             is test USDC with no monetary value. Nothing on this site can pay
             you real money or cost you real money.
           </p>
@@ -306,7 +306,7 @@ export default function PrivacyPage() {
             (for example hours of sleep, sleep score, or steps). We never write
             health data to the blockchain. We store which wearable you paired,
             but not the readings we pull from Junction or WHOOP: our server
-            (hosted on Vercel) reads the summary, runs the check, and keeps
+            (hosted on Vercel) reads the summary, checks the goal, and keeps
             SPOTTER&apos;s verdict.
           </p>
           <p>
@@ -346,7 +346,7 @@ export default function PrivacyPage() {
             the WHOOP app.
           </p>
           <p>
-            So our server does see the wearable summary it uses to run the
+            So our server does see the wearable summary it uses for the
             check. If that matters to you, do not connect a wearable yet.
           </p>
           <p>
@@ -382,7 +382,7 @@ export default function PrivacyPage() {
             Who processes your data
           </h2>
           <p>
-            We rely on the following third parties to run the beta. Each is
+            We rely on the following third parties to operate the beta. Each is
             named so you can read their own policies:
           </p>
           <ul className="list-disc pl-5 marker:text-haze [&>*+*]:mt-1.5">
@@ -455,8 +455,8 @@ export default function PrivacyPage() {
 
         <section className="border-t border-edge pt-8 [&>*+*]:mt-3">
           <p className="text-[0.8125rem] text-haze">
-            GoHealthMe V4 is a beta built at ETHGlobal Tokyo 2026, running on
-            Base Sepolia test money. This notice is not legal advice and will
+            GoHealthMe V4 is a beta built at ETHGlobal Tokyo 2026 on Base
+            Sepolia test money. This notice is not legal advice and will
             be replaced by a lawyer-reviewed policy before any real-money
             launch. See also our{" "}
             <Link href="/terms" className="font-semibold text-foreground underline decoration-muted/40 underline-offset-4 hover:decoration-foreground">

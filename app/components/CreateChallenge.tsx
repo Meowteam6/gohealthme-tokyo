@@ -456,7 +456,7 @@ function CreateChallengeInner() {
       setFormError(
         createBlock.kind === "paused"
           ? createBlock.detail
-          : "I am still checking whether challenges can run right now. Try again in a moment.",
+          : "I am still checking whether new challenges can start right now. Try again in a moment.",
       );
       return;
     }
@@ -552,7 +552,7 @@ function CreateChallengeInner() {
         <PerchedHeader title="Start a challenge" lead={PAGE_LEAD_COPY} pose="detective">
           <Card>
             <p className="sr-only" aria-live="polite">
-              Checking whether challenges can run
+              Checking whether new challenges can start
             </p>
             <Skeleton className="h-6 w-1/2" />
             <Skeleton className="mt-4 h-28 w-full" />

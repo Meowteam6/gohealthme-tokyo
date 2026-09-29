@@ -151,7 +151,11 @@ export default function SponsorPoolOutcome({
           <div className="grid grid-cols-2 gap-3 rounded-2xl bg-secondary/60 p-4">
             <WellStat label="Joined">{d.joined ?? 0}</WellStat>
             <WellStat label="Completion rate">
-              {d.completionRatePct !== null ? `${d.completionRatePct}%` : "—"}
+              {d.completionRatePct !== null ? (
+                `${d.completionRatePct}%`
+              ) : (
+                <span className="text-muted">Unknown</span>
+              )}
             </WellStat>
           </div>
 
@@ -164,7 +168,7 @@ export default function SponsorPoolOutcome({
                 {d.costPerCompletionUsdc !== null ? (
                   <Money usd={formatUsdc(d.costPerCompletionUsdc)} />
                 ) : (
-                  "—"
+                  <span className="text-muted">Unknown</span>
                 )}
               </WellStat>
             </div>
