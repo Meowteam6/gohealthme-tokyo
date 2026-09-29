@@ -34,10 +34,31 @@
 // before any prompt, getWalletAuth asks Dynamic for the token, decodes it
 // WITHOUT trusting it (the server is what verifies), and, when it lists the
 // connected wallet, sends `Authorization: Bearer <token>` plus the address
-// header. No wallet prompt at all. A wallet with no token, as a connect-only
-// external wallet may be, signs exactly as before. A token the server refuses
-// is remembered and not sent again, so the 401 retry signs once instead of
-// looping on the same token.
+// header. No wallet prompt at all. A token the server refuses is remembered
+// and not sent again, so the 401 retry signs once instead of looping on the
+// same token.
+//
+// A WALLET LOGIN PROVES ONCE PER SESSION. A connect-only external wallet
+// (MetaMask, Coinbase, Base Account, WalletConnect) has no token until it
+// signs Dynamic's own sign-in once. So when a prompt is unavoidable, the first
+// thing tried is that session proof (`proveSession`, lib/session-proof.ts):
+// the one signature buys a token that outlives the tab's reloads, instead of
+// an eight-minute signature that is gone on the next reload. Only when the
+// proof cannot run (Dynamic already signed in with another credential, no
+// Dynamic client) does the ad-hoc signature below open instead, in the same
+// tap. A declined proof is final for that tap (no second prompt), and later
+// taps fall back to the ad-hoc signature, so a proof Dynamic cannot complete
+// never becomes a loop. The explicit "Verify wallet" action clears that
+// memory first (forgetSessionProofDecline) to offer the proof again. The
+// ad-hoc signature path, and the server's acceptance of it, stay: the e2e
+// suite signs it directly.
+//
+// NEVER A COLD POPUP. Whatever asked (a page load, a Join tap, the verdict
+// card), the wallet does not open until the player has read one plain line
+// and said yes: `confirmPrompt` is the sheet's in-page question
+// (components/SessionProofSheet.tsx). Surfaces asking together share it, a
+// Not now is a no for that request only, and a Verify tap whose explanation
+// is already on screen passes `confirmed` and is not asked twice.
 
 import { decodeJwt } from "jose";
 
@@ -188,9 +209,9 @@ export function authBlockReason(auth: ClientAuth): string | null {
     case "no-wallet":
       return "Connect your wallet to see this claim. It is private to the wallet that made it.";
     case "unsigned":
-      return "This is private to your wallet. Sign to unlock it - nothing is charged and no transaction is sent.";
+      return "This is private to your wallet. One free signature unlocks it. Nothing is charged and no transaction is sent.";
     case "declined":
-      return "This claim is private to your wallet, so it stays hidden until you sign. Nothing is charged and no transaction is sent - the signature only proves the wallet is yours.";
+      return "This claim is private to your wallet, so it stays hidden until you sign. Nothing is charged and no transaction is sent. The signature only proves the wallet is yours.";
     case "failed":
       return `Your wallet could not sign the proof of ownership: ${auth.message}`;
   }
@@ -222,6 +243,39 @@ export type SignMessageFn = (message: string) => Promise<string>;
 /** Reads Dynamic's session token (getAuthToken); undefined when signed out. */
 export type SessionTokenFn = () => string | null | undefined;
 
+/**
+ * How a session proof ended. "proven": the session token now lists the wallet
+ * (with or without a prompt). "declined": the wallet was asked and no token
+ * came of it. "dismissed": the player said Not now to the explanation, so the
+ * wallet was never opened. "unavailable": nothing was asked because the proof
+ * cannot run here; the caller may sign instead.
+ */
+export type SessionProofResult = "proven" | "declined" | "dismissed" | "unavailable";
+
+/** `confirmed`: the player already tapped a Verify button whose explanation
+ *  sits right above it, so the wallet may open with no further question. */
+export interface ProveSessionOptions {
+  confirmed?: boolean;
+}
+
+/** Upgrade the Dynamic session so its token lists `address`. Never throws on
+ *  purpose, but callers still guard it. */
+export type ProveSessionFn = (
+  address: string,
+  options?: ProveSessionOptions,
+) => Promise<SessionProofResult>;
+
+/** What a prompt is about to ask of the wallet: the one session proof, or the
+ *  plain short-lived signature. The explanation differs. */
+export type PromptKind = "session" | "signature";
+
+/**
+ * Ask the player, in the page, before the wallet opens. Resolves true on a
+ * yes and false on a Not now. The app binds the sheet's question
+ * (lib/session-proof.ts confirmRegisteredPrompt); omitted, nothing is asked.
+ */
+export type ConfirmPromptFn = (address: string, kind: PromptKind) => Promise<boolean>;
+
 // ------------------------------------------------------------------ the cache
 //
 // Keyed by lower-cased address so a wallet switch cannot serve the previous
@@ -238,6 +292,28 @@ const inflight = new Map<string, Promise<ClientAuth>>();
 // because a tab could in principle see many rotations.
 const refusedSessionTokens = new Set<string>();
 const MAX_REFUSED_SESSION_TOKENS = 8;
+
+// Wallets whose session proof was declined (or could not finish) in this tab.
+// Ordinary taps then sign the ad-hoc message instead of reopening the proof.
+// Survives refresh, which is what a tap asks for; a reload starts clean.
+const declinedSessionProofs = new Set<string>();
+
+/** True when this wallet's session proof was declined in this tab. */
+export function sessionProofWasDeclined(address: string): boolean {
+  return declinedSessionProofs.has(address.toLowerCase());
+}
+
+/** Record a proof declined outside getWalletAuth (the sign-in sheet), so the
+ *  next ordinary tap signs instead of reopening it. */
+export function rememberSessionProofDecline(address: string): void {
+  declinedSessionProofs.add(address.toLowerCase());
+}
+
+/** Offer the session proof again: the explicit "Verify wallet" tap, or a
+ *  proof that succeeded after all. */
+export function forgetSessionProofDecline(address: string): void {
+  declinedSessionProofs.delete(address.toLowerCase());
+}
 
 /** Set aside the session token an auth result carried, if it carried one. */
 function refuseSessionTokenIn(auth: ClientAuth): void {
@@ -271,6 +347,7 @@ export function clearWalletAuth(address?: string): void {
     credentials.clear();
     inflight.clear();
     refusedSessionTokens.clear();
+    declinedSessionProofs.clear();
     return;
   }
   const key = address.toLowerCase();
@@ -296,9 +373,52 @@ function ok(credential: WalletAuthCredential): ClientAuth {
   return { kind: "ok", credential, headers: authHeadersOf(credential) };
 }
 
+/** The session token as proof for `address`, or null when there is none this
+ *  app may send: absent, refused by the server once, or not listing the wallet. */
+function sessionAuthFor(
+  getSessionToken: SessionTokenFn | null | undefined,
+  address: string,
+  nowMs: number,
+): ClientAuth | null {
+  const token = readSessionToken(getSessionToken);
+  if (
+    token === null ||
+    refusedSessionTokens.has(token) ||
+    !sessionTokenCoversAddress(token, address, nowMs)
+  ) {
+    return null;
+  }
+  return { kind: "ok", credential: null, headers: sessionAuthHeaders(token, address) };
+}
+
+const PROOF_RESULTS: ReadonlySet<string> = new Set([
+  "proven",
+  "declined",
+  "dismissed",
+  "unavailable",
+]);
+
+/** Run the session proof. A throw or a nonsense answer is "unavailable": the
+ *  proof never got as far as a prompt, so signing instead is not a second one. */
+async function runProof(
+  proveSession: ProveSessionFn,
+  address: string,
+  confirmed: boolean,
+): Promise<SessionProofResult> {
+  try {
+    const result: unknown = await proveSession(address, { confirmed });
+    return typeof result === "string" && PROOF_RESULTS.has(result)
+      ? (result as SessionProofResult)
+      : "unavailable";
+  } catch {
+    return "unavailable";
+  }
+}
+
 /**
  * Produce (or reuse) proof of control of `address`: the Dynamic session token
- * when it covers the wallet, otherwise a signature.
+ * when it covers the wallet; otherwise, when a prompt is allowed, the session
+ * proof first and the ad-hoc signature only when the proof cannot run.
  *
  * Never throws: a declined prompt and a broken signer are states the UI has to
  * render, not exceptions to escape into a render. `refresh` forces a new
@@ -316,11 +436,22 @@ export async function getWalletAuth(params: {
   cachedOnly?: boolean;
   /** Dynamic's getAuthToken. Omitted or null means signatures only. */
   getSessionToken?: SessionTokenFn | null;
+  /** Upgrade the Dynamic session so its token lists the wallet (one prompt,
+   *  session long). Omitted or null means the ad-hoc signature is the only
+   *  prompt, exactly as before. */
+  proveSession?: ProveSessionFn | null;
+  /** Ask in the page before the wallet opens (never a cold popup). Omitted or
+   *  null means the wallet opens straight away, exactly as before. */
+  confirmPrompt?: ConfirmPromptFn | null;
+  /** The player tapped a Verify button that already explains the signature,
+   *  so nothing more is asked before the wallet opens. */
+  confirmed?: boolean;
   now?: () => number;
 }): Promise<ClientAuth> {
   const { address, signMessage } = params;
   const now = params.now ?? Date.now;
   if (address === null || signMessage === null) return { kind: "no-wallet" };
+  const confirmed = params.confirmed === true;
 
   const key = address.toLowerCase();
   if (params.refresh === true) clearWalletAuth(address);
@@ -329,18 +460,8 @@ export async function getWalletAuth(params: {
   // one because the player tapped, and a good token must not turn that tap
   // into a prompt. Only a 401 against the token itself (fetchWithWalletAuth,
   // walletAuthFetch) marks it refused.
-  const sessionToken = readSessionToken(params.getSessionToken);
-  if (
-    sessionToken !== null &&
-    !refusedSessionTokens.has(sessionToken) &&
-    sessionTokenCoversAddress(sessionToken, address, now())
-  ) {
-    return {
-      kind: "ok",
-      credential: null,
-      headers: sessionAuthHeaders(sessionToken, address),
-    };
-  }
+  const session = sessionAuthFor(params.getSessionToken, address, now());
+  if (session !== null) return session;
 
   const cached = cachedWalletAuth(address, now());
   if (cached !== null) return ok(cached);
@@ -353,34 +474,51 @@ export async function getWalletAuth(params: {
   // signature another surface is in the middle of collecting.
   if (params.cachedOnly === true) return { kind: "unsigned" };
 
+  const proveSession = params.proveSession ?? null;
+  const confirmPrompt = params.confirmPrompt ?? null;
+
   const attempt = (async (): Promise<ClientAuth> => {
-    const timestamp = new Date(now()).toISOString();
     try {
-      const signature = await signMessage(
-        clientWalletAuthMessage(address, timestamp),
-      );
-      if (typeof signature !== "string" || !/^0x[0-9a-fA-F]+$/.test(signature)) {
-        return {
-          kind: "failed",
-          message: "the wallet returned a signature this app cannot use",
-        };
+      // The session proof first: the one signature buys a token that lasts
+      // the session instead of eight minutes. A decline ends this tap (no
+      // second prompt) and is remembered, so the next ordinary tap signs the
+      // ad-hoc message instead of reopening a proof that may never finish.
+      // The proof asks its own question before the wallet opens; a Not now
+      // there is a no for this tap only, never remembered as a decline.
+      if (proveSession !== null && !declinedSessionProofs.has(key)) {
+        const proof = await runProof(proveSession, address, confirmed);
+        if (proof === "dismissed") return { kind: "declined" };
+        if (proof === "declined") {
+          declinedSessionProofs.add(key);
+          return { kind: "declined" };
+        }
+        if (proof === "proven") {
+          const proven = sessionAuthFor(params.getSessionToken, address, now());
+          if (proven !== null) {
+            declinedSessionProofs.delete(key);
+            return proven;
+          }
+          // Proven, but the token is one the server already refused: nothing
+          // was prompted (Dynamic was signed in), so signing is the one prompt.
+        }
       }
-      const credential: WalletAuthCredential = {
-        address,
-        timestamp,
-        signature,
-      };
-      credentials.set(key, credential);
-      return ok(credential);
-    } catch (err) {
-      if (isUserRejection(err)) return { kind: "declined" };
-      return {
-        kind: "failed",
-        message:
-          err instanceof Error && err.message !== ""
-            ? err.message
-            : "the wallet could not sign",
-      };
+      // The plain signature, asked about first unless a Verify tap already
+      // did. Whatever landed while the question was open (a proof from
+      // another surface, a signature) is used instead of opening the wallet.
+      if (!confirmed && confirmPrompt !== null) {
+        let yes = false;
+        try {
+          yes = (await confirmPrompt(address, "signature")) === true;
+        } catch {
+          yes = false;
+        }
+        if (!yes) return { kind: "declined" };
+        const landedSession = sessionAuthFor(params.getSessionToken, address, now());
+        if (landedSession !== null) return landedSession;
+        const landedSignature = cachedWalletAuth(address, now());
+        if (landedSignature !== null) return ok(landedSignature);
+      }
+      return await signAdHoc(address, signMessage, now);
     } finally {
       inflight.delete(key);
     }
@@ -390,12 +528,82 @@ export async function getWalletAuth(params: {
   return attempt;
 }
 
+/** The ad-hoc "prove control" signature, cached for the reuse window. The
+ *  fallback when the session proof cannot run, and the path the e2e suite
+ *  signs directly. */
+async function signAdHoc(
+  address: string,
+  signMessage: SignMessageFn,
+  now: () => number,
+): Promise<ClientAuth> {
+  // Stamped here, after any proof, so time spent in a proof modal does not eat
+  // into the signature's freshness window.
+  const timestamp = new Date(now()).toISOString();
+  try {
+    const signature = await signMessage(clientWalletAuthMessage(address, timestamp));
+    if (typeof signature !== "string" || !/^0x[0-9a-fA-F]+$/.test(signature)) {
+      return {
+        kind: "failed",
+        message: "the wallet returned a signature this app cannot use",
+      };
+    }
+    const credential: WalletAuthCredential = { address, timestamp, signature };
+    credentials.set(address.toLowerCase(), credential);
+    return ok(credential);
+  } catch (err) {
+    if (isUserRejection(err)) return { kind: "declined" };
+    return {
+      kind: "failed",
+      message:
+        err instanceof Error && err.message !== ""
+          ? err.message
+          : "the wallet could not sign",
+    };
+  }
+}
+
 // -------------------------------------------------------------- signed fetch
 
 export type WalletAuthRequester = (options?: {
   refresh?: boolean;
   cachedOnly?: boolean;
+  /** A Verify tap whose explanation is on screen: open the wallet with no
+   *  further question. */
+  confirmed?: boolean;
 }) => Promise<ClientAuth>;
+
+/** Everything a requester needs from the wallet and the Dynamic session. */
+export interface WalletAuthBinding {
+  address: string | null;
+  signMessage: SignMessageFn | null;
+  getSessionToken: SessionTokenFn | null;
+  proveSession: ProveSessionFn | null;
+  /** The in-page question asked before the wallet opens. */
+  confirmPrompt?: ConfirmPromptFn | null;
+}
+
+/**
+ * Bind getWalletAuth to one wallet. lib/useWalletAuth.ts is a thin React
+ * wrapper over this, kept here so the binding is testable in node.
+ */
+export function walletAuthRequester(binding: WalletAuthBinding): WalletAuthRequester {
+  return (options) =>
+    getWalletAuth({
+      ...binding,
+      refresh: options?.refresh,
+      cachedOnly: options?.cachedOnly,
+      confirmed: options?.confirmed,
+    });
+}
+
+/**
+ * A requester that can never open a wallet prompt, whatever its caller asks:
+ * page loads read through this. fetchWithWalletAuth's 401 retry asks for
+ * `refresh`, and on a page load that must still be silent.
+ */
+export function cachedOnlyRequester(requester: WalletAuthRequester): WalletAuthRequester {
+  return (options) => requester({ ...options, cachedOnly: true });
+}
 
 export interface WalletAuthFetchResult {
   response: Response;

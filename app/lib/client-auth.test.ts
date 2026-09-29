@@ -22,17 +22,22 @@ import {
   WALLET_AUTH_TIMESTAMP_HEADER,
   authBlockReason,
   authHeadersOf,
+  cachedOnlyRequester,
   cachedWalletAuth,
   clearWalletAuth,
   clientWalletAuthMessage,
   credentialUsableAt,
   fetchInputUrl,
   fetchWithWalletAuth,
+  forgetSessionProofDecline,
   getWalletAuth,
   isUserRejection,
+  rememberSessionProofDecline,
+  sessionProofWasDeclined,
   sessionTokenCoversAddress,
   shouldAttachWalletAuth,
   walletAuthFetch,
+  walletAuthRequester,
   type ClientAuth,
 } from "@/lib/client-auth";
 
@@ -288,6 +293,18 @@ describe("authBlockReason", () => {
 
   it("promises no charge where a wallet prompt is being asked for", () => {
     expect(authBlockReason({ kind: "declined" })).toMatch(/nothing is charged/i);
+  });
+
+  it("reads in the house voice: no dashes standing in for punctuation", () => {
+    const states: ClientAuth[] = [
+      { kind: "no-wallet" },
+      { kind: "unsigned" },
+      { kind: "declined" },
+      { kind: "failed", message: "wrong chain" },
+    ];
+    for (const state of states) {
+      expect(authBlockReason(state) ?? "").not.toMatch(/[—–]|\s-\s/);
+    }
   });
 });
 
@@ -802,5 +819,555 @@ describe("fetchWithWalletAuth with a Dynamic session token", () => {
     expect(result.response.status).toBe(401);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(signMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ------------------------------------ wallet logins prove once per session
+//
+// A connect-only wallet (MetaMask, Coinbase, Base Account, WalletConnect) has
+// no Dynamic session token until it signs Dynamic's own sign-in once. Before
+// this, every private read opened the ad-hoc "prove control" signature, good
+// for eight minutes and gone on reload. Now the first prompt a wallet login
+// meets IS the session proof, so the one signature buys a token that lasts
+// the session. The ad-hoc signature stays as the fallback (and the e2e suite
+// signs it directly), but a declined proof never turns into a second prompt.
+
+describe("getWalletAuth with a session proof", () => {
+  function provingSession() {
+    let token: string | undefined;
+    const proveSession = vi.fn(async () => {
+      token = sessionToken();
+      return "proven" as const;
+    });
+    return { proveSession, getSessionToken: () => token };
+  }
+
+  it("prefers a session token that already covers the wallet: no proof, no signature", async () => {
+    const proveSession = vi.fn();
+    const signMessage = vi.fn();
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => sessionToken(),
+      proveSession,
+      now: () => NOW,
+    });
+    expect(auth.kind === "ok" && auth.credential).toBeNull();
+    expect(proveSession).not.toHaveBeenCalled();
+    expect(signMessage).not.toHaveBeenCalled();
+  });
+
+  it("tries the session proof before the ad-hoc signature and sends the token it yields", async () => {
+    const { proveSession, getSessionToken } = provingSession();
+    const signMessage = vi.fn();
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken,
+      proveSession,
+      now: () => NOW,
+    });
+    expect(proveSession).toHaveBeenCalledTimes(1);
+    expect(signMessage).not.toHaveBeenCalled();
+    expect(auth.kind === "ok" && auth.headers.authorization).toBe(
+      `Bearer ${getSessionToken()}`,
+    );
+  });
+
+  it("serves every later call, and a reload's worth of taps, from that one proof", async () => {
+    const { proveSession, getSessionToken } = provingSession();
+    const signMessage = vi.fn();
+    const params = { address: ADDRESS, signMessage, getSessionToken, proveSession, now: () => NOW };
+    await getWalletAuth(params);
+    await getWalletAuth({ ...params, refresh: true });
+    await getWalletAuth({ ...params, now: () => NOW + CLIENT_WALLET_AUTH_TTL_MS + 1 });
+    expect(proveSession).toHaveBeenCalledTimes(1);
+    expect(signMessage).not.toHaveBeenCalled();
+  });
+
+  it("never runs the proof for a cachedOnly read", async () => {
+    const proveSession = vi.fn();
+    const signMessage = vi.fn();
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession,
+      cachedOnly: true,
+      now: () => NOW,
+    });
+    expect(auth).toEqual({ kind: "unsigned" });
+    expect(proveSession).not.toHaveBeenCalled();
+    expect(signMessage).not.toHaveBeenCalled();
+  });
+
+  it("a declined proof opens no second prompt in the same tap", async () => {
+    const proveSession = vi.fn(async () => "declined" as const);
+    const signMessage = vi.fn();
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession,
+      now: () => NOW,
+    });
+    expect(auth).toEqual({ kind: "declined" });
+    expect(signMessage).not.toHaveBeenCalled();
+    expect(sessionProofWasDeclined(ADDRESS)).toBe(true);
+  });
+
+  it("after a decline the next tap falls back to today's signature, never the proof again", async () => {
+    const proveSession = vi.fn(async () => "declined" as const);
+    const signMessage = vi.fn().mockResolvedValue(`0x${"21".repeat(65)}`);
+    const params = {
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession,
+      now: () => NOW,
+    };
+    await getWalletAuth(params);
+    const second = await getWalletAuth({ ...params, refresh: true });
+    const third = await getWalletAuth({ ...params, refresh: true });
+    expect(proveSession).toHaveBeenCalledTimes(1);
+    expect(signMessage).toHaveBeenCalledTimes(2);
+    expect(second.kind === "ok" && second.headers[WALLET_AUTH_SIGNATURE_HEADER]).toBe(
+      `0x${"21".repeat(65)}`,
+    );
+    expect(third.kind).toBe("ok");
+  });
+
+  it("falls back to the signature in the same tap when the proof is unavailable", async () => {
+    // Dynamic already signed in with another credential, an embedded wallet,
+    // or no Dynamic client: nothing was prompted, so the signature is the one.
+    const proveSession = vi.fn(async () => "unavailable" as const);
+    const signMessage = vi.fn().mockResolvedValue(`0x${"22".repeat(65)}`);
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession,
+      now: () => NOW,
+    });
+    expect(signMessage).toHaveBeenCalledTimes(1);
+    expect(auth.kind === "ok" && auth.credential?.signature).toBe(`0x${"22".repeat(65)}`);
+    expect(sessionProofWasDeclined(ADDRESS)).toBe(false);
+  });
+
+  it("falls back to the signature when the proof throws", async () => {
+    const proveSession = vi.fn(async () => {
+      throw new Error("Dynamic is not ready");
+    });
+    const signMessage = vi.fn().mockResolvedValue(`0x${"23".repeat(65)}`);
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession,
+      now: () => NOW,
+    });
+    expect(signMessage).toHaveBeenCalledTimes(1);
+    expect(auth.kind).toBe("ok");
+  });
+
+  it("falls back to the signature when a proven session's token was refused by the server", async () => {
+    // A 401 set the token aside; the refresh must sign, not resend it.
+    const token = sessionToken();
+    const proveSession = vi.fn(async () => "proven" as const);
+    const signMessage = vi.fn().mockResolvedValue(`0x${"24".repeat(65)}`);
+    const requestAuth = (options?: { refresh?: boolean; cachedOnly?: boolean }) =>
+      getWalletAuth({
+        address: ADDRESS,
+        signMessage,
+        getSessionToken: () => token,
+        proveSession,
+        now: () => NOW,
+        ...options,
+      });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+
+    const result = await fetchWithWalletAuth("/api/x", undefined, requestAuth, fetchImpl);
+
+    expect(result.response.status).toBe(200);
+    expect(signMessage).toHaveBeenCalledTimes(1);
+    const second = fetchImpl.mock.calls[1][1] as { headers: Headers };
+    expect(second.headers.get("authorization")).toBeNull();
+  });
+
+  it("shares one proof between surfaces asking at the same moment", async () => {
+    let finish: (() => void) | undefined;
+    let token: string | undefined;
+    const proveSession = vi.fn(
+      () =>
+        new Promise<"proven">((resolve) => {
+          finish = () => {
+            token = sessionToken();
+            resolve("proven");
+          };
+        }),
+    );
+    const params = {
+      address: ADDRESS,
+      signMessage: vi.fn(),
+      getSessionToken: () => token,
+      proveSession,
+      now: () => NOW,
+    };
+    const all = Promise.all([getWalletAuth(params), getWalletAuth(params)]);
+    await Promise.resolve();
+    finish?.();
+    const results = await all;
+    expect(proveSession).toHaveBeenCalledTimes(1);
+    expect(results.every((r) => r.kind === "ok")).toBe(true);
+  });
+
+  it("a decline remembered elsewhere (the sign-in sheet) sends the next tap to the signature", async () => {
+    rememberSessionProofDecline(ADDRESS);
+    const proveSession = vi.fn();
+    const signMessage = vi.fn().mockResolvedValue(`0x${"25".repeat(65)}`);
+    const auth = await getWalletAuth({
+      address: ADDRESS.toLowerCase(),
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession,
+      now: () => NOW,
+    });
+    expect(proveSession).not.toHaveBeenCalled();
+    expect(signMessage).toHaveBeenCalledTimes(1);
+    expect(auth.kind).toBe("ok");
+  });
+
+  it("a proven session clears an earlier decline", async () => {
+    await getWalletAuth({
+      address: ADDRESS,
+      signMessage: vi.fn(),
+      getSessionToken: () => undefined,
+      proveSession: async () => "declined" as const,
+      now: () => NOW,
+    });
+    expect(sessionProofWasDeclined(ADDRESS)).toBe(true);
+    forgetSessionProofDecline(ADDRESS);
+    expect(sessionProofWasDeclined(ADDRESS)).toBe(false);
+  });
+});
+
+describe("walletAuthRequester", () => {
+  it("binds the token reader and the proof, and keeps cachedOnly silent", async () => {
+    const proveSession = vi.fn(async () => "declined" as const);
+    const signMessage = vi.fn();
+    const requestAuth = walletAuthRequester({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession,
+    });
+    expect(await requestAuth({ cachedOnly: true })).toEqual({ kind: "unsigned" });
+    expect(proveSession).not.toHaveBeenCalled();
+    expect(await requestAuth()).toEqual({ kind: "declined" });
+    expect(proveSession).toHaveBeenCalledTimes(1);
+    expect(signMessage).not.toHaveBeenCalled();
+  });
+
+  it("reports no wallet when there is no address", async () => {
+    const requestAuth = walletAuthRequester({
+      address: null,
+      signMessage: null,
+      getSessionToken: null,
+      proveSession: null,
+    });
+    expect(await requestAuth()).toEqual({ kind: "no-wallet" });
+  });
+});
+
+describe("the session proof is asked about the wallet in hand", () => {
+  it("passes the address to the proof, so it never proves a different wallet", async () => {
+    let token: string | undefined;
+    const proveSession = vi.fn(async () => {
+      token = sessionToken();
+      return "proven" as const;
+    });
+    await getWalletAuth({
+      address: ADDRESS,
+      signMessage: vi.fn(),
+      getSessionToken: () => token,
+      proveSession,
+      now: () => NOW,
+    });
+    // Unconfirmed: nobody tapped a Verify button for this request, so the
+    // proof has to explain itself before the wallet opens.
+    expect(proveSession).toHaveBeenCalledWith(ADDRESS, { confirmed: false });
+  });
+
+  it("an explicit Verify tap after a decline tries the session proof again", async () => {
+    // The declined memory stops a loop of prompts on ordinary taps; the one
+    // button whose whole job is verifying clears it first.
+    let token: string | undefined;
+    const proveSession = vi
+      .fn<(address: string) => Promise<"proven" | "declined" | "unavailable">>()
+      .mockResolvedValueOnce("declined")
+      .mockImplementationOnce(async () => {
+        token = sessionToken();
+        return "proven";
+      });
+    const signMessage = vi.fn();
+    const params = {
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => token,
+      proveSession,
+      now: () => NOW,
+    };
+    expect(await getWalletAuth(params)).toEqual({ kind: "declined" });
+    forgetSessionProofDecline(ADDRESS);
+    const verified = await getWalletAuth({ ...params, refresh: true });
+    expect(proveSession).toHaveBeenCalledTimes(2);
+    expect(signMessage).not.toHaveBeenCalled();
+    expect(verified.kind === "ok" && verified.headers.authorization).toBe(`Bearer ${token}`);
+    expect(sessionProofWasDeclined(ADDRESS)).toBe(false);
+  });
+});
+
+describe("cachedOnlyRequester", () => {
+  // Page loads read through this. Opening a page must never open a wallet,
+  // whatever the fetch helper asks for on a 401.
+  //
+  // walletAuthRequester reads the real clock (a React caller has no `now` to
+  // pass), so these tokens expire an hour from the real now, not from NOW.
+  // Minted from NOW they were already expired, and the first test passed
+  // without ever sending the token it is about.
+  const liveToken = () => sessionToken({ expMs: Date.now() + 60 * 60 * 1000 });
+
+  it("never prompts, not even for the refresh a 401 retry asks for", async () => {
+    const token = liveToken();
+    const signMessage = vi.fn();
+    const proveSession = vi.fn();
+    const prompting = walletAuthRequester({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => token,
+      proveSession,
+    });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("{}", { status: 401 }));
+
+    const result = await fetchWithWalletAuth(
+      "/api/wearable/progress",
+      undefined,
+      cachedOnlyRequester(prompting),
+      fetchImpl,
+    );
+
+    // The token went out first, the 401 set it aside, and the retry stayed silent.
+    const first = fetchImpl.mock.calls[0][1] as { headers: Headers };
+    expect(first.headers.get("authorization")).toBe(`Bearer ${token}`);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result.auth).toEqual({ kind: "unsigned" });
+    expect(signMessage).not.toHaveBeenCalled();
+    expect(proveSession).not.toHaveBeenCalled();
+  });
+
+  it("still reads with the session token when there is one", async () => {
+    const token = liveToken();
+    const requestAuth = cachedOnlyRequester(
+      walletAuthRequester({
+        address: ADDRESS,
+        signMessage: vi.fn(),
+        getSessionToken: () => token,
+        proveSession: vi.fn(),
+      }),
+    );
+    const auth = await requestAuth();
+    expect(auth.kind === "ok" && auth.headers.authorization).toBe(`Bearer ${token}`);
+  });
+});
+
+// ------------------------------------------- never a cold wallet popup
+//
+// The post-connect sheet explains the one signature, but most wallet logins
+// never see it: every reload is a silent reconnect, and every wallet that
+// connected before this shipped starts unproven. For them the first prompt
+// came from whatever surface asked (a page load of /challenges, the verdict
+// card's mount, Join's gas drip, Check my wearable), and the wallet opened
+// cold. So every prompt nobody confirmed is asked about first, in plain
+// words, and the wallet opens only after the player says yes.
+
+describe("getWalletAuth asks before it opens the wallet", () => {
+  const SIG = `0x${"31".repeat(65)}`;
+
+  it("asks before the plain signature, and a Not now opens nothing and is not remembered", async () => {
+    const confirmPrompt = vi.fn(async () => false);
+    const signMessage = vi.fn().mockResolvedValue(SIG);
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession: null,
+      confirmPrompt,
+      now: () => NOW,
+    });
+    expect(auth).toEqual({ kind: "declined" });
+    expect(confirmPrompt).toHaveBeenCalledWith(ADDRESS, "signature");
+    expect(signMessage).not.toHaveBeenCalled();
+    expect(sessionProofWasDeclined(ADDRESS)).toBe(false);
+  });
+
+  it("signs once the player says yes", async () => {
+    const confirmPrompt = vi.fn(async () => true);
+    const signMessage = vi.fn().mockResolvedValue(SIG);
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession: async () => "unavailable" as const,
+      confirmPrompt,
+      now: () => NOW,
+    });
+    expect(confirmPrompt).toHaveBeenCalledTimes(1);
+    expect(signMessage).toHaveBeenCalledTimes(1);
+    expect(auth.kind === "ok" && auth.credential?.signature).toBe(SIG);
+  });
+
+  it("a Verify tap is the confirmation: no second question", async () => {
+    const confirmPrompt = vi.fn(async () => false);
+    const proveSession = vi.fn(async () => "unavailable" as const);
+    const signMessage = vi.fn().mockResolvedValue(SIG);
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession,
+      confirmPrompt,
+      confirmed: true,
+      now: () => NOW,
+    });
+    expect(auth.kind).toBe("ok");
+    expect(confirmPrompt).not.toHaveBeenCalled();
+    expect(proveSession).toHaveBeenCalledWith(ADDRESS, { confirmed: true });
+  });
+
+  it("the requester carries the Verify tap's confirmation through", async () => {
+    const proveSession = vi.fn(async () => "declined" as const);
+    const requestAuth = walletAuthRequester({
+      address: ADDRESS,
+      signMessage: vi.fn(),
+      getSessionToken: () => undefined,
+      proveSession,
+      confirmPrompt: vi.fn(async () => false),
+    });
+    await requestAuth({ refresh: true, confirmed: true });
+    expect(proveSession).toHaveBeenCalledWith(ADDRESS, { confirmed: true });
+  });
+
+  it("a session proof the player waved off is a no for this tap, never remembered as a wallet decline", async () => {
+    // Remembering it would send the next tap straight to the plain signature.
+    const proveSession = vi.fn(async () => "dismissed" as const);
+    const confirmPrompt = vi.fn(async () => true);
+    const signMessage = vi.fn();
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession,
+      confirmPrompt,
+      now: () => NOW,
+    });
+    expect(auth).toEqual({ kind: "declined" });
+    expect(signMessage).not.toHaveBeenCalled();
+    expect(confirmPrompt).not.toHaveBeenCalled();
+    expect(sessionProofWasDeclined(ADDRESS)).toBe(false);
+  });
+
+  it("surfaces asking together share one question", async () => {
+    let answer: ((yes: boolean) => void) | undefined;
+    const confirmPrompt = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const signMessage = vi.fn().mockResolvedValue(SIG);
+    const params = {
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession: null,
+      confirmPrompt,
+      now: () => NOW,
+    };
+    const both = Promise.all([getWalletAuth(params), getWalletAuth(params)]);
+    await Promise.resolve();
+    answer?.(true);
+    const results = await both;
+    expect(confirmPrompt).toHaveBeenCalledTimes(1);
+    expect(signMessage).toHaveBeenCalledTimes(1);
+    expect(results.every((r) => r.kind === "ok")).toBe(true);
+  });
+
+  it("uses a credential that landed while the question was open instead of opening the wallet", async () => {
+    // The player verified from another surface (or Dynamic signed them in)
+    // while this question waited: yes means go on, not sign twice.
+    let token: string | undefined;
+    const confirmPrompt = vi.fn(async () => {
+      token = sessionToken();
+      return true;
+    });
+    const signMessage = vi.fn();
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => token,
+      proveSession: null,
+      confirmPrompt,
+      now: () => NOW,
+    });
+    expect(signMessage).not.toHaveBeenCalled();
+    expect(auth.kind === "ok" && auth.headers.authorization).toBe(`Bearer ${token}`);
+  });
+
+  it("a throwing question counts as a no, never as a yes", async () => {
+    const signMessage = vi.fn();
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => undefined,
+      proveSession: null,
+      confirmPrompt: async () => {
+        throw new Error("sheet unmounted");
+      },
+      now: () => NOW,
+    });
+    expect(auth).toEqual({ kind: "declined" });
+    expect(signMessage).not.toHaveBeenCalled();
+  });
+
+  it("a cachedOnly read never asks", async () => {
+    const confirmPrompt = vi.fn(async () => true);
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage: vi.fn(),
+      getSessionToken: () => undefined,
+      proveSession: vi.fn(),
+      confirmPrompt,
+      cachedOnly: true,
+      now: () => NOW,
+    });
+    expect(auth).toEqual({ kind: "unsigned" });
+    expect(confirmPrompt).not.toHaveBeenCalled();
+  });
+
+  it("a session token that covers the wallet never asks", async () => {
+    const confirmPrompt = vi.fn(async () => true);
+    const auth = await getWalletAuth({
+      address: ADDRESS,
+      signMessage: vi.fn(),
+      getSessionToken: () => sessionToken(),
+      proveSession: vi.fn(),
+      confirmPrompt,
+      now: () => NOW,
+    });
+    expect(auth.kind).toBe("ok");
+    expect(confirmPrompt).not.toHaveBeenCalled();
   });
 });

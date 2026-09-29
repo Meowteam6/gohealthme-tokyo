@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import EnsName from "@/components/ens/EnsName";
 import SpotterCaption from "@/components/spotter/SpotterCaption";
-import { Button, Card, Skeleton, Stat, StatRow, TEXT_LINK } from "@/components/ui";
+import { Card, Skeleton, Stat, StatRow, TEXT_LINK } from "@/components/ui";
 import NightTally from "@/components/game/NightTally";
 import {
   displayGoalSpec,
@@ -32,6 +32,8 @@ import {
   providerQueryKey,
 } from "@/lib/wearable-provider";
 import { useWalletAuth } from "@/lib/useWalletAuth";
+import { cachedOnlyRequester } from "@/lib/client-auth";
+import VerifyWalletAction from "@/components/VerifyWalletAction";
 import { nightTally, runClock, type NightTally as Tally, type RunStanding } from "@/lib/game/tally";
 import { runFigureOf } from "@/lib/game/run-scene";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
@@ -69,19 +71,21 @@ export function usePlayers(poolId: bigint) {
 /**
  * The nights for one player on one run, in whichever state the wearable read
  * is in. Every branch says what is true and what, if anything, the player can
- * do. `promptForData` lets the dashboard ask for the one signature; the run
- * page never opens a prompt on load and shows a button instead.
+ * do. The read is cachedOnly everywhere: opening a page never opens a wallet.
+ * With a session token (email, passkey, or a wallet proven once this session)
+ * the nights simply load; without one they say so and offer Verify wallet.
  */
 export function useRunNights({
   pool,
   address,
-  promptForData,
 }: {
   pool: PoolInfo;
   address: `0x${string}`;
-  promptForData: boolean;
+  /** Ignored: no page load prompts any more. Kept so older call sites
+   *  compile; drop it at the call site when next touched. */
+  promptForData?: boolean;
 }): { nights: ReactNode; tally: Tally | null; line: string | undefined } {
-  const requestAuth = useWalletAuth();
+  const requestAuth = cachedOnlyRequester(useWalletAuth());
   const now = useNowSeconds();
   const wearable = evidenceTypeOf(pool.goalSpec) === "wearable";
   const spec = classifyWearableGoal(pool.goalSpec);
@@ -89,15 +93,7 @@ export function useRunNights({
 
   const progressQuery = useQuery({
     queryKey: providerQueryKey(address, pool.id, metric),
-    queryFn: () =>
-      fetchProviderState(
-        address,
-        promptForData
-          ? requestAuth
-          : (options) => requestAuth({ ...options, cachedOnly: true }),
-        pool,
-        metric,
-      ),
+    queryFn: () => fetchProviderState(address, requestAuth, pool, metric),
     enabled: wearable,
     retry: false,
   });
@@ -140,23 +136,8 @@ export function useRunNights({
       </p>
     );
   } else if (providerAuthReason(state) !== null) {
-    nights = (
-      <div className="grid justify-items-start gap-3">
-        <p className={quiet}>
-          Your nights are private, so I need one signature to count them. Free,
-          no transaction.
-        </p>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            void requestAuth({ refresh: true }).then(() => progressQuery.refetch());
-          }}
-        >
-          Show my nights
-        </Button>
-      </div>
-    );
+    // Verifying re-reads every wallet-gated query, this one included.
+    nights = <VerifyWalletAction lead="Your nights are private to your wallet." />;
   } else if (providerMetricUnavailable(state)) {
     nights = (
       <p className="m-0 text-[0.9375rem] font-semibold leading-[1.45] text-foreground">
@@ -184,21 +165,19 @@ export function useRunNights({
 export default function RunBoard({
   pool,
   address,
-  promptForData,
   showLink = false,
   showTitle = true,
 }: {
   pool: PoolInfo;
   address: `0x${string}`;
-  /** The dashboard asks for a signature to read your own data; the run page
-   *  does not open a prompt on load. */
-  promptForData: boolean;
+  /** Ignored: no page load prompts any more (see useRunNights). */
+  promptForData?: boolean;
   showLink?: boolean;
   /** Off where the page's own heading already names the run. */
   showTitle?: boolean;
 }) {
   const now = useNowSeconds();
-  const { nights, line } = useRunNights({ pool, address, promptForData });
+  const { nights, line } = useRunNights({ pool, address });
   const players = usePlayers(pool.id);
   const selfStaked = pool.bountyModel === 2;
   const feeBps = useCommitmentFee(selfStaked).bps;
