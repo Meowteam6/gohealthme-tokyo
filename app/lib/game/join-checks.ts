@@ -15,6 +15,8 @@ import type {
   VerifierState,
 } from "@/lib/game/lobby";
 import type { AccessStatus } from "@/lib/useAccess";
+import type { HumanProof, HumanStatus } from "@/lib/game/character";
+import { challengeCreatePausedDetail, type MoneyInState } from "@/lib/switches";
 
 /**
  * The closed-beta gate is off only for the Playwright suite
@@ -76,20 +78,41 @@ export function approvalModeOf(probe: {
 }
 
 /**
- * Whether a dare can be created right now. Every dare the create form makes
- * is an upload-proof run (CreateChallenge encodeGoal), so with the document
- * checker off it would fund a reward nobody can ever be verified on. Checked
- * before the form, and again on submit, never after the deposit.
+ * Whether a challenge can be created right now. Checked before the form, and
+ * again on submit, never after the deposit. The document checker and the
+ * payout rule come first (a challenge nobody could be checked or paid on);
+ * then new money (KILL_BASE_MONEY_IN): a new challenge is new money, and its
+ * creator's own stake could not go in while the pause holds. The create
+ * preflight (/api/challenges/health) refuses on the same switch, so a flip
+ * between page load and submit still stops before any money moves.
+ *
+ * Last, the creator themself (`creator`, optional): a list player or an admin
+ * on a build where a hit is confirmed with World ID could never stake in the
+ * challenge they are about to fund (collectNeedsWorldOf, the lobby's
+ * "world-to-collect" lock), and the create moves their extra BEFORE their own
+ * stake. So the form says so first, with World ID as the fix, and holds while
+ * that answer is still being read.
  */
 export type CreateBlock =
   | { kind: "ok" }
   | { kind: "checking" }
   | { kind: "retry"; title: string }
-  | { kind: "paused"; title: string; detail: string };
+  | { kind: "paused"; title: string; detail: string }
+  | {
+      kind: "needs-world";
+      title: string;
+      detail: string;
+      fix: { label: string; href: string };
+    };
+
+/** Where the create form sends a creator to add World ID, and back. */
+const CREATE_PATH = "/challenge/new";
 
 export function challengeCreateBlock(
   verifier: VerifierState,
   payouts: PayoutState,
+  money: { state: MoneyInState; reason: string | null },
+  creator?: { collectNeedsWorld: boolean; checking: boolean },
 ): CreateBlock {
   if (verifier === "off") {
     return {
@@ -107,10 +130,63 @@ export function challengeCreateBlock(
         "Players who hit confirm with World ID before the contract pays, and that step is not set up here right now. I am not letting you put money on a challenge that could not pay out. Nothing has been charged.",
     };
   }
+  if (money.state === "paused") {
+    return {
+      kind: "paused",
+      title: "Challenges are paused for now",
+      detail: challengeCreatePausedDetail(money.reason, "has been"),
+    };
+  }
   if (verifier === "error") return { kind: "retry", title: "I could not check my document checker just now" };
   if (payouts === "error") return { kind: "retry", title: "I could not check how payouts work here just now" };
-  if (verifier === "loading" || payouts === "loading") return { kind: "checking" };
+  if (money.state === "error") return { kind: "retry", title: "I could not check whether stakes are open just now" };
+  if (
+    verifier === "loading" ||
+    payouts === "loading" ||
+    money.state === "loading" ||
+    creator?.checking === true
+  ) {
+    return { kind: "checking" };
+  }
+  if (creator?.collectNeedsWorld === true) {
+    return {
+      kind: "needs-world",
+      title: "Hits here are confirmed with World ID",
+      detail:
+        "Before I pay a hit here, the player confirms it with World ID, and you got in through the list without it. Your own stake could not go in, so I am not letting you put money into a new challenge yet. Add World ID once and you can start one. Nothing has been charged.",
+      fix: {
+        label: "Add World ID",
+        href: `/character?step=human&next=${encodeURIComponent(CREATE_PATH)}`,
+      },
+    };
+  }
   return { kind: "ok" };
+}
+
+/**
+ * True when this player could lose a stake but never collect a hit: they are
+ * a proven human through the list (or an admin) on a World-on build, and a
+ * hit here is confirmed with World ID before it pays (WORLD_APPROVAL_MODE=
+ * world). A miss is recorded without any confirmation, so without World ID
+ * the stake could only go one way. The join says so before the stake, with
+ * World ID as the fix (lib/game/lobby.ts "world-to-collect").
+ *
+ * Only where the list path newly opened the join (World on, 2026-09-30); a
+ * mocked confirmation anyone can give, an off one, or a mode still being read
+ * (the join already holds on that) never trips it.
+ */
+export function collectNeedsWorldOf(i: {
+  worldLane: LaneAvailability | "loading";
+  approvalMode: ApprovalModeView;
+  human: HumanStatus | null;
+  humanProof: HumanProof | null;
+}): boolean {
+  return (
+    i.worldLane === "on" &&
+    i.approvalMode === "world" &&
+    i.human === "verified" &&
+    i.humanProof !== "world"
+  );
 }
 
 /** Whether a verified win can pay on this build. */

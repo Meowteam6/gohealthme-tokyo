@@ -218,20 +218,26 @@ export function challengeGoalIssue(goalSpec: string): string | null {
   return launchGoalIssue(goalSpec);
 }
 
+/** Why a live challenge takes no money on this build right now. */
+export type ChallengePauseReason = "checker" | "payouts" | "money-in";
+
 /** What stops a live challenge from taking money on this build, or null.
  *  "checker": the goal needs the document checker and it is off. "payouts": a
- *  verified win could not pay. A wearable challenge never waits on the
- *  document checker. */
+ *  verified win could not pay. "money-in": new money is switched off by the
+ *  operator (KILL_BASE_MONEY_IN); money already in is untouched. A wearable
+ *  challenge never waits on the document checker. */
 export function challengePauseReason(input: {
   goalSpec: string;
   documentCheckerAvailable: boolean;
   payoutsMisconfigured: boolean;
-}): "checker" | "payouts" | null {
+  moneyInPaused?: boolean;
+}): ChallengePauseReason | null {
   if (
     proofPolicyOf(input.goalSpec).floor !== "wearable" &&
     !input.documentCheckerAvailable
   ) {
     return "checker";
   }
-  return input.payoutsMisconfigured ? "payouts" : null;
+  if (input.payoutsMisconfigured) return "payouts";
+  return input.moneyInPaused === true ? "money-in" : null;
 }

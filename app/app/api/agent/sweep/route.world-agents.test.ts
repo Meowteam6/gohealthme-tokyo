@@ -272,3 +272,108 @@ describe("sweep and unapproved PASS decisions", () => {
     expect(settleRecordedClaim).toHaveBeenCalledTimes(1);
   });
 });
+
+// KILL_WORLD_ID (Andre, 2026-09-30) turns the payout confirmation off. A hit
+// that was waiting on the human when the switch flipped must still pay: the
+// sweep records it on the verdict and keeps the pool phase off its pool.
+describe("sweep with World ID paused by the kill switch", () => {
+  async function seedWaiting(
+    appendLedger: Awaited<ReturnType<typeof loadRoute>>["appendLedger"],
+    status: "requested" | "declined" = "requested",
+  ) {
+    await appendLedger(GOAL, {
+      kind: "plan",
+      steps: [{ service: "attester-read", label: "read", estUsd: "0.02" }],
+      capUsd: "1.00",
+      poolId: "1",
+      participant: USER,
+    });
+    await appendLedger(GOAL, {
+      kind: "verdict",
+      verified: true,
+      confidence: "high",
+      reason: "7 of 7 nights",
+      ref: "wearable-100",
+    });
+    await appendLedger(GOAL, { kind: "reason", decision: "pay", note: "paying.", ref: "wearable-100" });
+    await appendLedger(GOAL, {
+      kind: "approval",
+      status,
+      requestId: "apr_00000000-0000-0000-0000-000000000000",
+      action: `settle:${GOAL}:1`,
+      provider: "mock",
+    });
+  }
+
+  it("records a hit still waiting on its confirmation, and holds its pool", async () => {
+    const { GET, appendLedger } = await loadRoute();
+    vi.stubEnv("KILL_WORLD_ID", "1");
+    await seedWaiting(appendLedger);
+    poolCount.mockResolvedValue(1n);
+    recordApprovedClaim.mockResolvedValue({ status: "paid", ledger: [] });
+
+    const body = (await (await GET(cron())).json()) as {
+      swept: string[];
+      recorded: number;
+      settled: number;
+      poolsSettled: number;
+    };
+    expect(recordApprovedClaim).toHaveBeenCalledTimes(1);
+    expect(recordApprovedClaim.mock.calls[0][1]).toMatchObject({
+      poolId: 1n,
+      participant: USER,
+      attesterId: "wearable-100",
+    });
+    expect(body).toMatchObject({ swept: [GOAL], recorded: 1, settled: 1, poolsSettled: 0 });
+    expect(settleDuePoolAsSpotter).not.toHaveBeenCalled();
+  });
+
+  it("does not pay over a human no", async () => {
+    const { GET, appendLedger } = await loadRoute();
+    vi.stubEnv("KILL_WORLD_ID", "1");
+    await seedWaiting(appendLedger, "declined");
+    const body = (await (await GET(cron())).json()) as { swept: string[] };
+    expect(recordApprovedClaim).not.toHaveBeenCalled();
+    expect(body.swept).toEqual([]);
+  });
+
+  it("leaves a waiting hit alone while the confirmation is on (regression)", async () => {
+    const { GET, appendLedger } = await loadRoute();
+    vi.stubEnv("KILL_WORLD_ID", "");
+    await seedWaiting(appendLedger);
+    await GET(cron());
+    expect(recordApprovedClaim).not.toHaveBeenCalled();
+  });
+});
+
+// MONEY OUT NEVER PAUSES: with both switches thrown the sweep still records
+// confirmed wins and settles recorded ones.
+describe("sweep with both kill switches thrown", () => {
+  it("still settles a recorded claim and still records an approved one", async () => {
+    const { GET, appendLedger, addPendingSettlement } = await loadRoute();
+    vi.stubEnv("KILL_WORLD_ID", "1");
+    vi.stubEnv("KILL_BASE_MONEY_IN", "1");
+    await seedApprovedUnrecorded(appendLedger);
+    await addPendingSettlement(GOAL, Math.floor(Date.now() / 1000));
+    recordApprovedClaim.mockResolvedValue({ status: "paid", ledger: [] });
+    const first = (await (await GET(cron())).json()) as { recorded: number };
+    expect(first.recorded).toBe(1);
+
+    const OTHER_GOAL = "0x" + "cd".repeat(32);
+    await appendLedger(OTHER_GOAL, {
+      kind: "plan",
+      steps: [{ service: "attester-read", label: "read", estUsd: "0.02" }],
+      capUsd: "1.00",
+      poolId: "7",
+      participant: USER,
+    });
+    await appendLedger(OTHER_GOAL, { kind: "reason", decision: "pay", note: "paying.", ref: "job-1" });
+    await appendLedger(OTHER_GOAL, { kind: "record", goalId: OTHER_GOAL, registryStatus: "recorded" });
+    await addPendingSettlement(OTHER_GOAL, Math.floor(Date.now() / 1000) - 60);
+    settleRecordedClaim.mockResolvedValue({ status: "settled", ledger: [] });
+    const second = (await (await GET(cron())).json()) as { settled: number };
+    expect(settleRecordedClaim).toHaveBeenCalled();
+    expect(second.settled).toBeGreaterThanOrEqual(1);
+  });
+});
+

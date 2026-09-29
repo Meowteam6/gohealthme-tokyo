@@ -150,6 +150,42 @@ describe("approval by World ID (prove-human)", () => {
   });
 });
 
+describe("World ID paused by the kill switch (KILL_WORLD_ID)", () => {
+  const NULLIFIER = `0x${"8".padStart(64, "0")}`;
+
+  it("keeps an existing World binding approved, so a verified player keeps their way in", async () => {
+    vi.stubEnv("WORLD_VERIFY_MODE", "mock");
+    const access = await load("");
+    const human = await import("@/lib/server/world/human");
+    await human.bindHuman({
+      address: USER,
+      nullifierHash: NULLIFIER,
+      mode: "mock",
+      protocolVersion: "4.0",
+    });
+    vi.stubEnv("KILL_WORLD_ID", "1");
+    expect(await access.getAccessStatus(USER)).toEqual({
+      status: "approved",
+      isAdmin: false,
+      source: "world",
+    });
+    // isAllowed gates withdraw, evidence and challenge pages: still open.
+    expect(await access.isAllowed(USER)).toBe(true);
+    // Nobody new gets in through World while it is paused.
+    expect(await access.isAllowed(OTHER)).toBe(false);
+  });
+
+  it("still lets the list and admins in while World is paused", async () => {
+    vi.stubEnv("WORLD_VERIFY_MODE", "mock");
+    vi.stubEnv("KILL_WORLD_ID", "true");
+    const access = await load(ADMIN);
+    await access.requestAccess({ address: USER });
+    await access.decideAccess({ address: USER, decision: "approve", adminAddress: ADMIN });
+    expect(await access.isAllowed(USER)).toBe(true);
+    expect(await access.isAllowed(ADMIN)).toBe(true);
+  });
+});
+
 describe("requestAccess idempotency", () => {
   it("opens a fresh request as pending and records the fields", async () => {
     const access = await load("");

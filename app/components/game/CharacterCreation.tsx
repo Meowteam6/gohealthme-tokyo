@@ -34,6 +34,9 @@ import {
 } from "@/lib/game/character";
 import type { CharacterView } from "@/lib/game/useCharacter";
 import type { Onboarding } from "@/lib/game/onboarding-store";
+import { useSwitches } from "@/lib/game/useSwitches";
+import { worldPausedLine } from "@/lib/switches";
+import { useApprovalMode } from "@/components/game/ApprovalNote";
 
 const TITLE: Record<StepId, string> = {
   "sign-in": "Sign in",
@@ -115,20 +118,75 @@ function HumanBody({
 }) {
   const [failure, setFailure] = useState<string | null>(null);
   const [useList, setUseList] = useState(false);
+  const switches = useSwitches();
+  // Where a hit is confirmed with World ID before it pays, the list gets a
+  // player in but not to a stake (lib/game/join-checks collectNeedsWorldOf):
+  // said here, before they ask for a spot or stake anything.
+  const confirmsWithWorld = useApprovalMode() === "world" && view.worldLane === "on";
   const address = view.address;
   if (address === null) return null;
   const state = view.steps.human;
+  const proof = view.character?.humanProof ?? null;
 
   if (view.humanMode === "world" && !useList) {
-    if (state.status === "done") {
+    if (state.status === "done" && proof !== "admin" && proof !== "list") {
       return (
         <Notice tone="ok" title={state.summary}>
           It covers every challenge you enter.
         </Notice>
       );
     }
+    if (state.status === "done") {
+      // In through the list (or an admin). Where a hit is confirmed with World
+      // ID, the list gets them in but not to a stake, so the notice never
+      // promises every challenge there; elsewhere World ID stays on offer as
+      // optional, because a name on the board comes with it (one per human).
+      return (
+        <div className="[&>*+*]:mt-3">
+          <Notice tone="ok" title={state.summary}>
+            {confirmsWithWorld
+              ? "You are in to look around and set up your player."
+              : "It covers every challenge you enter."}
+          </Notice>
+          <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
+            {confirmsWithWorld
+              ? "To stake, add World ID once: a hit here is confirmed with it before I pay. It also unlocks a name for the board."
+              : "Optional: verify with World ID once to pick a name for the board. Nothing changes about the challenges you can join."}
+          </p>
+          <ProveHuman
+            address={address}
+            onVerified={() => {
+              setFailure(null);
+              view.refresh();
+            }}
+            onFailed={(reason) => setFailure(reason)}
+          />
+          {failure !== null ? (
+            <Notice tone="error" live>
+              {failure} Nothing was recorded. You can try the scan again.
+            </Notice>
+          ) : null}
+          {onSkip !== undefined ? <SkipLink onSkip={onSkip} label="Not now" /> : null}
+        </div>
+      );
+    }
     return (
       <div className="[&>*+*]:mt-3">
+        {state.status === "waiting" ? (
+          <Notice
+            tone="limit"
+            title="Your list request is in"
+            live
+            action={
+              <Button type="button" variant="secondary" size="sm" onClick={() => view.access.refetch()}>
+                Check my spot
+              </Button>
+            }
+          >
+            You get in as soon as it is approved. World ID gets you in right now
+            instead, if you have it.
+          </Notice>
+        ) : null}
         <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
           One scan with World ID proves a real, unique person is playing. I never
           see who you are, only that you are one human.
@@ -146,7 +204,7 @@ function HumanBody({
             {failure} Nothing was recorded. You can try the scan again.
           </Notice>
         ) : null}
-        {!view.gate ? (
+        {!view.gate && state.status !== "waiting" ? (
           <button type="button" onClick={() => setUseList(true)} className={`${QUIET_ACTION} flex`}>
             No World ID? Ask for a spot on the list instead
           </button>
@@ -184,7 +242,14 @@ function HumanBody({
     <div className="[&>*+*]:mt-2">
       {view.worldLane !== "on" ? (
         <p className="m-0 text-[0.9375rem] text-muted">
-          World ID is not switched on for this build, so the list is the way in.
+          {switches.worldPaused
+            ? worldPausedLine(switches.reason)
+            : "World ID is not switched on for this build, so the list is the way in."}
+        </p>
+      ) : confirmsWithWorld ? (
+        <p className="m-0 text-[0.9375rem] text-muted">
+          The list gets you in to look around. Staking here needs World ID too,
+          because a hit is confirmed with it before I pay.
         </p>
       ) : null}
       <RequestAccess status={view.access.status} onSubmitted={view.access.refetch} />

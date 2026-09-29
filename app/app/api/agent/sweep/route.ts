@@ -41,6 +41,9 @@
 // recorded here through the same run loop the browser drives
 // (lib/server/agent/approved-record.ts), and its pool is held from the pool
 // phase meanwhile, so a confirmed win is never refunded as unadjudicated.
+// With the payout confirmation switched off (the World ID kill switch), a hit
+// whose request was still open is recorded the same way: nothing is left to
+// wait for, and the run loop's gate answers "off".
 //
 // THE MISS PHASE (commitment model, 2026-09-26). Between the claim phase and
 // the pool phase, every joined player of every pool that can record a miss
@@ -102,6 +105,7 @@ import {
   withinRecordHold,
   type ApprovedRecordTarget,
 } from "@/lib/server/agent/approved-record";
+import { approvalModeStatus } from "@/lib/server/agent/approval-mode-status";
 import { requireEnv, requireHealthPoolsAddress } from "@/lib/server/env";
 import { errorMessage, jsonError } from "@/lib/server/http";
 // --- ens ---
@@ -202,6 +206,8 @@ async function eligibility(
   goalId: string,
   ledger: LedgerEntry[],
   nowMs: number,
+  /** False when the payout confirmation is off on this deployment. */
+  confirmationRequired: boolean,
 ): Promise<Eligibility> {
   // --- miss rule ---
   // A recorded miss pays this player nothing, so the claim settle (which
@@ -218,7 +224,7 @@ async function eligibility(
     // ran because nobody polled after the confirmation (tab closed). Record
     // it now, and report the pool so the pool phase does not settle it
     // underneath this claim and refund a confirmed win.
-    const approved = approvedUnrecordedOf(ledger);
+    const approved = approvedUnrecordedOf(ledger, { confirmationRequired });
     if (approved !== null) {
       if (withinRecordHold(approved, nowMs)) {
         return { settle: false, record: approved, poolId: approved.poolId };
@@ -395,6 +401,9 @@ async function runSweep(): Promise<SweepCounts> {
     missSkips: [],
     missErrors: [],
   };
+  // Read once per sweep. A misconfigured confirmation stays required (fail
+  // closed): only a human yes is recorded, exactly as before.
+  const confirmationRequired = approvalModeStatus("agent/sweep") !== "off";
   const seen = new Set<string>();
   /** Pools the claim phase owns this tick; the pool phase must not touch them. */
   const claimPools = new Set<string>();
@@ -408,7 +417,7 @@ async function runSweep(): Promise<SweepCounts> {
     seen.add(goalId);
 
     const ledger = await readLedger(goalId);
-    const verdict = await eligibility(goalId, ledger, Date.now());
+    const verdict = await eligibility(goalId, ledger, Date.now(), confirmationRequired);
     if (verdict.poolId !== undefined) claimPools.add(verdict.poolId.toString());
     if (!verdict.settle && verdict.record !== undefined) {
       if (recordAttempts >= APPROVED_RECORDS_PER_SWEEP) return;

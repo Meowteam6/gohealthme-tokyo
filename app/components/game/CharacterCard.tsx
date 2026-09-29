@@ -10,6 +10,7 @@ import EnsName from "@/components/ens/EnsName";
 import { ChevronLink, TEXT_LINK } from "@/components/ui";
 import { runName } from "@/lib/game/landing";
 import { useOpenRuns } from "@/lib/game/useOpenRuns";
+import { humanStampOf, type Character, type HumanMode } from "@/lib/game/character";
 import type { CharacterView } from "@/lib/game/useCharacter";
 
 /** The checked chip: the One human stamp, and (Nikki, 2026-09-27) the paired
@@ -25,9 +26,12 @@ function CheckChip({ children }: { children: React.ReactNode }) {
   );
 }
 
-function HumanStamp({ verified, mode }: { verified: boolean; mode: "world" | "allowlist" }) {
-  if (verified) {
-    return <CheckChip>{mode === "world" ? "One human" : "On the list"}</CheckChip>;
+/** "One human" for World ID, "On the list" for the list and the admins, so a
+ *  list player on a World-on build is never stamped as World-verified. */
+function HumanStamp({ character, mode }: { character: Character; mode: HumanMode }) {
+  const stamp = humanStampOf(character, mode);
+  if (stamp !== null) {
+    return <CheckChip>{stamp}</CheckChip>;
   }
   return (
     <span className="inline-flex h-[26px] items-center whitespace-nowrap rounded-tag bg-fill-quiet px-2.5 text-[0.8125rem] font-semibold text-haze shadow-[inset_0_0_0_1px_var(--border-strong)]">
@@ -93,7 +97,6 @@ export default function CharacterCard({
 }) {
   const c = view.character;
   if (c === null) return null;
-  const verified = c.human === "verified";
   const nameNode =
     c.name !== null ? (
       <span>{c.name}</span>
@@ -109,7 +112,7 @@ export default function CharacterCard({
       >
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="type-heading truncate text-[1.375rem]">{nameNode}</span>
-          <HumanStamp verified={verified} mode={view.humanMode} />
+          <HumanStamp character={c} mode={view.humanMode} />
           {view.sensor.kind === "paired" ? <CheckChip>{view.sensor.device.label}</CheckChip> : null}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -122,7 +125,7 @@ export default function CharacterCard({
     );
   }
 
-  return <PlayerCard view={view} nameNode={nameNode} verified={verified} />;
+  return <PlayerCard view={view} nameNode={nameNode} />;
 }
 
 /** The full card on /character: the name with the human stamp beside it, the
@@ -132,11 +135,9 @@ export default function CharacterCard({
 function PlayerCard({
   view,
   nameNode,
-  verified,
 }: {
   view: CharacterView;
   nameNode: React.ReactNode;
-  verified: boolean;
 }) {
   const c = view.character;
   const open = useOpenRuns();
@@ -154,7 +155,7 @@ function PlayerCard({
           <p className="type-heading m-0 break-all text-[1.875rem] min-[900px]:text-[2.25rem]">
             {nameNode}
           </p>
-          <HumanStamp verified={verified} mode={view.humanMode} />
+          <HumanStamp character={c} mode={view.humanMode} />
         </div>
       </div>
       <dl className="m-0 divide-y divide-edge border-t border-edge">

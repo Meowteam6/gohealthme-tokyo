@@ -17,6 +17,23 @@
 // the goal spec and period from the pool on chain. Nothing here decides money;
 // the run loop's gate re-checks the approval and the pool state before any
 // write, exactly as it does for the browser.
+//
+// CONFIRMATION OFF (the World ID kill switch, Andre, 2026-09-30). When the payout
+// confirmation is switched off, a hit whose request was still open when the
+// switch flipped has nothing left to wait for: the run loop's gate answers
+// "off" and records it on the verdict. The sweep picks those up too
+// (`confirmationRequired: false`), so a verified hit is paid rather than
+// refunded for want of an open tab. That includes a lapsed ask (expired):
+// reading the approval status materializes expiry, and the dashboard reads it
+// for every open challenge, so a request that was open at the flip turns
+// "expired" the first time the player looks after its ten minutes, and the
+// run route would record it on the next poll anyway. A human no (declined)
+// and a settled pool (cancelled) are never picked.
+//
+// SETTLED FIRST. recordApprovedClaim reads the pool before driving the run
+// loop and stops on a settled one: settle() is one-shot and already refunded
+// the claim, and with the confirmation off no gate stands between the sweep
+// and a record write that can only revert, every tick of the hold window.
 
 import { isAddress, type Address, type Hex } from "viem";
 import type { LedgerEntry } from "@/lib/server/agent/ledger";
@@ -30,7 +47,8 @@ export interface ApprovedRecordTarget {
   participant: Address;
   attesterId: string;
   evidenceKind: EvidenceKind;
-  /** When the human approved, from the ledger row; null if unreadable. */
+  /** When the human approved (or, with the confirmation off, when SPOTTER
+   *  asked), from the ledger row; null if unreadable. */
   approvedAtMs: number | null;
 }
 
@@ -55,11 +73,18 @@ function evidenceKindOf(
 /**
  * The claim to record, or null. A claim qualifies only when ALL hold: no
  * record row yet, no settle row, SPOTTER's newest decision is pay, the newest
- * approval row is approved, and the plan row carries the pool linkage.
+ * approval row is approved (or, with the confirmation switched off, still an
+ * open request), and the plan row carries the pool linkage.
  */
 export function approvedUnrecordedOf(
   ledger: readonly LedgerEntry[],
+  options: {
+    /** False when the payout confirmation is off on this deployment
+     *  (approvalMode() === "off"). Defaults to true: only a human yes. */
+    confirmationRequired?: boolean;
+  } = {},
 ): ApprovedRecordTarget | null {
+  const confirmationRequired = options.confirmationRequired ?? true;
   if (ledger.some((e) => e.kind === "record" || e.kind === "settle")) return null;
 
   const reasons = ledger.filter(
@@ -74,7 +99,12 @@ export function approvedUnrecordedOf(
     (e): e is Extract<LedgerEntry, { kind: "approval" }> => e.kind === "approval",
   );
   const approval = approvals[approvals.length - 1];
-  if (approval === undefined || approval.status !== "approved") return null;
+  if (approval === undefined) return null;
+  const qualifies =
+    approval.status === "approved" ||
+    (!confirmationRequired &&
+      (approval.status === "requested" || approval.status === "expired"));
+  if (!qualifies) return null;
 
   const plan = ledger.find(
     (e): e is Extract<LedgerEntry, { kind: "plan" }> => e.kind === "plan",
@@ -131,6 +161,7 @@ export async function recordApprovedClaim(
     { pollInference },
     { recordResult },
     { recordVerdict },
+    { readLedger },
   ] = await Promise.all([
     import("@/lib/server/agent/run"),
     import("@/lib/server/evidence"),
@@ -142,11 +173,18 @@ export async function recordApprovedClaim(
     import("@/lib/server/judge"),
     import("@/lib/server/oracle"),
     import("@/lib/server/verdict"),
+    import("@/lib/server/agent/ledger"),
   ]);
 
   const pool = await loadClaimPool(target.poolId);
   if (pool === null) {
     throw new Error(`pool ${target.poolId} does not exist on chain`);
+  }
+  // Settled first (header): settle() is one-shot and already refunded this
+  // claim, so a record write now can only revert. Nothing is written; the
+  // sweep logs the miss and releases the claim when its hold window ends.
+  if (pool.settled) {
+    return { status: "error", ledger: await readLedger(goalId) };
   }
   const poll =
     target.evidenceKind === "wearable"

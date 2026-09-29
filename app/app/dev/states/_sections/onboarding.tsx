@@ -9,8 +9,10 @@ import CharacterCreation from "@/components/game/CharacterCreation";
 import { GateLoading } from "@/components/AccessGate";
 import type { CharacterView } from "@/lib/game/useCharacter";
 import type { Onboarding } from "@/lib/game/onboarding-store";
-import type { StepId, StepState } from "@/lib/game/character";
-import { NAME_LOCKED_NOTE } from "@/lib/game/character";
+import type { HumanProof, StepId, StepState } from "@/lib/game/character";
+import { NAME_LOCKED_NOTE, NAME_NEEDS_WORLD_NOTE } from "@/lib/game/character";
+import { SWITCHES_QUERY_KEY } from "@/lib/game/useSwitches";
+import type { Switches } from "@/lib/switches";
 import type { ProviderOptions } from "@/lib/wearable-connect";
 import Link from "next/link";
 import { ClaimCard, FeedEmpty } from "@/app/agent/AgentFeed";
@@ -58,6 +60,9 @@ function view(over: {
   sensor?: CharacterView["sensor"];
   providers?: ProviderOptions;
   name?: string | null;
+  /** How step 2 was proven, when the fixture needs the stamp to say so. */
+  humanProof?: HumanProof | null;
+  worldLane?: CharacterView["worldLane"];
 }): CharacterView {
   const signedIn = over.signedIn ?? true;
   const steps: Record<StepId, StepState> = {
@@ -76,6 +81,7 @@ function view(over: {
       ? {
           address: ADDRESS,
           human: steps.human.status === "done" ? "verified" : "unverified",
+          ...(over.humanProof === undefined ? {} : { humanProof: over.humanProof }),
           name: over.name ?? null,
           device: sensor.kind === "paired" ? sensor.device : null,
         }
@@ -85,7 +91,7 @@ function view(over: {
     gateLoading: false,
     humanMode: over.humanMode ?? "world",
     nameMode: "ens",
-    worldLane: "on",
+    worldLane: over.worldLane ?? "on",
     ensLane: "on",
     sensor,
     providers: over.providers ?? PROVIDERS,
@@ -196,6 +202,31 @@ function ActiveRunBoard() {
   );
 }
 
+/**
+ * A frame whose switches read is seeded (GET /api/switches), so the gallery
+ * shows a kill switch without the dev server having one thrown. Nothing
+ * refetches.
+ */
+function WithSwitches({ switches, children }: { switches: Switches; children: React.ReactNode }) {
+  const [client] = useState(() => {
+    const c = new QueryClient({
+      defaultOptions: {
+        queries: {
+          staleTime: Infinity,
+          gcTime: Infinity,
+          retry: false,
+          refetchOnMount: false,
+          refetchOnWindowFocus: false,
+          refetchOnReconnect: false,
+        },
+      },
+    });
+    c.setQueryData(SWITCHES_QUERY_KEY, switches);
+    return c;
+  });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
 const CLAIMS: PublicFeedClaim[] = [
   {
     goalId: "0x4f1c9a0b7e2d4c61aa90b3f1e8d2c7a5b6e4f3d2c1b0a9f8e7d6c5b4a3f2e1d0",
@@ -276,6 +307,48 @@ export default function OnboardingStates({ meta }: SectionProps) {
             providers: WHOOP_PAIRED,
           })}
         />
+      </StateFrame>
+      <StateFrame name="player-card-on-the-list" note="World on, in through the list: stamped On the list, never One human, and every challenge open">
+        <CharacterCard
+          view={view({
+            gate: true,
+            accessStatus: "approved",
+            humanProof: "list",
+            steps: {
+              human: { status: "done", summary: "On the list" },
+              name: { status: "locked", note: NAME_NEEDS_WORLD_NOTE },
+              sensor: { status: "done", summary: "WHOOP" },
+            },
+            sensor: { kind: "paired", device: WHOOP },
+            providers: WHOOP_PAIRED,
+          })}
+          variant="strip"
+        />
+      </StateFrame>
+      <StateFrame name="character-list-player-world-on" note="step 2 done through the list with World on: World ID offered as optional, for a name">
+        <CharacterCreation
+          view={view({
+            gate: true,
+            accessStatus: "approved",
+            humanProof: "list",
+            steps: {
+              human: { status: "done", summary: "On the list" },
+              name: { status: "locked", note: NAME_NEEDS_WORLD_NOTE },
+            },
+          })}
+          onboarding={onboarding()}
+          focus="human"
+          mode="page"
+        />
+      </StateFrame>
+      <StateFrame name="character-world-paused" note="KILL_WORLD_ID: World ID is paused, the list is the way in, with the operator's note">
+        <WithSwitches switches={{ worldId: true, baseMoneyIn: false, reason: "Back after the World upgrade on Friday." }}>
+          <CharacterCreation
+            view={view({ humanMode: "allowlist", worldLane: "off" })}
+            onboarding={onboarding()}
+            mode="gate"
+          />
+        </WithSwitches>
       </StateFrame>
       <StateFrame name="character-wearable-paired" note="step 4 with WHOOP: the limit is named before any stake">
         <CharacterCreation

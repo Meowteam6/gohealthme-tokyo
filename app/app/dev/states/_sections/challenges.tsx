@@ -24,11 +24,13 @@ import {
 } from "@/components/challenges/ChallengeLanding";
 import ChallengeInviteShare, { InviteLinks } from "@/components/ChallengeInviteShare";
 import ChipInWarning from "@/components/ChipInWarning";
-import { PAGE_COLUMN } from "@/components/night/kit";
+import { PAGE_COLUMN, PerchedHeader } from "@/components/night/kit";
 import { Card, ErrorNote, Skeleton } from "@/components/ui";
 import type { PoolInfo } from "@/lib/contract";
 import { potLineOf } from "@/lib/game/money-flow";
 import { inviteShareOf } from "@/lib/game/money-sharing";
+import { challengeCreatePausedDetail } from "@/lib/switches";
+import { challengeCreateBlock } from "@/lib/game/join-checks";
 
 const SELF_SHARE = inviteShareOf("self");
 const selfLinks = SELF_SHARE.kind === "links" ? SELF_SHARE.links : [];
@@ -62,6 +64,16 @@ const PAUSE = {
   detail:
     "A verified win could not be paid out on this build right now, so no new challenge can start. Your open ones are untouched.",
 };
+
+/** KILL_BASE_MONEY_IN with the operator's note, as the create block words it. */
+const KILL_NOTE = "Back after the contract upgrade on Friday.";
+const MONEY_IN_PAUSE = { detail: challengeCreatePausedDetail(KILL_NOTE, "has been") };
+
+/** A list player where hits are confirmed with World ID, at the create form. */
+const NEEDS_WORLD = challengeCreateBlock("available", "ready", { state: "open", reason: null }, {
+  collectNeedsWorld: true,
+  checking: false,
+});
 
 function LoadingCard() {
   return (
@@ -171,6 +183,47 @@ export default function ChallengeStates({ meta }: SectionProps) {
         <Frame pose="thinking" first={<StartCard pause={PAUSE} />} />
       </StateFrame>
 
+      <StateFrame name="challenges-paused-money-in" note="KILL_BASE_MONEY_IN: new stakes paused, with the operator's note">
+        <Frame pose="thinking" first={<StartCard pause={MONEY_IN_PAUSE} />} />
+      </StateFrame>
+
+      <StateFrame name="challenge-create-paused-money-in" note="/challenge/new while new stakes are paused: said before the form, nothing charged">
+        <div className={PAGE_COLUMN} role="status">
+          <PerchedHeader title="Challenges are paused for now" pose="thinking">
+            <EmptyCard
+              title="No new challenges on this build"
+              detail={MONEY_IN_PAUSE.detail}
+              action={
+                <Link href="/pools" className={PRIMARY_LINK}>
+                  See the open challenges
+                </Link>
+              }
+            />
+          </PerchedHeader>
+        </div>
+      </StateFrame>
+
+      {NEEDS_WORLD.kind === "needs-world" ? (
+        <StateFrame
+          name="challenge-create-needs-world"
+          note="/challenge/new for a list player where hits are confirmed with World ID: said before any extra goes in"
+        >
+          <div className={PAGE_COLUMN} role="status">
+            <PerchedHeader title="Start a challenge" pose="thinking">
+              <EmptyCard
+                title={NEEDS_WORLD.title}
+                detail={NEEDS_WORLD.detail}
+                action={
+                  <Link href={NEEDS_WORLD.fix.href} className={PRIMARY_LINK}>
+                    {NEEDS_WORLD.fix.label}
+                  </Link>
+                }
+              />
+            </PerchedHeader>
+          </div>
+        </StateFrame>
+      ) : null}
+
       <StateFrame name="challenges-error" note="the chain read failed">
         <Frame
           pose="thinking"
@@ -267,6 +320,12 @@ export default function ChallengeStates({ meta }: SectionProps) {
         </div>
       </StateFrame>
 
+      <StateFrame name="challenge-paused-money-in" note="/c/[token] while new money is paused: no chip-in, money in still comes out">
+        <div className={PAGE_COLUMN}>
+          <ChallengePausedCard reason="money-in" note={KILL_NOTE} />
+        </div>
+      </StateFrame>
+
       <StateFrame name="challenge-backer" note="/c/[token]?as=backer: chip in, never accept">
         <BackerView
           token="fixture-token-0000000000000000"
@@ -303,6 +362,20 @@ export default function ChallengeStates({ meta }: SectionProps) {
           backers={[]}
           canGrow={false}
           chipIn={{ bountyModel: 2, creator: { name: "mika.gohealthme.eth", you: false }, selfStake: false, stakers: null }}
+        />
+      </StateFrame>
+
+      <StateFrame name="challenge-backer-paused-money-in" note="the Back me link while new money is paused: said plainly, no chip-in">
+        <BackerView
+          token="fixture-token-0000000000000000"
+          poolId={45n}
+          challengerName="mika.gohealthme.eth"
+          message={null}
+          pot={{ prize: 2n * USDC, stakes: 1n * USDC, seed: 2n * USDC }}
+          backers={[]}
+          canGrow={false}
+          pause={{ reason: "money-in", note: null }}
+          chipIn={{ bountyModel: 2, creator: { name: "mika.gohealthme.eth", you: false }, selfStake: true, stakers: 1 }}
         />
       </StateFrame>
 

@@ -32,6 +32,8 @@ import { poolIsOver, poolPhase } from "@/lib/pool-lifecycle";
 import SweepLeftover from "@/components/SweepLeftover";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { poolOutcomeDisplay, type PoolAggregate } from "@/lib/sponsor-metrics";
+import { useSwitches } from "@/lib/game/useSwitches";
+import { addToPotPausedDetail } from "@/lib/switches";
 
 // The verdict-privacy line. Completion rate is a verdict-derived figure, so any
 // card that can show outcomes carries this, matching every other verdict
@@ -75,6 +77,10 @@ export default function SponsorPoolOutcome({
 }) {
   const [showTopUp, setShowTopUp] = useState(false);
   const { address } = useEmbeddedWallet();
+  // A top-up is new money: held while new money is paused by the operator
+  // (KILL_BASE_MONEY_IN), and never offered on a guess while that is unknown.
+  // The leftover sweep below is money out and never waits on it.
+  const switches = useSwitches();
   const d = poolOutcomeDisplay(aggregate);
   const phase = poolPhase(pool, nowSeconds);
   const isDocGoal = evidenceTypeOf(pool.goalSpec) === "document";
@@ -201,7 +207,22 @@ export default function SponsorPoolOutcome({
 
       {!poolIsOver(phase) ? (
         <div className="border-t border-edge pt-4">
-          {showTopUp ? (
+          {switches.moneyIn === "paused" ? (
+            <p role="status" className="m-0 rounded-2xl border border-dashed border-warning/40 bg-surface-raised p-4 text-sm text-muted">
+              {addToPotPausedDetail(switches.reason)}
+            </p>
+          ) : switches.moneyIn === "loading" ? (
+            <Button variant="primary" disabled className="w-full">
+              Checking stakes are open
+            </Button>
+          ) : switches.moneyIn === "error" ? (
+            <p role="alert" className="m-0 flex flex-wrap items-center gap-x-3 text-sm text-muted">
+              I could not check whether stakes are open just now, so nothing can be added on a guess.
+              <button type="button" onClick={switches.refetch} className="font-semibold text-foreground underline underline-offset-4">
+                Check again
+              </button>
+            </p>
+          ) : showTopUp ? (
             <FundPool poolId={pool.id} />
           ) : (
             <Button

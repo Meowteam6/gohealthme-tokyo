@@ -27,6 +27,7 @@ import { challengeRunKindOf, creatorStakedIn } from "@/lib/game/money-sharing";
 import { missRulePool } from "@/lib/miss-rule";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
 import { approvalModeStatus } from "@/lib/server/agent/approval-mode-status";
+import { killSwitches } from "@/lib/server/kill-switches";
 import { getChallengeByToken } from "@/lib/server/challenges";
 import { fetchPoolFunding, type PoolFunding } from "@/lib/server/pool-funders";
 import { documentProofStatus } from "@/lib/server/proof-status";
@@ -102,16 +103,20 @@ export default async function ChallengeLandingPage({
 
   // Checked on the server, from the same facts the judge and the approval gate
   // decide on: a challenge whose win could not pay (or an older document
-  // challenge while the checker is off) takes no more money from anyone. A
-  // wearable challenge never waits on the document checker. The accept control
-  // shows the same limit as a lock (lib/game/lobby.ts); this stops the chip-in
-  // and the rally.
+  // challenge while the checker is off) takes no more money from anyone, and
+  // neither does any challenge while new money is paused by the operator
+  // (KILL_BASE_MONEY_IN). A wearable challenge never waits on the document
+  // checker. The accept control shows the same limit as a lock
+  // (lib/game/lobby.ts); this stops the chip-in and the rally.
+  const switches = killSwitches();
   const pauseReason = challengePauseReason({
     goalSpec: pool.goalSpec,
     documentCheckerAvailable: documentProofStatus().available,
     payoutsMisconfigured:
       approvalModeStatus("challenge-page") === "misconfigured",
+    moneyInPaused: switches.baseMoneyIn,
   });
+  const killReason = pauseReason === "money-in" ? switches.reason : null;
 
   // Resolve the challenger to a handle when they have claimed one; otherwise
   // show the truncated address. This is public identity, never a health label.
@@ -217,6 +222,7 @@ export default async function ChallengeLandingPage({
         pot={pot}
         backers={contributorNames}
         canGrow={canGrow}
+        pause={phase === "live" && canPay && pauseReason !== null ? { reason: pauseReason, note: killReason } : null}
         chipIn={chipIn}
       />
     );
@@ -261,7 +267,7 @@ export default async function ChallengeLandingPage({
           <RallyCard token={token} name={challengerName} />
         </>
       ) : phase === "live" && canPay && pauseReason !== null ? (
-        <ChallengePausedCard reason={pauseReason} />
+        <ChallengePausedCard reason={pauseReason} note={killReason} />
       ) : null}
     </div>
   );

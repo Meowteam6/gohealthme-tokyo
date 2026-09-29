@@ -132,6 +132,8 @@ export function useLobby(view: CharacterView, highlightId: string | null): Lobby
           asOfSeconds: poolsQuery.data.asOfSeconds,
           verifier: checks.verifier,
           payouts: checks.payouts,
+          moneyIn: checks.moneyIn,
+          moneyInReason: checks.switchReason,
           gate: checks.gate,
           joined: joinedIds,
           highlightId,
@@ -144,6 +146,7 @@ export function useLobby(view: CharacterView, highlightId: string | null): Lobby
           uploadAvailable: checks.verifier === "available",
           worldLane: checks.worldLane,
           humanVerified: checks.humanVerified,
+          collectNeedsWorld: checks.collectNeedsWorld,
           deviceLabel,
         });
 
@@ -151,13 +154,15 @@ export function useLobby(view: CharacterView, highlightId: string | null): Lobby
     lobby,
     // Wait for the joined read too, or a run the player is in would flash
     // as enterable first.
-    // The document checker and the payout rule too: they decide whether
-    // upload runs show at all and whether any run can take a stake.
+    // The document checker, the payout rule and the money-in switch too: they
+    // decide whether upload runs show at all and whether any run can take a
+    // stake.
     loading:
       poolsQuery.isLoading ||
       (address !== null && myRuns.isLoading) ||
       checks.verifier === "loading" ||
-      checks.payouts === "loading",
+      checks.payouts === "loading" ||
+      checks.moneyIn === "loading",
     // A failed joined-runs read is an error too: every run would otherwise
     // look un-entered and offer a join that reverts ALREADY_JOINED.
     error: poolsQuery.isError || (address !== null && myRuns.isError),

@@ -3,6 +3,9 @@
 // switched on but cannot run (a bad value, mock refused on production, live
 // credentials missing) is "misconfigured": approvalGate would throw at record
 // time, so no win could pay. The cause goes to the log, never to a player.
+// While KILL_WORLD_ID is thrown the mode is "off" (approval-provider.ts), never
+// "misconfigured": a deliberate pause turns the confirmation off, it does not
+// hold payouts.
 
 import {
   approvalMode,

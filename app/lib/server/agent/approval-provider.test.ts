@@ -53,6 +53,37 @@ describe("approvalMode", () => {
   });
 });
 
+describe("approvalMode under the World ID kill switch", () => {
+  it("is off while KILL_WORLD_ID is thrown, whatever mode is set, so SPOTTER pays on the verdict", async () => {
+    const { approvalMode } = await load();
+    vi.stubEnv("KILL_WORLD_ID", "1");
+    vi.stubEnv("WORLD_APPROVAL_MODE", "world");
+    expect(approvalMode()).toBe("off");
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    expect(approvalMode()).toBe("off");
+    // A misconfigured value cannot hold payouts while World is paused.
+    vi.stubEnv("WORLD_APPROVAL_MODE", "typo");
+    expect(approvalMode()).toBe("off");
+  });
+
+  it("changes nothing when the switch is not thrown (regression)", async () => {
+    const { approvalMode } = await load();
+    vi.stubEnv("KILL_WORLD_ID", "0");
+    vi.stubEnv("WORLD_APPROVAL_MODE", "world");
+    expect(approvalMode()).toBe("world");
+    vi.stubEnv("WORLD_APPROVAL_MODE", "typo");
+    expect(() => approvalMode()).toThrow();
+  });
+
+  it("reports off, not misconfigured, on the status the join reads", async () => {
+    vi.resetModules();
+    const { approvalModeStatus } = await import("@/lib/server/agent/approval-mode-status");
+    vi.stubEnv("KILL_WORLD_ID", "true");
+    vi.stubEnv("WORLD_APPROVAL_MODE", "world");
+    expect(approvalModeStatus("test")).toBe("off");
+  });
+});
+
 describe("mock provider (event mode)", () => {
   it("labels its challenge as mocked and carries no world context", async () => {
     const { mockApprovalProvider } = await load();

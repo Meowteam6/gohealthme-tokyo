@@ -54,7 +54,7 @@ import {
 } from "@/lib/wearable-connect";
 import { uploadFallbackNote, wearableJoinBlock } from "@/lib/wearable-join-gate";
 import { poolCanPay, poolPhase } from "@/lib/pool-lifecycle";
-import { needsDocumentVerifier, runSlotOf } from "@/lib/game/lobby";
+import { creatorMoneyInOf, needsDocumentVerifier, runSlotOf } from "@/lib/game/lobby";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useJoinChecks } from "@/lib/game/useJoinChecks";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
@@ -218,6 +218,13 @@ export default function ChallengeAccept({
     needsDocumentVerifier: needsDocumentVerifier(pool.goalSpec),
     verifier: checks.verifier,
     payouts: checks.payouts,
+    // New money paused: the friend sees the pause on the slip before any
+    // prompt; the creator opening their own link may still lock in once
+    // their challenge holds money (creatorMoneyInOf).
+    moneyIn: checks.moneyIn,
+    moneyInReason: checks.switchReason,
+    creatorMoneyIn: creatorMoneyInOf(pool, address),
+    collectNeedsWorld: checks.collectNeedsWorld,
     deviceLabel,
   });
 

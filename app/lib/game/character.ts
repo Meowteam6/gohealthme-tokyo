@@ -31,9 +31,16 @@ export interface CharacterDevice {
   metrics: string[];
 }
 
+/** How a verified human proved it: World ID, the closed-beta list, or the
+ *  admin allowlist. */
+export type HumanProof = "world" | "list" | "admin";
+
 export interface Character {
   address: string;
   human: HumanStatus;
+  /** How `human` was proven; null while unproven. Optional so fixtures built
+   *  before 2026-09-30 still type (the stamp then falls back to the mode). */
+  humanProof?: HumanProof | null;
   name: string | null;
   device: CharacterDevice | null;
 }
@@ -133,6 +140,13 @@ export type StepState =
  *  refuses the claim with the same line (lib/server/ens/human-gate.ts). */
 export const NAME_LOCKED_NOTE = "Prove you are one human first, then pick your name.";
 
+/** Shown on step 3 to a player who got in through the list while World is
+ *  on: names are minted one per World ID human (lib/server/ens/human-gate.ts),
+ *  so the list alone does not carry one. Optional; they play under their
+ *  short wallet address, and step 2 offers World ID for it. */
+export const NAME_NEEDS_WORLD_NOTE =
+  "Names come with World ID, one per human. Add World ID in step 2 to pick one.";
+
 /** How step 2 is satisfied on this deployment. */
 export type HumanMode = "world" | "allowlist";
 
@@ -165,6 +179,22 @@ export function nameModeOf(i: CharacterInputs): NameMode {
 }
 
 /**
+ * How this player is a proven human, or null. World ID when the lane is on
+ * and the wallet verified; otherwise an admin, or an approved list entry.
+ * The list counts on a World-on build too (Andre, 2026-09-30): character
+ * creation offers "No World ID? Ask for a spot on the list instead", and an
+ * approved list player used to get in and then find every challenge locked
+ * "prove you are one human". The server agrees (lib/server/world/
+ * require-human.ts). World stays the self-serve way in.
+ */
+export function humanProofOf(i: CharacterInputs): HumanProof | null {
+  if (i.world.lane === "on" && i.world.human === "verified") return "world";
+  if (i.access.isAdmin) return "admin";
+  if (i.access.status === "approved") return "list";
+  return null;
+}
+
+/**
  * The hard gate, evaluated once. Signed in, and one of: an admin, an approved
  * allowlist entry, or a World-verified human. This is the same bar the
  * closed-beta gate used, with World as the self-serve way past it, so a
@@ -183,8 +213,17 @@ function humanStep(i: CharacterInputs): StepState {
     if (i.world.human === "verified") {
       return { status: "done", summary: "Verified human, one entry per challenge" };
     }
-    // The allowlist still counts as a way in: an approved pilot player keeps
-    // their access, and the World step shows as the upgrade, not a wall.
+    // The list is a way in on a World-on build too, and it counts as the
+    // human step (humanProofOf): nothing re-asks an admin or an approved
+    // list player to prove anything.
+    if (i.access.isAdmin) return { status: "done", summary: "Admin" };
+    if (i.access.status === "approved") return { status: "done", summary: "On the list" };
+    if (i.access.status === "pending") {
+      return {
+        status: "waiting",
+        note: "Your request is in. You get in as soon as it is approved, or right now with World ID.",
+      };
+    }
     return { status: "todo" };
   }
   // World is off (lane missing, unconfigured, or unreachable): the closed-beta
@@ -210,11 +249,12 @@ function nameStep(i: CharacterInputs): StepState {
   if (i.ens.lane === "loading") return { status: "loading" };
   if (i.ens.lane === "on") {
     if (i.ens.name !== null) return { status: "done", summary: i.ens.name };
-    // Names cost GoHealthMe gas, so the server mints one only for a verified
-    // human while World is on. Say so here, before any signature.
+    // Names cost GoHealthMe gas, so the server mints one only for a World
+    // verified human while World is on. Say so here, before any signature.
     if (i.world.lane === "loading") return { status: "loading" };
     if (i.world.lane === "on" && i.world.human !== "verified") {
-      return { status: "locked", note: NAME_LOCKED_NOTE };
+      const listed = i.access.isAdmin || i.access.status === "approved";
+      return { status: "locked", note: listed ? NAME_NEEDS_WORLD_NOTE : NAME_LOCKED_NOTE };
     }
     return { status: "todo" };
   }
@@ -289,8 +329,10 @@ export function currentStep(
     if (steps[id].status === "done" || steps[id].status === "locked" || skipped.has(id)) continue;
     return id;
   }
-  // A World-on build where the player got in through the allowlist: offer the
-  // proof once, skippably, because one-human-one-entry is checked at the join.
+  // Safety net: a passed gate with step 2 still to do is offered once,
+  // skippably. Since the list counts as the human step (humanProofOf,
+  // 2026-09-30) a passed gate always has step 2 done, so this no longer
+  // re-asks a list player for World ID.
   if (steps.human.status === "todo" && !skipped.has("human")) return "human";
   return null;
 }
@@ -334,17 +376,20 @@ export function creationBlocks(g: {
   return true;
 }
 
-/** The character the rest of the app reads. */
+/** The character the rest of the app reads. A proven human by World ID, the
+ *  list or the admin allowlist (humanProofOf); "unknown" while a read that
+ *  could still prove it is in flight, so the join holds on a skeleton instead
+ *  of flashing "prove you are one human" at a list player. */
 export function characterOf(i: CharacterInputs): Character | null {
   if (!i.authenticated || i.address === null) return null;
+  const humanProof = humanProofOf(i);
+  const worldPending = i.world.lane === "on" && i.world.human === "unknown";
   const human: HumanStatus =
-    i.world.lane === "on"
-      ? i.world.human
-      : i.access.isAdmin || i.access.status === "approved"
-        ? "verified"
-        : i.access.loading
-          ? "unknown"
-          : "unverified";
+    humanProof !== null
+      ? "verified"
+      : i.access.loading || worldPending
+        ? "unknown"
+        : "unverified";
   const name =
     i.ens.lane === "on"
       ? i.ens.name
@@ -354,7 +399,19 @@ export function characterOf(i: CharacterInputs): Character | null {
   return {
     address: i.address,
     human,
+    humanProof,
     name,
     device: i.sensor.kind === "paired" ? i.sensor.device : null,
   };
+}
+
+/**
+ * The stamp beside the player's name, or null when unproven: "One human" for
+ * World ID, "On the list" for the list and the admins. A character built
+ * without `humanProof` (older fixtures) falls back to the build's mode.
+ */
+export function humanStampOf(c: Character, mode: HumanMode): string | null {
+  if (c.human !== "verified") return null;
+  const proof = c.humanProof ?? (mode === "world" ? "world" : "list");
+  return proof === "world" ? "One human" : "On the list";
 }

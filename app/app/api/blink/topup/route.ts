@@ -42,6 +42,8 @@
 //   and old clients still send one; honouring it is the exploit.
 //
 // Response JSON:
+//   503 new money is paused on this build (KILL_BASE_MONEY_IN): nothing read,
+//       reserved or credited. Money already in is untouched.
 //   200 { balanceUusdc: string, grantedUusdc: string, applied: boolean }
 //       applied:false with grantedUusdc "0" is the honest no-op for a wallet
 //       that already holds enough practice money - a skip, not a failure.
@@ -51,6 +53,8 @@
 
 import { isAddress, type Address } from "viem";
 import { credit, getBalance } from "@/lib/server/balance";
+import { killSwitches } from "@/lib/server/kill-switches";
+import { MONEY_ALREADY_IN_LINE, withKillReason } from "@/lib/switches";
 import { jsonError, readJsonBody } from "@/lib/server/http";
 import {
   USDC_ADDRESS,
@@ -128,6 +132,19 @@ async function readSpendable(
 
 export async function POST(request: Request) {
   try {
+    // New test USDC is new money: refused first, before any read or
+    // reservation, while KILL_BASE_MONEY_IN is thrown.
+    const switches = killSwitches();
+    if (switches.baseMoneyIn) {
+      return jsonError(
+        503,
+        withKillReason(
+          `Test USDC top-ups are paused for now, along with new stakes. ${MONEY_ALREADY_IN_LINE} Nothing was credited.`,
+          switches.reason,
+        ),
+      );
+    }
+
     let body: Record<string, unknown>;
     try {
       body = await readJsonBody(request);

@@ -328,3 +328,102 @@ refused, full journey, denied journey, refused proof, expiry through status),
   screen instead of a record error.
 - **Nobody, when the mode is unset.** The gate returns before touching the
   store, and the run tests pin the ledger sequence to the pre-Tokyo one.
+
+## Kill switches
+
+Founder decision (Andre, 2026-09-30): production can turn the World ID gate
+and new money into Base off or on without a code change, and the UI says so
+plainly when one is off. Server env only, never `NEXT_PUBLIC_`; the browser
+learns them from `GET /api/switches` (`{ worldId, baseMoneyIn, reason }`,
+no-store). `"1"` or `"true"` (any case) throws a switch; anything else leaves it
+alone, so a typo never pauses a working build.
+
+| Variable | Effect when thrown |
+|---|---|
+| `KILL_WORLD_ID` | World ID is off. `worldSetup()` reports off with `paused: true`, so `/api/world/verify` refuses new proofs, `/api/world/rp-context` is off, `requireHuman()` stands down, and character creation shows the list path with "World ID is paused for now". `approvalMode()` resolves to off, so SPOTTER pays on the verdict alone. Bindings World already made keep counting (`boundWorldNamespace()` in `access.ts`). |
+| `KILL_BASE_MONEY_IN` | New money into Base is off: joining a challenge (lock `money-in-paused`), starting a challenge (`challengeCreateBlock` and `/api/challenges/health`), starting a public or sponsored challenge (`CreatePool`), chipping in (`/c/[token]`, the challenge page, the sponsor console) and the test USDC faucet (`/api/blink/topup`). |
+| `KILL_REASON` | Optional plain-text note, trimmed, one line, 200 characters max, shown after the paused copy. |
+
+**Vercel env changes take effect on the next deployment.** Flip a switch in
+the dashboard, then redeploy (or promote a fresh build) for it to reach
+players. Nothing reads these at build time, so any redeploy picks them up.
+A tab opened before the redeploy learns the new state on its next read of
+`/api/switches` (the read is cached in the page for 30 seconds, and refreshed
+on focus); a reload is immediate. The challenge create preflight and the
+faucet read the server on every request.
+
+**What the money-in switch cannot stop.** It is an app switch, not a contract
+pause: HealthPoolsV3 has no pause, so a hand-built `joinPool`, `fundPool` or
+`createPool` transaction still lands on Base Sepolia. The app never offers
+or prepares one while the switch is thrown, and money that arrives that way
+is treated like any other money already in (it pays out and refunds as
+normal). If the reason to flip it is a contract fault, the switch buys time;
+the fix is a redeployed contract.
+
+**Money out never pauses.** Neither switch reaches SPOTTER's run loop, the
+settlement sweep, the approval routes, evidence submit, the gas drip,
+`/api/balance/withdraw`, `ClaimPayout`, `RefundClaim` or `SweepLeftover`.
+`lib/server/kill-switches.test.ts` fails if any of those files starts reading
+a switch, and the sweep suite settles and records with both thrown.
+
+**A hit waiting on the World ID payout confirmation when `KILL_WORLD_ID`
+flips is not lost.** The run loop's gate answers off on the next poll and
+records it on the verdict. If the tab is closed, the sweep picks up a claim
+whose newest approval row is still `requested`, or `expired` because nobody
+could answer it (`approvedUnrecordedOf(..., { confirmationRequired: false
+})`), and records it the same way, holding its pool from the pool phase. A
+declined or cancelled request is never picked by the sweep, and a challenge
+that already settled is never written to (`recordApprovedClaim` reads the
+pool first: `settle()` is one-shot). Limit: the sweep finds such a claim
+through its fallback scan of the newest 100 claims, because a request
+(unlike an approval) is not queued.
+
+**The one exception to the money-in pause:** the creator of a challenge whose
+pot already holds money (their extra at create, or a friend's stake or chip-in
+since) may still lock in their own stake (`creatorMoneyInOf` in
+`lib/game/lobby.ts`). Blocking them would strand a game with money in it.
+
+### The list path (fixed with the switches)
+
+With World on, character creation offers "No World ID? Ask for a spot on the
+list instead". An approved list player passed the gate, but the character
+read "human" from World only, so every challenge locked "prove you are one
+human" and SPOTTER refused their claims. Now an admin or an approved list
+entry counts as a proven human in the client (`humanProofOf` and
+`characterOf` in `lib/game/character.ts`, step 2 "On the list", stamp "On
+the list") and on the server (`requireHuman` accepts a World binding, an
+admin or an approved access record). World stays the self-serve way in and
+still unlocks an ENS name (one per human), offered to list players as
+optional.
+
+**Where a hit is confirmed with World ID (`WORLD_APPROVAL_MODE=world`), a
+list player still needs World ID to stake.** A miss is recorded without any
+confirmation, so without World ID their stake could be lost and never
+collected. The join locks it with `world-to-collect` ("Hits here are
+confirmed with World ID", fix "Add World ID"), character creation says so
+before they ask for a spot, and the create form says so before any extra
+goes in (`challengeCreateBlock` "needs-world": the extra is pulled before
+the creator's own stake, which could not follow it). Mock and off
+confirmations never trip it.
+Whether list players' payouts should skip or replace the World ID
+confirmation is a founder call; it lives in `approval.ts` / `run.ts`.
+
+### Who sees what
+
+| Player | `KILL_WORLD_ID` | `KILL_BASE_MONEY_IN` | Both off |
+|---|---|---|---|
+| New player | Step 2 is the list with "World ID is paused for now" (and the note). Request, wait for approval, then play. | Can make their player; every open challenge shows "New stakes are paused for now" before any prompt; the faucet refuses. | As before, World or the list. |
+| World-verified player | Keeps their way in (binding still counts), challenge pages, withdraw and refund. Stamp reads "On the list" while World is paused (the client cannot see the binding without World). Payouts need no confirmation. | Their challenges run, pay and refund as normal. New joins and chip-ins show the pause. | As before. |
+| List player (World on) | Unchanged: in through the list, and plays (the confirmation is off). | Same as any player. | Now in and stamped "On the list". Plays every challenge when the payout confirmation is off or mocked; with it on (`world`), each challenge says "Hits here are confirmed with World ID" with "Add World ID" as the fix, before any stake. Before this change: every challenge locked "prove you are one human" with no honest reason. |
+| Admin | Unchanged. | Same as any player. | Step 2 "Admin"; plays exactly like a list player above. |
+| Player already staked | Their hit pays on the verdict; one waiting on its confirmation is recorded by the next poll or the sweep. Withdraw and refund work. | Nothing changes for money already in: pays, refunds, withdraws. Their own card stays "in". Adding to the pot shows the pause. | As before. |
+| Challenge creator with extra in | Unchanged. | May still lock in their own stake; everything else they would add is paused. | As before. |
+| Challenge creator, nothing in yet | Unchanged. | The create form says "Challenges are paused for now" before anything is filled in; a flip between load and submit is caught by `/api/challenges/health` before the deposit. | As before. |
+| Sponsor | Unchanged. | `CreatePool` shows the pause; top-ups in the console show the pause; the leftover sweep works. | As before. |
+| Backer (Back me link) | Unchanged. | "Backing is paused for now" instead of the chip-in; nothing charged. | As before. |
+
+Worse off, named: with `KILL_WORLD_ID` a World-verified player's stamp says
+"On the list" and ENS name claims lose the one-name-per-human cap (the ENS
+human gate follows `worldSetup()`, `lib/server/ens/human-gate.ts`). With
+`KILL_BASE_MONEY_IN` a friend opening a Match my stake link cannot match
+until stakes are back on. Both are said before any money moves.

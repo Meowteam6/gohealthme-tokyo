@@ -61,6 +61,7 @@ import {
   challengeCreateBlock,
   payoutStateOf,
 } from "@/lib/game/join-checks";
+import { useSwitches } from "@/lib/game/useSwitches";
 import { Card, ErrorNote, Skeleton } from "@/components/ui";
 import {
   ContractNotConfiguredError,
@@ -239,14 +240,18 @@ async function fetchInvitedChallenges(
 }
 
 /** Whether a new challenge can start on this build. Every challenge is a
- *  wearable run, so the document checker never gates it; the one thing that
- *  can is a verified win that could not pay (the same approval probe
- *  /challenge/new decides on, lib/game/join-checks). Read-only: the create
- *  page checks again before any money moves. Checking or a failed probe keeps
- *  the normal action. */
+ *  wearable run, so the document checker never gates it; what can is a
+ *  verified win that could not pay, or new money paused by the operator (the
+ *  same reads /challenge/new decides on, lib/game/join-checks). Read-only:
+ *  the create page checks again before any money moves. Checking or a failed
+ *  read keeps the normal action. */
 function useChallengePause(): { detail: string } | null {
   const approval = useApprovalProbe();
-  const block = challengeCreateBlock("available", payoutStateOf(approval.mode));
+  const switches = useSwitches();
+  const block = challengeCreateBlock("available", payoutStateOf(approval.mode), {
+    state: switches.moneyIn,
+    reason: switches.reason,
+  });
   return block.kind === "paused" ? { detail: block.detail } : null;
 }
 
