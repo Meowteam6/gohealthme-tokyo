@@ -306,28 +306,27 @@ describe("runSlotOf", () => {
     });
   });
 
-  // The list path opens the join to players without World ID. Where a hit is
-  // confirmed with World ID before it pays (WORLD_APPROVAL_MODE=world), such a
-  // player could lose a stake but never collect a hit: said before the stake,
-  // with World ID as the fix, instead of a stake that can only go one way.
-  describe("a list player where hits are confirmed with World ID", () => {
-    it("locks the stake with its own lock and fix, after the gate", () => {
+  // "Pay on the verdict" (Andre, 2026-10-02). A list player or an admin is
+  // paid on the wearable verdict, like V3, so nothing about a hit waits on a
+  // World ID they do not have: the join is open to them like to anyone proven
+  // human. The retired "world-to-collect" lock is never produced, even for a
+  // caller that still passes the old collectNeedsWorld flag.
+  describe("a list player or an admin on a build where World players confirm with World ID", () => {
+    it("is playable: SPOTTER pays them on the verdict", () => {
+      expect(runSlotOf(input({ worldLane: "on", humanVerified: true }))).toEqual({ kind: "playable" });
       expect(runSlotOf(input({ worldLane: "on", humanVerified: true, collectNeedsWorld: true }))).toEqual({
-        kind: "locked",
-        lock: { kind: "world-to-collect" },
+        kind: "playable",
       });
-      // Gate problems still read first.
+    });
+
+    it("keeps every other lock in front of them (regression)", () => {
       expect(
         runSlotOf(input({ worldLane: "on", humanVerified: true, collectNeedsWorld: true, gate: "error" })),
       ).toEqual({ kind: "locked", lock: { kind: "check-failed", check: "access" } });
-      // Never in front of a challenge they are already in.
       expect(runSlotOf(input({ joined: true, collectNeedsWorld: true }))).toEqual({ kind: "in-run" });
-    });
-
-    it("is playable otherwise (regression)", () => {
-      expect(runSlotOf(input({ worldLane: "on", humanVerified: true, collectNeedsWorld: false }))).toEqual({
-        kind: "playable",
-      });
+      expect(
+        runSlotOf(input({ worldLane: "on", humanVerified: true, joinBlock: { kind: "no-device" } })),
+      ).toEqual({ kind: "locked", lock: { kind: "no-sensor" } });
     });
   });
 
@@ -469,18 +468,6 @@ describe("lockCopy", () => {
     const withReason = lockCopy({ kind: "money-in-paused", reason: "Back after the upgrade on Friday." }, "/pools");
     expect(withReason.detail).toMatch(/Nothing has been charged\. Back after the upgrade on Friday\.$/);
     expect(`${copy.title} ${copy.detail}`).not.toMatch(/[!\u2014]|\b(bet|wager|odds|winner)\b/i);
-  });
-
-  it("sends a list player to add World ID when hits here are confirmed with it", () => {
-    const copy = lockCopy({ kind: "world-to-collect" }, "/pools/7");
-    expect(copy.title).toMatch(/World ID/);
-    expect(copy.detail).toContain("Nothing has been charged.");
-    expect(copy.fix).toEqual({
-      kind: "link",
-      label: "Add World ID",
-      href: "/character?step=human&next=%2Fpools%2F7",
-    });
-    expect(copy.tone).toBe("fixable");
   });
 
   it("gives a failed switches read a retry in place", () => {

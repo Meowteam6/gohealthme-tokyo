@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { failureModeOf, runStatusFromLedger, type LedgerEntry } from "@/lib/agent-receipt";
 import {
   payDecidedOf,
+  payoutPathOfStatus,
+  payoutPathQueryKey,
   runApprovalLine,
   verdictCopy,
   verdictScreenOf,
@@ -655,5 +657,132 @@ describe("the verdict follows the newest read, never a stale earlier no-pay", ()
     const ledger = [junction, hit, pay, syncing, noPay];
     expect(failureModeOf(ledger)).toBe("evidence");
     expect(screenFor(ledger).kind).toBe("bad-read");
+  });
+});
+
+// "Pay on the verdict" (Andre, 2026-10-02). A list player or an admin is paid
+// on the wearable verdict (the status route's confirm: "verdict"), so the
+// verdict screen never shows them a World ID confirm card and says plainly
+// that SPOTTER pays on the verdict. A World-verified player sees no change.
+describe("a player SPOTTER pays on the verdict", () => {
+  const AT2 = "2026-10-02T00:00:00.000Z";
+  const asked: LedgerEntry = {
+    kind: "approval",
+    at: AT2,
+    status: "requested",
+    requestId: "req-1",
+    action: "settle",
+    provider: "world",
+  } as LedgerEntry;
+  const declinedRow: LedgerEntry = { ...asked, status: "declined" } as LedgerEntry;
+  const hit = [spend, verdict(true), reason("pay")];
+  const WORLD_COPY = /World ID|confirm/i;
+
+  it("never reaches a World ID confirm or its refusals, even from an ask that predates the change", () => {
+    for (const runStatus of [
+      "awaiting-approval",
+      "approval-declined",
+      "approval-expired",
+      "approval-cancelled",
+    ] as const) {
+      const screen = screenFor([...hit, asked], { runStatus, payout: "verdict" });
+      expect(screen.kind).toBe("checking");
+    }
+    // The card's own report is ignored too.
+    expect(
+      screenFor([...hit, asked], {
+        runStatus: "awaiting-approval",
+        payout: "verdict",
+        localApproval: { outcome: "declined", ledgerLength: 99 },
+      }).kind,
+    ).toBe("checking");
+  });
+
+  it("says SPOTTER pays on the verdict while it checks and while the goal is not met yet", () => {
+    const checking = screenFor([spend], { payout: "verdict" });
+    expect(checking).toEqual({ kind: "checking", onVerdict: true });
+    const notYet = screenFor([spend, verdict(false), reason("no-pay")], {
+      payout: "verdict",
+      missDeadlineMs: 1_790_487_000_000,
+      missConfirmByMs: 1_790_494_200_000,
+    });
+    expect(notYet).toMatchObject({ kind: "not-yet", onVerdict: true });
+    for (const screen of [checking, notYet]) {
+      const copy = verdictCopy(screen);
+      expect(copy?.body).toMatch(/pays? you on the verdict/);
+      expect(copy?.body).not.toMatch(WORLD_COPY);
+      expect(`${copy?.headline} ${copy?.body}`).not.toMatch(/[!—]|\b(runs?|pools?|dares?|bet|wager|odds|winner)\b/i);
+    }
+  });
+
+  it("banks and pays a list player's hit exactly like anyone's", () => {
+    expect(screenFor([...hit, recordEntry, deferred], { payout: "verdict" })).toEqual({
+      kind: "banked",
+      selfReported: false,
+    });
+    expect(screenFor([...hit, recordEntry, settled], { payout: "verdict" })).toMatchObject({
+      kind: "won",
+      paidUsd: "12.50",
+    });
+  });
+
+  it("calls a settled, unrecorded hit not recorded in time, never not confirmed with World ID", () => {
+    for (const ledger of [hit, [...hit, asked], [...hit, declinedRow]]) {
+      const screen = screenFor(ledger, { payout: "verdict", poolSettled: true });
+      expect(screen).toEqual({ kind: "hit-unconfirmed", onVerdict: true });
+      const copy = verdictCopy(screen);
+      expect(copy?.body).not.toMatch(WORLD_COPY);
+      expect(copy?.body).toMatch(/claim it below/);
+    }
+  });
+
+  it("leaves a World-verified player's screens unchanged (regression)", () => {
+    expect(screenFor([...hit, asked], { payout: "world" })).toMatchObject({ kind: "confirm-human" });
+    expect(screenFor([spend], { payout: "world" })).toEqual({ kind: "checking" });
+    expect(screenFor(hit, { payout: "world", poolSettled: true })).toEqual({ kind: "hit-unconfirmed" });
+  });
+
+  it("dashboard: asks a list player to open the challenge so SPOTTER can record the hit, never to confirm it", () => {
+    const open = { settled: false, cancelled: false, resultRecorded: false };
+    const line = runApprovalLine("none", open, { confirmByMs: null, confirm: "verdict" });
+    expect(line?.openRun).toBe(true);
+    expect(line?.text).toMatch(/shows the goal met/);
+    expect(line?.text).not.toMatch(WORLD_COPY);
+    expect(line?.text).not.toMatch(/[!—]|\b(runs?|pools?|dares?)\b/i);
+    expect(runApprovalLine("none", open, { confirmByMs: null })?.text).toMatch(/confirm it with World ID/);
+  });
+});
+
+describe("payoutPathOfStatus", () => {
+  it("reads the status route's confirm, and nothing else", () => {
+    expect(payoutPathOfStatus({ status: "none", mode: "world", confirm: "verdict" })).toBe("verdict");
+    expect(payoutPathOfStatus({ status: "pending", mode: "world", confirm: "world" })).toBe("world");
+    expect(payoutPathOfStatus({ status: "none", mode: "world" })).toBeNull();
+    expect(payoutPathOfStatus({ confirm: "maybe" })).toBeNull();
+    expect(payoutPathOfStatus(null)).toBeNull();
+    expect(payoutPathOfStatus("verdict")).toBeNull();
+  });
+});
+
+// A list player who adds World ID mid-challenge is World-bound from then on,
+// so the server asks them to confirm (approval.ts payoutConfirmFor). The
+// verdict screen must re-read the payout path the moment the server starts
+// asking, not trust a cached "verdict" and hide the confirm card until the
+// ask lapses; and it must not re-read on every ordinary status change.
+describe("payoutPathQueryKey", () => {
+  const key = (runStatus: Parameters<typeof payoutPathQueryKey>[2]) =>
+    JSON.stringify(payoutPathQueryKey("0xgoal", "0xme", runStatus));
+
+  it("changes when the server starts or stops waiting on the player's World ID confirm", () => {
+    for (const asking of ["awaiting-approval", "approval-declined", "approval-expired", "approval-cancelled"] as const) {
+      expect(key(asking)).not.toBe(key("verifying"));
+      expect(key(asking)).toBe(key("awaiting-approval"));
+    }
+  });
+
+  it("stays the same across statuses where nothing is asked, so the screen never flickers", () => {
+    for (const status of [null, "verifying", "no-pay", "recorded", "paid", "missed", "error"] as const) {
+      expect(key(status)).toBe(key("verifying"));
+    }
   });
 });

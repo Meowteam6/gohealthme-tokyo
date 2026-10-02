@@ -85,9 +85,8 @@ import { challengePreviewOf } from "@/lib/game/money-flow";
 import { MoneyChips, MoneyTermsList } from "@/components/game/MoneyTerms";
 import { missRuleWouldApply } from "@/lib/miss-rule";
 import { useApprovalProbe } from "@/components/game/ApprovalNote";
-import { challengeCreateBlock, collectNeedsWorldOf, payoutStateOf } from "@/lib/game/join-checks";
+import { challengeCreateBlock, payoutStateOf } from "@/lib/game/join-checks";
 import { useSwitches } from "@/lib/game/useSwitches";
-import { useCharacter } from "@/lib/game/useCharacter";
 import AuthorCapabilityNotice from "@/components/AuthorCapabilityNotice";
 import { LAUNCH_GOAL_EXAMPLES, wearableGoalNotice } from "@/lib/launch-goal-check";
 import { COMING_LINE } from "@/lib/provider-capabilities";
@@ -406,26 +405,13 @@ function CreateChallengeInner() {
   const approvalProbe = useApprovalProbe();
   const switches = useSwitches();
   // The creator's own stake goes in after the extra, through the join gate.
-  // A list player where a hit is confirmed with World ID could never make
-  // that stake (the lobby's "world-to-collect" lock), so the form says so
-  // before any money moves, and holds while their proof is still being read.
-  const creatorView = useCharacter();
-  const creatorCharacter = creatorView.character;
+  // Nothing about the creator holds it for World ID: a list player or an
+  // admin is paid on the verdict (Andre, 2026-10-02), so only build-wide
+  // limits stop a create.
   const createBlock = challengeCreateBlock(
     "available",
     payoutStateOf(approvalProbe.mode),
     { state: switches.moneyIn, reason: switches.reason },
-    {
-      collectNeedsWorld: collectNeedsWorldOf({
-        worldLane: creatorView.worldLane,
-        approvalMode: approvalProbe.mode,
-        human: creatorCharacter?.human ?? null,
-        humanProof: creatorCharacter?.humanProof ?? null,
-      }),
-      checking:
-        creatorCharacter !== null &&
-        (creatorView.worldLane === "loading" || creatorCharacter.human === "unknown"),
-    },
   );
   const goalNotice = wearableGoalNotice(goal);
 
@@ -479,7 +465,7 @@ function CreateChallengeInner() {
     setPhase({ kind: "idle" });
     if (createBlock.kind !== "ok") {
       setFormError(
-        createBlock.kind === "paused" || createBlock.kind === "needs-world"
+        createBlock.kind === "paused"
           ? createBlock.detail
           : "I am still checking whether new challenges can start right now. Try again in a moment.",
       );
@@ -618,26 +604,6 @@ function CreateChallengeInner() {
             action={
               <Link href="/pools" className={LINK_PRIMARY}>
                 See the open challenges
-              </Link>
-            }
-          />
-        </PerchedHeader>
-      </div>
-    );
-  }
-  if (!inFlight && createBlock.kind === "needs-world") {
-    // A list player where hits are confirmed with World ID: said before the
-    // form, with the one fix, so no extra goes in ahead of a stake that could
-    // not follow it.
-    return (
-      <div className={PAGE_COLUMN} role="status">
-        <PerchedHeader title="Start a challenge" lead={PAGE_LEAD_COPY} pose="thinking">
-          <EmptyCard
-            title={createBlock.title}
-            detail={createBlock.detail}
-            action={
-              <Link href={createBlock.fix.href} className={LINK_PRIMARY}>
-                {createBlock.fix.label}
               </Link>
             }
           />

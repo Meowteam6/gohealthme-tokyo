@@ -119,10 +119,14 @@ function HumanBody({
   const [failure, setFailure] = useState<string | null>(null);
   const [useList, setUseList] = useState(false);
   const switches = useSwitches();
-  // Where a hit is confirmed with World ID before it pays, the list gets a
-  // player in but not to a stake (lib/game/join-checks collectNeedsWorldOf):
-  // said here, before they ask for a spot or stake anything.
-  const confirmsWithWorld = useApprovalMode() === "world" && view.worldLane === "on";
+  // Where the payout confirmation is on, a World-verified player confirms
+  // each payout with World ID, and a list player or an admin is paid on the
+  // verdict with no extra step (Andre, 2026-10-02, "Pay on the verdict";
+  // lib/game/join-checks payoutPathOf). Said here, so neither the list nor
+  // adding World ID later changes how a hit pays without the player seeing it.
+  const approvalMode = useApprovalMode();
+  const confirmsWithWorld =
+    (approvalMode === "world" || approvalMode === "mock") && view.worldLane === "on";
   const address = view.address;
   if (address === null) return null;
   const state = view.steps.human;
@@ -137,20 +141,22 @@ function HumanBody({
       );
     }
     if (state.status === "done") {
-      // In through the list (or an admin). Where a hit is confirmed with World
-      // ID, the list gets them in but not to a stake, so the notice never
-      // promises every challenge there; elsewhere World ID stays on offer as
-      // optional, because a name on the board comes with it (one per human).
+      // In through the list (or an admin): every challenge is open to them,
+      // and where World players confirm payouts, SPOTTER pays them on the
+      // verdict instead. World ID stays on offer as optional, because a name
+      // on the board comes with it (one per human); where the confirmation is
+      // on, it also moves their payouts to a World ID confirm, so that is said
+      // before they scan.
       return (
         <div className="[&>*+*]:mt-3">
           <Notice tone="ok" title={state.summary}>
             {confirmsWithWorld
-              ? "You are in to look around and set up your player."
+              ? "It covers every challenge you enter, and SPOTTER pays you on the verdict: no World ID step when you hit."
               : "It covers every challenge you enter."}
           </Notice>
           <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
             {confirmsWithWorld
-              ? "To stake, add World ID once: a hit here is confirmed with it before I pay. It also unlocks a name for the board."
+              ? "Optional: verify with World ID once to pick a name for the board. After that, you confirm each payout with World ID before it moves."
               : "Optional: verify with World ID once to pick a name for the board. Nothing changes about the challenges you can join."}
           </p>
           <ProveHuman
@@ -248,8 +254,8 @@ function HumanBody({
         </p>
       ) : confirmsWithWorld ? (
         <p className="m-0 text-[0.9375rem] text-muted">
-          The list gets you in to look around. Staking here needs World ID too,
-          because a hit is confirmed with it before I pay.
+          On the list, SPOTTER pays you on the verdict: when your wearable shows
+          the goal met, there is no World ID step before your payout.
         </p>
       ) : null}
       <RequestAccess status={view.access.status} onSubmitted={view.access.refetch} />

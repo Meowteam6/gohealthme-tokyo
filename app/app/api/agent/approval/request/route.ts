@@ -22,7 +22,7 @@
 import { APPROVAL_NOT_ENABLED_MESSAGE as NOT_ENABLED_MESSAGE } from "@/lib/server/agent/approval-messages";
 import { isClaimOwner, claimParticipantOf } from "@/lib/server/agent/claim-access";
 import { readLedger } from "@/lib/server/agent/ledger";
-import { recordSignal, requestApproval } from "@/lib/server/agent/approval";
+import { payoutConfirmFor, recordSignal, requestApproval } from "@/lib/server/agent/approval";
 import {
   approvalMode,
   approvalProviderFor,
@@ -42,6 +42,12 @@ import {
 // body: no env names reach a player.
 const PAUSED_MESSAGE =
   "Payouts are paused on this build while the World ID check is being set up. Nothing moved.";
+
+// An admin or an approved list player is paid on the verdict (Andre,
+// 2026-10-02): SPOTTER never asks them, so no ask is opened. `code` lets a
+// card that somehow mounted say so plainly instead of offering World ID.
+const ON_VERDICT_MESSAGE =
+  "SPOTTER pays you on the verdict, so there is nothing to confirm with World ID.";
 
 const GOAL_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 
@@ -97,6 +103,10 @@ export async function POST(request: Request) {
     if (ledger.some((e) => e.kind === "record")) {
       return jsonError(409, "This claim is already recorded on-chain.");
     }
+    const participant = claimParticipantOf(ledger) ?? auth.address;
+    if ((await payoutConfirmFor(participant)) === "verdict") {
+      return Response.json({ error: ON_VERDICT_MESSAGE, code: "on-verdict" }, { status: 409 });
+    }
     // A settle is one-shot and already refunded this claim (B-2), so a new
     // request would show a live countdown for a payout that cannot happen and
     // a "confirmed" that reverts SETTLED. `code` lets the card say so plainly.
@@ -128,7 +138,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const participant = claimParticipantOf(ledger) ?? auth.address;
     const { record, challenge } = await requestApproval({
       goalId,
       poolId,

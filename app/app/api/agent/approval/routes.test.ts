@@ -405,3 +405,78 @@ describe("GET /api/agent/approval/status", () => {
     expect(await response.json()).toEqual({ status: "none", mode: "mock", hit: true });
   });
 });
+
+// "Pay on the verdict" (Andre, 2026-10-02): an admin or an approved list
+// player is never asked to confirm with World ID. The request route refuses
+// to open an ask for one, and the status route says which way a claim's
+// payout is released, so the verdict screen never shows them a World ID card.
+describe("paid on the verdict", () => {
+  const ADMIN = "0x3333333333333333333333333333333333333333";
+  const WORLD = "0x8ba1f109551bD432803012645Ac136ddd64DBA72";
+
+  async function listed(address: string) {
+    vi.stubEnv("ADMIN_ADDRESSES", ADMIN);
+    const access = await import("@/lib/server/access");
+    await access.requestAccess({ address });
+    await access.decideAccess({ address, decision: "approve", adminAddress: ADMIN });
+  }
+
+  function status(query: string) {
+    return new Request(`http://localhost/api/agent/approval/status?goalId=${GOAL}${query}`);
+  }
+
+  it("request: refuses a list player with 409 code on-verdict and opens nothing", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    const { requestRoute, appendLedger, readLedger } = await load();
+    await seedPayDecision(appendLedger);
+    await listed(USER);
+    signer = { ok: true, address: USER };
+    const response = await requestRoute(post("/api/agent/approval/request", { goalId: GOAL }));
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as { error: string; code: string };
+    expect(body.code).toBe("on-verdict");
+    expect(body.error).toMatch(/pays you on the verdict/);
+    expect((await readLedger(GOAL)).some((e) => e.kind === "approval")).toBe(false);
+  });
+
+  it("status: verdict for the claim's list player, world for anyone else", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    const { statusRoute, appendLedger } = await load();
+    await seedPayDecision(appendLedger);
+    expect(((await (await statusRoute(status(""))).json()) as { confirm?: string }).confirm).toBe("world");
+    await listed(USER);
+    expect(((await (await statusRoute(status(""))).json()) as { confirm?: string }).confirm).toBe("verdict");
+  });
+
+  it("status: reads the address before SPOTTER has a plan row, and says world for a World-bound wallet", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    vi.stubEnv("WORLD_VERIFY_MODE", "mock");
+    const { statusRoute } = await load();
+    const human = await import("@/lib/server/world/human");
+    await human.bindHuman({
+      address: WORLD,
+      nullifierHash: `0x${"3".padStart(64, "0")}`,
+      mode: "mock",
+      protocolVersion: "4.0",
+    });
+    await listed(OTHER);
+    expect(await (await statusRoute(status(`&address=${WORLD}`))).json()).toEqual({
+      status: "none",
+      mode: "mock",
+      confirm: "world",
+    });
+    expect(((await (await statusRoute(status(`&address=${OTHER}`))).json()) as { confirm?: string }).confirm).toBe(
+      "verdict",
+    );
+    // A bad address is ignored, not an error.
+    expect(await (await statusRoute(status("&address=nope"))).json()).toEqual({ status: "none", mode: "mock" });
+  });
+
+  it("status: verdict for everyone while the confirmation is off", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "");
+    const { statusRoute } = await load();
+    expect(((await (await statusRoute(status(`&address=${USER}`))).json()) as { confirm?: string }).confirm).toBe(
+      "verdict",
+    );
+  });
+});

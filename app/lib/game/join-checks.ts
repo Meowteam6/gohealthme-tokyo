@@ -86,33 +86,21 @@ export function approvalModeOf(probe: {
  * preflight (/api/challenges/health) refuses on the same switch, so a flip
  * between page load and submit still stops before any money moves.
  *
- * Last, the creator themself (`creator`, optional): a list player or an admin
- * on a build where a hit is confirmed with World ID could never stake in the
- * challenge they are about to fund (collectNeedsWorldOf, the lobby's
- * "world-to-collect" lock), and the create moves their extra BEFORE their own
- * stake. So the form says so first, with World ID as the fix, and holds while
- * that answer is still being read.
+ * Nothing about the creator themself stops a create (Andre, 2026-10-02, "Pay
+ * on the verdict"): a list player or an admin is paid on the verdict, so
+ * their own stake can always follow their extra. The "needs-world" block that
+ * sent them to World ID first is retired.
  */
 export type CreateBlock =
   | { kind: "ok" }
   | { kind: "checking" }
   | { kind: "retry"; title: string }
-  | { kind: "paused"; title: string; detail: string }
-  | {
-      kind: "needs-world";
-      title: string;
-      detail: string;
-      fix: { label: string; href: string };
-    };
-
-/** Where the create form sends a creator to add World ID, and back. */
-const CREATE_PATH = "/challenge/new";
+  | { kind: "paused"; title: string; detail: string };
 
 export function challengeCreateBlock(
   verifier: VerifierState,
   payouts: PayoutState,
   money: { state: MoneyInState; reason: string | null },
-  creator?: { collectNeedsWorld: boolean; checking: boolean },
 ): CreateBlock {
   if (verifier === "off") {
     return {
@@ -140,53 +128,54 @@ export function challengeCreateBlock(
   if (verifier === "error") return { kind: "retry", title: "I could not check my document checker just now" };
   if (payouts === "error") return { kind: "retry", title: "I could not check how payouts work here just now" };
   if (money.state === "error") return { kind: "retry", title: "I could not check whether stakes are open just now" };
-  if (
-    verifier === "loading" ||
-    payouts === "loading" ||
-    money.state === "loading" ||
-    creator?.checking === true
-  ) {
+  if (verifier === "loading" || payouts === "loading" || money.state === "loading") {
     return { kind: "checking" };
-  }
-  if (creator?.collectNeedsWorld === true) {
-    return {
-      kind: "needs-world",
-      title: "Hits here are confirmed with World ID",
-      detail:
-        "Before I pay a hit here, the player confirms it with World ID, and you got in through the list without it. Your own stake could not go in, so I am not letting you put money into a new challenge yet. Add World ID once and you can start one. Nothing has been charged.",
-      fix: {
-        label: "Add World ID",
-        href: `/character?step=human&next=${encodeURIComponent(CREATE_PATH)}`,
-      },
-    };
   }
   return { kind: "ok" };
 }
 
 /**
- * True when this player could lose a stake but never collect a hit: they are
- * a proven human through the list (or an admin) on a World-on build, and a
- * hit here is confirmed with World ID before it pays (WORLD_APPROVAL_MODE=
- * world). A miss is recorded without any confirmation, so without World ID
- * the stake could only go one way. The join says so before the stake, with
- * World ID as the fix (lib/game/lobby.ts "world-to-collect").
+ * Retired (Andre, 2026-10-02, "Pay on the verdict"): always false. It named a
+ * list player or an admin on a build where a hit was confirmed with World ID,
+ * who could lose a stake but never collect a hit. SPOTTER now pays them on
+ * the verdict (lib/server/agent/approval.ts payoutConfirmFor), so nobody
+ * needs World ID to collect. Kept only until its last callers drop it
+ * (lib/game/useJoinChecks.ts, and the collectNeedsWorld field PoolDetail and
+ * ChallengeAccept still pass to runSlotOf, which ignores it).
  *
- * Only where the list path newly opened the join (World on, 2026-09-30); a
- * mocked confirmation anyone can give, an off one, or a mode still being read
- * (the join already holds on that) never trips it.
+ * @deprecated Nobody needs World ID to collect; delete with its callers.
  */
-export function collectNeedsWorldOf(i: {
+export function collectNeedsWorldOf(input: {
   worldLane: LaneAvailability | "loading";
   approvalMode: ApprovalModeView;
   human: HumanStatus | null;
   humanProof: HumanProof | null;
 }): boolean {
-  return (
-    i.worldLane === "on" &&
-    i.approvalMode === "world" &&
-    i.human === "verified" &&
-    i.humanProof !== "world"
-  );
+  void input;
+  return false;
+}
+
+/** How a player's hit is released: a World ID confirm, or SPOTTER pays it on
+ *  the wearable verdict with no extra step. */
+export type PayoutPath = "world" | "verdict";
+
+/**
+ * The client mirror of the server's payoutConfirmFor (Andre, 2026-10-02,
+ * "Pay on the verdict"). A World-verified player confirms each payout with
+ * World ID wherever the confirmation is switched on; a list player or an
+ * admin is paid on the verdict, whatever the build; with the confirmation off
+ * everyone is. A wallet that is not proven human reads "world", never the
+ * verdict, though the join never lets it stake. Null while the mode is still
+ * being read or its read failed: copy waits rather than guessing.
+ */
+export function payoutPathOf(i: {
+  approvalMode: ApprovalModeView;
+  humanProof: HumanProof | null;
+}): PayoutPath | null {
+  if (i.approvalMode === "loading" || i.approvalMode === "error") return null;
+  if (i.approvalMode === "off") return "verdict";
+  if (i.humanProof === "list" || i.humanProof === "admin") return "verdict";
+  return "world";
 }
 
 /** Whether a verified win can pay on this build. */

@@ -11,6 +11,30 @@
 // queued for the sweep here, and the sweep drives its record write, so a
 // confirmed win is never refunded for want of an open browser.
 //
+// WHO CONFIRMS (Andre, 2026-10-02, "Pay on the verdict"). The confirm is
+// asked per wallet, not per build (payoutConfirmFor). A World-bound wallet
+// confirms with World ID: that is World ID for Agents. An admin or an approved
+// list player has no World ID to confirm with, so SPOTTER pays them on the
+// wearable verdict with no request at all, exactly as V3 did; the gate
+// answers "verdict" and the caller records. A wallet that is neither keeps the
+// confirm (fail closed); requireHuman already refuses it before any verdict is
+// read. Either way the payout goes to the staker's own wallet: run.ts records
+// the result for the claim's participant, and nothing here picks a recipient.
+//
+// QUEUED ON REQUEST (117bb64 review, 2026-09-30). The claim joins the sweep's
+// pending queue (lock.ts) the moment SPOTTER asks, not only once approved. A
+// hit still waiting on its confirm when KILL_WORLD_ID flips has nothing left
+// to wait for (approved-record.ts, CONFIRMATION OFF), and without the queue the
+// sweep found it only through its fallback scan of the newest 100 ledgers. The
+// queue decides nothing about money: with the confirmation on, the sweep still
+// records only a human yes. A claim that can never be paid leaves the queue
+// here: a decline (a re-ask queues it again), a cancel, and any claim the gate
+// finds on a settled pool. A lapsed ask (expired) stays queued, because once
+// World is switched off it is paid on the verdict, as the run route's gate
+// would pay it on the next poll; the sweep drops it once its ask is older
+// than the record hold window (APPROVED_RECORD_HOLD_MS), so a lapsed ask
+// nobody revisits never sits at the head of the queue for good.
+//
 // WHAT AN APPROVAL PROVES. That one human consented to this payout, within
 // the request's window. It never proves the goal: the wearable read and
 // SPOTTER's verdict do that, before this module is ever consulted. A declined
@@ -51,15 +75,22 @@ import { randomUUID } from "crypto";
 import { getAddress, isAddress } from "viem";
 import { readJson, setNx, withLock, writeJson } from "@/lib/server/store";
 import { appendLedger } from "@/lib/server/agent/ledger";
-import { addPendingSettlement } from "@/lib/server/agent/lock";
+import {
+  addPendingSettlement,
+  removePendingSettlement,
+} from "@/lib/server/agent/lock";
 import { optionalEnv } from "@/lib/server/env";
 import {
   approvalMode,
   approvalProviderFor,
   type ApprovalChallenge,
+  type ApprovalMode,
   type ApprovalProvider,
   type ApprovalProviderName,
 } from "@/lib/server/agent/approval-provider";
+import { getAccessRecord, isAdmin } from "@/lib/server/access";
+import { boundWorldNamespace } from "@/lib/server/world/config";
+import { isVerifiedHuman } from "@/lib/server/world/human";
 import type { WorldCredential } from "@/lib/world/credentials";
 
 export type ApprovalStatus =
@@ -337,6 +368,11 @@ export async function requestApproval(
           ? "asked you to confirm this payout with a fresh World ID check before anything moves"
           : "you asked SPOTTER to check again; a fresh request is open",
     });
+    // Queued, due now (header, QUEUED ON REQUEST): the sweep always finds a
+    // hit that is waiting on its confirm, whatever happens to the tab or the
+    // World switch. After the ledger row, so the sweep never reads a queued
+    // claim with no request on it.
+    await addPendingSettlement(goalId, Math.floor(nowMs / 1000));
     return { record, created: true, challenge };
   });
 }
@@ -400,7 +436,7 @@ export async function completeApproval(args: {
         note: "you declined; nothing moved, and your stake comes back when the challenge closes",
       };
       await save(declined);
-      await appendLedger(goalId, {
+      const rows = await appendLedger(goalId, {
         kind: "approval",
         status: "declined",
         requestId: current.requestId,
@@ -409,6 +445,12 @@ export async function completeApproval(args: {
         expiresAtIso: current.expiresAt,
         note: declined.note,
       });
+      // The sweep never pays a human no on its own, World switched off or
+      // not: out of its queue. "Ask again" queues the new request. Unless the
+      // result already landed while this ask sat open (the World switch, or
+      // a player paid on the verdict): then the queue entry is that record's
+      // settle, run.ts's, and a no to a stale ask must not take it away.
+      if (!rows.some((e) => e.kind === "record")) await removePendingSettlement(goalId);
       return { status: "declined", record: declined };
     }
 
@@ -496,15 +538,42 @@ export async function cancelApproval(
       expiresAtIso: current.expiresAt,
       note,
     });
+    // The pool settled underneath the request: nothing left to pay.
+    await removePendingSettlement(goalId);
     return cancelled;
   });
 }
 
 // ---------------------------------------------------------------- the gate
 
+/** How a wallet's payout is released: a World ID confirm, or the verdict. */
+export type PayoutConfirm = "world" | "verdict";
+
+/**
+ * Who confirms a payout with World ID (header, WHO CONFIRMS). "world" for a
+ * World-bound wallet, checked first so a list player who later adds World ID
+ * confirms like any World player; "verdict" for an admin or an approved list
+ * entry with no World binding; "world" for everyone else, so an unknown wallet
+ * is never paid on the verdict alone. The binding is read in the namespace
+ * World's bindings live in even while KILL_WORLD_ID pauses new proofs
+ * (boundWorldNamespace), the same read access.ts makes.
+ */
+export async function payoutConfirmFor(address: string): Promise<PayoutConfirm> {
+  if (!isAddress(address)) return "world";
+  const namespace = boundWorldNamespace();
+  if (namespace !== null && (await isVerifiedHuman(address, namespace))) return "world";
+  if (isAdmin(address)) return "verdict";
+  if ((await getAccessRecord(address))?.status === "approved") return "verdict";
+  return "world";
+}
+
 export type GateOutcome =
   /** WORLD_APPROVAL_MODE unset: the caller proceeds exactly as before. */
   | { status: "off" }
+  /** The confirmation is on, and this wallet is paid on the verdict (an admin
+   *  or an approved list player, payoutConfirmFor). The caller proceeds
+   *  exactly as with "off"; nothing was asked or written. */
+  | { status: "verdict" }
   | { status: "approved"; record: ApprovalRecord }
   | { status: "awaiting"; record: ApprovalRecord }
   | { status: "declined" | "expired" | "cancelled"; record: ApprovalRecord }
@@ -522,6 +591,12 @@ export type GateOutcome =
  * A declined or expired record is NOT re-asked here. SPOTTER asks once per
  * decision; only the human, through the card's "ask again", opens a new
  * request. Otherwise every poll after a decline would nag.
+ *
+ * Paid on the verdict (header, WHO CONFIRMS): with the confirmation on, an
+ * admin or an approved list player gets "verdict" before any record is read
+ * or written, so the caller records exactly as with "off". That holds even on
+ * a build whose World confirm is misconfigured: those players never needed
+ * it, so its setup never holds their payout. Everyone else still throws there.
  */
 export async function approvalGate(args: {
   goalId: string;
@@ -531,8 +606,15 @@ export async function approvalGate(args: {
   poolSettled: () => Promise<boolean>;
   nowMs?: number;
 }): Promise<GateOutcome> {
-  const mode = approvalMode();
+  let mode: ApprovalMode;
+  try {
+    mode = approvalMode();
+  } catch (err) {
+    if ((await payoutConfirmFor(args.address)) === "verdict") return { status: "verdict" };
+    throw err;
+  }
   if (mode === "off") return { status: "off" };
+  if ((await payoutConfirmFor(args.address)) === "verdict") return { status: "verdict" };
   const provider = approvalProviderFor(mode);
   const nowMs = args.nowMs ?? Date.now();
 
@@ -544,6 +626,9 @@ export async function approvalGate(args: {
   // "confirmed". The sweep records approved claims before the pool phase can
   // settle their pool, so reaching this means that race was lost.
   if (await args.poolSettled()) {
+    // Whatever the approval says, a claim with no record on a settled pool
+    // can never be paid, so the sweep has nothing left to do for it.
+    await removePendingSettlement(args.goalId);
     if (current === null || current.status === "approved") return { status: "unpayable" };
     if (current.status === "pending") {
       const cancelled = await cancelApproval(

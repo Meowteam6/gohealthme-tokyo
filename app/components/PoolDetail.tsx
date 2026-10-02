@@ -238,7 +238,7 @@ function JoinedNight({
   address: `0x${string}`;
   base: Omit<Parameters<typeof YourNight>[0], "children">;
 }) {
-  const { nights, line } = useRunNights({ pool, address, promptForData: false });
+  const { nights, line } = useRunNights({ pool, address });
   const spec = classifyWearableGoal(pool.goalSpec);
   // A one-night run's caption is the goodnight line; a longer run's is where
   // the nights stand.

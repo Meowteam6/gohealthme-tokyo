@@ -30,6 +30,13 @@
 // run route would record it on the next poll anyway. A human no (declined)
 // and a settled pool (cancelled) are never picked.
 //
+// PER WALLET (Andre, 2026-10-02, "Pay on the verdict"). The confirmation is
+// also off for one wallet at a time: an admin or an approved list player is
+// paid on the verdict (approval.ts payoutConfirmFor). The sweep passes
+// `confirmationRequired: false` for such a claim's participant, so an ask
+// opened for one before that decision is recorded like a hit with the
+// confirmation off. A World-bound participant still needs a human yes.
+//
 // SETTLED FIRST. recordApprovedClaim reads the pool before driving the run
 // loop and stops on a settled one: settle() is one-shot and already refunded
 // the claim, and with the confirmation off no gate stands between the sweep

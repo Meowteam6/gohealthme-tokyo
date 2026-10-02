@@ -1204,6 +1204,12 @@ async function runClaimUnlocked(
   // keeps this claim out of the settlement sweep (it settles only recorded
   // claims); the stake comes back through the contract's unadjudicated
   // refund at period end.
+  //
+  // Paid on the verdict (Andre, 2026-10-02): an admin or an approved list
+  // player has no World ID to confirm with, so the gate answers "verdict" and
+  // the record below runs exactly as with the gate off, like V3. Only a
+  // World-bound wallet is asked (approval.ts, WHO CONFIRMS). The record is for
+  // input.address either way: the payout goes to the staker's own wallet.
   if (entryOf(ledger, "record") === undefined) {
     let gate: GateOutcome;
     try {
@@ -1234,7 +1240,7 @@ async function runClaimUnlocked(
       );
       return { status: "error", ledger };
     }
-    if (gate.status !== "off" && gate.status !== "approved") {
+    if (gate.status !== "off" && gate.status !== "verdict" && gate.status !== "approved") {
       const status: RunStatus =
         gate.status === "awaiting"
           ? "awaiting-approval"

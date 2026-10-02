@@ -5,6 +5,7 @@ import {
   challengeCreateBlock,
   collectNeedsWorldOf,
   gateStateOf,
+  payoutPathOf,
   payoutStateOf,
   verifierStateOf,
   type GateInputs,
@@ -160,50 +161,18 @@ describe("challengeCreateBlock with new money paused", () => {
   });
 });
 
-// The list path at the create form (2026-09-30). A list player (or an admin)
-// on a build where a hit is confirmed with World ID is locked out of staking
-// ("world-to-collect", lib/game/lobby.ts). The create form moves their extra
-// into the pot BEFORE their own stake, so without this they would pay in and
-// then find their own challenge locked. Said before the form, with the fix.
-describe("challengeCreateBlock for a creator who needs World ID to collect", () => {
-  it("stops the create before any deposit, with World ID as the fix", () => {
-    const block = challengeCreateBlock("available", "ready", OPEN, {
-      collectNeedsWorld: true,
-      checking: false,
-    });
-    expect(block.kind).toBe("needs-world");
-    if (block.kind !== "needs-world") return;
-    expect(block.title).toBe("Hits here are confirmed with World ID");
-    expect(block.detail).toMatch(/World ID/);
-    expect(block.detail).toMatch(/nothing has been charged/i);
-    expect(block.fix).toEqual({
-      label: "Add World ID",
-      href: "/character?step=human&next=%2Fchallenge%2Fnew",
-    });
-    expect(`${block.title} ${block.detail}`).not.toMatch(
-      /\b(run|runs|reward|dare|pool|bet|wager|odds|winner)\b|[!—]/i,
-    );
-  });
-
-  it("holds while the creator's human proof is still being read, never ok", () => {
-    expect(
-      challengeCreateBlock("available", "ready", OPEN, { collectNeedsWorld: false, checking: true }),
-    ).toEqual({ kind: "checking" });
-  });
-
-  it("lets a World-verified creator, or anyone where hits need no World ID, through (regression)", () => {
-    expect(
-      challengeCreateBlock("available", "ready", OPEN, { collectNeedsWorld: false, checking: false }),
-    ).toEqual({ kind: "ok" });
+// "Pay on the verdict" (Andre, 2026-10-02). A list player or an admin is paid
+// on the verdict, so their own stake can always follow the extra they put in:
+// the create form never stops them for World ID. Only build-wide limits stop
+// a create.
+describe("challengeCreateBlock for a list player or an admin", () => {
+  it("lets every proven creator through when nothing build-wide holds", () => {
     expect(challengeCreateBlock("available", "ready", OPEN)).toEqual({ kind: "ok" });
   });
 
-  it("keeps the build-wide pauses first", () => {
-    const creator = { collectNeedsWorld: true, checking: false };
-    expect(challengeCreateBlock("available", "ready", { state: "paused", reason: null }, creator).kind).toBe(
-      "paused",
-    );
-    expect(challengeCreateBlock("available", "misconfigured", OPEN, creator).kind).toBe("paused");
+  it("keeps the build-wide pauses (regression)", () => {
+    expect(challengeCreateBlock("available", "ready", { state: "paused", reason: null }).kind).toBe("paused");
+    expect(challengeCreateBlock("available", "misconfigured", OPEN).kind).toBe("paused");
   });
 });
 
@@ -236,33 +205,42 @@ describe("approvalModeOf and payoutStateOf", () => {
   });
 });
 
-describe("collectNeedsWorldOf", () => {
-  const base = {
-    worldLane: "on" as const,
-    approvalMode: "world" as const,
-    human: "verified" as const,
-    humanProof: "list" as const,
-  };
-
-  it("is true for a list player or an admin where hits are confirmed with World ID", () => {
-    expect(collectNeedsWorldOf(base)).toBe(true);
-    expect(collectNeedsWorldOf({ ...base, humanProof: "admin" })).toBe(true);
-  });
-
-  it("is false for a World-verified player", () => {
-    expect(collectNeedsWorldOf({ ...base, humanProof: "world" })).toBe(false);
-  });
-
-  it("is false when the confirmation is off, mocked (anyone can give it) or not known yet", () => {
-    for (const approvalMode of ["off", "mock", "misconfigured", "loading", "error"] as const) {
-      expect(collectNeedsWorldOf({ ...base, approvalMode })).toBe(false);
+describe("collectNeedsWorldOf (retired)", () => {
+  it("is false for everyone: nobody needs World ID to collect a hit any more", () => {
+    for (const humanProof of ["list", "admin", "world", null] as const) {
+      for (const approvalMode of ["world", "mock", "off", "misconfigured", "loading", "error"] as const) {
+        expect(
+          collectNeedsWorldOf({ worldLane: "on", approvalMode, human: "verified", humanProof }),
+        ).toBe(false);
+      }
     }
-  });
-
-  it("only applies where the list path newly opened the join: World on, human proven", () => {
-    expect(collectNeedsWorldOf({ ...base, worldLane: "off" })).toBe(false);
-    expect(collectNeedsWorldOf({ ...base, human: "unverified", humanProof: null })).toBe(false);
-    expect(collectNeedsWorldOf({ ...base, human: "unknown", humanProof: null })).toBe(false);
   });
 });
 
+// The client mirror of the server's payoutConfirmFor (approval.ts): who
+// confirms a payout with World ID, and who SPOTTER pays on the verdict.
+describe("payoutPathOf", () => {
+  it("asks a World-verified player to confirm wherever the confirmation is on", () => {
+    for (const approvalMode of ["world", "mock", "misconfigured"] as const) {
+      expect(payoutPathOf({ approvalMode, humanProof: "world" })).toBe("world");
+    }
+  });
+
+  it("pays a list player or an admin on the verdict, whatever the build", () => {
+    for (const approvalMode of ["world", "mock", "misconfigured", "off"] as const) {
+      expect(payoutPathOf({ approvalMode, humanProof: "list" })).toBe("verdict");
+      expect(payoutPathOf({ approvalMode, humanProof: "admin" })).toBe("verdict");
+    }
+  });
+
+  it("pays everyone on the verdict while the confirmation is off", () => {
+    expect(payoutPathOf({ approvalMode: "off", humanProof: "world" })).toBe("verdict");
+    expect(payoutPathOf({ approvalMode: "off", humanProof: null })).toBe("verdict");
+  });
+
+  it("never guesses: unknown while the mode is being read, world for an unproven wallet", () => {
+    expect(payoutPathOf({ approvalMode: "loading", humanProof: "list" })).toBeNull();
+    expect(payoutPathOf({ approvalMode: "error", humanProof: "list" })).toBeNull();
+    expect(payoutPathOf({ approvalMode: "world", humanProof: null })).toBe("world");
+  });
+});

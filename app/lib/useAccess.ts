@@ -13,31 +13,65 @@
 // Results and errors are tagged with the address they belong to, so a wallet
 // switch never shows the previous wallet's status while the new fetch is in
 // flight.
+//
+// `source` is kept (2026-10-02): it is the only client read that still knows a
+// wallet is World-bound while KILL_WORLD_ID pauses World. The World lane then
+// reads off and an approved status alone looks like the list, so the
+// character card stamped a World-verified player "On the list".
 
 import { useCallback, useEffect, useState } from "react";
 import { useEmbeddedWallet } from "@/lib/wallet";
 
 export type AccessStatus = "none" | "pending" | "approved" | "denied";
 
+/** Why the gate answered the way it did (lib/server/access.ts): an admin
+ *  wallet, a World ID binding (kept while World is paused), the closed-beta
+ *  list record, or nothing. */
+export type AccessSource = "admin" | "world" | "request" | "none";
+
 export interface AccessState {
   loading: boolean;
   error: boolean;
   status: AccessStatus;
   isAdmin: boolean;
+  /** "none" until this address's answer lands. The hook always sets it;
+   *  optional so view fixtures built before 2026-10-02 still type (a reader
+   *  treats absent as "none"), like Character.humanProof. */
+  source?: AccessSource;
   authenticated: boolean;
   address: string | null;
   refetch: () => void;
 }
 
-interface StatusResponse {
+export interface AccessStatusRead {
   status: AccessStatus;
   isAdmin: boolean;
+  source: AccessSource;
 }
 
-interface Tagged {
+interface Tagged extends AccessStatusRead {
   address: string;
-  status: AccessStatus;
-  isAdmin: boolean;
+}
+
+const STATUSES: readonly AccessStatus[] = ["none", "pending", "approved", "denied"];
+const SOURCES: readonly AccessSource[] = ["admin", "world", "request", "none"];
+
+/**
+ * `GET /api/access/status` -> what the gate keeps, or null when the answer has
+ * no usable status (the gate then shows its retry, never a guess). A missing
+ * or unknown `source` is never read as a World binding: an admin stays admin,
+ * any other record reads as the list, and no record reads as none.
+ */
+export function parseAccessStatus(payload: unknown): AccessStatusRead | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const body = payload as Record<string, unknown>;
+  const status = STATUSES.find((s) => s === body.status);
+  if (status === undefined) return null;
+  const isAdmin = body.isAdmin === true;
+  const known = SOURCES.find((s) => s === body.source);
+  const source: AccessSource =
+    known ?? (isAdmin ? "admin" : status === "none" ? "none" : "request");
+  return { status, isAdmin, source };
 }
 
 export function useAccess(enabled = true): AccessState {
@@ -59,13 +93,13 @@ export function useAccess(enabled = true): AccessState {
     let cancelled = false;
     fetch(`/api/access/status?address=${address}`)
       .then((r) =>
-        r.ok
-          ? (r.json() as Promise<StatusResponse>)
-          : Promise.reject(new Error(String(r.status))),
+        r.ok ? (r.json() as Promise<unknown>) : Promise.reject(new Error(String(r.status))),
       )
       .then((data) => {
         if (cancelled) return;
-        setResult({ address, status: data.status, isAdmin: Boolean(data.isAdmin) });
+        const read = parseAccessStatus(data);
+        if (read === null) throw new Error("access status answered something unusable");
+        setResult({ address, ...read });
         setErrorFor(null);
       })
       .catch(() => {
@@ -84,6 +118,7 @@ export function useAccess(enabled = true): AccessState {
   let error = false;
   let status: AccessStatus = "none";
   let isAdmin = false;
+  let source: AccessSource = "none";
 
   if (!enabled) {
     // nothing to load
@@ -96,9 +131,10 @@ export function useAccess(enabled = true): AccessState {
   } else if (fresh) {
     status = result.status;
     isAdmin = result.isAdmin;
+    source = result.source;
   } else {
     loading = true; // fetch in flight for this address
   }
 
-  return { loading, error, status, isAdmin, authenticated, address, refetch };
+  return { loading, error, status, isAdmin, source, authenticated, address, refetch };
 }

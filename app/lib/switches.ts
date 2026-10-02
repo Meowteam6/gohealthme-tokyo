@@ -27,14 +27,27 @@ export interface Switches {
 export const KILL_REASON_MAX = 200;
 
 /**
- * An operator note fit for a player's screen: control characters and line
+ * Characters a player cannot see that still change what they read: the bidi
+ * embeddings and overrides (U+202A-202E) and isolates (U+2066-2069), which can
+ * reorder the paused line the reason is appended to, the bidi marks (U+061C
+ * ALM, U+200E LRM, U+200F RLM), and the zero-width characters (U+200B-200D:
+ * space and joiners; U+2060-2064: word joiner and invisible operators; U+FEFF:
+ * BOM). Written as escapes: raw bidi controls in source are invisible to a
+ * reviewer and can reorder how the code around them displays.
+ */
+const INVISIBLE_FORMATTING = /[\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
+
+/**
+ * An operator note fit for a player's screen: invisible formatting characters
+ * (bidi overrides, zero-width) are removed, control characters and line
  * breaks become spaces, runs of whitespace collapse, the ends are trimmed and
- * the length is capped. Rendered as text by React, never as markup. Empty is
- * null.
+ * the length is capped after all of that, so invisible padding cannot use up
+ * the cap. Rendered as text by React, never as markup. Empty is null.
  */
 export function cleanKillReason(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const text = raw
+    .replace(INVISIBLE_FORMATTING, "")
     .replace(/[\u0000-\u001f\u007f]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -106,6 +119,20 @@ export function challengeCreatePausedDetail(reason: string | null, charged: "has
 export function addToPotPausedDetail(reason: string | null): string {
   return withKillReason(
     `Adding to the pot is paused for now, along with new stakes. ${MONEY_ALREADY_IN_LINE} Nothing has been charged.`,
+    reason,
+  );
+}
+
+/**
+ * The test USDC faucet while new money is paused (lib/faucet-funding.ts). The
+ * top-up is refused, but practice money already waiting in the app still goes
+ * to the wallet: `delivered` says whether any did on this tap.
+ */
+export function testUsdcPausedDetail(reason: string | null, delivered: boolean): string {
+  return withKillReason(
+    delivered
+      ? "New test USDC is paused for now. What was already waiting for you was delivered."
+      : `New test USDC is paused for now. Nothing new was added. ${MONEY_ALREADY_IN_LINE}`,
     reason,
   );
 }

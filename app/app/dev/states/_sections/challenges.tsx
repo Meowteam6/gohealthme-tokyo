@@ -30,7 +30,6 @@ import type { PoolInfo } from "@/lib/contract";
 import { potLineOf } from "@/lib/game/money-flow";
 import { inviteShareOf } from "@/lib/game/money-sharing";
 import { challengeCreatePausedDetail } from "@/lib/switches";
-import { challengeCreateBlock } from "@/lib/game/join-checks";
 
 const SELF_SHARE = inviteShareOf("self");
 const selfLinks = SELF_SHARE.kind === "links" ? SELF_SHARE.links : [];
@@ -69,11 +68,6 @@ const PAUSE = {
 const KILL_NOTE = "Back after the contract upgrade on Friday.";
 const MONEY_IN_PAUSE = { detail: challengeCreatePausedDetail(KILL_NOTE, "has been") };
 
-/** A list player where hits are confirmed with World ID, at the create form. */
-const NEEDS_WORLD = challengeCreateBlock("available", "ready", { state: "open", reason: null }, {
-  collectNeedsWorld: true,
-  checking: false,
-});
 
 function LoadingCard() {
   return (
@@ -202,27 +196,6 @@ export default function ChallengeStates({ meta }: SectionProps) {
           </PerchedHeader>
         </div>
       </StateFrame>
-
-      {NEEDS_WORLD.kind === "needs-world" ? (
-        <StateFrame
-          name="challenge-create-needs-world"
-          note="/challenge/new for a list player where hits are confirmed with World ID: said before any extra goes in"
-        >
-          <div className={PAGE_COLUMN} role="status">
-            <PerchedHeader title="Start a challenge" pose="thinking">
-              <EmptyCard
-                title={NEEDS_WORLD.title}
-                detail={NEEDS_WORLD.detail}
-                action={
-                  <Link href={NEEDS_WORLD.fix.href} className={PRIMARY_LINK}>
-                    {NEEDS_WORLD.fix.label}
-                  </Link>
-                }
-              />
-            </PerchedHeader>
-          </div>
-        </StateFrame>
-      ) : null}
 
       <StateFrame name="challenges-error" note="the chain read failed">
         <Frame

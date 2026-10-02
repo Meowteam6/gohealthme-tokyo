@@ -324,3 +324,65 @@ describe("run.ts AUTHORIZE gate", () => {
     expect(await readApproval(GOAL)).toBeNull();
   });
 });
+
+// "Pay on the verdict" (Andre, 2026-10-02): with the confirmation on, an admin
+// or an approved list player is recorded and paid on the verdict, like V3,
+// with no approval request; the result is recorded for, and paid to, the
+// staker's own wallet. A World-verified player still waits on World ID.
+describe("run.ts AUTHORIZE gate, paid on the verdict", () => {
+  const ADMIN = "0x3333333333333333333333333333333333333333";
+
+  async function listed(mode: string) {
+    vi.stubEnv("WORLD_APPROVAL_MODE", mode);
+    vi.stubEnv("WORLD_VERIFY_MODE", "mock");
+    vi.stubEnv("ADMIN_ADDRESSES", ADMIN);
+    const mod = await loadRun();
+    const access = await import("@/lib/server/access");
+    await access.requestAccess({ address: USER });
+    await access.decideAccess({ address: USER, decision: "approve", adminAddress: ADMIN });
+    return mod;
+  }
+
+  for (const mode of ["mock", "world"]) {
+    it(`${mode} mode: an approved list player is recorded and paid on the verdict, to their own wallet, with no approval rows`, async () => {
+      const { runAgentForGoal, readApproval } = await listed(mode);
+      const deps = makeDeps();
+      const result = await runAgentForGoal(deps, INPUT);
+      expect(result.status).toBe("paid");
+      expect(deps.legacyRecordResult).toHaveBeenCalledWith(7n, USER, true, 20_000n);
+      expect(result.ledger.find((e) => e.kind === "settle")).toMatchObject({
+        status: "settled",
+        paidUsd: "50",
+      });
+      expect(kinds(result.ledger)).toEqual(["plan", "spend", "verdict", "reason", "record", "settle"]);
+      expect(await readApproval(GOAL)).toBeNull();
+    });
+  }
+
+  it("mock mode: an admin is recorded and paid on the verdict", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    vi.stubEnv("ADMIN_ADDRESSES", USER);
+    const { runAgentForGoal } = await loadRun();
+    const deps = makeDeps();
+    const result = await runAgentForGoal(deps, INPUT);
+    expect(result.status).toBe("paid");
+    expect(result.ledger.some((e) => e.kind === "approval")).toBe(false);
+  });
+
+  it("mock mode: a World-verified player still waits on their World ID confirm", async () => {
+    vi.stubEnv("WORLD_APPROVAL_MODE", "mock");
+    vi.stubEnv("WORLD_VERIFY_MODE", "mock");
+    const { runAgentForGoal } = await loadRun();
+    const human = await import("@/lib/server/world/human");
+    await human.bindHuman({
+      address: USER,
+      nullifierHash: `0x${"7".padStart(64, "0")}`,
+      mode: "mock",
+      protocolVersion: "4.0",
+    });
+    const deps = makeDeps();
+    const result = await runAgentForGoal(deps, INPUT);
+    expect(result.status).toBe("awaiting-approval");
+    expect(deps.legacyRecordResult).not.toHaveBeenCalled();
+  });
+});

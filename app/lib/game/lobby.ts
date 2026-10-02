@@ -48,10 +48,12 @@ export type RunLock =
   /** Signed in, World is not how this player got in, and the closed-beta list
    *  has not approved them. Ordered after not-human. */
   | { kind: "not-approved"; pending: boolean }
-  /** In through the list (or an admin), on a build where a hit is confirmed
-   *  with World ID before it pays (WORLD_APPROVAL_MODE=world). Without World
-   *  ID a stake could be lost on a miss and never collected on a hit, so the
-   *  stake waits for World ID (collectNeedsWorldOf in join-checks.ts). */
+  /** Retired (Andre, 2026-10-02, "Pay on the verdict"): runSlotOf never
+   *  produces it. It held a list player's stake for World ID on a build where
+   *  a hit was confirmed with it; SPOTTER now pays a list player or an admin
+   *  on the verdict. Kept only for the gallery frame that still renders it
+   *  (app/dev/states/_sections/landing.tsx); delete with that frame.
+   *  @deprecated Never produced. */
   | { kind: "world-to-collect" }
   /** An upload-proof run while SPOTTER's document checker is off for this
    *  build. The run stays visible (a dare link must never just vanish); the
@@ -125,8 +127,10 @@ export interface RunSlotInput {
   /** The viewer created this challenge and its pot already holds money
    *  (creatorMoneyInOf). The money-in pause does not strand their game. */
   creatorMoneyIn?: boolean;
-  /** A proven human who is not World-verified, where hits are confirmed with
-   *  World ID before paying (collectNeedsWorldOf). */
+  /** Ignored. Callers not yet updated still pass the retired
+   *  collectNeedsWorldOf answer; nothing locks on it any more (a list player
+   *  or an admin is paid on the verdict, Andre, 2026-10-02).
+   *  @deprecated Drop from PoolDetail and ChallengeAccept. */
   collectNeedsWorld?: boolean;
   /** Label of the player's paired device, for the cannot-measure copy. */
   deviceLabel: string | null;
@@ -172,8 +176,8 @@ function locked(lock: RunLock): RunSlot {
  *  5. The device can never measure this goal (a hardware fact, not a delay).
  *  6. The provider is down (clears on its own).
  *  7. Not proven human (World on).
- *  8. Not on the closed-beta list; in through the list where a hit is
- *     confirmed with World ID (world-to-collect).
+ *  8. Not on the closed-beta list. A list player or an admin is not held
+ *     for World ID: SPOTTER pays them on the verdict (Andre, 2026-10-02).
  *  9. No sensor, then sensor not checked this visit.
  * Any of those reads still loading holds the slot on "checking", and one that
  * failed locks it with a retry. Neither ever falls through to "playable".
@@ -229,7 +233,6 @@ export function runSlotOf(input: RunSlotInput): RunSlot {
   if (input.gate === "error") return locked({ kind: "check-failed", check: "access" });
   if (input.gate === "pending") return locked({ kind: "not-approved", pending: true });
   if (input.gate === "not-approved") return locked({ kind: "not-approved", pending: false });
-  if (input.collectNeedsWorld === true) return locked({ kind: "world-to-collect" });
 
   if (block.kind === "no-device") return { kind: "locked", lock: { kind: "no-sensor" } };
   if (block.kind === "unchecked") {
@@ -348,6 +351,7 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
             tone: "fixable",
           };
     case "world-to-collect":
+      // Retired (RunLock): never produced; kept for the gallery frame only.
       return {
         title: "Hits here are confirmed with World ID",
         detail:
@@ -440,8 +444,6 @@ export interface LobbyInput {
   uploadAvailable: boolean;
   worldLane: HumanLane;
   humanVerified: boolean;
-  /** collectNeedsWorldOf for this player (the same for every challenge). */
-  collectNeedsWorld?: boolean;
   deviceLabel: string | null;
 }
 
@@ -510,7 +512,6 @@ export function buildLobby(input: LobbyInput): Lobby {
         moneyIn: input.moneyIn,
         moneyInReason: input.moneyInReason ?? null,
         creatorMoneyIn: creatorMoneyInOf(pool, input.address),
-        collectNeedsWorld: input.collectNeedsWorld === true,
         deviceLabel: input.deviceLabel,
       }),
     };
