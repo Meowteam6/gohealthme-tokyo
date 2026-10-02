@@ -12,9 +12,10 @@
 //      GET /api/agent/run/[goalId] and renders as the state it encodes. This
 //      is the DEFAULT tab for wearable pools, so without it a user with a
 //      claim in flight opened the page to an empty box. The read is owner-only
-//      (goal ids are public; the ledger's prose is not), so every request
-//      carries one wallet signature reused across the session, and a claim
-//      that cannot be shown is reported as withheld rather than as absent.
+//      (goal ids are public; the ledger's prose is not), so it carries the
+//      wallet proof the tab already holds (readClaimOnLoad, cachedOnly: a page
+//      load never opens a wallet), and a claim that cannot be shown is
+//      reported as withheld rather than as absent, with a tap to verify.
 //   2. Say when the payout lands - the recorded state carries the settle
 //      moment and a countdown, and schedules the single automatic re-poll that
 //      makes the payout appear without anyone touching anything.
@@ -22,7 +23,7 @@
 //      connect flow can only ever 502, so the CTA is replaced by the reason
 //      and a one-tap move to the document proof path.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { displayGoalSpec, fetchGoalId, fetchPool } from "@/lib/contract";
@@ -55,8 +56,14 @@ import {
   providerMetricUnavailable,
   providerQueryKey,
 } from "@/lib/wearable-provider";
-import { fetchWithWalletAuth, type WalletAuthRequester } from "@/lib/client-auth";
+import {
+  cachedOnlyRequester,
+  fetchWithWalletAuth,
+  type WalletAuthRequester,
+} from "@/lib/client-auth";
 import { useWalletAuth } from "@/lib/useWalletAuth";
+import { runVerifyWallet } from "@/lib/session-proof";
+import { proofLandedWhileWaiting } from "@/components/world/HumanApprovalCard";
 
 import {
   claimMoved,
@@ -66,7 +73,9 @@ import {
   nextClaimScreen,
   receiptToKeep,
   type ClaimMark,
+  type ClaimReadBody,
   type ClaimScreen,
+  type ClaimVisibility,
 } from "@/lib/claim-restore";
 import AgentReceipt from "@/components/AgentReceipt";
 import Countdown from "@/components/Countdown";
@@ -128,7 +137,129 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * The claim read a page load makes: the restore on mount, on a wallet change,
+ * and after a proof lands. Shared by the wearable and document claim
+ * surfaces (EvidenceUpload).
+ *
+ * Quiet by construction: whatever requester it is handed, it reads cached
+ * credentials only (a Dynamic session token, or a signature already collected
+ * this session), and fetchWithWalletAuth's 401 retry stays cachedOnly too, so
+ * opening a claim never opens a wallet. The request is still sent unsigned:
+ * the redacted answer is what says a claim exists. `lockedByProof` is true
+ * when the claim is withheld only because this tab holds no proof yet, which
+ * one Verify tap fixes; a claim withheld from a proven wallet (another
+ * wallet's claim, a refused proof) is not.
+ *
+ * `resume`: the claim is private only for want of a proof AND its public
+ * projection says the run is still in flight, so the panel drives it on with
+ * quiet polls. The run route never needs a proof to progress, only to show
+ * its rows, so an unproven wallet must not stall SPOTTER until a tap (a hit
+ * paid on the verdict records only when a poll drives it).
+ */
+export async function readClaimOnLoad(
+  goalId: string,
+  poolId: bigint,
+  requestAuth: WalletAuthRequester,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ visibility: ClaimVisibility; lockedByProof: boolean; resume: boolean }> {
+  const url = `/api/agent/run/${goalId}?poolId=${poolId.toString()}`;
+  let sent = await fetchWithWalletAuth(
+    url,
+    undefined,
+    cachedOnlyRequester(requestAuth),
+    fetchImpl,
+  );
+  if (sent.response.status === 401 && sent.auth.kind !== "ok") {
+    // The proof it held was refused and none is left to try quietly. Ask
+    // unsigned: that answer is what tells a withheld claim from no claim, so
+    // the panel never shows an empty box over a claim that already ran.
+    sent = { response: await fetchImpl(url), auth: sent.auth };
+  }
+  if (!sent.response.ok) {
+    throw new Error(`ledger read responded ${sent.response.status}`);
+  }
+  const body = (await sent.response.json().catch(() => ({}))) as ClaimReadBody & {
+    claim?: unknown;
+  };
+  const visibility = claimVisibilityOf(body, sent.auth);
+  const lockedByProof = visibility.kind === "locked" && sent.auth.kind !== "ok";
+  return {
+    visibility,
+    lockedByProof,
+    resume: lockedByProof && privateClaimInFlight(body.claim),
+  };
+}
+
+/**
+ * Whether a withheld claim's public projection (feed-view.ts, machine states
+ * only) is a run a poll can move on: the "verifying" state of
+ * runStatusFromLedger (mid-run, decided to pay, approved, or recorded and not
+ * settled). Anything finished, refused, waiting on the human, stopped on an
+ * error or handed to the sweep is left alone, and so is anything this cannot
+ * read: a poll on a finished no-pay could re-check it, which only the
+ * player's tap may do.
+ */
+function privateClaimInFlight(claim: unknown): boolean {
+  if (typeof claim !== "object" || claim === null) return false;
+  const c = claim as {
+    decision?: unknown;
+    recordTxs?: unknown;
+    settle?: unknown;
+    approval?: unknown;
+    problem?: unknown;
+    missed?: unknown;
+  };
+  if (c.missed === true) return false;
+  if (c.problem !== undefined && c.problem !== null) return false;
+  // Settled, deferred to the sweep, or closed: nothing for a poll to do.
+  if (c.settle !== undefined && c.settle !== null) return false;
+  // Recorded and not settled yet: the next poll settles or defers it.
+  if (c.recordTxs !== undefined && c.recordTxs !== null) return true;
+  if (typeof c.approval === "object" && c.approval !== null) {
+    const status = (c.approval as { status?: unknown }).status;
+    // A yes is recorded by the next poll. An open ask waits on the human,
+    // whose confirm needs the Verify tap anyway (and the sweep holds it
+    // queued), so polling it would only turn this card into a timeout.
+    if (status === "approved") return true;
+    if (
+      status === "requested" ||
+      status === "declined" ||
+      status === "expired" ||
+      status === "cancelled"
+    ) {
+      return false;
+    }
+  }
+  return c.decision === null || c.decision === "pay";
+}
+
+/**
+ * The wearable connection read on a claim panel, cachedOnly by construction
+ * (its 401 retry included). It used to drop cachedOnly on that retry, so a
+ * refused session token turned a page load into a wallet prompt. With no proof
+ * held it answers auth-required and the panel offers the explained tap.
+ */
+export function readProviderOnLoad(
+  address: `0x${string}`,
+  requestAuth: WalletAuthRequester,
+  window?: Parameters<typeof fetchProviderState>[2],
+  metric?: string,
+): ReturnType<typeof fetchProviderState> {
+  return fetchProviderState(address, cachedOnlyRequester(requestAuth), window, metric);
+}
+
 /** Human-readable local time for the settlement moment. */
+/** How the last Verify tap ended when it did not prove the wallet. */
+function UnlockNote({ note }: { note: string | null }) {
+  if (note === null) return null;
+  return (
+    <p className="m-0 text-sm leading-[1.45] text-muted" role="status">
+      {note}
+    </p>
+  );
+}
+
 function formatLocalTime(ms: number): string {
   return new Date(ms).toLocaleString(undefined, {
     month: "short",
@@ -149,10 +280,18 @@ function WearableCheckInner({
   onSwitchToDocument?: () => void;
   verdictShown?: boolean;
 }) {
-  const { ready, authenticated, address } = useEmbeddedWallet();
+  const { ready, authenticated, address, sessionProven } = useEmbeddedWallet();
   const requestAuth = useWalletAuth();
+  // Every read this panel makes on its own (restore, resumed polls, the
+  // deferred settle re-poll, the connection read) goes through this: a held
+  // proof is used, a missing one is never asked for.
+  const quietAuth = useMemo(() => cachedOnlyRequester(requestAuth), [requestAuth]);
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<CheckStatus>({ kind: "idle" });
+  // A Verify tap in flight, and how the last one ended when it did not prove
+  // the wallet (a no, a wallet error). Null otherwise.
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockNote, setUnlockNote] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
   // Set only when the browser blocked the connect popup: the real Junction
   // Link URL, rendered as a link the user taps directly (a true gesture is
@@ -184,23 +323,11 @@ function WearableCheckInner({
 
   const readableGoal = displayGoalSpec(goalSpec);
 
-  // The connection-status read must resolve on its own, without ever opening a
-  // wallet prompt of its own. A claim surface already prompts once on mount
-  // (the ledger restore); a SECOND blocking signature prompt fired by this
-  // read is what pinned the UI on "Checking for a connected wearable" when it
-  // was dismissed - the query stayed pending forever and the Connect button
-  // below was never reached. Read cached-only: reuse any signature already
-  // collected, and when there is none the route answers 401 and the explicit
-  // "Sign and check" action shows instead of an infinite spinner. Only an
-  // explicit refresh (the 401-on-stale-credential retry) may re-sign.
-  const providerStatusAuth = useCallback<WalletAuthRequester>(
-    (options) =>
-      requestAuth({
-        refresh: options?.refresh,
-        cachedOnly: options?.refresh === true ? options?.cachedOnly : true,
-      }),
-    [requestAuth],
-  );
+  // The connection-status read resolves on its own and never opens a wallet
+  // (readProviderOnLoad): a blocking prompt here once pinned the UI on
+  // "Checking for a connected wearable" when it was dismissed. With no proof
+  // held the route answers 401 and the explained "Sign and check" tap shows
+  // instead of a spinner; the 401 retry stays cachedOnly too.
 
 
   // Stop any in-flight poll loop on unmount.
@@ -218,9 +345,16 @@ function WearableCheckInner({
    * renders it verbatim. No attester id:
    * SPOTTER fetches the wearable summary itself, server-side, and derives the
    * claim's ref from the pool period on the chain.
+   *
+   * `prompt`: the player tapped to start this check, so its first request may
+   * ask for the proof (explained in the page before the wallet opens). Every
+   * other request, and every loop nobody tapped for (a resumed claim, the
+   * settle re-poll), reads cachedOnly: the run never needs a signature to
+   * progress, only to show its rows, so a lapsed proof hides rows rather than
+   * opening a wallet mid-loop.
    */
   const pollRun = useCallback(
-    async (goalId: string) => {
+    async (goalId: string, prompt: boolean) => {
       if (address === null) return;
       const seq = ++runSeqRef.current;
       let last: RunStatus = "verifying";
@@ -244,7 +378,7 @@ function WearableCheckInner({
                 evidenceKind: "wearable",
               }),
             },
-            requestAuth,
+            prompt && attempt === 0 ? requestAuth : quietAuth,
           );
           body = (await sent.response.json().catch(() => ({}))) as RunResponse;
           if (!sent.response.ok) {
@@ -322,7 +456,7 @@ function WearableCheckInner({
         ledger: receiptToKeep(screen),
       });
     },
-    [address, poolId, goalSpec, queryClient, requestAuth],
+    [address, poolId, goalSpec, queryClient, requestAuth, quietAuth],
   );
 
   // Restore on mount and on wallet change: once the wallet resolves, derive
@@ -339,17 +473,9 @@ function WearableCheckInner({
     void (async () => {
       try {
         const goalId = await fetchGoalId(poolId, address);
-        const sent = await fetchWithWalletAuth(
-          `/api/agent/run/${goalId}?poolId=${poolId.toString()}`,
-          undefined,
-          requestAuth,
-        );
-        if (!sent.response.ok) {
-          throw new Error(`ledger read responded ${sent.response.status}`);
-        }
-        const body = (await sent.response.json().catch(() => ({}))) as RunResponse;
+        const read = await readClaimOnLoad(goalId, poolId, requestAuth);
+        const { visibility } = read;
         if (cancelled) return;
-        const visibility = claimVisibilityOf(body, sent.auth);
         goalIdRef.current = goalId;
         repollDoneRef.current = false;
         setRestoredFor(address);
@@ -358,6 +484,10 @@ function WearableCheckInner({
           // read as "nothing has happened", which is the opposite of true.
           screenRef.current = emptyClaimScreen();
           setStatus({ kind: "locked", reason: visibility.reason });
+          // Still mid-run and private only for want of a proof: SPOTTER keeps
+          // working with quiet polls (rows hidden, "Sign and show the rows"
+          // offered), so nothing waits on a tap the system can do without.
+          if (read.resume) void pollRun(goalId, false);
           return;
         }
         if (visibility.kind === "none") {
@@ -374,7 +504,7 @@ function WearableCheckInner({
         // A run waiting on the player's World ID OK resumes too: the poll after
         // the approval lands is what records the result.
         if (runStatus === "verifying" || runStatus === "awaiting-approval") {
-          void pollRun(goalId);
+          void pollRun(goalId, false);
         }
       } catch (err) {
         // Restore is a read-only convenience; a failed read must not block a
@@ -391,15 +521,46 @@ function WearableCheckInner({
     };
   }, [ready, address, poolId, restoredFor, pollRun, requestAuth]);
 
-  /** Sign again and re-run the restore. If the prompt is refused a second time
-   *  the restore lands back on the withheld state with the reason, so there is
-   *  one path and it always tells the truth. */
+  /** The explained tap on a withheld claim: the one wallet proof
+   *  (lib/session-proof.ts; the reason on screen is the explanation, so the
+   *  wallet opens with no second question), then the restore re-runs under
+   *  it. A no stays on the withheld screen with the plain reason, never a
+   *  loop. Every other wallet-gated card on the page re-reads too. */
   const unlockClaim = () => {
     void (async () => {
-      await requestAuth({ refresh: true });
-      setRestoredFor(null);
+      setUnlocking(true);
+      setUnlockNote(null);
+      try {
+        const note = await runVerifyWallet({
+          address,
+          requestAuth,
+          invalidate: (root) => queryClient.invalidateQueries({ queryKey: [root] }),
+        });
+        if (note !== null) {
+          setUnlockNote(note);
+          return;
+        }
+        setRestoredFor(null);
+      } finally {
+        setUnlocking(false);
+      }
     })();
   };
+
+  // A session proof that lands while this claim waits on one (the explained
+  // sheet after a connect, a Verify tap on another card) re-reads it with no
+  // tap here. Transition-only, so a proof the server refused cannot loop.
+  const waitingOnProof =
+    !unlocking &&
+    (status.kind === "locked" ||
+      (status.kind === "agent" && status.lockedReason !== null));
+  const proofSeen = useRef<boolean | null>(null);
+  useEffect(() => {
+    const step = proofLandedWhileWaiting(proofSeen.current, waitingOnProof, sessionProven);
+    proofSeen.current = step.seen;
+    // A one-shot re-read on an external change: the session proof landing.
+    if (step.proceed) setRestoredFor(null);
+  }, [waitingOnProof, sessionProven]);
 
   // Deferred settlement: the settle entry may carry its own periodEndIso;
   // otherwise read periodEnd from the pool itself. The query key matches
@@ -446,9 +607,9 @@ function WearableCheckInner({
     queryKey: providerQueryKey(address, poolId, goalMetric ?? undefined),
     queryFn: () => {
       if (address === null) throw new Error("No wallet connected.");
-      return fetchProviderState(
+      return readProviderOnLoad(
         address,
-        providerStatusAuth,
+        requestAuth,
         poolWindow,
         goalMetric ?? undefined,
       );
@@ -478,7 +639,7 @@ function WearableCheckInner({
     if (goalId === null) return;
     const timer = setTimeout(() => {
       repollDoneRef.current = true;
-      void pollRun(goalId);
+      void pollRun(goalId, false);
     }, settleRepollDelayMs(periodEndMs, Date.now()));
     return () => clearTimeout(timer);
   }, [ready, address, restoredFor, status, periodEndMs, pollRun]);
@@ -505,7 +666,7 @@ function WearableCheckInner({
       }
     }
     repollDoneRef.current = false;
-    await pollRun(goalId);
+    await pollRun(goalId, true);
   };
 
   // Loading gate, derived rather than stored: while the wallet SDK is still
@@ -580,13 +741,18 @@ function WearableCheckInner({
             )}
           </SignInGate>
         ) : (
-          <Button
-            type="button"
-            onClick={unlockClaim}
-            className="w-full"
-          >
-            Sign and show my claim
-          </Button>
+          <>
+            <Button
+              type="button"
+              onClick={unlockClaim}
+              disabled={unlocking}
+              aria-busy={unlocking}
+              className="w-full"
+            >
+              {unlocking ? "Waiting for your wallet" : "Sign and show my claim"}
+            </Button>
+            <UnlockNote note={unlockNote} />
+          </>
         )}
       </div>
     );
@@ -644,11 +810,14 @@ function WearableCheckInner({
             <Button
               type="button"
               onClick={unlockClaim}
+              disabled={unlocking}
+              aria-busy={unlocking}
               variant="ghost"
               className="mt-3 w-full"
             >
-              Sign and show the rows
+              {unlocking ? "Waiting for your wallet" : "Sign and show the rows"}
             </Button>
+            <UnlockNote note={unlockNote} />
           </div>
         ) : null}
 
@@ -823,12 +992,24 @@ function WearableCheckInner({
   const providerAuth = providerAuthReason(providerState);
   const connected = providerConnected(providerState);
 
-  /** Sign, then re-read the provider. Used when the wearable read came back
-   *  401: the device may well be connected, we just cannot look yet. */
+  /** The explained tap when the wearable read came back 401: the device may
+   *  well be connected, we just cannot look yet. The proof re-reads every
+   *  wallet-gated query, this panel's connection read included. */
   const unlockProvider = () => {
     void (async () => {
-      await requestAuth({ refresh: true });
-      await providerQuery.refetch();
+      setUnlocking(true);
+      setUnlockNote(null);
+      try {
+        const note = await runVerifyWallet({
+          address,
+          requestAuth,
+          invalidate: (root) => queryClient.invalidateQueries({ queryKey: [root] }),
+        });
+        setUnlockNote(note);
+        if (note === null) await providerQuery.refetch();
+      } finally {
+        setUnlocking(false);
+      }
     })();
   };
 
@@ -923,10 +1104,13 @@ function WearableCheckInner({
           <Button
             type="button"
             onClick={unlockProvider}
+            disabled={unlocking}
+            aria-busy={unlocking}
             className="w-full"
           >
-            Sign and check my wearable
+            {unlocking ? "Waiting for your wallet" : "Sign and check my wearable"}
           </Button>
+          <UnlockNote note={unlockNote} />
         </div>
       ) : providerMetricUnavailable(providerState) ? (
         // Syncing, and this device does not produce the number this goal is

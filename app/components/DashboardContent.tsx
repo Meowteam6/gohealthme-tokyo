@@ -24,7 +24,7 @@
 import { SignInLoadingCard } from "@/components/night/SlowSignInNotice";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import BalanceCard from "@/components/BalanceCard";
 import ClaimPayout from "@/components/ClaimPayout";
 import RefundClaim from "@/components/RefundClaim";
@@ -86,7 +86,7 @@ import {
   type RunApprovalStatus,
 } from "@/lib/game/verdict";
 import { parseStatus } from "@/lib/world/approval-client";
-import RunBoard from "@/components/game/RunBoard";
+import RunBoard, { runNightsQuery, verifyActionOwner } from "@/components/game/RunBoard";
 import CharacterCard from "@/components/game/CharacterCard";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { MY_RUNS_KEY, fetchMyRuns } from "@/lib/game/useLobby";
@@ -434,12 +434,18 @@ function ProviderChoice({ address }: { address: `0x${string}` }) {
   );
 }
 
+const STREAK_LOCKED = "Your streak is private to your wallet.";
+
 function StreakCard({
   address,
   pool,
+  verifyAction = true,
 }: {
   address: `0x${string}`;
   pool?: PoolInfo;
+  /** Whether a locked streak offers the Verify wallet button. Off when an
+   *  earlier locked card on the page already carries it. */
+  verifyAction?: boolean;
 }) {
   const requestAuth = cachedOnlyRequester(useWalletAuth());
   const healthQuery = useQuery({
@@ -481,8 +487,14 @@ function StreakCard({
         // Locked, not empty. Offering the connect flow here would tell someone
         // with a linked device to link it again. Verifying re-reads every
         // wallet-gated card on the page (lib/session-proof.ts), the synced-data
-        // card below included.
-        <VerifyWalletAction lead="Your streak is private to your wallet." className="mt-3" />
+        // card below included, so a page shows the button once.
+        verifyAction ? (
+          <VerifyWalletAction lead={STREAK_LOCKED} className="mt-3" />
+        ) : (
+          <p className="m-0 mt-3 text-[0.9375rem] leading-[1.45] text-muted">
+            {STREAK_LOCKED} The Verify wallet button above unlocks it too.
+          </p>
+        )
       ) : !providerConnected(state) ? (
         <>
           <p className="m-0 mt-2 text-[0.9375rem] text-muted">
@@ -836,6 +848,21 @@ export default function DashboardContent() {
     refetchInterval: 15_000,
   });
 
+  // The nights read of every open wearable challenge, in page order: the same
+  // cache entries the boards render from (one fetch each, not two). A locked
+  // page offers Verify wallet once, in the first locked card, because one tap
+  // re-reads every card; this is how the page knows which card that is.
+  const openWearableRuns = (joinedQuery.data ?? []).filter(
+    ({ pool }) =>
+      !pool.settled && !pool.cancelled && evidenceTypeOf(pool.goalSpec) === "wearable",
+  );
+  const boardReads = useQueries({
+    queries:
+      address === null
+        ? []
+        : openWearableRuns.map(({ pool }) => runNightsQuery(address, pool, requestAuth)),
+  });
+
   if (!ready) {
     return (
       <MyRunsFrame pose="detective">
@@ -865,12 +892,27 @@ export default function DashboardContent() {
   const runs = joinedQuery.data ?? [];
   // An unsettled run is on the board; a settled or cancelled one is a
   // result line with whatever is left to do on it.
-  const wearableRun = runs.find(
-    ({ pool }) =>
-      !pool.settled && !pool.cancelled && evidenceTypeOf(pool.goalSpec) === "wearable",
-  );
+  const wearableRun = openWearableRuns[0];
   const openRuns = runs.filter(({ pool }) => !pool.settled && !pool.cancelled);
   const finishedRuns = runs.filter(({ pool }) => pool.settled || pool.cancelled);
+
+  // The general streak card earns its place only when no live wearable run
+  // already shows the nights on its own board.
+  const streakShown =
+    wearableRun === undefined &&
+    (wearableConnected || providerAuthReason(connectionQuery.data) !== null);
+  // Which locked card carries the one Verify wallet button. Every other locked
+  // card says its data is locked and points at it. With nothing locked, no
+  // card is told to drop a button, so a read this page has not seen yet can
+  // never leave a card locked with no way in.
+  const verifyOwner = verifyActionOwner([
+    ...openWearableRuns.map(({ pool }, i) => ({
+      id: `board:${pool.id.toString()}`,
+      state: boardReads[i]?.data,
+    })),
+    ...(streakShown ? [{ id: "streak", state: connectionQuery.data }] : []),
+  ]);
+  const offersVerify = (id: string) => verifyOwner === null || verifyOwner === id;
 
   // The one otter on the page: a run board carries its own scene, so when a
   // live run leads the page the header stands no second pose; otherwise
@@ -965,7 +1007,12 @@ export default function DashboardContent() {
             );
             return (
               <div key={entry.pool.id.toString()} className="[&>*+*]:mt-3">
-                <RunBoard pool={entry.pool} address={address} showLink />
+                <RunBoard
+                  pool={entry.pool}
+                  address={address}
+                  showLink
+                  verifyAction={offersVerify(`board:${entry.pool.id.toString()}`)}
+                />
                 {approvalLine !== null ? (
                   <ApprovalRunNote line={approvalLine} poolId={entry.pool.id} />
                 ) : null}
@@ -1011,11 +1058,8 @@ export default function DashboardContent() {
         </>
       ) : null}
 
-      {/* The general streak card earns its place only when no live wearable
-       *  run already shows the nights on its own board. */}
-      {wearableRun === undefined &&
-      (wearableConnected || providerAuthReason(connectionQuery.data) !== null) ? (
-        <StreakCard address={address} />
+      {streakShown ? (
+        <StreakCard address={address} verifyAction={offersVerify("streak")} />
       ) : null}
       <RecentDataCard address={address} />
       <BalanceCard address={address} />

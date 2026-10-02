@@ -6,11 +6,12 @@
 //      GET /api/agent/run/[goalId] and renders as the state it encodes,
 //      never as a blank "Prove it." box that hides a claim that already ran.
 //      That read is owner-only now (the ledger carries model prose about the
-//      uploaded document, and goal ids are public), so every request here
-//      carries a wallet signature. One signature covers the whole session -
-//      the run loop polls every 800ms and a prompt per poll is unusable. When
-//      there is no signature the claim is reported as withheld, with the
-//      reason, rather than as absent.
+//      uploaded document, and goal ids are public), so it carries the wallet
+//      proof the tab already holds (readClaimOnLoad, cachedOnly: a page load
+//      never opens a wallet). One proof covers the whole session - the run
+//      loop polls every 800ms and a prompt per poll is unusable. With no proof
+//      the claim is reported as withheld, with the reason and a tap to
+//      verify, rather than as absent.
 //   2. Resume, do not restart - the POST run loop is idempotent server-side,
 //      so a mid-flight claim picks up where it stopped, and a deferred
 //      settlement schedules exactly one automatic re-poll for just after the
@@ -22,7 +23,7 @@
 // re-poll timing) lives in lib/agent-receipt.ts as tested pure functions;
 // this component stays thin.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { displayGoalSpec, fetchGoalId, fetchPool } from "@/lib/contract";
@@ -37,12 +38,14 @@ import {
   type LedgerEntry,
   type RunStatus,
 } from "@/lib/agent-receipt";
-import { fetchWithWalletAuth } from "@/lib/client-auth";
+import { cachedOnlyRequester, fetchWithWalletAuth } from "@/lib/client-auth";
 import { useWalletAuth } from "@/lib/useWalletAuth";
+import { runVerifyWallet } from "@/lib/session-proof";
+import { readClaimOnLoad } from "@/components/WearableCheck";
+import { proofLandedWhileWaiting } from "@/components/world/HumanApprovalCard";
 import {
   claimMoved,
   claimScreenOf,
-  claimVisibilityOf,
   emptyClaimScreen,
   nextClaimScreen,
   receiptToKeep,
@@ -173,6 +176,16 @@ function formatLocalTime(ms: number): string {
  *  presents as "verified". */
 type UploadModality = "document" | "self-reported";
 
+/** How the last Verify tap ended when it did not prove the wallet. */
+function UnlockNote({ note }: { note: string | null }) {
+  if (note === null) return null;
+  return (
+    <p className="m-0 mt-2 text-sm leading-[1.45] text-muted" role="status">
+      {note}
+    </p>
+  );
+}
+
 function EvidenceUploadInner({
   poolId,
   goalSpec,
@@ -183,9 +196,17 @@ function EvidenceUploadInner({
   modality: UploadModality;
 }) {
   const selfReported = modality === "self-reported";
-  const { ready, authenticated, address } = useEmbeddedWallet();
+  const { ready, authenticated, address, sessionProven } = useEmbeddedWallet();
   const requestAuth = useWalletAuth();
+  // Every read this panel makes on its own (restore, resumed polls, the
+  // deferred settle re-poll) goes through this: a held proof is used, a
+  // missing one is never asked for.
+  const quietAuth = useMemo(() => cachedOnlyRequester(requestAuth), [requestAuth]);
   const queryClient = useQueryClient();
+  // A Verify tap in flight, and how the last one ended when it did not prove
+  // the wallet (a no, a wallet error). Null otherwise.
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockNote, setUnlockNote] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [status, setStatus] = useState<UploadStatus>({ kind: "idle" });
@@ -227,11 +248,18 @@ function EvidenceUploadInner({
    * for the wallet that owns the claim, returns the full ledger; the receipt
    * renders it verbatim. Server-side dedupe (by attester job id) makes
    * resuming safe: nothing is bought or recorded twice no matter how often
-   * this runs. The signature rides along on every poll from the session cache,
+   * this runs. The proof rides along on every poll from the session cache,
    * so this prompts once, not once per 800ms tick.
+   *
+   * `prompt`: the player tapped to submit, so the first request may ask for
+   * the proof (explained in the page before the wallet opens). Every other
+   * request, and every loop nobody tapped for (a resumed claim, the settle
+   * re-poll), reads cachedOnly: the run never needs a signature to progress,
+   * only to show its rows, so a lapsed proof hides rows rather than opening a
+   * wallet mid-loop.
    */
   const pollRun = useCallback(
-    async (goalId: string, attesterId: string) => {
+    async (goalId: string, attesterId: string, prompt: boolean) => {
       if (address === null) return;
       const seq = ++runSeqRef.current;
       let last: RunStatus = "verifying";
@@ -258,7 +286,7 @@ function EvidenceUploadInner({
                 evidenceKind: modality,
               }),
             },
-            requestAuth,
+            prompt && attempt === 0 ? requestAuth : quietAuth,
           );
           body = (await sent.response.json().catch(() => ({}))) as RunResponse;
           if (!sent.response.ok) {
@@ -332,7 +360,7 @@ function EvidenceUploadInner({
         ledger: receiptToKeep(screen),
       });
     },
-    [address, poolId, goalSpec, modality, queryClient, requestAuth],
+    [address, poolId, goalSpec, modality, queryClient, requestAuth, quietAuth],
   );
 
   // Restore on mount and on wallet change (defect M5): once the wallet
@@ -350,17 +378,8 @@ function EvidenceUploadInner({
     void (async () => {
       try {
         const goalId = await fetchGoalId(poolId, address);
-        const sent = await fetchWithWalletAuth(
-          `/api/agent/run/${goalId}?poolId=${poolId.toString()}`,
-          undefined,
-          requestAuth,
-        );
-        if (!sent.response.ok) {
-          throw new Error(`ledger read responded ${sent.response.status}`);
-        }
-        const body = (await sent.response.json().catch(() => ({}))) as RunResponse;
+        const { visibility } = await readClaimOnLoad(goalId, poolId, requestAuth);
         if (cancelled) return;
-        const visibility = claimVisibilityOf(body, sent.auth);
         goalIdRef.current = goalId;
         repollDoneRef.current = false;
         setRestoredFor(address);
@@ -386,7 +405,7 @@ function EvidenceUploadInner({
         const runStatus = runStatusFromLedger(ledger) ?? "verifying";
         setStatus({ kind: "agent", runStatus, ledger, lockedReason: null });
         if (runStatus === "verifying" && attesterIdRef.current !== null) {
-          void pollRun(goalId, attesterIdRef.current);
+          void pollRun(goalId, attesterIdRef.current, false);
         }
       } catch (err) {
         // Restore is a read-only convenience; a failed read must not block a
@@ -403,15 +422,46 @@ function EvidenceUploadInner({
     };
   }, [ready, address, poolId, restoredFor, pollRun, requestAuth]);
 
-  /** Sign again and re-run the restore. Used from the withheld state: if the
-   *  prompt is refused a second time the restore lands back here with the
-   *  reason, so there is exactly one path and it always tells the truth. */
+  /** The explained tap on a withheld claim: the one wallet proof
+   *  (lib/session-proof.ts; the reason on screen is the explanation, so the
+   *  wallet opens with no second question), then the restore re-runs under
+   *  it. A no stays on the withheld screen with the plain reason, never a
+   *  loop. Every other wallet-gated card on the page re-reads too. */
   const unlockClaim = () => {
     void (async () => {
-      await requestAuth({ refresh: true });
-      setRestoredFor(null);
+      setUnlocking(true);
+      setUnlockNote(null);
+      try {
+        const note = await runVerifyWallet({
+          address,
+          requestAuth,
+          invalidate: (root) => queryClient.invalidateQueries({ queryKey: [root] }),
+        });
+        if (note !== null) {
+          setUnlockNote(note);
+          return;
+        }
+        setRestoredFor(null);
+      } finally {
+        setUnlocking(false);
+      }
     })();
   };
+
+  // A session proof that lands while this claim waits on one (the explained
+  // sheet after a connect, a Verify tap on another card) re-reads it with no
+  // tap here. Transition-only, so a proof the server refused cannot loop.
+  const waitingOnProof =
+    !unlocking &&
+    (status.kind === "locked" ||
+      (status.kind === "agent" && status.lockedReason !== null));
+  const proofSeen = useRef<boolean | null>(null);
+  useEffect(() => {
+    const step = proofLandedWhileWaiting(proofSeen.current, waitingOnProof, sessionProven);
+    proofSeen.current = step.seen;
+    // A one-shot re-read on an external change: the session proof landing.
+    if (step.proceed) setRestoredFor(null);
+  }, [waitingOnProof, sessionProven]);
 
   // Deferred settlement (defect B2): the settle entry may carry its own
   // periodEndIso; otherwise read periodEnd from the pool itself. The query
@@ -451,7 +501,7 @@ function EvidenceUploadInner({
     if (goalId === null || attesterId === null) return;
     const timer = setTimeout(() => {
       repollDoneRef.current = true;
-      void pollRun(goalId, attesterId);
+      void pollRun(goalId, attesterId, false);
     }, settleRepollDelayMs(periodEndMs, Date.now()));
     return () => clearTimeout(timer);
   }, [ready, address, restoredFor, status, periodEndMs, pollRun]);
@@ -554,7 +604,7 @@ function EvidenceUploadInner({
     goalIdRef.current = goalId;
     attesterIdRef.current = attesterId;
     repollDoneRef.current = false;
-    await pollRun(goalId, attesterId);
+    await pollRun(goalId, attesterId, true);
   };
 
   const resetUpload = () => {
@@ -639,13 +689,18 @@ function EvidenceUploadInner({
             )}
           </SignInGate>
         ) : (
-          <button
-            type="button"
-            onClick={unlockClaim}
-            className={`${buttonClasses()} w-full`}
-          >
-            Sign and show my claim
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={unlockClaim}
+              disabled={unlocking}
+              aria-busy={unlocking}
+              className={`${buttonClasses()} w-full`}
+            >
+              {unlocking ? "Waiting for your wallet" : "Sign and show my claim"}
+            </button>
+            <UnlockNote note={unlockNote} />
+          </>
         )}
       </div>
     );
@@ -699,10 +754,13 @@ function EvidenceUploadInner({
             <button
               type="button"
               onClick={unlockClaim}
+              disabled={unlocking}
+              aria-busy={unlocking}
               className="mt-3 w-full rounded-xl border border-accent/50 bg-surface-raised px-5 py-3 text-sm font-semibold text-accent-deep hover:bg-accent/10"
             >
-              Sign and show the rows
+              {unlocking ? "Waiting for your wallet" : "Sign and show the rows"}
             </button>
+            <UnlockNote note={unlockNote} />
           </div>
         ) : null}
 

@@ -197,7 +197,7 @@ function ActiveRunBoard() {
   });
   return (
     <QueryClientProvider client={fixture.client}>
-      <RunBoard pool={fixture.pool} address={ADDRESS} promptForData={false} showLink />
+      <RunBoard pool={fixture.pool} address={ADDRESS} showLink />
     </QueryClientProvider>
   );
 }

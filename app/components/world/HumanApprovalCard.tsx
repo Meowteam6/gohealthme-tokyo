@@ -25,18 +25,30 @@
 // event mode the proof is mocked and the card says so; in world mode the
 // widget talks to World App and the server re-verifies the result.
 //
-// Every server call carries the wallet signature (lib/client-auth.ts), so a
+// Every server call carries the wallet proof (lib/client-auth.ts), so a
 // stranger holding a goalId or a requestId can neither open nor answer the
-// ask. The signature only proves the wallet is yours; no transaction is sent.
+// ask. The proof only shows the wallet is yours; no transaction is sent.
+//
+// NEVER A WALLET ON MOUNT. The mount read (loadApproval) is cachedOnly, its
+// 401 retry included. With a held proof (a Dynamic session token, or a
+// signature already collected this session) the ask opens as before. Without
+// one the card shows the explained Verify wallet step, and the tap is what
+// opens the wallet; a session proof landing elsewhere (the sheet after a
+// connect) opens the ask with no tap at all. The World ID confirm stays.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   authBlockReason,
+  cachedOnlyRequester,
   fetchWithWalletAuth,
   type ClientAuth,
+  type WalletAuthRequester,
 } from "@/lib/client-auth";
 import { useWalletAuth } from "@/lib/useWalletAuth";
+import { useEmbeddedWallet } from "@/lib/wallet";
+import { proofLineFor, runVerifyWallet, verifyOutcomeLine } from "@/lib/session-proof";
 import {
   formatCountdown,
   mockApprovalProof,
@@ -70,11 +82,20 @@ const WorldApprovalWidget = dynamic(
   { ssr: false },
 );
 
+/** app/api/agent/approval/request answers 409 with this code for a wallet
+ *  paid on the verdict (approval.ts payoutConfirmFor). */
+const ON_VERDICT_CODE = "on-verdict";
+
 const STATUS_POLL_MS = 2_000;
 const COUNTDOWN_TICK_MS = 500;
 
-type CardState =
+export type ApprovalCardState =
   | { kind: "asking" }
+  /** No wallet proof is held this session, so the ask cannot open yet. The
+   *  card explains the one free signature and waits for a tap; never a wallet
+   *  on mount. `note` is how the last tap ended (a no, a wallet error), or
+   *  null when nobody has tapped. */
+  | { kind: "verify"; note: string | null }
   | { kind: "pending"; request: OpenApprovalRequest; error: string | null }
   | { kind: "verifying"; request: OpenApprovalRequest }
   | { kind: "done"; outcome: ApprovalOutcome; requestId: string | null }
@@ -91,7 +112,13 @@ type CardState =
       retry: boolean;
       needsSignature: boolean;
       retryLoad?: boolean;
+      /** The request route answered 409 "on-verdict": an admin or approved
+       *  list player, paid on the verdict with no World ID confirm. Nothing
+       *  is broken, so the card never says payouts wait on a fix. */
+      onVerdict?: true;
     };
+
+type CardState = ApprovalCardState;
 
 type WorldRequest = OpenApprovalRequest & {
   world: NonNullable<OpenApprovalRequest["world"]>;
@@ -101,15 +128,21 @@ function isWorldRequest(request: OpenApprovalRequest): request is WorldRequest {
   return request.provider === "world" && request.world !== undefined;
 }
 
+/** Where an auth attempt that produced no proof leaves the card. Nothing
+ *  connected is a blocked card; everything else (no proof held yet, a no, a
+ *  wallet error) is the explained Verify wallet step, never a cold retry. */
 function authBlock(auth: ClientAuth): CardState {
-  return {
-    kind: "blocked",
-    message:
-      authBlockReason(auth) ??
-      "Sign with the wallet that made this claim to answer SPOTTER.",
-    retry: true,
-    needsSignature: auth.kind !== "no-wallet",
-  };
+  if (auth.kind === "no-wallet") {
+    return {
+      kind: "blocked",
+      message:
+        authBlockReason(auth) ??
+        "Sign in with the wallet that made this claim to answer SPOTTER.",
+      retry: true,
+      needsSignature: false,
+    };
+  }
+  return { kind: "verify", note: auth.kind === "unsigned" ? null : verifyOutcomeLine(auth) };
 }
 
 async function readError(
@@ -127,12 +160,146 @@ async function readError(
   }
 }
 
+const STATUS_URL = (goalId: string) =>
+  `/api/agent/approval/status?goalId=${encodeURIComponent(goalId)}`;
+
+/**
+ * Open, or pick up, the request. Idempotent server-side: SPOTTER's own ask
+ * (from the run loop) comes back here with what the browser needs. Returns the
+ * next card state and touches nothing else.
+ *
+ * The proof is settled before anything is sent: with none to attach, the
+ * request route could only answer 401, so the card goes straight to its
+ * Verify wallet step. A cachedOnly requester therefore never prompts here and
+ * never sends an unsigned request; a prompting one asks (explained by the
+ * sheet) only because a tap called for it.
+ */
+export async function openApprovalRequest(
+  goalId: string,
+  requestAuth: WalletAuthRequester,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ApprovalCardState> {
+  const held = await requestAuth();
+  if (held.kind !== "ok") return authBlock(held);
+  const sent = await fetchWithWalletAuth(
+    "/api/agent/approval/request",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ goalId }),
+    },
+    requestAuth,
+    fetchImpl,
+  );
+  if (sent.auth.kind !== "ok") return authBlock(sent.auth);
+  const { response } = sent;
+  if (!response.ok) {
+    const { message, code } = await readError(response);
+    // The run settled first: a terminal fact, not an error to retry.
+    if (response.status === 409 && code === SETTLED_CODE) return { kind: "settled" };
+    // Paid on the verdict (request route, ON_VERDICT_MESSAGE): no ask exists
+    // and none is needed; the run records the result without one.
+    if (response.status === 409 && code === ON_VERDICT_CODE) {
+      return { kind: "blocked", message, retry: false, needsSignature: false, onVerdict: true };
+    }
+    return {
+      kind: "blocked",
+      message,
+      // 409 "not enabled" and 503 "not configured" are deployment facts;
+      // retrying changes nothing. Everything else is worth another try.
+      retry: response.status !== 409 && response.status !== 503,
+      needsSignature: response.status === 401,
+    };
+  }
+  const request = parseOpenRequest(await response.json().catch(() => null));
+  if (request === null) {
+    return {
+      kind: "blocked",
+      message:
+        "SPOTTER's approval service answered in a shape this app cannot read.",
+      retry: true,
+      needsSignature: false,
+    };
+  }
+  if (request.status !== "pending") {
+    return { kind: "done", outcome: request.status, requestId: request.requestId };
+  }
+  return { kind: "pending", request, error: null };
+}
+
+/**
+ * The mount read: where the confirmation stands, before anything else. A
+ * finished answer is adopted, never re-asked (mountActionFor); only a pending
+ * request or a missing one is picked up with the idempotent POST.
+ *
+ * Quiet by construction: whatever requester it is handed, the pick-up reads
+ * cached credentials only, its 401 retry included, so mounting the card can
+ * never open a wallet. No proof held means the Verify wallet step.
+ */
+export async function loadApproval(
+  goalId: string,
+  requestAuth: WalletAuthRequester,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ApprovalCardState> {
+  let status: ReturnType<typeof parseStatus>;
+  try {
+    const response = await fetchImpl(STATUS_URL(goalId), { cache: "no-store" });
+    if (!response.ok) {
+      const { message } = await readError(response);
+      return {
+        kind: "blocked",
+        message,
+        retry: response.status !== 503,
+        needsSignature: false,
+        retryLoad: true,
+      };
+    }
+    status = parseStatus(await response.json().catch(() => null));
+  } catch {
+    status = null;
+  }
+  if (status === null) {
+    return {
+      kind: "blocked",
+      message: "I could not check where your confirmation stands just now. Nothing moved.",
+      retry: true,
+      needsSignature: false,
+      retryLoad: true,
+    };
+  }
+  if (mountActionFor(status.status) === "adopt" && status.status !== "none" && status.status !== "pending") {
+    return { kind: "done", outcome: status.status, requestId: status.requestId ?? null };
+  }
+  return openApprovalRequest(goalId, cachedOnlyRequester(requestAuth), fetchImpl);
+}
+
+/**
+ * Whether a session proof just landed for a surface that is waiting on one.
+ * `seen` is what the last call returned: null when the surface was not
+ * waiting, else whether the wallet was proven then. Fires only on a
+ * not-proven to proven change during one wait, so a wallet that was already
+ * proven when the wait began (the server refused that proof) never loops.
+ * Shared with the claim surfaces (WearableCheck, EvidenceUpload).
+ */
+export function proofLandedWhileWaiting(
+  seen: boolean | null,
+  waiting: boolean,
+  proven: boolean,
+): { seen: boolean | null; proceed: boolean } {
+  if (!waiting) return { seen: null, proceed: false };
+  return { seen: proven, proceed: seen === false && proven };
+}
+
 export default function HumanApprovalCard(props: HumanApprovalCardProps) {
   // props.address is not used as the proof signal any more: the server hands
   // back `signal` (`<goalId>:<attempt>`), which binds the proof to the payout.
   const { goalId, onResult } = props;
   const requestAuth = useWalletAuth();
+  const quietAuth = useMemo(() => cachedOnlyRequester(requestAuth), [requestAuth]);
+  const { address, sessionProven, sessionProofPossible } = useEmbeddedWallet();
+  const queryClient = useQueryClient();
   const [state, setState] = useState<CardState>({ kind: "asking" });
+  const [provingWallet, setProvingWallet] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [widgetOpen, setWidgetOpen] = useState(false);
   // "v4" asks for any World ID 4.0 credential; "legacy" is the 3.0 request,
@@ -158,49 +325,19 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     [],
   );
 
-  // Open, or pick up, the request. Idempotent server-side: SPOTTER's own ask
-  // (from the run loop) comes back here with what the browser needs. Pure in
-  // the React sense: it returns the next card state and touches nothing.
-  const openRequest = useCallback(async (): Promise<CardState> => {
-    const sent = await fetchWithWalletAuth(
-      "/api/agent/approval/request",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ goalId }),
-      },
-      requestAuth,
-    );
-    if (sent.auth.kind !== "ok") return authBlock(sent.auth);
-    const { response } = sent;
-    if (!response.ok) {
-      const { message, code } = await readError(response);
-      // The run settled first: a terminal fact, not an error to retry.
-      if (response.status === 409 && code === SETTLED_CODE) return { kind: "settled" };
-      return {
-        kind: "blocked",
-        message,
-        // 409 "not enabled" and 503 "not configured" are deployment facts;
-        // retrying changes nothing. Everything else is worth another try.
-        retry: response.status !== 409 && response.status !== 503,
-        needsSignature: response.status === 401,
-      };
-    }
-    const request = parseOpenRequest(await response.json().catch(() => null));
-    if (request === null) {
-      return {
-        kind: "blocked",
-        message:
-          "SPOTTER's approval service answered in a shape this app cannot read.",
-        retry: true,
-        needsSignature: false,
-      };
-    }
-    if (request.status !== "pending") {
-      return { kind: "done", outcome: request.status, requestId: request.requestId };
-    }
-    return { kind: "pending", request, error: null };
-  }, [goalId, requestAuth]);
+  // Open, or pick up, the request (openApprovalRequest). Taps pass the
+  // prompting requester, explained by the sheet before any wallet opens.
+  const openRequest = useCallback(
+    (): Promise<CardState> => openApprovalRequest(goalId, requestAuth),
+    [goalId, requestAuth],
+  );
+
+  // The same open, cachedOnly: what a proof landing elsewhere, or a Verify
+  // tap that already collected the proof, continues with.
+  const openQuietly = useCallback(
+    (): Promise<CardState> => openApprovalRequest(goalId, quietAuth),
+    [goalId, quietAuth],
+  );
 
   /** Button-driven re-ask: shows the asking state, then whatever comes back. */
   const ask = useCallback(() => {
@@ -210,44 +347,12 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     });
   }, [openRequest]);
 
-  // Mount: READ where the confirmation stands before anything else. A
-  // finished answer is adopted, never re-asked (mountActionFor); only a
-  // pending request or a missing one is fetched with the idempotent POST.
-  const load = useCallback(async (): Promise<CardState> => {
-    let status: ReturnType<typeof parseStatus>;
-    try {
-      const response = await fetch(
-        `/api/agent/approval/status?goalId=${encodeURIComponent(goalId)}`,
-        { cache: "no-store" },
-      );
-      if (!response.ok) {
-        const { message } = await readError(response);
-        return {
-          kind: "blocked",
-          message,
-          retry: response.status !== 503,
-          needsSignature: false,
-          retryLoad: true,
-        };
-      }
-      status = parseStatus(await response.json().catch(() => null));
-    } catch {
-      status = null;
-    }
-    if (status === null) {
-      return {
-        kind: "blocked",
-        message: "I could not check where your confirmation stands just now. Nothing moved.",
-        retry: true,
-        needsSignature: false,
-        retryLoad: true,
-      };
-    }
-    if (mountActionFor(status.status) === "adopt" && status.status !== "none" && status.status !== "pending") {
-      return { kind: "done", outcome: status.status, requestId: status.requestId ?? null };
-    }
-    return openRequest();
-  }, [goalId, openRequest]);
+  // Mount: READ where the confirmation stands before anything else
+  // (loadApproval). Quiet by construction: a mount never opens a wallet.
+  const load = useCallback(
+    (): Promise<CardState> => loadApproval(goalId, requestAuth),
+    [goalId, requestAuth],
+  );
 
   const reload = useCallback(() => {
     setState({ kind: "asking" });
@@ -298,10 +403,7 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     let cancelled = false;
     const poll = async () => {
       try {
-        const response = await fetch(
-          `/api/agent/approval/status?goalId=${encodeURIComponent(goalId)}`,
-          { cache: "no-store" },
-        );
+        const response = await fetch(STATUS_URL(goalId), { cache: "no-store" });
         if (!response.ok || cancelled) return;
         const status = parseStatus(await response.json().catch(() => null));
         if (status === null || cancelled) return;
@@ -446,10 +548,55 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
     [state, stage, openRequest],
   );
 
+  // The server refused a proof the tab held: a fresh one, on a tap whose
+  // reason is on screen, so the wallet opens with no second question.
   const retrySignature = useCallback(async () => {
-    await requestAuth({ refresh: true });
+    await requestAuth({ refresh: true, confirmed: true });
     reload();
   }, [requestAuth, reload]);
+
+  /** The Verify wallet tap: the one explained proof (lib/session-proof.ts),
+   *  then the ask opens with the proof now held. A no stays on this step with
+   *  the plain reason and a way back, never a loop. */
+  const verifyWallet = useCallback(async () => {
+    setProvingWallet(true);
+    try {
+      const note = await runVerifyWallet({
+        address,
+        requestAuth,
+        invalidate: (root) => queryClient.invalidateQueries({ queryKey: [root] }),
+      });
+      if (!mounted.current) return;
+      if (note !== null) {
+        setState({ kind: "verify", note });
+        return;
+      }
+      setState({ kind: "asking" });
+      const next = await openQuietly();
+      if (mounted.current) setState(next);
+    } finally {
+      if (mounted.current) setProvingWallet(false);
+    }
+  }, [address, requestAuth, queryClient, openQuietly]);
+
+  // A session proof that lands while the card waits on one (the explained
+  // sheet after a connect, a Verify tap on another card) opens the ask with
+  // no tap here. Transition-only, so a proof the server refused cannot loop.
+  const proofSeen = useRef<boolean | null>(null);
+  useEffect(() => {
+    const step = proofLandedWhileWaiting(
+      proofSeen.current,
+      state.kind === "verify" && !provingWallet,
+      sessionProven,
+    );
+    proofSeen.current = step.seen;
+    if (!step.proceed) return;
+    // The step stays on screen for the moment the open takes; nothing is set
+    // synchronously here.
+    void openQuietly().then((next) => {
+      if (mounted.current) setState(next);
+    });
+  }, [state.kind, provingWallet, sessionProven, openQuietly]);
 
   // ------------------------------------------------------------- rendering
   // The card sits inside the Verdict, under its headline, so it carries no
@@ -465,6 +612,31 @@ export default function HumanApprovalCard(props: HumanApprovalCardProps) {
           />
           Opening the World ID request. Nothing moves before you answer.
         </p>
+      </div>
+    );
+  }
+
+  if (state.kind === "verify") {
+    return (
+      <div data-lane="world-agents" data-step="verify-wallet" className={QUIET_WELL}>
+        <ApprovalWalletStep
+          proofLine={proofLineFor(sessionProofPossible)}
+          note={state.note}
+          busy={provingWallet}
+          disabled={address === null}
+          onVerify={() => void verifyWallet()}
+        />
+      </div>
+    );
+  }
+
+  if (state.kind === "blocked" && state.onVerdict === true) {
+    return (
+      <div data-lane="world-agents" data-outcome="on-verdict" role="status" className={QUIET_WELL}>
+        <p className="m-0 text-[0.9375rem] font-semibold text-foreground">
+          SPOTTER decided to pay, with no World ID step for you.
+        </p>
+        <p className="m-0 mt-1 text-sm text-muted">{state.message}</p>
       </div>
     );
   }
@@ -575,6 +747,55 @@ export function ApprovalOutcomeView({
 
 const QUIET_WELL =
   "rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border)]";
+
+/**
+ * The Verify wallet step, drawn from props only so the state gallery can draw
+ * it: why the wallet is asked, what the one signature costs (nothing), the
+ * tap, and how the last tap ended. Mirrors components/VerifyWalletAction.tsx,
+ * which cannot hand the ask back to this card when the proof lands.
+ */
+export function ApprovalWalletStep({
+  proofLine,
+  note,
+  busy,
+  disabled = false,
+  onVerify,
+}: {
+  proofLine: string;
+  note: string | null;
+  busy: boolean;
+  disabled?: boolean;
+  onVerify: () => void;
+}) {
+  return (
+    <div className="grid justify-items-start gap-3">
+      <div>
+        <p className="m-0 text-[0.9375rem] font-semibold text-foreground">
+          SPOTTER decided to pay. Your wallet opens the confirmation.
+        </p>
+        <p className="m-0 mt-1 text-[0.9375rem] leading-[1.45] text-muted">
+          Only the wallet that made this claim can answer SPOTTER, and World
+          ID asks you to confirm right after. {proofLine}
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        disabled={busy || disabled}
+        aria-busy={busy}
+        onClick={onVerify}
+      >
+        {busy ? "Waiting for your wallet" : "Verify wallet"}
+      </Button>
+      {note !== null ? (
+        <p className="m-0 text-sm leading-[1.45] text-haze" role="status">
+          {note}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 /** outcomeCopy is written lower case in SPOTTER's old voice; the card reads in
  *  sentence case. */

@@ -30,6 +30,12 @@
 // fetchPool (an eth_call) for the goal, reward and window, fetchParticipant to
 // drop any dare you have already accepted. Still no getLogs.
 //
+// NO WALLET ON LOAD. The invited read is cachedOnly, its 401 retry included.
+// Email and passkey logins, and a wallet login that proved itself once this
+// session, hold a Dynamic session token, so the invites simply load. Without
+// one the section says the invites are private and offers the quiet Verify
+// wallet action; its success re-reads this query (lib/session-proof.ts).
+//
 // PRIVACY. The dare is health-adjacent, but this is the participant's and the
 // creator's OWN challenges page - they are entitled to see their own goal text.
 // The public redaction rule (feed / profile / pool metadata) is untouched.
@@ -73,14 +79,30 @@ import {
   fetchProofTier,
 } from "@/lib/contract";
 import { challengeShareUrl } from "@/lib/challenges";
-import { fetchWithWalletAuth, type WalletAuthRequester } from "@/lib/client-auth";
+import {
+  cachedOnlyRequester,
+  fetchWithWalletAuth,
+  type WalletAuthRequester,
+} from "@/lib/client-auth";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
+import VerifyWalletAction from "@/components/VerifyWalletAction";
 import { useDisplayNames } from "@/lib/use-display-names";
 
 /** The on-chain initiative string every challenge pool carries. Mirrors
  *  CHALLENGE_INITIATIVE in CreateChallenge.tsx, which writes it at createPool. */
 const CHALLENGE_INITIATIVE = "challenge";
+
+const INVITED_LEAD =
+  "Challenges aimed at your name. Accept one by putting up the stake it asks for. Hit the goal and your stake comes back, plus your share of any missed stakes and anything added to the pot.";
+
+/** What the invited read found. `locked`: the invites are private to this
+ *  wallet and the tab holds no proof of it yet, so the page offers Verify
+ *  wallet instead of reading an empty list as "nobody challenged you". */
+interface InvitedRead {
+  invites: InvitedChallenge[];
+  locked: boolean;
+}
 
 /** The invite row the signed route returns, before the on-chain pool read. */
 interface RawInvite {
@@ -184,13 +206,21 @@ async function fetchMyChallenges(
  * attached. Everything after that is the page's usual reliable read: one
  * fetchPool per invite for the goal / reward / window, one fetchParticipant to
  * drop anything already joined (that belongs in "Challenges you're in"). No
- * getLogs. Best-effort by design: an unsigned or failed response yields an empty
- * list so the additive section simply stays hidden rather than erroring the page.
+ * getLogs. Best-effort by design: a failed response yields an empty list so
+ * the additive section simply stays hidden rather than erroring the page.
+ *
+ * Quiet by construction: whatever requester it is handed, it reads cached
+ * credentials only, so loading the page can never open a wallet. With no proof
+ * in hand nothing is sent (the route answers only a proven owner) and the
+ * answer is `locked`, which the page turns into the Verify wallet action.
  */
 async function fetchInvitedChallenges(
   address: `0x${string}`,
   requestAuth: WalletAuthRequester,
-): Promise<InvitedChallenge[]> {
+): Promise<InvitedRead> {
+  const quiet = cachedOnlyRequester(requestAuth);
+  const held = await quiet();
+  if (held.kind !== "ok") return { invites: [], locked: true };
   const { response, auth } = await fetchWithWalletAuth(
     "/api/challenges/invited",
     {
@@ -198,11 +228,14 @@ async function fetchInvitedChallenges(
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ address }),
     },
-    requestAuth,
+    quiet,
   );
-  // The tokens are private to the handle owner: without an attached signature
-  // there is nothing to show, and a non-ok response is not worth erroring over.
-  if (auth.kind !== "ok" || !response.ok) return [];
+  // A refused proof is the same locked state: Verify wallet fixes it. Any
+  // other non-ok response is not worth erroring the page over.
+  if (auth.kind !== "ok" || response.status === 401) {
+    return { invites: [], locked: true };
+  }
+  if (!response.ok) return { invites: [], locked: false };
 
   const body = (await response.json().catch(() => ({}))) as {
     invites?: RawInvite[];
@@ -236,7 +269,10 @@ async function fetchInvitedChallenges(
     }),
   );
 
-  return resolved.filter((entry): entry is InvitedChallenge => entry !== null);
+  return {
+    invites: resolved.filter((entry): entry is InvitedChallenge => entry !== null),
+    locked: false,
+  };
 }
 
 /** Whether a new challenge can start on this build. Every challenge is a
@@ -268,9 +304,9 @@ function MyChallengesContent() {
     enabled: address !== null,
   });
 
-  // The dares aimed at your handle. Signature-gated, so it is cached on the
-  // address: the embedded wallet signs once and the credential is reused rather
-  // than re-signing every render.
+  // The dares aimed at your handle. Wallet-gated and read cachedOnly
+  // (fetchInvitedChallenges), so opening the page never opens a wallet; a
+  // locked answer shows Verify wallet, whose success re-reads this key.
   const invitedQuery = useQuery({
     queryKey: ["invited-challenges", address],
     queryFn: () => {
@@ -286,7 +322,7 @@ function MyChallengesContent() {
   const nameAddresses = useMemo(
     () => [
       ...(query.data?.inChallenges ?? []).map((entry) => entry.pool.creator),
-      ...(invitedQuery.data ?? []).map((entry) => entry.challengerAddress),
+      ...(invitedQuery.data?.invites ?? []).map((entry) => entry.challengerAddress),
     ],
     [query.data, invitedQuery.data],
   );
@@ -368,7 +404,18 @@ function MyChallengesContent() {
   }
 
   const data = query.data ?? { inChallenges: [], sentChallenges: [] };
-  const invited = invitedQuery.data ?? [];
+  const invited = invitedQuery.data?.invites ?? [];
+  const invitedLocked = invitedQuery.data?.locked === true;
+  // Private, not empty: an empty list here would read as "nobody challenged
+  // you" when the page simply cannot look yet.
+  const lockedInvites = invitedLocked ? (
+    <section className="[&>*+*]:mt-4">
+      <SectionHead title="Invited to you" lead={INVITED_LEAD} />
+      <Card>
+        <VerifyWalletAction lead="Challenges aimed at your name are private to your wallet." />
+      </Card>
+    </section>
+  ) : null;
   const nothing =
     data.inChallenges.length === 0 &&
     data.sentChallenges.length === 0 &&
@@ -385,7 +432,9 @@ function MyChallengesContent() {
             action={<StartAction paused />}
           />
         }
-      />
+      >
+        {lockedInvites}
+      </Frame>
     ) : (
       <Frame
         pose="meditate"
@@ -396,18 +445,18 @@ function MyChallengesContent() {
             action={<StartAction paused={false} />}
           />
         }
-      />
+      >
+        {lockedInvites}
+      </Frame>
     );
   }
 
   return (
     <Frame pose={pause !== null ? "thinking" : "wave"} first={<StartCard pause={pause} />}>
+      {lockedInvites}
       {invited.length > 0 ? (
         <section className="[&>*+*]:mt-4">
-          <SectionHead
-            title="Invited to you"
-            lead="Challenges aimed at your name. Accept one by putting up the stake it asks for. Hit the goal and your stake comes back, plus your share of any missed stakes and anything added to the pot."
-          />
+          <SectionHead title="Invited to you" lead={INVITED_LEAD} />
           {invited.map((entry) => (
             <InvitedChallengeCard
               key={entry.inviteToken}
@@ -461,7 +510,7 @@ function MyChallengesContent() {
 }
 
 /** A freshly invited player has no sent or joined challenges, so the empty
- *  state waits for the (signature-gated) invited read to settle; otherwise the
+ *  state waits for the (wallet-gated) invited read to settle; otherwise the
  *  page flashes "No challenges yet" and then pops an invite in above it. */
 function invitedLoadingOnEmpty(data: MyChallenges | undefined, invitedLoading: boolean): boolean {
   if (data === undefined) return false;

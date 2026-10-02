@@ -17,6 +17,8 @@ import { walletAuthMessage } from "@/lib/server/wallet-auth";
 import { authenticateWallet, verifyWalletSignature } from "@/lib/server/wallet-auth";
 import {
   CLIENT_WALLET_AUTH_TTL_MS,
+  REFUSED_SESSION_TOKEN_RETRY_MAX_MS,
+  REFUSED_SESSION_TOKEN_RETRY_MS,
   WALLET_AUTH_ADDRESS_HEADER,
   WALLET_AUTH_SIGNATURE_HEADER,
   WALLET_AUTH_TIMESTAMP_HEADER,
@@ -381,7 +383,12 @@ describe("fetchWithWalletAuth", () => {
       fetchImpl,
     );
 
-    expect(requestAuth).toHaveBeenNthCalledWith(2, { refresh: true });
+    // The claim read also holds a refused token back (it redacts instead of
+    // refusing), so the retry carries that flag beside the refresh.
+    expect(requestAuth).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ refresh: true }),
+    );
     expect(result.response.status).toBe(200);
   });
 
@@ -1370,4 +1377,493 @@ describe("getWalletAuth asks before it opens the wallet", () => {
     expect(auth.kind).toBe("ok");
     expect(confirmPrompt).not.toHaveBeenCalled();
   });
+});
+
+// ------------------------------------ a refused token is not refused forever
+//
+// The server answers 401 to a session token it could not check, and that
+// includes a transient failure to reach Dynamic's keys (a JWKS timeout), not
+// only a bad token. Setting the token aside for the rest of the tab turned one
+// slow key fetch into locked cards and an extra signature for a wallet that
+// had already proven itself. A refusal now sets the token aside for a while,
+// longer each time the same token is refused again, and a token the server
+// accepts again starts clean. A bad token still never loops.
+
+describe("a refused session token recovers", () => {
+  const SIG = `0x${"41".repeat(65)}`;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    return () => {
+      vi.useRealTimers();
+    };
+  });
+
+  function requesterFor(token: () => string | undefined, signMessage = vi.fn().mockResolvedValue(SIG)) {
+    const requestAuth = (options?: { refresh?: boolean; cachedOnly?: boolean }) =>
+      getWalletAuth({
+        address: ADDRESS,
+        signMessage,
+        getSessionToken: token,
+        now: () => Date.now(),
+        ...options,
+      });
+    return { requestAuth, signMessage };
+  }
+
+  const bearerOf = (auth: ClientAuth) =>
+    auth.kind === "ok" ? (auth.headers.authorization ?? null) : null;
+
+  it("sets the token aside for a short while, then tries it again", async () => {
+    const token = sessionToken({ expMs: NOW + 2 * 60 * 60 * 1000 });
+    const { requestAuth } = requesterFor(() => token);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    await fetchWithWalletAuth("/api/x", undefined, requestAuth, fetchImpl);
+
+    // Inside the window the signature serves; the token is not resent.
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS - 1_000);
+    expect(bearerOf(await requestAuth())).toBeNull();
+
+    // After it, the same token gets its try again.
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    expect(bearerOf(await requestAuth())).toBe(`Bearer ${token}`);
+  });
+
+  it("brings page-load reads back to the token once the window passes", async () => {
+    const token = sessionToken({ expMs: NOW + 2 * 60 * 60 * 1000 });
+    const prompting = walletAuthRequester({
+      address: ADDRESS,
+      signMessage: vi.fn(),
+      getSessionToken: () => token,
+      proveSession: vi.fn(),
+    });
+    const quiet = cachedOnlyRequester(prompting);
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response("{}", { status: 401 }));
+    const first = await fetchWithWalletAuth("/api/wearable/progress", undefined, quiet, fetchImpl);
+    expect(first.auth).toEqual({ kind: "unsigned" });
+
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    expect(bearerOf(await quiet())).toBe(`Bearer ${token}`);
+  });
+
+  it("waits longer each time the same token is refused, so a bad token never loops", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const { requestAuth } = requesterFor(() => token);
+    const refused = () => vi.fn().mockResolvedValue(new Response("{}", { status: 401 }));
+
+    await fetchWithWalletAuth("/api/x", undefined, requestAuth, refused());
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    const secondAt = Date.now();
+    await fetchWithWalletAuth("/api/x", undefined, requestAuth, refused());
+
+    // The second window is twice the first.
+    vi.setSystemTime(secondAt + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    expect(bearerOf(await requestAuth())).toBeNull();
+    vi.setSystemTime(secondAt + 2 * REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    expect(bearerOf(await requestAuth())).toBe(`Bearer ${token}`);
+  });
+
+  it("never waits longer than the cap", async () => {
+    const token = sessionToken({ expMs: NOW + 48 * 60 * 60 * 1000 });
+    const { requestAuth } = requesterFor(() => token);
+    let at = NOW;
+    for (let i = 0; i < 12; i++) {
+      vi.setSystemTime(at);
+      await fetchWithWalletAuth(
+        "/api/x",
+        undefined,
+        requestAuth,
+        vi.fn().mockResolvedValue(new Response("{}", { status: 401 })),
+      );
+      at = Date.now() + REFUSED_SESSION_TOKEN_RETRY_MAX_MS + 1_000;
+    }
+    vi.setSystemTime(at);
+    expect(bearerOf(await requestAuth())).toBe(`Bearer ${token}`);
+  });
+
+  it("a token the server accepts again starts clean", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const { requestAuth } = requesterFor(() => token);
+    await fetchWithWalletAuth(
+      "/api/x",
+      undefined,
+      requestAuth,
+      vi.fn().mockResolvedValue(new Response("{}", { status: 401 })),
+    );
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    const accepted = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    await fetchWithWalletAuth("/api/x", undefined, requestAuth, accepted);
+    const sent = accepted.mock.calls[0][1] as { headers: Headers };
+    expect(sent.headers.get("authorization")).toBe(`Bearer ${token}`);
+
+    // One more refusal later is a first refusal again: the short window.
+    const thirdAt = Date.now() + 60_000;
+    vi.setSystemTime(thirdAt);
+    await fetchWithWalletAuth(
+      "/api/x",
+      undefined,
+      requestAuth,
+      vi.fn().mockResolvedValue(new Response("{}", { status: 401 })),
+    );
+    vi.setSystemTime(thirdAt + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    expect(bearerOf(await requestAuth())).toBe(`Bearer ${token}`);
+  });
+
+  it("keeps a good signature when the token is what the server refused: no second prompt", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const { requestAuth, signMessage } = requesterFor(() => token);
+    // First refusal: the retry signs once and the page reads fine.
+    await fetchWithWalletAuth(
+      "/api/x",
+      undefined,
+      requestAuth,
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+        .mockResolvedValueOnce(new Response("{}", { status: 200 })),
+    );
+    expect(signMessage).toHaveBeenCalledTimes(1);
+
+    // The window passes while that signature is still fresh, and the token is
+    // refused again: the retry rides the signature already in hand.
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    const result = await fetchWithWalletAuth("/api/x", undefined, requestAuth, fetchImpl);
+
+    expect(result.response.status).toBe(200);
+    expect(signMessage).toHaveBeenCalledTimes(1);
+    const retry = fetchImpl.mock.calls[1][1] as { headers: Headers };
+    expect(retry.headers.get(WALLET_AUTH_SIGNATURE_HEADER)).toBe(SIG);
+  });
+
+  it("still re-signs a signature the server refused (it aged out)", async () => {
+    const { requestAuth, signMessage } = requesterFor(() => undefined);
+    await requestAuth();
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    await fetchWithWalletAuth("/api/x", undefined, requestAuth, fetchImpl);
+    expect(signMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("the third-party fetch lets a refused token recover too", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const { requestAuth } = requesterFor(() => token);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    const wrapped = walletAuthFetch(requestAuth, "https://app.example", fetchImpl);
+    await wrapped("/api/unlink/x");
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    await wrapped("/api/unlink/x");
+    const later = fetchImpl.mock.calls[1][1] as { headers: Headers };
+    expect(later.headers.get("authorization")).toBe(`Bearer ${token}`);
+  });
+
+  // The claim loop's cadence. Each scenario below runs the real poll rhythm,
+  // so "heals" and "never loops" are counted, not inferred from one read.
+  const POLL_MS = 800;
+  const bearerSent = (init: RequestInit | undefined) =>
+    new Headers(init?.headers).get("authorization");
+
+  it("heals a transient 401: the polls ride the signature, then the token again", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const { requestAuth, signMessage } = requesterFor(() => token);
+    // Dynamic's keys are unreachable for one request; the token itself is good.
+    let blipped = false;
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (bearerSent(init) !== null && !blipped) {
+        blipped = true;
+        return new Response("{}", { status: 401 });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    const rodeOn: Array<"token" | "signature"> = [];
+    for (let t = 0; t <= 60_000; t += POLL_MS) {
+      vi.setSystemTime(NOW + t);
+      const result = await fetchWithWalletAuth("/api/x", undefined, requestAuth, fetchImpl);
+      expect(result.response.status).toBe(200);
+      rodeOn.push(bearerOf(result.auth) === null ? "signature" : "token");
+    }
+
+    // One signature for the blip, the signature through the window, and the
+    // first poll past it back on the token for good.
+    expect(signMessage).toHaveBeenCalledTimes(1);
+    const healedAt = rodeOn.indexOf("token") * POLL_MS;
+    expect(healedAt).toBeGreaterThanOrEqual(REFUSED_SESSION_TOKEN_RETRY_MS);
+    expect(healedAt).toBeLessThan(REFUSED_SESSION_TOKEN_RETRY_MS + POLL_MS);
+    expect(rodeOn.slice(rodeOn.indexOf("token")).every((on) => on === "token")).toBe(true);
+  });
+
+  it("never loops on a token the server always refuses", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const { requestAuth, signMessage } = requesterFor(() => token);
+    let tokenSends = 0;
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (bearerSent(init) !== null) {
+        tokenSends += 1;
+        return new Response("{}", { status: 401 });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    // Seven minutes of polls, inside the signature's eight-minute life.
+    for (let t = 0; t <= 7 * 60_000; t += POLL_MS) {
+      vi.setSystemTime(NOW + t);
+      const before = fetchImpl.mock.calls.length;
+      const result = await fetchWithWalletAuth("/api/x", undefined, requestAuth, fetchImpl);
+      expect(result.response.status).toBe(200);
+      // A read is at most the try and the one retry, never a chain.
+      expect(fetchImpl.mock.calls.length - before).toBeLessThanOrEqual(2);
+    }
+
+    // Windows of 30s, 60s, 120s and 240s: four tries in 526 polls, one
+    // signature, and every read answered.
+    expect(tokenSends).toBe(4);
+    expect(signMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives a rotated token its own try at once, with its own short window", async () => {
+    const original = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const rotated = sessionToken({ expMs: NOW + 6 * 60 * 60 * 1000 });
+    let current = original;
+    const { requestAuth } = requesterFor(() => current);
+    const refused = () => vi.fn().mockResolvedValue(new Response("{}", { status: 401 }));
+
+    // The original is refused twice, so it sits out a doubled window.
+    await fetchWithWalletAuth("/api/x", undefined, requestAuth, refused());
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    const secondAt = Date.now();
+    await fetchWithWalletAuth("/api/x", undefined, requestAuth, refused());
+
+    // Dynamic rotates the token inside that window: the new one is sent now.
+    current = rotated;
+    vi.setSystemTime(secondAt + 1_000);
+    expect(bearerOf(await requestAuth())).toBe(`Bearer ${rotated}`);
+
+    // Refused once, the rotated token waits the first window, not the
+    // original's doubled one.
+    const rotatedAt = Date.now();
+    await fetchWithWalletAuth("/api/x", undefined, requestAuth, refused());
+    vi.setSystemTime(rotatedAt + REFUSED_SESSION_TOKEN_RETRY_MS - 1_000);
+    expect(bearerOf(await requestAuth())).toBeNull();
+    vi.setSystemTime(rotatedAt + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    expect(bearerOf(await requestAuth())).toBe(`Bearer ${rotated}`);
+  });
+
+  it("serves the signature in hand while the token is set aside, page-load reads included", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const signMessage = vi.fn().mockResolvedValue(SIG);
+    const prompting = walletAuthRequester({
+      address: ADDRESS,
+      signMessage,
+      getSessionToken: () => token,
+      proveSession: null,
+    });
+    const quiet = cachedOnlyRequester(prompting);
+
+    // A tapped read meets the refusal and signs once.
+    await fetchWithWalletAuth(
+      "/api/x",
+      undefined,
+      prompting,
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response("{}", { status: 401 }))
+        .mockResolvedValueOnce(new Response("{}", { status: 200 })),
+    );
+    expect(signMessage).toHaveBeenCalledTimes(1);
+
+    // Inside the window, a page-load read (which may never prompt) carries
+    // that signature instead of going out unsigned.
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS / 2);
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const read = await fetchWithWalletAuth("/api/wearable/progress", undefined, quiet, fetchImpl);
+    expect(read.auth.kind).toBe("ok");
+    const sent = fetchImpl.mock.calls[0][1] as { headers: Headers };
+    expect(sent.headers.get("authorization")).toBeNull();
+    expect(sent.headers.get(WALLET_AUTH_SIGNATURE_HEADER)).toBe(SIG);
+    expect(signMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts refusals that land together as one, so a blip across several cards heals in the first window", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const { requestAuth, signMessage } = requesterFor(() => token);
+    let release: () => void = () => {};
+    const blip = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let tokenSends = 0;
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (bearerSent(init) !== null) {
+        tokenSends += 1;
+        await blip;
+        return new Response("{}", { status: 401 });
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    // Three cards read at once and all three meet the same blip.
+    const reads = Promise.all(
+      [0, 1, 2].map(() => fetchWithWalletAuth("/api/x", undefined, requestAuth, fetchImpl)),
+    );
+    await vi.waitFor(() => expect(tokenSends).toBe(3));
+    release();
+    const results = await reads;
+    expect(results.every((result) => result.response.status === 200)).toBe(true);
+    // The three retries share one signature.
+    expect(signMessage).toHaveBeenCalledTimes(1);
+
+    // One blip is one refusal: the token is back after the first window.
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    expect(bearerOf(await requestAuth())).toBe(`Bearer ${token}`);
+  });
+});
+
+// ------------------------- a route that redacts cannot refuse a token
+//
+// The claim read (/api/agent/run/[goalId]) never answers 401: a proof it
+// cannot check gets the redacted claim with a 200, by design. So it can never
+// tell this tab a token is bad, and its 200 says nothing about the token. If a
+// token the server refused were sent there again once its window passed, the
+// owner would see a withheld claim with a good signature in hand, and the
+// claim's "Sign again" would hand back the same token instead of signing: a
+// button that does nothing for as long as the server keeps refusing. A token
+// refused in this tab stays aside there until a route that can refuse it has
+// accepted it again.
+
+describe("a refused token and the claim read, which redacts instead of refusing", () => {
+  const SIG = `0x${"41".repeat(65)}`;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    return () => {
+      vi.useRealTimers();
+    };
+  });
+
+  const bearerSent = (init: RequestInit | undefined) =>
+    new Headers(init?.headers).get("authorization");
+  const isClaimRead = (input: RequestInfo | URL) => String(input).startsWith("/api/agent/run/");
+
+  /** The server as it is: every route but the claim read answers a proof it
+   *  will not take with 401; the claim read redacts. `tokenGood` is whether
+   *  the server can check the token right now. */
+  function server(tokenGood: () => boolean) {
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const refused = bearerSent(init) !== null && !tokenGood();
+      if (isClaimRead(input)) {
+        return Response.json({ hasLedger: true, access: refused ? "unproven" : "owner" });
+      }
+      return new Response("{}", { status: refused ? 401 : 200 });
+    });
+  }
+
+  function requesterFor(token: () => string) {
+    const signMessage = vi.fn().mockResolvedValue(SIG);
+    const requestAuth = (options?: { refresh?: boolean; cachedOnly?: boolean }) =>
+      getWalletAuth({
+        address: ADDRESS,
+        signMessage,
+        getSessionToken: token,
+        now: () => Date.now(),
+        ...options,
+      });
+    return { requestAuth, signMessage };
+  }
+
+  it("keeps the claim read on the signature after the window, and Sign again signs", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const { requestAuth, signMessage } = requesterFor(() => token);
+    // The server cannot check the token at all (an outage, a skewed clock).
+    const fetchImpl = server(() => false);
+
+    await fetchWithWalletAuth("/api/wearable/progress", undefined, requestAuth, fetchImpl);
+    expect(signMessage).toHaveBeenCalledTimes(1);
+
+    // Past the window, the claim read still rides the signature in hand.
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    const read = await fetchWithWalletAuth(
+      "/api/agent/run/0x1?poolId=1",
+      undefined,
+      requestAuth,
+      fetchImpl,
+    );
+    expect(await read.response.json()).toMatchObject({ access: "owner" });
+
+    // The claim's Sign again (a refresh, which drops the signature) and the
+    // re-read it triggers: the read signs instead of resending the token.
+    await requestAuth({ refresh: true });
+    const again = await fetchWithWalletAuth(
+      "/api/agent/run/0x1",
+      { method: "POST" },
+      requestAuth,
+      fetchImpl,
+    );
+    expect(await again.response.json()).toMatchObject({ access: "owner" });
+    expect(bearerSent(fetchImpl.mock.calls.at(-1)?.[1])).toBeNull();
+    expect(signMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("a page-load claim read with no signature stays unsigned rather than resending the token", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const { requestAuth } = requesterFor(() => token);
+    const quiet = cachedOnlyRequester(requestAuth);
+    const fetchImpl = server(() => false);
+
+    await fetchWithWalletAuth("/api/wearable/progress", undefined, quiet, fetchImpl);
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    const read = await fetchWithWalletAuth("/api/agent/run/0x1", undefined, quiet, fetchImpl);
+    expect(read.auth).toEqual({ kind: "unsigned" });
+    expect(bearerSent(fetchImpl.mock.calls.at(-1)?.[1])).toBeNull();
+  });
+
+  it("goes back to the token once a route that can refuse it accepts it again", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const { requestAuth, signMessage } = requesterFor(() => token);
+    let good = false;
+    const fetchImpl = server(() => good);
+
+    // A blip: refused once, and the retry signs.
+    await fetchWithWalletAuth("/api/wearable/progress", undefined, requestAuth, fetchImpl);
+    good = true;
+
+    // The window passes; the next read that can refuse it takes the token.
+    vi.setSystemTime(NOW + REFUSED_SESSION_TOKEN_RETRY_MS + 1_000);
+    const healed = await fetchWithWalletAuth(
+      "/api/wearable/progress",
+      undefined,
+      requestAuth,
+      fetchImpl,
+    );
+    expect(bearerOf(healed.auth)).toBe(`Bearer ${token}`);
+
+    // So the claim read is back on the token too, with no new signature.
+    const read = await fetchWithWalletAuth("/api/agent/run/0x1", undefined, requestAuth, fetchImpl);
+    expect(bearerOf(read.auth)).toBe(`Bearer ${token}`);
+    expect(signMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a token that was never refused to the claim read as before", async () => {
+    const token = sessionToken({ expMs: NOW + 5 * 60 * 60 * 1000 });
+    const { requestAuth, signMessage } = requesterFor(() => token);
+    const fetchImpl = server(() => true);
+    const read = await fetchWithWalletAuth("/api/agent/run/0x1", undefined, requestAuth, fetchImpl);
+    expect(bearerOf(read.auth)).toBe(`Bearer ${token}`);
+    expect(signMessage).not.toHaveBeenCalled();
+  });
+
+  const bearerOf = (auth: ClientAuth) =>
+    auth.kind === "ok" ? (auth.headers.authorization ?? null) : null;
 });
