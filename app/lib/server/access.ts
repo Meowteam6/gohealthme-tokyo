@@ -169,10 +169,13 @@ export async function getAccessStatus(
   address: string,
 ): Promise<AccessStatusView> {
   if (!isAddress(address)) return { status: "none", isAdmin: false, source: "none" };
-  if (isAdmin(address)) return { status: "approved", isAdmin: true, source: "admin" };
+  // A World binding is reported first, admins included, so the stamp reads
+  // One human for a World-bound admin too (paused or not); isAdmin is kept.
+  const admin = isAdmin(address);
   if (await approvedByWorld(address)) {
-    return { status: "approved", isAdmin: false, source: "world" };
+    return { status: "approved", isAdmin: admin, source: "world" };
   }
+  if (admin) return { status: "approved", isAdmin: true, source: "admin" };
   const record = await getAccessRecord(address);
   if (record === null) return { status: "none", isAdmin: false, source: "none" };
   return { status: record.status, isAdmin: false, source: "request" };

@@ -137,6 +137,7 @@ export function useCharacter(): CharacterView {
       isAdmin: access.isAdmin,
       loading: access.loading,
       error: access.error,
+      source: access.source,
     },
     world: {
       lane: worldLane,

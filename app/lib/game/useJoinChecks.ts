@@ -10,7 +10,6 @@ import { useCallback } from "react";
 import { useApprovalProbe } from "@/components/game/ApprovalNote";
 import {
   accessGateDisabled,
-  collectNeedsWorldOf,
   gateStateOf,
   payoutStateOf,
   verifierStateOf,
@@ -34,9 +33,6 @@ export interface JoinChecks {
   verifier: VerifierState;
   payouts: PayoutState;
   approvalMode: ApprovalModeView;
-  /** A list player where hits are confirmed with World ID (join-checks.ts
-   *  collectNeedsWorldOf): the stake waits for World ID. */
-  collectNeedsWorld: boolean;
   /** Whether new money may go in on this build (KILL_BASE_MONEY_IN). */
   moneyIn: MoneyInState;
   /** The operator's note for a pause, or null. */
@@ -86,12 +82,6 @@ export function useJoinChecks(view: CharacterView): JoinChecks {
     verifier: verifierStateOf(proof),
     payouts: payoutStateOf(approval.mode),
     approvalMode: approval.mode,
-    collectNeedsWorld: collectNeedsWorldOf({
-      worldLane: view.worldLane,
-      approvalMode: approval.mode,
-      human: view.character?.human ?? null,
-      humanProof: view.character?.humanProof ?? null,
-    }),
     moneyIn: switches.moneyIn,
     switchReason: switches.reason,
     retry,

@@ -6,6 +6,7 @@ import {
   currentStep,
   gatePassed,
   hardGateClosed,
+  humanProofOf,
   humanStampOf,
   isReadyToPlay,
   measurableGoalsOf,
@@ -499,5 +500,34 @@ describe("hardGateClosed (is this player creating their character here)", () => 
     expect(hardGateClosed({ ...settled, accessLoading: true })).toBe(false);
     expect(hardGateClosed({ ...settled, worldLane: "loading" })).toBe(false);
     expect(hardGateClosed({ ...settled, gate: true })).toBe(false);
+  });
+});
+
+// While KILL_WORLD_ID pauses World, the lane reads off but a binding World
+// already made still counts (lib/server/access.ts approvedByWorld). The
+// server says so in the access source; step 2 and the proof must not call a
+// World-verified player "On the list" for the length of the pause.
+describe("a World-bound player while World is paused", () => {
+  const paused = (access: Partial<CharacterInputs["access"]>) =>
+    inputs({
+      world: { lane: "off", human: "unverified" },
+      access: { status: "approved", isAdmin: false, loading: false, error: false, ...access },
+    });
+
+  it("keeps the World proof and the World summary", () => {
+    const i = paused({ source: "world" });
+    expect(humanProofOf(i)).toBe("world");
+    expect(characterSteps(i).human).toMatchObject({ status: "done" });
+    expect(characterSteps(i).human).not.toMatchObject({ summary: "On the list" });
+  });
+
+  it("keeps a World-bound admin on the World proof too", () => {
+    expect(humanProofOf(paused({ source: "world", isAdmin: true }))).toBe("world");
+  });
+
+  it("still calls a list player and an admin what they are", () => {
+    expect(humanProofOf(paused({ source: "request" }))).toBe("list");
+    expect(characterSteps(paused({ source: "request" })).human).toMatchObject({ summary: "On the list" });
+    expect(humanProofOf(paused({ source: "admin", isAdmin: true }))).toBe("admin");
   });
 });

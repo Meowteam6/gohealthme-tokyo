@@ -48,13 +48,6 @@ export type RunLock =
   /** Signed in, World is not how this player got in, and the closed-beta list
    *  has not approved them. Ordered after not-human. */
   | { kind: "not-approved"; pending: boolean }
-  /** Retired (Andre, 2026-10-02, "Pay on the verdict"): runSlotOf never
-   *  produces it. It held a list player's stake for World ID on a build where
-   *  a hit was confirmed with it; SPOTTER now pays a list player or an admin
-   *  on the verdict. Kept only for the gallery frame that still renders it
-   *  (app/dev/states/_sections/landing.tsx); delete with that frame.
-   *  @deprecated Never produced. */
-  | { kind: "world-to-collect" }
   /** An upload-proof run while SPOTTER's document checker is off for this
    *  build. The run stays visible (a dare link must never just vanish); the
    *  stake does not. */
@@ -127,11 +120,6 @@ export interface RunSlotInput {
   /** The viewer created this challenge and its pot already holds money
    *  (creatorMoneyInOf). The money-in pause does not strand their game. */
   creatorMoneyIn?: boolean;
-  /** Ignored. Callers not yet updated still pass the retired
-   *  collectNeedsWorldOf answer; nothing locks on it any more (a list player
-   *  or an admin is paid on the verdict, Andre, 2026-10-02).
-   *  @deprecated Drop from PoolDetail and ChallengeAccept. */
-  collectNeedsWorld?: boolean;
   /** Label of the player's paired device, for the cannot-measure copy. */
   deviceLabel: string | null;
 }
@@ -350,19 +338,6 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
             fix: { kind: "link", label: "Get in", href: `/character?next=${next}` },
             tone: "fixable",
           };
-    case "world-to-collect":
-      // Retired (RunLock): never produced; kept for the gallery frame only.
-      return {
-        title: "Hits here are confirmed with World ID",
-        detail:
-          "Before I pay a hit here, you confirm it with World ID, and you got in through the list without it. Add World ID once and you can stake. Nothing has been charged.",
-        fix: {
-          kind: "link",
-          label: "Add World ID",
-          href: `/character?step=human&next=${next}`,
-        },
-        tone: "fixable",
-      };
     case "verifier-off":
       return {
         title: "I cannot check uploads right now",

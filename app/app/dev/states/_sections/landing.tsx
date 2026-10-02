@@ -315,9 +315,6 @@ export default function LandingStates({ meta }: SectionProps) {
           returnTo="/pools/5"
         />
       </StateFrame>
-      <StateFrame name="lobby-lock-world-to-collect" note="in through the list where a hit is confirmed with World ID: the stake waits for World ID" phone>
-        <LockPanel lock={{ kind: "world-to-collect" }} returnTo="/pools/5" />
-      </StateFrame>
       <StateFrame name="lobby-lock-switches-failed" note="the switches read failed: the stake is held behind a retry" phone>
         <LockPanel lock={{ kind: "check-failed", check: "switches" }} returnTo="/pools/5" onRetry={() => {}} />
       </StateFrame>

@@ -309,21 +309,17 @@ describe("runSlotOf", () => {
   // "Pay on the verdict" (Andre, 2026-10-02). A list player or an admin is
   // paid on the wearable verdict, like V3, so nothing about a hit waits on a
   // World ID they do not have: the join is open to them like to anyone proven
-  // human. The retired "world-to-collect" lock is never produced, even for a
-  // caller that still passes the old collectNeedsWorld flag.
+  // human.
   describe("a list player or an admin on a build where World players confirm with World ID", () => {
     it("is playable: SPOTTER pays them on the verdict", () => {
       expect(runSlotOf(input({ worldLane: "on", humanVerified: true }))).toEqual({ kind: "playable" });
-      expect(runSlotOf(input({ worldLane: "on", humanVerified: true, collectNeedsWorld: true }))).toEqual({
-        kind: "playable",
-      });
     });
 
     it("keeps every other lock in front of them (regression)", () => {
       expect(
-        runSlotOf(input({ worldLane: "on", humanVerified: true, collectNeedsWorld: true, gate: "error" })),
+        runSlotOf(input({ worldLane: "on", humanVerified: true, gate: "error" })),
       ).toEqual({ kind: "locked", lock: { kind: "check-failed", check: "access" } });
-      expect(runSlotOf(input({ joined: true, collectNeedsWorld: true }))).toEqual({ kind: "in-run" });
+      expect(runSlotOf(input({ joined: true }))).toEqual({ kind: "in-run" });
       expect(
         runSlotOf(input({ worldLane: "on", humanVerified: true, joinBlock: { kind: "no-device" } })),
       ).toEqual({ kind: "locked", lock: { kind: "no-sensor" } });
@@ -405,7 +401,6 @@ describe("lockCopy", () => {
     { kind: "payouts-paused" },
     { kind: "money-in-paused", reason: null },
     { kind: "money-in-paused", reason: "Back after the upgrade on Friday." },
-    { kind: "world-to-collect" },
     { kind: "check-failed", check: "human" },
     { kind: "check-failed", check: "access" },
     { kind: "check-failed", check: "payouts" },

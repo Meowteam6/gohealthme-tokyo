@@ -30,7 +30,9 @@ import { buttonClasses } from "@/components/ui";
  *  real failures; `enough` and `capped` are not failures and get no link. */
 type ChipState =
   | { kind: "idle" }
-  | { kind: "done" }
+  /** `note` says what the player should know beside the delivery (new test
+   *  USDC paused, while what was waiting still moved). */
+  | { kind: "done"; note?: string }
   | { kind: "enough" }
   | { kind: "capped"; message: string }
   | { kind: "fallback"; message: string };
@@ -61,7 +63,7 @@ export default function TestUsdcChip() {
     const baseline = balanceQuery.data ?? 0n;
     const result = await fund(address);
     if (result.kind === "funded") {
-      setState({ kind: "done" });
+      setState({ kind: "done", note: result.note });
       // Existing invalidation: one immediate refetch. On its own this often
       // reads the pre-fund figure, because the RPC read replica lags the tx.
       await queryClient.invalidateQueries({
@@ -126,7 +128,7 @@ export default function TestUsdcChip() {
       </button>
       {state.kind === "done" ? (
         <span className="text-[11px] text-accent-deep sm:text-xs" aria-live="polite">
-          Added
+          {state.note !== undefined ? state.note : "Added"}
         </span>
       ) : null}
       {state.kind === "enough" ? (

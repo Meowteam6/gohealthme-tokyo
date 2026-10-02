@@ -224,7 +224,6 @@ export default function ChallengeAccept({
     moneyIn: checks.moneyIn,
     moneyInReason: checks.switchReason,
     creatorMoneyIn: creatorMoneyInOf(pool, address),
-    collectNeedsWorld: checks.collectNeedsWorld,
     deviceLabel,
   });
 
@@ -286,7 +285,7 @@ export default function ChallengeAccept({
                     items={[{ key: "upload", glyph: "info", children: uploadFallbackNote(pool.goalSpec) }]}
                   />
                 ) : null}
-                <ApprovalNote />
+                <ApprovalNote humanProof={view.character?.humanProof ?? null} />
               </>
             ),
             underStake:

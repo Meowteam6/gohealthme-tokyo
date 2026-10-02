@@ -90,9 +90,9 @@ function readApproval(): ApprovalMode | "misconfigured" {
 function approvalLine(mode: ApprovalMode | "misconfigured"): string {
   switch (mode) {
     case "world":
-      return "Before SPOTTER records a player's hit, he asks them to confirm with World ID. No confirmation, no share: your stake still comes back when the challenge settles.";
+      return "Before SPOTTER records a World ID player's hit, he asks them to confirm with World ID. No confirmation, no share: their stake still comes back when the challenge settles. Players on the list are paid on the verdict.";
     case "mock":
-      return "Before SPOTTER records a player's hit, he asks them to confirm with World ID. On this build that confirmation is mocked, not a real World ID check. No confirmation, no share: your stake still comes back when the challenge settles.";
+      return "Before SPOTTER records a World ID player's hit, he asks them to confirm with World ID. On this build that confirmation is mocked, not a real World ID check. No confirmation, no share: their stake still comes back when the challenge settles. Players on the list are paid on the verdict.";
     case "misconfigured":
       return "Payout confirmation is not set up correctly on this deployment, so SPOTTER is holding every payout until it is fixed.";
     case "off":

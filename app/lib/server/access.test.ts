@@ -133,6 +133,23 @@ describe("approval by World ID (prove-human)", () => {
     expect(await access.isAllowed(ADMIN)).toBe(true);
   });
 
+  // An admin who also proved with World ID is a World-bound human: the source
+  // says world (so the stamp reads One human, paused or not) and isAdmin stays.
+  it("reports a World-bound admin as source world, still an admin", async () => {
+    const { access, human } = await loadWithWorld("mock", ADMIN);
+    await human.bindHuman({
+      address: ADMIN,
+      nullifierHash: `0x${"9".padStart(64, "0")}`,
+      mode: "mock",
+      protocolVersion: "4.0",
+    });
+    expect(await access.getAccessStatus(ADMIN)).toEqual({
+      status: "approved",
+      isAdmin: true,
+      source: "world",
+    });
+  });
+
   it("does not let a World approval overwrite a stored denial record", async () => {
     const { access, human } = await loadWithWorld("mock", ADMIN);
     await access.requestAccess({ address: USER });

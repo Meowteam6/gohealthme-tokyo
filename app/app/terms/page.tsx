@@ -212,11 +212,12 @@ export default function TermsPage() {
             <li>
               Hit the goal: you get your stake back plus an equal share of the
               missed stakes and anything else in the pot, once your hit is
-              recorded. SPOTTER records a hit only after you open the challenge
-              and confirm it with World ID, and only before the challenge
-              settles. A hit
-              that is not confirmed by then gets its stake back without a
-              share.
+              recorded. If you joined with World ID, SPOTTER records a hit
+              only after you open the challenge and confirm it with World ID,
+              and only before the challenge settles; a hit that is not
+              confirmed by then gets its stake back without a share. If you
+              were approved through the closed-beta list, SPOTTER records your
+              hit on your wearable&apos;s verdict, with no confirmation step.
             </li>
             <li>
               Miss it, with your wearable showing the miss: your stake goes to

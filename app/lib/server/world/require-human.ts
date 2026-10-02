@@ -8,9 +8,12 @@
 // user never reaches this refusal; only a caller who bypassed the product and
 // staked by hand does, and the reason tells them how to fix it.
 //
-// When WORLD_VERIFY_MODE is unset, or World is switched off by KILL_WORLD_ID,
-// this is a no-op that says so (`enforced: false`), so a deployment without
-// World behaves as before and SPOTTER keeps paying through a pause.
+// When WORLD_VERIFY_MODE is unset this is a no-op that says so (`enforced:
+// false`), so a deployment without World behaves as before. A PAUSE is not the
+// same thing: while KILL_WORLD_ID is thrown the payout confirm is off too, so a
+// no-op here would pay a wallet nobody approved on the verdict alone. Paused,
+// a World binding made before the pause, an admin or an approved list entry
+// still passes, so every real player keeps getting paid through it.
 //
 // WHO COUNTS AS ONE HUMAN (Andre, 2026-09-30). A World-verified wallet, an
 // admin, or an approved closed-beta list entry. World is the self-serve way
@@ -22,7 +25,7 @@
 
 import { isAddress } from "viem";
 import { getAccessRecord, isAdmin } from "@/lib/server/access";
-import { worldSetup } from "@/lib/server/world/config";
+import { boundWorldNamespace, worldSetup } from "@/lib/server/world/config";
 import { isVerifiedHuman } from "@/lib/server/world/human";
 
 export const HUMAN_REQUIRED_REASON =
@@ -41,11 +44,19 @@ export type RequireHumanResult =
 export async function requireHuman(
   address: string,
 ): Promise<RequireHumanResult> {
-  if (worldSetup().mode === "off") return { ok: true, enforced: false };
+  const setup = worldSetup();
+  if (setup.mode === "off" && setup.paused !== true) {
+    return { ok: true, enforced: false };
+  }
   if (!isAddress(address)) {
     return { ok: false, status: 403, reason: HUMAN_REQUIRED_REASON };
   }
-  if (await isVerifiedHuman(address)) return { ok: true, enforced: true };
+  // The namespace World bound in, which survives a pause (access.ts reads the
+  // same one), so a binding made before KILL_WORLD_ID still counts.
+  const namespace = boundWorldNamespace();
+  if (namespace !== null && (await isVerifiedHuman(address, namespace))) {
+    return { ok: true, enforced: true };
+  }
   if (await onTheList(address)) return { ok: true, enforced: true };
   return { ok: false, status: 403, reason: HUMAN_REQUIRED_REASON };
 }

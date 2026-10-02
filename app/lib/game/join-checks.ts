@@ -134,27 +134,6 @@ export function challengeCreateBlock(
   return { kind: "ok" };
 }
 
-/**
- * Retired (Andre, 2026-10-02, "Pay on the verdict"): always false. It named a
- * list player or an admin on a build where a hit was confirmed with World ID,
- * who could lose a stake but never collect a hit. SPOTTER now pays them on
- * the verdict (lib/server/agent/approval.ts payoutConfirmFor), so nobody
- * needs World ID to collect. Kept only until its last callers drop it
- * (lib/game/useJoinChecks.ts, and the collectNeedsWorld field PoolDetail and
- * ChallengeAccept still pass to runSlotOf, which ignores it).
- *
- * @deprecated Nobody needs World ID to collect; delete with its callers.
- */
-export function collectNeedsWorldOf(input: {
-  worldLane: LaneAvailability | "loading";
-  approvalMode: ApprovalModeView;
-  human: HumanStatus | null;
-  humanProof: HumanProof | null;
-}): boolean {
-  void input;
-  return false;
-}
-
 /** How a player's hit is released: a World ID confirm, or SPOTTER pays it on
  *  the wearable verdict with no extra step. */
 export type PayoutPath = "world" | "verdict";

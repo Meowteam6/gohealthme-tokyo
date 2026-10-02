@@ -83,9 +83,36 @@ describe("requireHuman", () => {
     expect(await req.requireHuman(B)).toMatchObject({ ok: false, status: 403 });
   });
 
-  it("is a no-op while World is paused by the kill switch, so SPOTTER keeps paying", async () => {
+  // A pause is not "World was never here". While KILL_WORLD_ID is thrown the
+  // payout confirm is off too, so a no-op here would let a wallet nobody
+  // approved stake by hand and be paid on the verdict alone. Existing World
+  // bindings and the list still count, so every real player keeps getting paid.
+  it("still refuses a bare wallet while World is paused by the kill switch", async () => {
     vi.stubEnv("KILL_WORLD_ID", "1");
     const { req } = await load("mock");
-    expect(await req.requireHuman(B)).toEqual({ ok: true, enforced: false });
+    expect(await req.requireHuman(B)).toEqual({
+      ok: false,
+      status: 403,
+      reason: req.HUMAN_REQUIRED_REASON,
+    });
+    expect(await req.requireHuman("garbage")).toMatchObject({ ok: false, status: 403 });
+  });
+
+  it("passes a World-bound wallet, an admin and a list entry while World is paused", async () => {
+    vi.stubEnv("KILL_WORLD_ID", "1");
+    vi.stubEnv("ADMIN_ADDRESSES", ADMIN);
+    const { human, req } = await load("mock");
+    const access = await import("@/lib/server/access");
+    await human.bindHuman({
+      address: A,
+      nullifierHash: `0x${"2".padStart(64, "0")}`,
+      mode: "mock",
+      protocolVersion: "4.0",
+    });
+    expect(await req.requireHuman(A)).toEqual({ ok: true, enforced: true });
+    expect(await req.requireHuman(ADMIN)).toEqual({ ok: true, enforced: true });
+    await access.requestAccess({ address: B });
+    await access.decideAccess({ address: B, decision: "approve", adminAddress: ADMIN });
+    expect(await req.requireHuman(B)).toEqual({ ok: true, enforced: true });
   });
 });

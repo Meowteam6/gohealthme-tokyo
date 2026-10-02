@@ -208,6 +208,7 @@ export default function FundingHelp({
         void runFunding();
       }}
       funded={outcome !== null && outcome.kind === "funded"}
+      fundedNote={outcome !== null && outcome.kind === "funded" ? (outcome.note ?? null) : null}
       fallbackReason={fallbackReason}
       onRecheck={onRecheck}
       recheckLabel={recheckLabel}
@@ -229,6 +230,7 @@ export function FundingHelpView({
   primaryLabel,
   onFund,
   funded,
+  fundedNote = null,
   fallbackReason,
   onRecheck,
   recheckLabel,
@@ -241,6 +243,9 @@ export function FundingHelpView({
   primaryLabel: string;
   onFund: () => void;
   funded: boolean;
+  /** What the player should know beside the delivery, e.g. new test USDC is
+   *  paused while what was waiting still moved. Null for a plain delivery. */
+  fundedNote?: string | null;
   fallbackReason: string | null;
   onRecheck?: () => void;
   recheckLabel: string;
@@ -282,7 +287,7 @@ export function FundingHelpView({
           </p>
           {funded ? (
             <p className="m-0 mt-2 text-sm font-semibold text-moonlight" aria-live="polite">
-              Test USDC added. Checking your balance again.
+              {fundedNote ?? "Test USDC added."} Checking your balance again.
             </p>
           ) : null}
         </div>

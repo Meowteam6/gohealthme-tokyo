@@ -721,7 +721,6 @@ export default function PoolDetail({ id }: { id: string }) {
     moneyIn: checks.moneyIn,
     moneyInReason: checks.switchReason,
     creatorMoneyIn: creatorMoneyInOf(pool, address),
-    collectNeedsWorld: checks.collectNeedsWorld,
     deviceLabel: viewerProvider?.label ?? null,
   });
   // Nobody tops up a run that cannot be checked or whose win could not pay on
@@ -996,7 +995,7 @@ export default function PoolDetail({ id }: { id: string }) {
       {termsBlock}
       {solo !== null ? <SoloNote line={solo} /> : null}
       <StakeChecks items={cleared} />
-      <ApprovalNote />
+      <ApprovalNote humanProof={character.character?.humanProof ?? null} />
     </>
   );
 

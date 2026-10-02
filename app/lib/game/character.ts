@@ -15,7 +15,7 @@
 // run locked with "pair your wearable" as the fix. Making them hard would be a new
 // wall, which is the thing this module exists to remove.
 
-import type { AccessStatus } from "@/lib/useAccess";
+import type { AccessSource, AccessStatus } from "@/lib/useAccess";
 import type { LaneAvailability } from "@/lib/game/lanes";
 import { launchGoalLabels } from "@/lib/game/sensor-copy";
 import {
@@ -162,6 +162,10 @@ export interface CharacterInputs {
     isAdmin: boolean;
     loading: boolean;
     error: boolean;
+    /** Why the server approved this wallet. "world" is a World binding, which
+     *  still counts while KILL_WORLD_ID pauses World and the lane reads off.
+     *  Optional so fixtures built before 2026-10-02 still type. */
+    source?: AccessSource;
   };
   world: { lane: LaneAvailability | "loading"; human: HumanStatus };
   ens: { lane: LaneAvailability | "loading"; name: string | null };
@@ -189,6 +193,8 @@ export function nameModeOf(i: CharacterInputs): NameMode {
  */
 export function humanProofOf(i: CharacterInputs): HumanProof | null {
   if (i.world.lane === "on" && i.world.human === "verified") return "world";
+  // A binding World made before a pause, admins included.
+  if (i.access.status === "approved" && i.access.source === "world") return "world";
   if (i.access.isAdmin) return "admin";
   if (i.access.status === "approved") return "list";
   return null;
@@ -227,7 +233,11 @@ function humanStep(i: CharacterInputs): StepState {
     return { status: "todo" };
   }
   // World is off (lane missing, unconfigured, or unreachable): the closed-beta
-  // allowlist is the step, exactly as it worked before V4.
+  // allowlist is the step, exactly as it worked before V4. A World binding made
+  // before a pause still reads as one (humanProofOf).
+  if (i.access.status === "approved" && i.access.source === "world") {
+    return { status: "done", summary: "Verified human, one entry per challenge" };
+  }
   if (i.access.isAdmin) return { status: "done", summary: "Admin" };
   if (i.access.loading) return { status: "loading" };
   if (i.access.error) {

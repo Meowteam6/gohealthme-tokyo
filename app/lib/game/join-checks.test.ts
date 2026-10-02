@@ -3,7 +3,6 @@ import {
   accessGateDisabled,
   approvalModeOf,
   challengeCreateBlock,
-  collectNeedsWorldOf,
   gateStateOf,
   payoutPathOf,
   payoutStateOf,
@@ -202,18 +201,6 @@ describe("approvalModeOf and payoutStateOf", () => {
     expect(payoutStateOf("misconfigured")).toBe("misconfigured");
     expect(payoutStateOf("loading")).toBe("loading");
     expect(payoutStateOf("error")).toBe("error");
-  });
-});
-
-describe("collectNeedsWorldOf (retired)", () => {
-  it("is false for everyone: nobody needs World ID to collect a hit any more", () => {
-    for (const humanProof of ["list", "admin", "world", null] as const) {
-      for (const approvalMode of ["world", "mock", "off", "misconfigured", "loading", "error"] as const) {
-        expect(
-          collectNeedsWorldOf({ worldLane: "on", approvalMode, human: "verified", humanProof }),
-        ).toBe(false);
-      }
-    }
   });
 });
 
