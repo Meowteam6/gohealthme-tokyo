@@ -27,6 +27,7 @@ import SignInStep from "@/components/game/SignInStep";
 import SlowSignInNotice from "@/components/night/SlowSignInNotice";
 import SensorStep from "@/components/game/SensorStep";
 import {
+  NAME_NEEDS_WORLD_NOTE,
   STEP_ORDER,
   currentStep,
   type StepId,
@@ -97,7 +98,13 @@ function StatusText({
     case "todo":
       return <span className="text-haze">To do</span>;
     case "locked":
-      return <span className="text-haze">Locked until step 2 is done</span>;
+      // A list player already finished step 2; what their name waits on is
+      // World ID, which is optional for them (NAME_NEEDS_WORLD_NOTE).
+      return (
+        <span className="text-haze">
+          {state.note === NAME_NEEDS_WORLD_NOTE ? "Optional, with World ID" : "Locked until step 2 is done"}
+        </span>
+      );
   }
 }
 
