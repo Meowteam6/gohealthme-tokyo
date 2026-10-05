@@ -152,7 +152,7 @@ Before V4 nothing human sat between the decision and that write.
 
 With `WORLD_APPROVAL_MODE` set, a pay decision stops at an AUTHORIZE gate:
 
-1. **Request.** SPOTTER opens an approval request for the goal (TTL 90s) and
+1. **Request.** SPOTTER opens an approval request for the goal (TTL ten minutes) and
    appends a ledger row `approval: requested` ("asked you to confirm"). The run
    returns `awaiting-approval`. Nothing is on chain.
 2. **Human completes.** The claim screen mounts `HumanApprovalCard`. The card
@@ -170,6 +170,66 @@ With `WORLD_APPROVAL_MODE` set, a pay decision stops at an AUTHORIZE gate:
 4. **Protected action.** The browser's next poll of the run route finds the
    approval, records the PASS (both writes) and settles when the pool period
    allows, asserting on `AchieverPaid` as before.
+
+### Who confirms with World ID, and who is paid on the verdict
+
+Founder decision (Andre, 2026-10-02, "Pay on the verdict"). The confirm is
+asked per wallet, not per build (`payoutConfirmFor` in
+`app/lib/server/agent/approval.ts`):
+
+- **A World-bound wallet confirms with World ID.** That is World ID for
+  Agents, unchanged: steps 1 to 4 above.
+- **An admin or an approved list player is paid on the verdict.** They have
+  no World ID to confirm with, so SPOTTER records and pays them on the
+  wearable verdict with no approval request at all, exactly as V3 did. The
+  gate answers `verdict` and `run.ts` records as it does with the gate off.
+- **A wallet that is neither keeps the confirm** (fail closed), and
+  `requireHuman` refuses it before any verdict is read, so it is never paid
+  on the verdict alone.
+- **The payout always goes to the staker's own wallet.** `run.ts` records the
+  result for the claim's participant; nothing here picks a recipient.
+
+The World binding is checked first, so a list player who later adds World ID
+confirms like any World player (character creation says so before they
+scan). The binding is read in the namespace World's bindings live in
+(`boundWorldNamespace`), the same read `access.ts` makes. A list player is
+paid on the verdict even where the World confirm is misconfigured: they never
+needed it, so its setup never holds their payout; everyone else's claim
+still stops with an honest error row.
+
+Where it shows: `POST /api/agent/approval/request` refuses a paid-on-verdict
+player with 409 `code: "on-verdict"` and opens nothing.
+`GET /api/agent/approval/status` carries `confirm: "world" | "verdict"` for
+the claim's participant (or the optional `address` query param), and the
+verdict screen reads it (`useVerdict`, `payout` in `lib/game/verdict.ts`): a
+list player never sees a World ID card or its refusals, the checking and
+not-yet screens say "pays you on the verdict", and a settled hit that was
+read but not recorded reads "not recorded in time", never "not confirmed".
+The join, character creation and the create form no longer hold a list
+player for World ID (the `world-to-collect` lock and the create form's
+`needs-world` block are retired).
+
+> Open (2026-10-02): the join note `components/game/ApprovalNote.tsx`
+> (mounted by `PoolDetail` and `ChallengeAccept`) still shows every player
+> "Before it pays, SPOTTER asks you to confirm with World ID". It should read
+> `payoutPathOf` (`lib/game/join-checks.ts`) and tell a list player or an
+> admin that SPOTTER pays them on the verdict. The dashboard line
+> (`DashboardContent` to `runApprovalLine`) should pass the status route's
+> `confirm` with its hit flag, so a list player's unrecorded hit reads "open
+> the challenge", not "confirm it with World ID".
+
+The settlement sweep follows the same rule per claim: an ask opened for a
+list player before this decision (requested or lapsed) is recorded like a
+hit with the confirmation off; a World-bound player's ask still waits on a
+yes; a declined ask is never paid by the sweep.
+
+| Player | At the join | At the verdict | How they are paid |
+|---|---|---|---|
+| World-verified | Joins after proving one human with IDKit; the join note says SPOTTER asks for a World ID confirm before it pays. | SPOTTER reads the hit and asks "Confirm it is you" (World ID for Agents); declined, expired and cancelled are their own screens with "Ask again". | On their World ID yes: the record write, then settle to their own wallet. No yes, no prize; the stake comes back at settle. |
+| List player | Joins with no World ID lock; character creation says SPOTTER pays them on the verdict. | No World ID card. Checking and not-yet say SPOTTER pays on the verdict; a hit goes straight to banked, then paid. | On the wearable verdict, no extra step: record, then settle to their own wallet. |
+| Admin | As a list player. | As a list player. | As a list player. |
+| Not approved (neither) | Locked at the join ("Prove you are one human first", or the beta list), before any stake. | Never reached: `requireHuman` refuses the claim before any verdict is read. | Never paid on the verdict; a hand-built stake is refused by SPOTTER and comes back at settle. |
+| World binding while `KILL_WORLD_ID` is on | Keeps their way in (the binding still counts); new joins work as for anyone proven. | No World ID card: the confirmation is off for everyone. | On the verdict, like everyone while the switch is thrown; a hit that was waiting on its confirm is recorded by the next poll or the sweep. |
 
 ### The unsuccessful paths (the action does not occur)
 
@@ -328,6 +388,11 @@ refused, full journey, denied journey, refused proof, expiry through status),
   screen instead of a record error.
 - **Nobody, when the mode is unset.** The gate returns before touching the
   store, and the run tests pin the ledger sequence to the pre-Tokyo one.
+- **Nobody, from "Pay on the verdict" (2026-10-02).** A list player or an
+  admin gains a way to stake and be paid with the confirmation on; a
+  World-verified player sees no change. One trade named: a list player who
+  later adds World ID moves to the World ID confirm for every payout after
+  that, and character creation says so before they scan.
 
 ## Kill switches
 
@@ -374,9 +439,13 @@ could answer it (`approvedUnrecordedOf(..., { confirmationRequired: false
 })`), and records it the same way, holding its pool from the pool phase. A
 declined or cancelled request is never picked by the sweep, and a challenge
 that already settled is never written to (`recordApprovedClaim` reads the
-pool first: `settle()` is one-shot). Limit: the sweep finds such a claim
-through its fallback scan of the newest 100 claims, because a request
-(unlike an approval) is not queued.
+pool first: `settle()` is one-shot). The sweep finds such a claim through
+its pending queue: SPOTTER queues a claim the moment it asks
+(`requestApproval`), drops it on a decline or a cancel, and the sweep drops
+an ask that is still not payable once it is older than the record hold
+window (`APPROVED_RECORD_HOLD_MS`, six hours), so lapsed asks nobody revisits
+never crowd the head of the queue. After that window the run route still
+records it on the player's next visit.
 
 **The one exception to the money-in pause:** the creator of a challenge whose
 pot already holds money (their extra at create, or a friend's stake or chip-in
@@ -396,17 +465,13 @@ admin or an approved access record). World stays the self-serve way in and
 still unlocks an ENS name (one per human), offered to list players as
 optional.
 
-**Where a hit is confirmed with World ID (`WORLD_APPROVAL_MODE=world`), a
-list player still needs World ID to stake.** A miss is recorded without any
-confirmation, so without World ID their stake could be lost and never
-collected. The join locks it with `world-to-collect` ("Hits here are
-confirmed with World ID", fix "Add World ID"), character creation says so
-before they ask for a spot, and the create form says so before any extra
-goes in (`challengeCreateBlock` "needs-world": the extra is pulled before
-the creator's own stake, which could not follow it). Mock and off
-confirmations never trip it.
-Whether list players' payouts should skip or replace the World ID
-confirmation is a founder call; it lives in `approval.ts` / `run.ts`.
+**Superseded 2026-10-02 ("Pay on the verdict").** From 2026-09-30 to
+2026-10-02, where a hit was confirmed with World ID, a list player needed
+World ID to stake (the `world-to-collect` lock, and the create form's
+`needs-world` block). Andre's call: an admin or an approved list player is
+paid on the verdict with no World ID step, so both are retired and the list
+player plays every challenge. See "Who confirms with World ID, and who is
+paid on the verdict" above.
 
 ### Who sees what
 
@@ -414,8 +479,8 @@ confirmation is a founder call; it lives in `approval.ts` / `run.ts`.
 |---|---|---|---|
 | New player | Step 2 is the list with "World ID is paused for now" (and the note). Request, wait for approval, then play. | Can make their player; every open challenge shows "New stakes are paused for now" before any prompt; the faucet refuses. | As before, World or the list. |
 | World-verified player | Keeps their way in (binding still counts), challenge pages, withdraw and refund. Stamp reads "On the list" while World is paused (the client cannot see the binding without World). Payouts need no confirmation. | Their challenges run, pay and refund as normal. New joins and chip-ins show the pause. | As before. |
-| List player (World on) | Unchanged: in through the list, and plays (the confirmation is off). | Same as any player. | Now in and stamped "On the list". Plays every challenge when the payout confirmation is off or mocked; with it on (`world`), each challenge says "Hits here are confirmed with World ID" with "Add World ID" as the fix, before any stake. Before this change: every challenge locked "prove you are one human" with no honest reason. |
-| Admin | Unchanged. | Same as any player. | Step 2 "Admin"; plays exactly like a list player above. |
+| List player (World on) | Unchanged: in through the list, and plays (the confirmation is off). | Same as any player. | In and stamped "On the list". Plays every challenge, and SPOTTER pays them on the verdict with no World ID step, whatever the confirmation mode (2026-10-02). Before 2026-09-30: every challenge locked "prove you are one human" with no honest reason. |
+| Admin | Unchanged. | Same as any player. | Step 2 "Admin"; plays and is paid exactly like a list player above. |
 | Player already staked | Their hit pays on the verdict; one waiting on its confirmation is recorded by the next poll or the sweep. Withdraw and refund work. | Nothing changes for money already in: pays, refunds, withdraws. Their own card stays "in". Adding to the pot shows the pause. | As before. |
 | Challenge creator with extra in | Unchanged. | May still lock in their own stake; everything else they would add is paused. | As before. |
 | Challenge creator, nothing in yet | Unchanged. | The create form says "Challenges are paused for now" before anything is filled in; a flip between load and submit is caught by `/api/challenges/health` before the deposit. | As before. |
