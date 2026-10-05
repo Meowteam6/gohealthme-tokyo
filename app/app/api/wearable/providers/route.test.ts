@@ -7,6 +7,7 @@ import { NextRequest } from "next/server";
 const providerConfigured = vi.fn();
 const providerIdFor = vi.fn();
 const isConnected = vi.fn();
+const observedMetrics = vi.fn();
 const requireAddressSignature = vi.fn();
 
 vi.mock("@/lib/server/wearable", () => ({
@@ -18,7 +19,7 @@ vi.mock("@/lib/server/wearable", () => ({
     label: id,
     metrics: [],
     isConnected: (...a: unknown[]) => isConnected(id, ...a),
-    observedMetrics: async () => ({ kind: "declared" }),
+    observedMetrics: (...a: unknown[]) => observedMetrics(id, ...a),
   }),
 }));
 vi.mock("@/lib/server/wallet-auth", () => ({
@@ -49,6 +50,7 @@ interface Entry {
   configured: boolean;
   connected: boolean;
   note: string | null;
+  capability: string;
 }
 
 async function entry(id: string, query: string): Promise<Entry | undefined> {
@@ -67,11 +69,51 @@ beforeEach(() => {
   providerConfigured.mockReturnValue(true);
   providerIdFor.mockResolvedValue("junction");
   isConnected.mockResolvedValue(false);
+  observedMetrics.mockResolvedValue({ kind: "declared" });
   requireAddressSignature.mockResolvedValue({ ok: true, address: USER });
   seat.allowed = true;
   seat.seatsLeft = 5;
   appleConfigured.mockReturnValue(true);
   appleAppAvailable.mockReturnValue(true);
+});
+
+describe("GET /api/wearable/providers probes Apple whenever it is linked (2026-10-06)", () => {
+  // Apple records itself as the wallet's provider only when the first day
+  // arrives, so a phone that redeemed a code and has not synced is linked
+  // while the stored choice is still Junction. The pairing panel reads
+  // Apple's entry directly, and "declared" there renders as paired with every
+  // metric. The probe is our own table, so it costs nothing upstream.
+  it("answers Apple's capability while another provider is the stored choice", async () => {
+    providerIdFor.mockResolvedValue("junction");
+    isConnected.mockImplementation(async (id: string) => id === "apple");
+    observedMetrics.mockImplementation(async (id: string) =>
+      id === "apple" ? { kind: "awaiting-sync" } : { kind: "declared" },
+    );
+
+    const apple = await entry("apple", `?address=${USER}`);
+
+    expect(apple?.connected).toBe(true);
+    expect(apple?.capability).toBe("awaiting-sync");
+    expect(observedMetrics).toHaveBeenCalledWith("apple", USER);
+  });
+
+  it("still probes a vendor provider only when it is the stored choice", async () => {
+    providerIdFor.mockResolvedValue("whoop");
+    isConnected.mockResolvedValue(true);
+
+    const junction = await entry("junction", `?address=${USER}`);
+
+    expect(junction?.connected).toBe(true);
+    expect(junction?.capability).toBe("declared");
+    expect(observedMetrics).not.toHaveBeenCalledWith("junction", USER);
+    expect(observedMetrics).toHaveBeenCalledWith("whoop", USER);
+  });
+
+  it("does not probe an Apple that is not linked", async () => {
+    isConnected.mockResolvedValue(false);
+    await entry("apple", `?address=${USER}`);
+    expect(observedMetrics).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET /api/wearable/providers Apple flag (2026-10-06)", () => {

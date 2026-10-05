@@ -23,8 +23,10 @@
 //
 // Probed only for the provider actually backing this wallet, and only when it
 // is connected: a browse surface must not pay for a probe of a provider nobody
-// is using. Null narrows nothing, so an upstream hiccup can never take pools
-// off somebody's board.
+// is using. Apple is the one exception (see GET): it is linked from the moment
+// a phone redeems a code, before it is the stored choice, and its probe is a
+// read of our own table. Null narrows nothing, so an upstream hiccup can never
+// take challenges off somebody's board.
 
 import { type NextRequest } from "next/server";
 import { isAddress } from "viem";
@@ -114,8 +116,17 @@ export async function GET(request: NextRequest) {
         // rather than fall back to the declared union - that fallback is how
         // a Junction outage handed a wallet all seven metrics on no evidence,
         // and how a WHOOP-via-Junction wallet was offered steps runs.
+        //
+        // Apple is probed whenever it is linked, selected or not. It records
+        // itself as the wallet's provider only when the first day arrives, so
+        // a phone that redeemed a code and has not synced is linked while the
+        // stored choice is still Junction or WHOOP. The pairing panel reads
+        // Apple's entry directly (lib/wearable-connect.ts phonePairingOf),
+        // and "declared" there renders as paired with every metric before a
+        // single day exists. The probe is a query against our own table, so
+        // nothing upstream is paid for a provider nobody is using.
         let capability: ObservedCapability = { kind: "declared" };
-        if (connected && id === selected) {
+        if (connected && (id === selected || id === "apple")) {
           try {
             capability = await provider.observedMetrics(address);
           } catch (err) {

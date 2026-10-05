@@ -319,7 +319,8 @@ export async function getObservedMetrics(
  *
  * This is what isConnected asks. It is deliberately "has data arrived", not
  * "did someone tap Set up": for a pushed provider there is no credential to
- * check, so the first sync IS the evidence that a phone is really attached.
+ * check; a redeemed device (apple-pairing.ts deviceExistsFor) or a stored day
+ * is the evidence that a phone is really attached.
  */
 export async function hasAnyAppleData(address: string): Promise<boolean> {
   const supabase = getSupabaseServiceRole();

@@ -61,6 +61,16 @@ export type Metric =
   | "distance_km"
   | "workouts";
 
+/** Every metric this module produces. One sleep query feeds the two sleep metrics. */
+export const METRICS: readonly Metric[] = [
+  "steps",
+  "distance_km",
+  "active_calories",
+  "sleep_hours",
+  "sleep_efficiency",
+  "workouts",
+];
+
 export type { DayValue } from "./sleep-aggregate";
 
 /**
@@ -243,6 +253,19 @@ export interface Aggregates {
   days: DayValue[];
 }
 
+/** What one read of HealthKit produced, and which metrics it actually read. */
+export interface Collection {
+  /** Metrics with at least one day of data in the reported window. */
+  aggregates: Aggregates[];
+  /**
+   * Per metric, whether HealthKit answered its query. False means the query
+   * threw: the phone learned nothing about those days, not that they were
+   * empty, and no caller may vouch for them. A query that answered with no
+   * rows is still true: that is a real empty the phone may vouch for.
+   */
+  read: Record<Metric, boolean>;
+}
+
 /**
  * Workout sessions per local day.
  *
@@ -286,7 +309,7 @@ async function workoutsByDay(since: Date): Promise<DayValue[]> {
 export async function collectAggregates(
   days: number,
   now: Date = new Date(),
-): Promise<Aggregates[]> {
+): Promise<Collection> {
   const since = windowSince(days, now);
   const firstReported = localDay(reportFrom(days, now));
 
@@ -296,9 +319,13 @@ export async function collectAggregates(
   // six metrics, so a sync that fires at the wrong moment reports nothing
   // instead of the partial truth it actually had.
   //
-  // A failed metric is OMITTED, never sent as zero. An absent day means "not
-  // synced" on the server and a zero means "you did not do it", and the whole
-  // verdict rests on that distinction.
+  // A failed metric is OMITTED, never sent as zero, AND REPORTED AS UNREAD.
+  // An absent day means "not synced" on the server and a zero means "you did
+  // not do it", and the whole verdict rests on that distinction. The unread
+  // flag carries it one step further: the server records a miss on a day the
+  // phone covered with no row, so a rejected query that quietly became an
+  // empty result let lib/sync.ts vouch for days it never read. Each metric
+  // now says whether HealthKit answered, and coverage is withheld otherwise.
   const settled = await Promise.allSettled([
     dailySums("HKQuantityTypeIdentifierStepCount", "count", since),
     dailySums("HKQuantityTypeIdentifierDistanceWalkingRunning", "m", since, (m) =>
@@ -312,6 +339,8 @@ export async function collectAggregates(
   ]);
 
   const [stepsR, distanceR, energyR, sleepR, workoutsR] = settled;
+  const fulfilled = (r: PromiseSettledResult<unknown> | undefined): boolean =>
+    r !== undefined && r.status === "fulfilled";
   const ok = <T,>(r: PromiseSettledResult<T> | undefined, fallback: T): T =>
     r !== undefined && r.status === "fulfilled" ? r.value : fallback;
 
@@ -320,6 +349,16 @@ export async function collectAggregates(
   const activeCalories = ok(energyR, [] as DayValue[]);
   const sleep = ok(sleepR, { hours: [] as DayValue[], efficiency: [] as DayValue[] });
   const workouts = ok(workoutsR, [] as DayValue[]);
+
+  const read: Record<Metric, boolean> = {
+    steps: fulfilled(stepsR),
+    distance_km: fulfilled(distanceR),
+    active_calories: fulfilled(energyR),
+    // One query, two metrics: they are read or unread together.
+    sleep_hours: fulfilled(sleepR),
+    sleep_efficiency: fulfilled(sleepR),
+    workouts: fulfilled(workoutsR),
+  };
 
   const all: Aggregates[] = [
     { metric: "steps", days: steps },
@@ -333,7 +372,8 @@ export async function collectAggregates(
     { metric: "workouts", days: workouts },
   ];
   // Day strings are YYYY-MM-DD, so string order is calendar order.
-  return all
+  const aggregates = all
     .map((a) => ({ metric: a.metric, days: a.days.filter((d) => d.day >= firstReported) }))
     .filter((a) => a.days.length > 0);
+  return { aggregates, read };
 }

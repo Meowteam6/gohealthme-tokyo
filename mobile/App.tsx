@@ -9,7 +9,10 @@
 //
 // The screen never claims success on its own. iOS does not tell an app what
 // the user granted on the HealthKit sheet, so the only honest proof is how
-// many days the server says it stored, and that is what is shown.
+// many days the server says it stored, and that is what is shown. A sync the
+// server answered with nothing stored and nothing covered gets one plain
+// line pointing at Settings, never a silent success; a read HealthKit
+// refused outright gets one line and a retry.
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -37,9 +40,16 @@ import {
   saveConnected,
   savePairing,
 } from "./lib/pairing-store";
-import { syncNow, type SyncOutcome } from "./lib/sync";
+import { syncNotice, syncNow, type SyncOutcome } from "./lib/sync";
 
 const SYNC_DAYS = 30;
+
+/**
+ * The newest sync that landed, and whether this screen asked for it. A
+ * background wake also reports here; its outcome drives the headline, but
+ * the Settings line is only shown for a sync the person was waiting on.
+ */
+type LastSync = { outcome: SyncOutcome; manual: boolean };
 
 /** How a failed step is retried: the same button, in place. */
 type Failure = { message: string; retry: "pair" | "connect" | "sync" };
@@ -66,7 +76,7 @@ export default function App(): React.JSX.Element {
   // asked to pair a different wallet.
   const [repairing, setRepairing] = useState(false);
   const [busy, setBusy] = useState<"pairing" | "connecting" | "syncing" | null>(null);
-  const [last, setLast] = useState<SyncOutcome | null>(null);
+  const [last, setLast] = useState<LastSync | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [available, setAvailable] = useState<boolean | null>(null);
 
@@ -124,8 +134,10 @@ export default function App(): React.JSX.Element {
       setBusy("syncing");
       setFailure(null);
       try {
-        setLast(await syncNow(current.deviceToken, SYNC_DAYS));
+        setLast({ outcome: await syncNow(current.deviceToken, SYNC_DAYS), manual: true });
       } catch (err) {
+        // HealthUnreadableError lands here too: its message is the one line
+        // the person needs, and the retry is the same button.
         if (err instanceof NotPairedError) {
           await revoked();
         } else {
@@ -143,7 +155,7 @@ export default function App(): React.JSX.Element {
     async (current: Pairing): Promise<void> => {
       if (listener.current === null) {
         listener.current = createBackgroundListener({
-          onSynced: setLast,
+          onSynced: (outcome) => setLast({ outcome, manual: false }),
           onError: (err) => {
             if (err instanceof NotPairedError) void revoked();
             else console.warn("[background]", describe(err));
@@ -226,6 +238,10 @@ export default function App(): React.JSX.Element {
 
   const showPairForm = pairing === null || repairing;
   const codeReady = code.trim().length >= 8;
+  const stored = last?.outcome.result.stored ?? 0;
+  // One line under the headline, only for a sync this screen asked for and
+  // only while no error is showing in its place.
+  const notice = last !== null && last.manual && failure === null ? syncNotice(last.outcome) : null;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -290,9 +306,9 @@ export default function App(): React.JSX.Element {
           <View style={styles.card}>
             <Text style={styles.headline}>
               {last !== null
-                ? last.result.stored > 0
-                  ? `Synced ${last.daysWithData} days for ${shortAddress(pairing.address)}`
-                  : `Nothing to sync yet for ${shortAddress(pairing.address)}`
+                ? stored > 0
+                  ? `Synced ${last.outcome.daysWithData} days for ${shortAddress(pairing.address)}`
+                  : `Nothing synced for ${shortAddress(pairing.address)}`
                 : busy === "syncing"
                   ? "Syncing Apple Health"
                   : busy === "connecting"
@@ -302,12 +318,8 @@ export default function App(): React.JSX.Element {
                       : "Allow Apple Health to finish"}
             </Text>
 
-            {last !== null && last.result.stored === 0 && failure === null && (
-              <Text style={styles.hint}>
-                Apple Health had no data for the last {SYNC_DAYS} days, the Watch has
-                not synced to this iPhone yet, or access was not allowed. Check the
-                Health app, then try again.
-              </Text>
+            {notice !== null && (
+              <Text style={stored === 0 ? styles.errorLine : styles.hint}>{notice}</Text>
             )}
 
             {failure !== null && <Text style={styles.errorLine}>{failure.message}</Text>}
@@ -322,7 +334,7 @@ export default function App(): React.JSX.Element {
               <Pressable style={styles.button} onPress={() => void connect(pairing)}>
                 <Text style={styles.buttonText}>Allow Apple Health</Text>
               </Pressable>
-            ) : last !== null && last.result.stored === 0 ? (
+            ) : last !== null && stored === 0 ? (
               <Pressable style={styles.button} onPress={() => void sync(pairing)}>
                 <Text style={styles.buttonText}>Try again</Text>
               </Pressable>

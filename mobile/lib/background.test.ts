@@ -57,7 +57,13 @@ const SLEEP = "HKCategoryTypeIdentifierSleepAnalysis";
 const WORKOUTS = "HKWorkoutTypeIdentifier";
 
 function outcome() {
-  return { sent: 1, daysWithData: 1, coveredDays: ["2026-10-06"], result: { stored: 1 } };
+  return {
+    sent: 1,
+    daysWithData: 1,
+    coveredDays: ["2026-10-06"],
+    unread: [],
+    result: { stored: 1, covered: 1 },
+  };
 }
 
 beforeEach(() => {

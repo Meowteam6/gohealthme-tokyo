@@ -41,7 +41,10 @@ vi.mock("@kingstinct/react-native-healthkit", () => ({
 import { collectAggregates, READ_TYPES, requestPermissions } from "./healthkit";
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  // reset, not clear: several tests install a persistent mockImplementation
+  // and clearAllMocks keeps it, so an earlier test's steps leaked into a
+  // later "nothing at all" case. reset restores the vi.fn defaults above.
+  vi.resetAllMocks();
 });
 
 describe("requestPermissions", () => {
@@ -140,7 +143,12 @@ describe("collectAggregates call shapes", () => {
     }
   });
 
-  it("drops a metric whose query throws without losing the others", async () => {
+  it("drops a metric whose query throws without losing the others, and reports it unread", async () => {
+    // THE MONEY BUG THIS PINS. A rejected query used to become an empty
+    // result, indistinguishable from "answered, found nothing". The sync
+    // then vouched for the whole window and the server recorded a miss on
+    // a workouts day the phone never read. The caller must be able to tell
+    // the two apart, so each metric says whether HealthKit answered.
     hk.queryWorkoutSamples.mockRejectedValueOnce(new Error("errorDatabaseInaccessible"));
     hk.queryStatisticsCollectionForQuantity.mockImplementation(async (id: unknown) =>
       id === "HKQuantityTypeIdentifierStepCount"
@@ -148,10 +156,57 @@ describe("collectAggregates call shapes", () => {
         : [],
     );
 
-    const aggregates = await collectAggregates(7);
+    const { aggregates, read } = await collectAggregates(7);
 
     expect(aggregates.map((a) => a.metric)).toEqual(["steps"]);
     expect(aggregates[0]?.days).toEqual([{ day: "2026-10-05", value: 4200 }]);
+    expect(read.workouts).toBe(false);
+    expect(read.steps).toBe(true);
+    // Answered and empty is still answered: a real zero the phone may vouch for.
+    expect(read.distance_km).toBe(true);
+    expect(read.active_calories).toBe(true);
+    expect(read.sleep_hours).toBe(true);
+    expect(read.sleep_efficiency).toBe(true);
+  });
+
+  it("a rejected sleep query marks both sleep metrics unread", async () => {
+    hk.queryCategorySamples.mockRejectedValueOnce(new Error("errorDatabaseInaccessible"));
+
+    const { read } = await collectAggregates(7);
+
+    expect(read.sleep_hours).toBe(false);
+    expect(read.sleep_efficiency).toBe(false);
+    expect(read.steps).toBe(true);
+    expect(read.workouts).toBe(true);
+  });
+
+  it("every query rejected: nothing aggregated and every metric unread", async () => {
+    // A locked phone. HealthKit is sealed behind the passcode and all five
+    // queries throw. The phone knows nothing about any day.
+    const locked = new Error("errorDatabaseInaccessible");
+    hk.queryCategorySamples.mockRejectedValueOnce(locked);
+    hk.queryWorkoutSamples.mockRejectedValueOnce(locked);
+    // Three cumulative quantities, three queries. Once each, so nothing
+    // leaks into the next test.
+    hk.queryStatisticsCollectionForQuantity
+      .mockRejectedValueOnce(locked)
+      .mockRejectedValueOnce(locked)
+      .mockRejectedValueOnce(locked);
+
+    const { aggregates, read } = await collectAggregates(7);
+
+    expect(aggregates).toEqual([]);
+    expect(Object.values(read).every((v) => v === false)).toBe(true);
+    expect(Object.keys(read).sort()).toEqual(
+      ["steps", "distance_km", "active_calories", "sleep_hours", "sleep_efficiency", "workouts"].sort(),
+    );
+  });
+
+  it("every query answered and empty: nothing aggregated, every metric read", async () => {
+    const { aggregates, read } = await collectAggregates(7);
+
+    expect(aggregates).toEqual([]);
+    expect(Object.values(read).every((v) => v === true)).toBe(true);
   });
 
   it("reads one margin day before the first reported day, and never reports the margin day", async () => {
@@ -182,7 +237,7 @@ describe("collectAggregates call shapes", () => {
         : [],
     );
 
-    const aggregates = await collectAggregates(2, now);
+    const { aggregates } = await collectAggregates(2, now);
 
     // The read itself starts on the margin day.
     const sleepOptions = hk.queryCategorySamples.mock.calls[0]?.[1] as {
@@ -206,7 +261,7 @@ describe("collectAggregates call shapes", () => {
       { value: 3, startDate: new Date("2026-10-04T14:00:00"), endDate: new Date("2026-10-04T14:20:00") },
     ]);
 
-    const aggregates = await collectAggregates(7);
+    const { aggregates } = await collectAggregates(7);
 
     const hours = aggregates.find((a) => a.metric === "sleep_hours");
     expect(hours?.days).toEqual([{ day: "2026-10-04", value: 0.33, partial: true }]);

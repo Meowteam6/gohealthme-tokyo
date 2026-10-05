@@ -24,7 +24,17 @@
 //      address the token was issued for, never an address the phone names.
 //
 // ONE PHONE PER WALLET. Pairing again revokes the previous device token, so a
-// lost or replaced phone is cut off by pairing the new one.
+// lost or replaced phone is cut off by pairing the new one. Disconnecting
+// Apple revokes it too (revokeDevicesFor): deleting the stored days while the
+// phone kept a live token let its next background wake refill the table after
+// the person asked to be forgotten. The phone's next post gets the 401 "pair
+// again" answer and returns to its pair screen.
+//
+// THE WEB CAN SEE THAT A PHONE EXISTS (deviceExistsFor). Between redeeming the
+// code and the first stored day there is nothing in the data table, and
+// reading that as "not linked" made the web wait out the code's ten minutes
+// and say it expired. A device record for the wallet, confirmed or not, is
+// the fact the awaiting-first-sync hold is built on.
 //
 // PROVIDER CHOICE IS NOT MADE HERE. Redeeming a code switches nothing: a
 // wallet with a working Junction or WHOOP link keeps it until the phone has
@@ -204,6 +214,45 @@ export async function confirmDevice(token: string): Promise<void> {
   const record = await readJson<DeviceRecord | null>(deviceKey(token), null);
   if (record === null) return;
   await writeJson(deviceKey(token), { ...record, confirmed: true });
+}
+
+/** The hash of the token the wallet's current phone holds, or null. */
+async function currentTokenHash(address: string): Promise<string | null> {
+  const pointer = await readJson<{ tokenHash?: unknown } | null>(
+    currentDeviceKey(address),
+    null,
+  );
+  return typeof pointer?.tokenHash === "string" ? pointer.tokenHash : null;
+}
+
+/**
+ * Whether a phone holds a token for this wallet, confirmed or not. True from
+ * the moment a code is redeemed until the device is revoked; minting a code
+ * alone is never a device. Never throws for "no".
+ */
+export async function deviceExistsFor(address: string): Promise<boolean> {
+  const tokenHash = await currentTokenHash(address);
+  if (tokenHash === null) return false;
+  const record = await readJson<DeviceRecord | null>(`apple-device:${tokenHash}`, null);
+  return (
+    record !== null &&
+    typeof record.address === "string" &&
+    record.address.toLowerCase() === address.toLowerCase()
+  );
+}
+
+/**
+ * Cut off every phone paired to this wallet: the device record and the
+ * per-wallet pointer both go, so the token fails deviceForToken on its next
+ * post and the wallet reads as having no device. Idempotent; a wallet that
+ * never paired is already in this state. Pairing again afterwards works.
+ */
+export async function revokeDevicesFor(address: string): Promise<void> {
+  const tokenHash = await currentTokenHash(address);
+  if (tokenHash !== null) {
+    await deleteKey(`apple-device:${tokenHash}`);
+  }
+  await deleteKey(currentDeviceKey(address));
 }
 
 /** The device token carried as `Authorization: Bearer <token>`, or null. */

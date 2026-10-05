@@ -59,6 +59,8 @@ export async function redeemCode(code: string): Promise<Pairing> {
 export interface SyncResult {
   /** How many day rows the server actually stored. */
   stored: number;
+  /** How many covered days the server recorded. Zero when it declined coverage. */
+  covered: number;
 }
 
 export interface AggregateRow {
@@ -115,5 +117,8 @@ export async function postAggregates(
     throw new Error(await readError(res, `sync failed (${res.status})`));
   }
   const json = (await res.json().catch(() => ({}))) as Partial<SyncResult>;
-  return { stored: typeof json.stored === "number" ? json.stored : 0 };
+  return {
+    stored: typeof json.stored === "number" ? json.stored : 0,
+    covered: typeof json.covered === "number" ? json.covered : 0,
+  };
 }

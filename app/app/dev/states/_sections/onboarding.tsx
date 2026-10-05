@@ -84,7 +84,7 @@ const IPHONE_ONLY_DEVICE = { provider: "apple", label: "Apple Health", metrics: 
 const INSTALL_URL = "https://testflight.apple.com/join/gohealthme";
 const PAIR_CODE = { code: "7KQ4MN9P", deepLink: "gohealthme://pair?code=7KQ4MN9P" };
 const PAIR_STEPS: PhoneSteps = {
-  instructions: "Apple Health can only be read on your iPhone. Open the GoHealthMe app there and enter this code.",
+  instructions: "Apple Health is read on your iPhone. Open the GoHealthMe app there and allow Apple Health when it asks.",
   pairing: { ...PAIR_CODE, expiresAt: Date.UTC(2027, 0, 1, 23, 30) },
   installUrl: INSTALL_URL,
 };

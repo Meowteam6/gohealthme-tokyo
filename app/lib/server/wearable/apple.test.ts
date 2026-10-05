@@ -536,6 +536,56 @@ describe("disconnect", () => {
   });
 });
 
+describe("the sync route and the real store on a read the phone could not finish", () => {
+  // The phone withholds coverage when any HealthKit query threw
+  // (mobile/lib/sync.ts) and does not post at all when nothing answered.
+  // Pinned here from the server's side, through the real route and the real
+  // store with only Supabase stubbed: a covered day is a promise the miss
+  // rule forfeits a stake on, so a batch that carries rows but vouches for
+  // no day must land the rows and write nothing to wearable_sync_days, and
+  // a batch with no row of any metric must write nothing anywhere.
+  function syncWith(token: string, body: Record<string, unknown>): Request {
+    return new Request("https://app.test/api/wearable/apple/sync", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("rows with an explicitly empty coveredDays store the rows and no covered day", async () => {
+    const { POST } = await import("@/app/api/wearable/apple/sync/route");
+    const token = await pairPhone(freshWallet());
+    const { calls } = supabaseWith(() => []);
+
+    const res = await POST(
+      syncWith(token, {
+        days: [{ metric: "steps", day: yesterday(), value: 8000 }],
+        tzOffsetSec: 32400,
+        coveredDays: [],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ stored: 1, covered: 0 });
+    const upserts = calls.filter((c) => c.op === "upsert").map((c) => c.table);
+    expect(upserts).toEqual(["wearable_days"]);
+  });
+
+  it("a batch with no row of any metric writes to neither table, whatever it claims to cover", async () => {
+    const { POST } = await import("@/app/api/wearable/apple/sync/route");
+    const token = await pairPhone(freshWallet());
+    const { calls } = supabaseWith(() => []);
+
+    const res = await POST(
+      syncWith(token, { days: [], tzOffsetSec: 0, coveredDays: [yesterday()] }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ stored: 0, covered: 0 });
+    expect(calls.some((c) => c.op === "upsert")).toBe(false);
+  });
+});
+
 describe("daysWithSource, the field that stops impossible advice", () => {
   it("counts a synced day even when this metric has no value on it", async () => {
     // The defect this pins: a phone that syncs steps faithfully but produces

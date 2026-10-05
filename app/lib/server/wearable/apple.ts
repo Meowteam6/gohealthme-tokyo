@@ -14,9 +14,12 @@
 //   1. The link cannot end at a browser consent page, so startLink returns
 //      WearableLink kind "app" and hands the user to the phone. The interface
 //      already carries that shape.
-//   2. There is no credential to check, so isConnected asks whether data has
-//      ever arrived. For a pushed provider the first sync IS the evidence that
-//      a phone is really attached to this wallet.
+//   2. There is no credential to check, so isConnected asks whether a phone is
+//      attached: one holds a device token for this wallet (it redeemed a
+//      pairing code, apple-pairing.ts), or data has arrived from one. Tapping
+//      Set up creates neither. Between redeeming and the first stored day the
+//      wallet is linked and awaiting its first sync, and the web holds on that
+//      instead of waiting out the pairing code and calling it expired.
 //
 // WHAT WE DELIBERATELY NEVER RECEIVE
 //
@@ -74,7 +77,11 @@ import {
   countQualifyingDays,
   daySeries,
 } from "@/lib/server/wearable/streak";
-import { mintPairingCode } from "@/lib/server/wearable/apple-pairing";
+import {
+  deviceExistsFor,
+  mintPairingCode,
+  revokeDevicesFor,
+} from "@/lib/server/wearable/apple-pairing";
 import type {
   MetricProgress,
   MissEvidence,
@@ -120,11 +127,11 @@ export function appleAppAvailable(): boolean {
  * charged, and has anything of mine been read.
  */
 const APP_HANDOFF_INSTRUCTIONS =
-  "Apple Health can only be read on your iPhone. Open the GoHealthMe app " +
-  "there, enter this code, and allow Apple Health when it asks. Your runs " +
-  "switch to Apple Health once the first day arrives from the phone; until " +
-  "then anything you already connected keeps counting. Nothing was charged " +
-  "and no health data has been read yet.";
+  "Apple Health is read on your iPhone. Open the GoHealthMe app there and " +
+  "allow Apple Health when it asks. Your challenges switch to Apple Health " +
+  "once the first day arrives from the phone; until then whatever you " +
+  "already connected keeps counting. Nothing was charged and no health data " +
+  "has been read yet.";
 
 /**
  * Where a player gets the iPhone app (a TestFlight public link during the
@@ -139,18 +146,23 @@ export function appleInstallUrl(): string | null {
 /**
  * Where a wallet sits in the Apple link, in the shared vocabulary.
  *
- * "not-linked" nothing has ever arrived from a phone for this wallet
- * "linked"     days have arrived; the watch is reporting
+ * "not-linked"          no phone holds a token for this wallet and nothing
+ *                       has ever arrived from one
+ * "awaiting-first-sync" a phone redeemed a pairing code and no day has been
+ *                       stored yet: the Health sheet is still up, was denied,
+ *                       or the phone has simply not synced. Waiting, or
+ *                       opening the app, fixes it
+ * "linked"              days have arrived; the watch is reporting
  *
- * Apple never reports "awaiting-first-sync": nothing is created server-side
- * when someone taps Set up, so there is no in-between to be in. Either a phone
- * has pushed or it has not. "metric-unavailable" is decided per goal by
- * daysWithSource, not here.
+ * Tapping Set up creates nothing server-side, so it moves nothing here. The
+ * in-between begins when the phone redeems the code. "metric-unavailable" is
+ * decided per goal by daysWithSource, not here.
  */
-export type AppleLinkState = "not-linked" | "linked";
+export type AppleLinkState = "not-linked" | "awaiting-first-sync" | "linked";
 
 export async function appleLinkState(address: string): Promise<AppleLinkState> {
-  return (await hasAnyAppleData(address)) ? "linked" : "not-linked";
+  if (await hasAnyAppleData(address)) return "linked";
+  return (await deviceExistsFor(address)) ? "awaiting-first-sync" : "not-linked";
 }
 
 /**
@@ -237,13 +249,17 @@ export const appleProvider: WearableProvider = {
     };
   },
 
-  isConnected(address: string): Promise<boolean> {
+  async isConnected(address: string): Promise<boolean> {
     // For a pushed provider there is no credential to validate, so the honest
-    // question is whether a phone has ever reported. Answering "yes" because
-    // someone tapped a button would tell a person who never installed the app
-    // that their watch is connected, and then read zero days and say they
-    // missed the goal.
-    return hasAnyAppleData(address);
+    // question is whether a phone is attached: data has arrived from one, or
+    // one holds a device token for this wallet (it redeemed a pairing code).
+    // Answering "yes" because someone tapped Set up would tell a person who
+    // never installed the app that their watch is connected; neither of these
+    // is created by the tap. A paired phone with no rows yet reads as
+    // awaiting its first sync everywhere downstream (daysWithSource 0,
+    // capability awaiting-sync), never as a miss on zero days.
+    if (await hasAnyAppleData(address)) return true;
+    return deviceExistsFor(address);
   },
 
   /**
@@ -255,16 +271,23 @@ export const appleProvider: WearableProvider = {
    * what lets the join gate say so BEFORE somebody stakes on a sleep pool
    * instead of after.
    *
-   * TWO WAYS TO GET THIS WRONG, BOTH OF WHICH TAKE POOLS AWAY FROM SOMEONE:
+   * THREE WAYS TO GET THIS WRONG, EACH OF WHICH MISLEADS SOMEONE AT THE JOIN:
    *
    * Returning [] when nothing has synced yet. An empty array means "this
    * device produced none of these", which the gate honours by hiding every
-   * wearable pool. A wallet that linked ten minutes ago has observed nothing
-   * and must fall back to the declared list, so it gets null.
+   * wearable challenge.
+   *
+   * Returning "declared" for a phone that has paired and not synced. Declared
+   * is the whole Apple list, so the pairing panel would say the watch is
+   * paired and counts everything before a single day exists, and an iPhone
+   * with no Watch would be offered sleep. A paired phone with no rows is
+   * "awaiting-sync": linked, and the join waits for the first day to show
+   * what this device measures. Declared stays the answer only when no phone
+   * is paired at all, where there is nothing to wait for.
    *
    * Returning [] on a query failure. Narrowing the gate because our own
-   * database was unreachable takes pools away for a reason that has nothing
-   * to do with the user's device. Errors are null too.
+   * database was unreachable takes challenges away for a reason that has
+   * nothing to do with the user's device. Errors are "unknown".
    */
   async observedMetrics(address: string): Promise<ObservedCapability> {
     // The same horizon the phone collects and the verdict reads. Asking a
@@ -283,10 +306,16 @@ export const appleProvider: WearableProvider = {
       return { kind: "unknown" };
     }
 
-    // DECLARED, not observed-with-an-empty-list. Nothing has arrived yet, so
-    // there is nothing to narrow, and an empty observed list would blank the
-    // whole board of a wallet that linked ten minutes ago.
-    if (observed.length === 0) return { kind: "declared" };
+    // Nothing has arrived yet. A paired phone is AWAITING-SYNC: the join
+    // holds until its first day says what the device measures (the panel
+    // reads this as "waiting on its first sync"). No phone at all is
+    // DECLARED, never observed-with-an-empty-list, which would blank the
+    // whole board of a wallet with nothing to wait for.
+    if (observed.length === 0) {
+      return (await deviceExistsFor(address))
+        ? { kind: "awaiting-sync" }
+        : { kind: "declared" };
+    }
 
     // Intersect with what this provider declares, so a row written by an older
     // build under a retired metric name cannot widen the gate.
@@ -519,8 +548,12 @@ export const appleProvider: WearableProvider = {
 
   async disconnect(address: string): Promise<void> {
     // Apple CAN be disconnected, unlike Junction, because the data is ours to
-    // delete. Deleting it also makes isConnected answer false again, so the
-    // user is not left connected to something they asked us to forget.
+    // delete and the phone is ours to cut off. The phone first: deleting the
+    // rows while its token stayed valid let the next background wake refill
+    // the table after the person asked us to forget them. With the token
+    // revoked the phone's next post is refused and it returns to its pair
+    // screen; with the rows gone isConnected answers false again.
+    await revokeDevicesFor(address);
     await deleteAllAppleData(address);
   },
 };

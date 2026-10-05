@@ -136,8 +136,46 @@ describe("availableProviders", () => {
 });
 
 describe("providerIdFor", () => {
+  afterEach(() => {
+    appleStore.on = false;
+  });
+
   it("defaults to junction when nothing is chosen", async () => {
     expect(await providerIdFor(nextAddress())).toBe("junction");
+  });
+
+  // The most common Apple user: their FIRST wearable is Apple. The stored
+  // choice is only written on the first stored day, so between redeeming the
+  // code and that first sync nothing would name Apple, the wallet would be
+  // read through Junction, and the awaiting-sync hold could never show.
+  it("serves a wallet whose only link is a redeemed iPhone through apple, before its first day", async () => {
+    appleStore.on = true;
+    vi.stubEnv("APPLE_APP_AVAILABLE", "1");
+    const { mintPairingCode, redeemPairingCode } = await import("@/lib/server/wearable/apple-pairing");
+    const address = nextAddress();
+    const minted = await mintPairingCode(address);
+    const redeemed = await redeemPairingCode(minted.code);
+    expect(redeemed.ok).toBe(true);
+    expect(await storedProviderId(address)).toBeNull();
+    expect(await providerIdFor(address)).toBe("apple");
+  });
+
+  it("keeps a stored choice ahead of a redeemed iPhone", async () => {
+    appleStore.on = true;
+    vi.stubEnv("APPLE_APP_AVAILABLE", "1");
+    const { mintPairingCode, redeemPairingCode } = await import("@/lib/server/wearable/apple-pairing");
+    const address = nextAddress();
+    await setProviderId(address, "whoop");
+    await redeemPairingCode((await mintPairingCode(address)).code);
+    expect(await providerIdFor(address)).toBe("whoop");
+  });
+
+  it("ignores a redeemed iPhone while Apple is not open on the build", async () => {
+    vi.stubEnv("APPLE_APP_AVAILABLE", "");
+    const { mintPairingCode, redeemPairingCode } = await import("@/lib/server/wearable/apple-pairing");
+    const address = nextAddress();
+    await redeemPairingCode((await mintPairingCode(address)).code);
+    expect(await providerIdFor(address)).toBe("junction");
   });
 
   it("honours a stored choice", async () => {

@@ -264,8 +264,10 @@ export interface WearableProvider {
   /**
    * Per-local-day evidence for the miss rule, from `fromISO` (a UTC date,
    * inclusive) to now. Optional: a provider that cannot place its data on
-   * the wearer's calendar (Apple rows carry no timezone) does not implement
-   * it, and SPOTTER then never records a miss for its wallets.
+   * the wearer's calendar does not implement it, and SPOTTER then never
+   * records a miss for its wallets. All three current providers implement
+   * it; Apple does so from the local days and UTC offset the phone posts
+   * with each sync (apple.ts getMissEvidence).
    */
   getMissEvidence?(
     address: string,
