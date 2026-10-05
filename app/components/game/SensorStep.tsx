@@ -23,6 +23,7 @@ import {
   type ProviderOption,
   type WearableProviderId,
 } from "@/lib/wearable-connect";
+import PhonePairPanel, { type PhoneSteps } from "@/components/PhonePairPanel";
 import {
   WEARABLE_METRICS,
   metricLabel,
@@ -75,7 +76,7 @@ function PairButton({
 }: {
   address: `0x${string}`;
   option: ProviderOption;
-  onPhoneSteps: (steps: string) => void;
+  onPhoneSteps: (steps: PhoneSteps) => void;
   onBlocked: (url: string) => void;
   onError: () => void;
 }) {
@@ -93,7 +94,8 @@ function PairButton({
         void startWearableLink(address, requestAuth, option.id, currentReturnPath())
           .catch((err: unknown) => {
             if (err instanceof PopupBlockedError) onBlocked(err.linkUrl);
-            else if (err instanceof PhoneLinkRequiredError) onPhoneSteps(err.instructions);
+            else if (err instanceof PhoneLinkRequiredError)
+              onPhoneSteps({ instructions: err.instructions, pairing: err.pairing, installUrl: err.installUrl });
             else onError();
           })
           .finally(() => setOpening(false));
@@ -137,7 +139,7 @@ function SensorStepBody({
   onSkip?: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [phoneSteps, setPhoneSteps] = useState<string | null>(null);
+  const [phoneSteps, setPhoneSteps] = useState<PhoneSteps | null>(null);
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [declined, setDeclined] = useState(false);
@@ -293,11 +295,7 @@ function SensorStepBody({
         ))}
       <p className="m-0 text-[0.8125rem] text-haze">{COMING_LINE}</p>
 
-      {phoneSteps !== null ? (
-        <Notice tone="info" role="status">
-          {phoneSteps}
-        </Notice>
-      ) : null}
+      {phoneSteps !== null ? <PhonePairPanel steps={phoneSteps} /> : null}
       {blockedUrl !== null ? (
         <a
           href={blockedUrl}

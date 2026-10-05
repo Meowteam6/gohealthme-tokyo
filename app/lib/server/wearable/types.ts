@@ -176,7 +176,19 @@ export type WearableLink =
    * exists, and `instructions` is what to tell a user reading this on a
    * desktop, where the deep link cannot help them.
    */
-  | { kind: "app"; linkUrl: string | null; instructions: string };
+  | {
+      kind: "app";
+      linkUrl: string | null;
+      instructions: string;
+      /**
+       * A one-time code the phone app redeems to learn which wallet it syncs
+       * for (Apple Health; see apple-pairing.ts). Absent for providers whose
+       * app signs in on its own.
+       */
+      pairing?: { code: string; deepLink: string; expiresAt: number };
+      /** Where to get the phone app, when the deployment names one. */
+      installUrl?: string | null;
+    };
 
 /**
  * One health-data integration.

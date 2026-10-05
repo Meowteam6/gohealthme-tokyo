@@ -1,6 +1,7 @@
 // POST /api/wearable/apple/sync
-// Body: { address, days: [{ metric, day, value }, ...] }
-// Returns: { stored }
+// Headers: Authorization: Bearer <device token>
+// Body: { days: [{ metric, day, value }, ...] }
+// Returns: { stored, address }
 //
 // The GoHealthMe iPhone app posts here. It reads HealthKit on device,
 // aggregates each calendar day, and sends the daily numbers. This is the only
@@ -13,11 +14,13 @@
 // takes a timestamped reading, so heart-rate series, sleep stage timings,
 // workout routes and GPS traces stay on the phone permanently.
 //
-// An unsigned post. What lands here decides whether a pool pays. Without the
-// signature anyone who knows a wallet address - and every address is public,
-// on chain and in this app's own participant lists - could post 20,000 steps a
-// day for a stranger and have SPOTTER pay out on it. The wallet signature is
-// the whole integrity story for this provider.
+// A post without a paired device token. What lands here decides whether a
+// pool pays. Without it anyone who knows a wallet address - and every address
+// is public, on chain and in this app's own participant lists - could post
+// 20,000 steps a day for a stranger and have SPOTTER pay out on it. The token
+// is issued only to a phone that redeemed a code the wallet's own signed-in
+// web session produced (lib/server/wearable/apple-pairing.ts), and the server
+// writes under the address the token was issued for, never one the phone names.
 //
 // A future day. A pool window that has not happened yet cannot be
 // pre-satisfied. Enforced here and again by a check constraint on the table
@@ -28,8 +31,6 @@
 // anything is written, so a malformed batch fails loudly rather than storing
 // half of itself.
 
-import { isAddress } from "viem";
-
 import {
   errorMessage,
   jsonError,
@@ -37,11 +38,15 @@ import {
   readJsonBody,
   safeError,
 } from "@/lib/server/http";
-import { requireAddressSignature } from "@/lib/server/wallet-auth";
 import { setProviderId } from "@/lib/server/wearable";
 import { appleConfigured } from "@/lib/server/wearable/apple";
 import { putDays } from "@/lib/server/wearable/apple-store";
 import { appleProvider } from "@/lib/server/wearable/apple";
+import {
+  confirmDevice,
+  deviceForToken,
+  readDeviceToken,
+} from "@/lib/server/wearable/apple-pairing";
 import type { WearableMetric } from "@/lib/server/wearable/types";
 
 /** A phone syncing a week of six metrics sends 42 rows; 400 is a month of slack. */
@@ -140,24 +145,19 @@ export async function POST(request: Request) {
       return jsonError(400, errorMessage(err));
     }
 
-    const { address, days } = body;
-    if (typeof address !== "string" || !isAddress(address)) {
-      return jsonError(400, "address must be a valid 0x address");
+    const { days } = body;
+
+    const token = readDeviceToken(request);
+    const device = token === null ? null : await deviceForToken(token);
+    if (token === null || device === null) {
+      // Unknown, revoked (the wallet paired another phone) or never paired.
+      // The phone turns this into "pair again", which is the only fix.
+      return jsonError(401, "This iPhone is not paired. Pair it again from the GoHealthMe website.");
     }
 
-    const auth = await requireAddressSignature(request, address);
-    if (!auth.ok) {
-      return jsonError(401, `Wallet signature required: ${auth.reason}`);
-    }
-
-    // Everything below writes under auth.address, the address RECOVERED from
-    // the signature, never the one submitted in the body. The two are proven
-    // equal one line above, so this changes no behaviour today. It is here so
-    // that a future edit which loosens the comparison, or adds a second way
-    // for an address to arrive, cannot turn this into the bug the WHOOP
-    // callback had: an address trusted because something adjacent to it was
-    // verified. The proven value is the only one this route acts on.
-    const owner = auth.address;
+    // Everything below writes under the address the token was ISSUED for.
+    // Nothing the phone sends can name a different wallet.
+    const owner = device.address;
 
     const parsed = parseDays(days);
     if (typeof parsed === "string") {
@@ -185,24 +185,32 @@ export async function POST(request: Request) {
       stored += await putDays(owner, metric, rows);
     }
 
-    // THIS is Apple's callback. The browser tap that started the link recorded
-    // nothing, deliberately: nothing confirms it, and a user who reads the
-    // instructions and closes the tab must not lose a working provider. Real
-    // data arriving from a phone that signed as this wallet is the first
-    // moment anything is proven, so the choice is recorded here.
+    // THIS is Apple's callback. Neither the browser tap nor redeeming the code
+    // recorded anything, deliberately: nothing confirmed them, and a player who
+    // pairs and never syncs must not lose a working Junction or WHOOP link.
+    // Real data arriving from the paired phone is the first proof, so the
+    // choice is recorded here - ONCE per pairing. A later sync must not record
+    // it again: a player who paired Apple and then picked WHOOP on the web
+    // would otherwise be flipped back to Apple by the phone's next sync.
+    // Pairing again is the way back to Apple.
     //
     // Failing to record must not fail the sync: the numbers are already stored
     // and the person's goal does not depend on which provider a dashboard
-    // prefers. Logged rather than thrown.
-    if (stored > 0) {
+    // prefers. Logged rather than thrown, and the device stays unconfirmed so
+    // the next sync tries again.
+    if (stored > 0 && !device.confirmed) {
       try {
         await setProviderId(owner, "apple");
+        await confirmDevice(token);
       } catch (err) {
         console.warn("[wearable/apple/sync] provider choice not recorded", err);
       }
     }
 
-    return Response.json({ stored }, { headers: { "cache-control": "no-store" } });
+    return Response.json(
+      { stored, address: owner },
+      { headers: { "cache-control": "no-store" } },
+    );
   } catch (err) {
     return jsonError(502, safeError(err, correlationId));
   }

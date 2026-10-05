@@ -365,6 +365,20 @@ export async function setNx(
   });
 }
 
+/** The value a setNx key holds, or null when it is absent or expired. */
+export async function getNx(key: string): Promise<string | null> {
+  if (redis !== null) {
+    // Read raw: @upstash/redis would JSON-parse a value that looks like JSON,
+    // and callers of setNx stored a string on purpose.
+    const value = await redis.get<unknown>(KEY_PREFIX + key);
+    if (value === null || value === undefined) return null;
+    return typeof value === "string" ? value : JSON.stringify(value);
+  }
+
+  const current = liveNxRecord(await readFileJson<NxRecord | null>(key, null));
+  return current === null ? null : current.value;
+}
+
 /** Presence check for a key written by setNx. */
 export async function existsKey(key: string): Promise<boolean> {
   if (redis !== null) {

@@ -85,6 +85,7 @@ All server-only. Nothing here is exposed to the browser.
 | `WHOOP_REDIRECT_URI` | for WHOOP | The exact absolute callback URL registered with WHOOP. See below. |
 | `WHOOP_TIMEOUT_MS` | optional | Defaults to 15000. |
 | `APPLE_APP_AVAILABLE` | optional | `1` offers Apple Health in the picker. Leave unset until the GoHealthMe iPhone app has a build real users can install; the sync endpoint works without it. |
+| `APPLE_APP_INSTALL_URL` | optional | An `https://` link to the iPhone app (TestFlight public link during the beta), shown beside the pairing code. |
 | `WEARABLE_TOKEN_KEY` | **whenever WHOOP is on** | 32 bytes, base64 or hex. Encrypts the per-wallet OAuth records at rest. Generate with `openssl rand -base64 32`. |
 
 `WEARABLE_TOKEN_KEY` has **no plaintext fallback by design**. A direct provider
@@ -201,7 +202,6 @@ Phone side, in `mobile/.env`:
 | Name | Required | What it is |
 |---|---|---|
 | `EXPO_PUBLIC_API_BASE` | yes | The GoHealthMe deployment the phone posts to. A Vercel preview URL works. |
-| `EXPO_PUBLIC_DEV_SIGNER_KEY` | pilot only | Signs the wallet-auth message before the embedded wallet is wired in. A well-known zero-value test key, never funded. Remove before real users. |
 
 ### The table
 
@@ -227,9 +227,27 @@ kept longer than it is useful is a liability, not a feature.
 4. `npx expo prebuild --clean`
 5. Build to a device: an EAS cloud build with the paid Apple Developer account,
    or `npx expo run:ios --device` with Xcode installed locally
-6. On the phone, enter the wallet, tap **Set up Apple Health**, allow the sheet
+6. On the website, pick Apple Health; it shows a one-time code. On the phone,
+   **Pair** with that code, then **Connect Apple Health** and allow the sheet
 7. Verify with the number on screen: it reports how many day rows the SERVER
    stored, not how many the phone sent
+
+### Pairing (how the server knows whose phone it is)
+
+The phone holds no wallet. The player's signed-in web session vouches for it:
+the Apple link (already wallet-signed) mints a ten-minute, single-use code;
+the app redeems it at `/api/wearable/apple/pair/redeem` for a device token
+kept in the iPhone Keychain; every sync sends `Authorization: Bearer <token>`
+and the server writes under the wallet the token was issued for, ignoring any
+address in the body. Only the token's hash is stored. One phone per wallet:
+pairing again revokes the previous token. Code: `app/lib/server/wearable/apple-pairing.ts`.
+
+**Provider overlap.** One provider per wallet decides every verdict
+(`lib/server/wearable/index.ts`). Redeeming a code switches nothing, so a
+paired-but-never-synced phone leaves a working Junction or WHOOP link in
+charge. The first sync that stores rows after a pairing records Apple, once;
+later syncs only store days, so a player who switches to WHOOP on the web is
+not flipped back by the next phone sync. Pairing again is the way back.
 
 ### Telling a real failure from the system working
 

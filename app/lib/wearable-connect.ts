@@ -59,11 +59,37 @@ export class PopupBlockedError extends Error {
  */
 export class PhoneLinkRequiredError extends Error {
   readonly instructions: string;
-  constructor(instructions: string) {
+  /** The one-time code the phone app redeems, when the provider pairs by code. */
+  readonly pairing: PhonePairing | null;
+  /** Where to get the phone app, when the deployment names one. */
+  readonly installUrl: string | null;
+  constructor(
+    instructions: string,
+    pairing: PhonePairing | null = null,
+    installUrl: string | null = null,
+  ) {
     super("This device is connected from the phone app, not the browser.");
     this.name = "PhoneLinkRequiredError";
     this.instructions = instructions;
+    this.pairing = pairing;
+    this.installUrl = installUrl;
   }
+}
+
+/** A pairing code minted for this wallet by the link route. */
+export interface PhonePairing {
+  code: string;
+  deepLink: string;
+  expiresAt: number;
+}
+
+function parsePairing(input: unknown): PhonePairing | null {
+  if (typeof input !== "object" || input === null) return null;
+  const { code, deepLink, expiresAt } = input as Record<string, unknown>;
+  if (typeof code !== "string" || typeof deepLink !== "string") return null;
+  if (!deepLink.startsWith("gohealthme://")) return null;
+  if (typeof expiresAt !== "number" || !Number.isFinite(expiresAt)) return null;
+  return { code, deepLink, expiresAt };
 }
 
 /** Where the connect flow wants to send the user. */
@@ -73,6 +99,8 @@ interface LinkTarget {
   kind: "oauth" | "app";
   linkUrl: string | null;
   instructions: string | null;
+  pairing: PhonePairing | null;
+  installUrl: string | null;
 }
 
 /**
@@ -105,6 +133,8 @@ export async function fetchLinkTarget(
     kind?: unknown;
     linkUrl?: unknown;
     instructions?: unknown;
+    pairing?: unknown;
+    installUrl?: unknown;
     error?: unknown;
   } | null;
 
@@ -137,6 +167,11 @@ export async function fetchLinkTarget(
     linkUrl,
     instructions:
       typeof body?.instructions === "string" ? body.instructions : null,
+    pairing: parsePairing(body?.pairing),
+    installUrl:
+      typeof body?.installUrl === "string" && body.installUrl.startsWith("https://")
+        ? body.installUrl
+        : null,
   };
 }
 
@@ -195,6 +230,8 @@ export async function startWearableLink(
     throw new PhoneLinkRequiredError(
       target.instructions ??
         "Open the GoHealthMe app on your phone to finish connecting this device.",
+      target.pairing,
+      target.installUrl,
     );
   }
 

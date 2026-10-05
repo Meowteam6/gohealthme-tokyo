@@ -17,6 +17,21 @@
       "ios": {
         "simulator": false
       }
+    },
+    "production": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE": "https://gohealthme-tokyo.vercel.app"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {}
     }
   }
 }
