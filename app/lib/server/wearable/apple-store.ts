@@ -20,16 +20,51 @@
 //
 // This is the only table in this database that holds health data at all, which
 // is why the migration and the table comment both say so out loud.
+//
+// COVERAGE, THE SECOND TABLE, AND WHY A MISS NEEDS IT
+//
+// A missing wearable_days row is ambiguous: "no workout that day" or "the
+// phone never read that day". The miss rule (lib/server/agent/miss.ts) refuses
+// to forfeit a stake on that ambiguity, so until coverage existed an Apple
+// player who missed was always refunded while a WHOOP player on the same
+// challenge lost the stake. wearable_sync_days records every LOCAL day the
+// phone read HealthKit for, data or not. A covered day with no row is a real
+// zero; an uncovered day is unknown, and unknown refunds. It holds no health
+// data: a covered day says nothing about what the person did.
+//
+// DAYS ARE THE PHONE'S LOCAL CALENDAR DAYS, END TO END
+//
+// The phone keys each aggregate to the wearer's local day (a night belongs to
+// the day it ended on their calendar), and posts the UTC offset it used. The
+// server never re-keys: it stores the day as named, and the miss rule places
+// the challenge window on that same calendar with the offset. Nothing here is
+// UTC except the bounds the server computes for its own reads.
 
 import { getSupabaseServiceRole } from "@/lib/server/supabase";
 import type { WearableMetric } from "@/lib/server/wearable/types";
 
 const TABLE = "wearable_days";
+const COVERAGE_TABLE = "wearable_sync_days";
 
 /** One device-reported day. `day` is the wearer's LOCAL calendar day. */
 export interface WearableDay {
   day: string;
   value: number;
+  /**
+   * True when the phone knows this day's value is incomplete (a sleep night
+   * the stitcher could not close). Counts toward a pass when the value clears
+   * the bar; never counts as a covered night for a miss.
+   */
+  partial?: boolean;
+}
+
+/** One local day the phone covered, as the miss rule reads it. */
+export interface CoveredDay {
+  day: string;
+  /** The wearer's UTC offset in seconds at that sync, or null from a phone
+   *  build that predates coverage. */
+  tzOffsetSec: number | null;
+  syncedAt: string;
 }
 
 /** Whether the Apple push path can store anything at all. */
@@ -45,6 +80,11 @@ export function appleStoreConfigured(): boolean {
  * evening number must replace the lunchtime one rather than colliding or
  * appending. The primary key (address, metric, day) is the conflict target.
  *
+ * `tzOffsetSec` is the wearer's UTC offset at this sync, stored beside every
+ * value so the miss rule can place a challenge window on their calendar; null
+ * from a phone build that predates it, which the miss rule reads as "cannot
+ * place", the refund-only behaviour Apple had before.
+ *
  * Returns the number of days written, so the route can report something true
  * rather than assuming success.
  */
@@ -52,6 +92,7 @@ export async function putDays(
   address: string,
   metric: WearableMetric,
   days: readonly WearableDay[],
+  tzOffsetSec: number | null = null,
 ): Promise<number> {
   if (days.length === 0) return 0;
   const supabase = getSupabaseServiceRole();
@@ -65,6 +106,8 @@ export async function putDays(
     day: d.day,
     value: d.value,
     source: "apple",
+    tz_offset_sec: tzOffsetSec,
+    partial: d.partial === true,
     updated_at: new Date().toISOString(),
   }));
 
@@ -97,7 +140,7 @@ export async function getDays(
 
   const { data, error } = await supabase
     .from(TABLE)
-    .select("day, value")
+    .select("day, value, partial")
     .eq("address", address.toLowerCase())
     .eq("metric", metric)
     .gte("day", startISO)
@@ -108,14 +151,92 @@ export async function getDays(
     throw new Error(`wearable_days read failed: ${error.message}`);
   }
 
-  return (data ?? []).map((row) => ({
-    day: String((row as { day: string }).day).slice(0, 10),
-    value: Number((row as { value: number | string }).value),
-  }));
+  return (data ?? []).map((row) => {
+    const r = row as { day: string; value: number | string; partial?: boolean | null };
+    return {
+      day: String(r.day).slice(0, 10),
+      value: Number(r.value),
+      partial: r.partial === true,
+    };
+  });
 }
 
 /**
- * The distinct UTC days this wallet reported ANY metric on, inside a window.
+ * Record the LOCAL days the phone read HealthKit for in this sync, data or
+ * not, with the offset it used. Upsert on (address, day): a re-sync refreshes
+ * synced_at and the offset rather than colliding. Duplicates in one batch
+ * collapse to one row.
+ *
+ * Returns the number of distinct days written.
+ */
+export async function putCoveredDays(
+  address: string,
+  days: readonly string[],
+  tzOffsetSec: number | null,
+): Promise<number> {
+  const distinct = [...new Set(days)];
+  if (distinct.length === 0) return 0;
+  const supabase = getSupabaseServiceRole();
+  if (supabase === null) {
+    throw new Error("Supabase service role is not configured");
+  }
+
+  const syncedAt = new Date().toISOString();
+  const rows = distinct.map((day) => ({
+    address: address.toLowerCase(),
+    day,
+    tz_offset_sec: tzOffsetSec,
+    synced_at: syncedAt,
+  }));
+
+  const { error } = await supabase
+    .from(COVERAGE_TABLE)
+    .upsert(rows, { onConflict: "address,day" });
+
+  if (error) {
+    throw new Error(`wearable_sync_days upsert failed: ${error.message}`);
+  }
+  return rows.length;
+}
+
+/**
+ * The local days the phone covered inside an inclusive window, newest day
+ * first. This is the miss rule's heartbeat for Apple: a covered day with no
+ * value is a real zero, an uncovered day is unknown. Empty when the store is
+ * not configured, which the miss rule reads as "cannot judge" (tz null).
+ */
+export async function getCoveredDays(
+  address: string,
+  startISO: string,
+  endISO: string,
+): Promise<CoveredDay[]> {
+  const supabase = getSupabaseServiceRole();
+  if (supabase === null) return [];
+
+  const { data, error } = await supabase
+    .from(COVERAGE_TABLE)
+    .select("day, tz_offset_sec, synced_at")
+    .eq("address", address.toLowerCase())
+    .gte("day", startISO)
+    .lte("day", endISO)
+    .order("day", { ascending: false });
+
+  if (error) {
+    throw new Error(`wearable_sync_days read failed: ${error.message}`);
+  }
+
+  return (data ?? []).map((row) => {
+    const r = row as { day: string; tz_offset_sec?: number | null; synced_at?: string };
+    return {
+      day: String(r.day).slice(0, 10),
+      tzOffsetSec: typeof r.tz_offset_sec === "number" ? r.tz_offset_sec : null,
+      syncedAt: String(r.synced_at ?? ""),
+    };
+  });
+}
+
+/**
+ * The distinct LOCAL days this wallet reported ANY metric on, inside a window.
  *
  * This is what separates "the phone has not synced" from "the phone synced and
  * this device does not measure that". A tracker that faithfully reports steps
@@ -236,5 +357,16 @@ export async function deleteAllAppleData(address: string): Promise<void> {
 
   if (error) {
     throw new Error(`wearable_days delete failed: ${error.message}`);
+  }
+
+  // Coverage is pushed by the same phone and means nothing without the days
+  // it covered, so forgetting the wallet forgets it too.
+  const coverage = await supabase
+    .from(COVERAGE_TABLE)
+    .delete()
+    .eq("address", address.toLowerCase());
+
+  if (coverage.error) {
+    throw new Error(`wearable_sync_days delete failed: ${coverage.error.message}`);
   }
 }

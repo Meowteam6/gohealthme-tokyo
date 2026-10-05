@@ -229,3 +229,84 @@ describe("naps must not carry a day", () => {
     expect(hours[0]?.value).toBeCloseTo(7.5, 1);
   });
 });
+
+describe("partial nights", () => {
+  // The server records a miss only on a day whose sleep it can trust as
+  // final. A day made only of a nap, a night the Watch stopped recording
+  // early, or a night still in progress when the phone synced is flagged
+  // partial so the server waits for a later sync instead of judging it.
+  const NOON_NEXT_DAY = new Date("2026-09-02T12:00:00").getTime();
+
+  it("does not flag a full night read after the person woke up", () => {
+    const { hours } = aggregateSleep(
+      [sample(CORE, "2026-09-01T23:00:00", "2026-09-02T07:00:00")],
+      NOON_NEXT_DAY,
+    );
+    expect(hours).toEqual([{ day: "2026-09-02", value: 8 }]);
+  });
+
+  it("flags a day whose only sleep is a nap", () => {
+    const { hours } = aggregateSleep(
+      [sample(CORE, "2026-09-02T14:00:00", "2026-09-02T14:20:00")],
+      new Date("2026-09-02T18:00:00").getTime(),
+    );
+    expect(hours).toEqual([{ day: "2026-09-02", value: 0.33, partial: true }]);
+  });
+
+  it("flags a night cut short, under three hours asleep", () => {
+    const { hours } = aggregateSleep(
+      [sample(CORE, "2026-09-01T23:00:00", "2026-09-02T01:30:00")],
+      NOON_NEXT_DAY,
+    );
+    expect(hours[0]?.partial).toBe(true);
+  });
+
+  it("does not flag a full night plus a nap on the same day", () => {
+    const { hours } = aggregateSleep(
+      [
+        sample(CORE, "2026-09-01T23:00:00", "2026-09-02T06:00:00"),
+        sample(CORE, "2026-09-02T14:00:00", "2026-09-02T14:20:00"),
+      ],
+      new Date("2026-09-02T18:00:00").getTime(),
+    );
+    expect(hours).toHaveLength(1);
+    expect(hours[0]?.partial).toBeUndefined();
+  });
+
+  it("flags a night that is still in progress when the phone syncs", () => {
+    // A background delivery at 03:30 sees four hours so far. That is not the
+    // night's total, and the server must not judge a seven-hour goal on it.
+    const { hours } = aggregateSleep(
+      [sample(CORE, "2026-09-01T23:00:00", "2026-09-02T03:00:00")],
+      new Date("2026-09-02T03:30:00").getTime(),
+    );
+    expect(hours[0]?.value).toBeCloseTo(4, 1);
+    expect(hours[0]?.partial).toBe(true);
+  });
+
+  it("marks efficiency partial on the same day, for the same reason", () => {
+    const { efficiency } = aggregateSleep(
+      [
+        sample(IN_BED, "2026-09-01T23:00:00", "2026-09-02T03:00:00"),
+        sample(CORE, "2026-09-01T23:00:00", "2026-09-02T03:00:00"),
+      ],
+      new Date("2026-09-02T03:30:00").getTime(),
+    );
+    expect(efficiency[0]?.partial).toBe(true);
+  });
+
+  it("treats a night as closed once the gap that ends a night has passed", () => {
+    const { hours } = aggregateSleep(
+      [sample(CORE, "2026-09-01T23:00:00", "2026-09-02T07:00:00")],
+      new Date("2026-09-02T09:01:00").getTime(),
+    );
+    expect(hours[0]?.partial).toBeUndefined();
+  });
+
+  it("defaults now to the clock, so a historical night is never partial by accident", () => {
+    const { hours } = aggregateSleep([
+      sample(CORE, "2020-01-01T23:00:00", "2020-01-02T07:00:00"),
+    ]);
+    expect(hours[0]?.partial).toBeUndefined();
+  });
+});

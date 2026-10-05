@@ -49,6 +49,18 @@ import { passVerdictReason, runProgress } from "@/lib/server/agent/miss";
 import type { ServiceQuote } from "@/lib/server/agent/x402";
 
 /**
+ * What makes a connected device's data arrive, per provider. Junction and
+ * WHOOP are pulled, so time is the fix. Nothing pulls Apple: the iPhone posts
+ * the day in the background on its own schedule, or whenever the GoHealthMe
+ * app is opened, so "give it a few minutes" is advice that may never come true.
+ */
+function syncAdvice(providerId: string): string {
+  return providerId === "apple"
+    ? "Open the GoHealthMe app on your iPhone, or wait for its next background sync, then check again."
+    : "Give it a few minutes to sync, then check again.";
+}
+
+/**
  * The read SPOTTER buys before verifying a wearable claim, named for the
  * provider that will actually serve it.
  *
@@ -161,8 +173,7 @@ export function wearableEvidenceSource(
             confidence: "low",
             reason:
               `Your wearable is connected but has not synced any ${spec.label} ` +
-              "data for this period yet. Give it a few minutes to sync, then " +
-              "check again.",
+              `data for this period yet. ${syncAdvice(provider.id)}`,
           },
         };
       }

@@ -418,6 +418,50 @@ describe("lockCopy", () => {
     }
   });
 
+  it("names the missing Watch when an iPhone without sleep data meets a sleep challenge", () => {
+    // Apple declares sleep, so this lock only ever comes from the observed
+    // narrowing: the phone synced and no sleep arrived. That is no Watch worn
+    // to bed, and the copy says so instead of "the hardware cannot".
+    for (const metric of ["sleep_hours", "sleep_efficiency"] as const) {
+      const copy = lockCopy(
+        { kind: "cannot-measure", metric, deviceLabel: "Apple Health" },
+        "/pools/7",
+      );
+      expect(copy.title).toBe("Your iPhone has no sleep data");
+      expect(copy.detail).toMatch(/Apple Watch worn to bed/);
+      expect(copy.detail).not.toMatch(/hardware/);
+      expect(copy.tone).toBe("hardware");
+      expect(copy.fix).toEqual({
+        kind: "link",
+        label: "Change my wearable",
+        href: "/character?step=sensor&next=%2Fpools%2F7",
+      });
+    }
+    // Whichever name the server gives the provider.
+    expect(
+      lockCopy({ kind: "cannot-measure", metric: "sleep_hours", deviceLabel: "Apple Watch" }, "/pools").title,
+    ).toBe("Your iPhone has no sleep data");
+  });
+
+  it("says Apple publishes no sleep score, for any Watch", () => {
+    const copy = lockCopy(
+      { kind: "cannot-measure", metric: "sleep_score", deviceLabel: "Apple Health" },
+      "/pools/7",
+    );
+    expect(copy.title).toBe("Apple Watch cannot measure this one");
+    expect(copy.detail).toMatch(/publishes no sleep score/);
+    expect(copy.detail).not.toMatch(/iPhone has no sleep data/);
+  });
+
+  it("keeps the generic hardware line for an Apple device on a non-sleep metric", () => {
+    const copy = lockCopy(
+      { kind: "cannot-measure", metric: "distance_km", deviceLabel: "Apple Health" },
+      "/pools/7",
+    );
+    expect(copy.title).toBe("Apple Health cannot measure this one");
+    expect(copy.detail).toMatch(/That is the hardware/);
+  });
+
   it("says a WHOOP cannot count steps and sends the player to change wearable", () => {
     const copy = lockCopy(
       { kind: "cannot-measure", metric: "steps", deviceLabel: "WHOOP" },

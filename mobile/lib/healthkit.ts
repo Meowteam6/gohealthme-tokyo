@@ -13,20 +13,34 @@
 // on the user's own phone and nowhere else, and the server holds six numbers a
 // day that say nothing about when you slept or where you ran.
 //
-// DAYS ARE THE WEARER'S LOCAL CALENDAR DAYS, NOT UTC.
+// DAYS ARE THE WEARER'S LOCAL CALENDAR DAYS, NOT UTC. See lib/days.ts for why;
+// the statistics collection is anchored at LOCAL midnight and every day string
+// is formatted in local time. HealthKit does the bucketing itself from that
+// anchor, which is also why we do not hand-roll day boundaries.
 //
-// This is the subtle one and it decides payouts. Junction keys a night on the
-// device's own calendar_date, so a Sydney wearer who wakes at 08:30 has that
-// night on the day they woke up. Keying the same night in UTC would file it on
-// the previous day, and the same person doing the same thing would fall in
-// different buckets depending on which provider read them - and at a pool
-// window's first and last day, that is the difference between being paid and
-// not.
-//
-// So the statistics collection is anchored at LOCAL midnight and every day
-// string is formatted in local time. HealthKit does the bucketing itself from
-// that anchor, which is also why we do not hand-roll day boundaries.
+// EVERY CALL HERE IS TYPED AGAINST THE LIBRARY, WITH NO CASTS. Two earlier
+// bugs lived behind `as never`: requestAuthorization was handed a bare array
+// where { toRead } is required, so the permission sheet never appeared, and
+// the sample queries omitted the required `limit`, so they threw and the
+// allSettled below dropped sleep and workouts in silence. A cast here is how
+// the next one hides; lib/healthkit.test.ts pins the call shapes.
 
+import {
+  CategoryValueSleepAnalysis,
+  ComparisonPredicateOperator,
+  isHealthDataAvailable,
+  queryCategorySamples,
+  queryStatisticsCollectionForQuantity,
+  queryWorkoutSamples,
+  requestAuthorization,
+  type ObjectTypeIdentifier,
+  type PredicateWithMetadataKey,
+  type QuantityTypeIdentifier,
+  type QueryStatisticsResponse,
+  type UnitForIdentifier,
+} from "@kingstinct/react-native-healthkit";
+
+import { localDay, localMidnight, reportFrom, windowSince } from "./days";
 import {
   aggregateSleep,
   SLEEP_ASLEEP_CORE,
@@ -36,19 +50,7 @@ import {
   SLEEP_AWAKE,
   SLEEP_IN_BED,
   type DayValue,
-  type SleepSample,
 } from "./sleep-aggregate";
-import {
-  CategoryValueSleepAnalysis,
-  ComparisonPredicateOperator,
-} from "@kingstinct/react-native-healthkit";
-import {
-  isHealthDataAvailable,
-  queryWorkoutSamples,
-  queryCategorySamples,
-  queryStatisticsCollectionForQuantity,
-  requestAuthorization,
-} from "@kingstinct/react-native-healthkit";
 
 /** Mirrors WearableMetric on the server. Names must match exactly. */
 export type Metric =
@@ -61,20 +63,20 @@ export type Metric =
 
 export type { DayValue } from "./sleep-aggregate";
 
-
 /**
  * Everything we ask HealthKit for, and nothing else.
  *
- * Read-only: the second argument to requestAuthorization is what we would
- * WRITE, and GoHealthMe never writes to anyone's Health app.
+ * Read-only. requestAuthorization also takes a `toShare` list of what we
+ * would WRITE, and GoHealthMe never writes to anyone's Health app, so it is
+ * never passed.
  */
-const READ_TYPES = [
+export const READ_TYPES: readonly ObjectTypeIdentifier[] = [
   "HKQuantityTypeIdentifierStepCount",
   "HKQuantityTypeIdentifierDistanceWalkingRunning",
   "HKQuantityTypeIdentifierActiveEnergyBurned",
   "HKCategoryTypeIdentifierSleepAnalysis",
   "HKWorkoutTypeIdentifier",
-] as const;
+];
 
 // COMPILE-TIME CHECK THAT OUR SLEEP CONSTANTS ARE STILL APPLE'S.
 //
@@ -113,11 +115,18 @@ void _sleepConstantsMatchApple;
  * would silently exclude almost all real data and leave only the rare sample
  * that explicitly says NO. `notEqualTo true` keeps absent and NO, drops YES.
  */
-const NOT_USER_ENTERED = {
+const NOT_USER_ENTERED: PredicateWithMetadataKey = {
   withMetadataKey: "HKWasUserEntered",
   operatorType: ComparisonPredicateOperator.notEqualTo,
   value: true,
-} as const;
+};
+
+/**
+ * The library requires a numeric `limit` on every sample query, and documents
+ * zero (or any non-positive number) as "all samples". A window of sleep stages
+ * or workouts is small; capping it would silently truncate a night.
+ */
+const NO_LIMIT = 0;
 
 export function healthDataAvailable(): boolean {
   return isHealthDataAvailable();
@@ -132,38 +141,7 @@ export function healthDataAvailable(): boolean {
  * the screen says so and why isConnected on the server is "data has arrived".
  */
 export async function requestPermissions(): Promise<boolean> {
-  return requestAuthorization(READ_TYPES as unknown as Parameters<typeof requestAuthorization>[0]);
-}
-
-/**
- * Local midnight for a day. The anchor HealthKit buckets from, so every bucket
- * is one of the wearer's own days rather than one of UTC's.
- */
-/**
- * A gap longer than this ends a night. Two hours is long enough to survive a
- * trip to the bathroom or a stretch the watch simply did not record, and short
- * enough that an afternoon nap is its own event rather than part of last night.
- */
-const NIGHT_GAP_MS = 2 * 60 * 60 * 1000;
-
-function localMidnight(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-/**
- * The wearer's local calendar day as YYYY-MM-DD.
- *
- * Deliberately not toISOString().slice(0,10), which converts to UTC first and
- * would shift the day for anyone east of Greenwich after their afternoon, or
- * west of it before their morning.
- */
-function localDay(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return requestAuthorization({ toRead: READ_TYPES });
 }
 
 /**
@@ -173,9 +151,9 @@ function localDay(date: Date): string {
  * server treats an absent day as "not synced" and a zero as "you did nothing",
  * and those must not be confused on a stake.
  */
-async function dailySums(
-  identifier: string,
-  unit: string,
+async function dailySums<T extends QuantityTypeIdentifier>(
+  identifier: T,
+  unit: UnitForIdentifier<T>,
   since: Date,
   scale: (n: number) => number = (n) => n,
 ): Promise<DayValue[]> {
@@ -196,13 +174,13 @@ async function dailySums(
   // the whole day, and a watch spending an hour on the charger while the phone
   // stays in a pocket is the normal case, not an edge case. That silently paid
   // people less than they walked.
-  const rows = await queryStatisticsCollectionForQuantity(
-    identifier as never,
+  const rows: readonly QueryStatisticsResponse[] = await queryStatisticsCollectionForQuantity(
+    identifier,
     ["cumulativeSum"],
     anchor,
     { day: 1 },
     {
-      unit: unit as never,
+      unit,
       filter: { date: { startDate: anchor }, metadata: NOT_USER_ENTERED },
     },
   );
@@ -213,7 +191,7 @@ async function dailySums(
     const sum = row.sumQuantity?.quantity;
     if (typeof sum !== "number" || !Number.isFinite(sum)) continue;
     const start = row.startDate;
-    if (!start) continue;
+    if (start === undefined) continue;
     out.push({ day: localDay(new Date(start)), value: scale(sum) });
   }
   return out;
@@ -224,32 +202,26 @@ async function dailySums(
  *
  * HealthKit reports sleep as category samples: stretches of inBed, asleepCore,
  * asleepDeep, asleepREM and awake. Time asleep is the sum of the asleep
- * stages; efficiency is that over time in bed.
- *
- * A night is attributed to the WEARER'S LOCAL day it ENDS on, because a night
- * that starts at 23:40 and one that starts at 00:20 are the same night's sleep
- * to the person living it, and splitting them across two days would halve
- * both. Local rather than UTC so this agrees with how Junction keys the same
- * night; a UTC key would file a Sydney wearer's 08:30 wake-up on the previous
- * day and put the same behaviour in a different bucket per provider.
+ * stages; efficiency is that over time in bed. The stitching, the day a night
+ * belongs to, and the partial flag all live in lib/sleep-aggregate.ts, which
+ * is pure so the money arithmetic is tested without a device.
  *
  * Reported as "sleep_efficiency", NOT "sleep_score". Apple publishes no
  * proprietary 0-100 score, and the two are different measurements: efficiency
  * runs 85-95 for an ordinary sleeper while a WHOOP score is recovery-weighted
  * and lower. Sending efficiency under the name "score" would hold Apple and
- * WHOOP users to different bars on the same pool threshold, silently.
+ * WHOOP users to different bars on the same challenge threshold, silently.
  */
 async function sleepByNight(
   since: Date,
+  now: Date,
 ): Promise<{ hours: DayValue[]; efficiency: DayValue[] }> {
   const anchor = localMidnight(since);
-  const samples = (await queryCategorySamples(
-    "HKCategoryTypeIdentifierSleepAnalysis" as never,
-    {
-      filter: { date: { startDate: anchor }, metadata: NOT_USER_ENTERED },
-      ascending: true,
-    } as never,
-  )) as unknown as ReadonlyArray<SleepSample>;
+  const samples = await queryCategorySamples("HKCategoryTypeIdentifierSleepAnalysis", {
+    filter: { date: { startDate: anchor }, metadata: NOT_USER_ENTERED },
+    ascending: true,
+    limit: NO_LIMIT,
+  });
 
   return aggregateSleep(
     samples.map((s) => ({
@@ -257,6 +229,7 @@ async function sleepByNight(
       startDate: s.startDate,
       endDate: s.endDate,
     })),
+    now.getTime(),
   );
 }
 
@@ -279,14 +252,14 @@ export interface Aggregates {
  */
 async function workoutsByDay(since: Date): Promise<DayValue[]> {
   const anchor = localMidnight(since);
-  const sessions = (await queryWorkoutSamples({
+  const sessions = await queryWorkoutSamples({
     filter: { date: { startDate: anchor }, metadata: NOT_USER_ENTERED },
     ascending: true,
-  } as never)) as unknown as ReadonlyArray<{ startDate?: string | Date }>;
+    limit: NO_LIMIT,
+  });
 
   const byDay = new Map<string, number>();
   for (const w of sessions) {
-    if (w.startDate === undefined) continue;
     const start = new Date(w.startDate);
     if (Number.isNaN(start.getTime())) continue;
     // Keyed on when the workout STARTED, which is the day the person would say
@@ -298,19 +271,24 @@ async function workoutsByDay(since: Date): Promise<DayValue[]> {
 }
 
 /**
- * Read the last `days` days of Apple Health and return daily aggregates.
+ * Read the last `days` days of Apple Health and return daily aggregates for
+ * today and the `days` days before it.
  *
  * Everything raw is discarded before this function returns. Nothing that
  * reaches the caller can identify a time of day, a location, or an individual
- * reading.
+ * reading. `now` is the clock the window and the partial-night rule use; the
+ * caller passes the same instant it used to list the covered days.
+ *
+ * The read starts one day earlier than the first day returned (days.ts,
+ * reportFrom): that margin day's night is cut at its midnight by the query,
+ * so reporting it would overwrite a whole night with a shorter one.
  */
-export async function collectAggregates(days: number): Promise<Aggregates[]> {
-  // One extra day of margin. A night whose LOCAL day is the first day of a
-  // pool window can end on the previous day in UTC, and anchoring exactly at
-  // the boundary drops it. Sending one day more costs a row and closes the
-  // hole at the edge of every window.
-  const since = new Date();
-  since.setDate(since.getDate() - Math.max(1, days) - 1);
+export async function collectAggregates(
+  days: number,
+  now: Date = new Date(),
+): Promise<Aggregates[]> {
+  const since = windowSince(days, now);
+  const firstReported = localDay(reportFrom(days, now));
 
   // allSettled, NOT all. A HealthKit query throws errorDatabaseInaccessible
   // when the device is locked, and Apple documents that as ordinary rather
@@ -329,7 +307,7 @@ export async function collectAggregates(days: number): Promise<Aggregates[]> {
     dailySums("HKQuantityTypeIdentifierActiveEnergyBurned", "kcal", since, (k) =>
       round(k, 1),
     ),
-    sleepByNight(since),
+    sleepByNight(since, now),
     workoutsByDay(since),
   ]);
 
@@ -343,15 +321,19 @@ export async function collectAggregates(days: number): Promise<Aggregates[]> {
   const sleep = ok(sleepR, { hours: [] as DayValue[], efficiency: [] as DayValue[] });
   const workouts = ok(workoutsR, [] as DayValue[]);
 
-  return [
+  const all: Aggregates[] = [
     { metric: "steps", days: steps },
     { metric: "distance_km", days: distanceKm },
     { metric: "active_calories", days: activeCalories },
     { metric: "sleep_hours", days: sleep.hours },
     { metric: "sleep_efficiency", days: sleep.efficiency },
     // Declared by the provider, so it MUST be collected here. A declared metric
-    // the phone never produces makes a workouts pool look joinable and then
-    // silently have no data behind it.
+    // the phone never produces makes a workouts challenge look joinable and
+    // then silently have no data behind it.
     { metric: "workouts", days: workouts },
-  ].filter((a) => a.days.length > 0) as Aggregates[];
+  ];
+  // Day strings are YYYY-MM-DD, so string order is calendar order.
+  return all
+    .map((a) => ({ metric: a.metric, days: a.days.filter((d) => d.day >= firstReported) }))
+    .filter((a) => a.days.length > 0);
 }

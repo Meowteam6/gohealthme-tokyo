@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  isAppleDeviceLabel,
   joinIsBlocked,
   sensorHoldCopy,
   uploadFallbackNote,
@@ -284,6 +285,22 @@ describe("sensorHoldCopy", () => {
       expect(copy.detail).not.toMatch(/pair/i);
     },
   );
+
+  it("sends an Apple wallet to the GoHealthMe app, never to Apple Health", () => {
+    // Opening Apple's own Health app syncs nothing to SPOTTER; the GoHealthMe
+    // app on the iPhone is what posts the day. Whichever label the server uses.
+    for (const label of ["Apple Health", "Apple Watch"]) {
+      const copy = sensorHoldCopy("awaiting-sync", label);
+      expect(copy.detail).toMatch(/^Open the GoHealthMe app on your iPhone/);
+      expect(copy.detail).toMatch(/background sync/);
+      expect(copy.detail).not.toMatch(/Open the Apple/);
+    }
+    expect(isAppleDeviceLabel("Apple Health")).toBe(true);
+    expect(isAppleDeviceLabel("apple watch")).toBe(true);
+    expect(isAppleDeviceLabel("WHOOP")).toBe(false);
+    expect(isAppleDeviceLabel("Pineapple")).toBe(false);
+    expect(isAppleDeviceLabel(null)).toBe(false);
+  });
 
   it("falls back to 'your wearable' with no label", () => {
     expect(sensorHoldCopy("awaiting-sync", null).detail).toMatch(

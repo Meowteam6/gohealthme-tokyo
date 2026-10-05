@@ -4,7 +4,7 @@
 //
 // WHY A DEVICE TOKEN AND NOT A WALLET
 //
-// What lands on the server decides whether a pool pays out. Every wallet
+// What lands on the server decides whether a challenge pays out. Every wallet
 // address is public, so the phone must prove it speaks for one. Players sign
 // in on the web with whatever wallet they already use, and a wallet inside
 // this app would only match theirs for one kind of wallet. So the signed-in
@@ -66,6 +66,21 @@ export interface AggregateRow {
   /** The wearer's LOCAL calendar day, YYYY-MM-DD. */
   day: string;
   value: number;
+  /** Sleep rows only, and only when the day's sleep is not final yet. */
+  partial?: true;
+}
+
+/**
+ * What one sync sends. The field names are a contract with the server's
+ * miss evidence; change them there first.
+ */
+export interface SyncBody {
+  /** One row per metric per day with data. May be empty: coverage still counts. */
+  days: readonly AggregateRow[];
+  /** The device's UTC offset in seconds, positive east of Greenwich. */
+  tzOffsetSec: number;
+  /** Every local day the phone read HealthKit for in this sync, data or not. */
+  coveredDays: readonly string[];
 }
 
 /**
@@ -77,7 +92,7 @@ export interface AggregateRow {
  */
 export async function postAggregates(
   deviceToken: string,
-  days: readonly AggregateRow[],
+  body: SyncBody,
 ): Promise<SyncResult> {
   const res = await fetch(`${API_BASE}/api/wearable/apple/sync`, {
     method: "POST",
@@ -85,7 +100,7 @@ export async function postAggregates(
       "content-type": "application/json",
       authorization: `Bearer ${deviceToken}`,
     },
-    body: JSON.stringify({ days }),
+    body: JSON.stringify(body),
   });
 
   if (res.status === 401) {

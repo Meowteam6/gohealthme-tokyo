@@ -45,11 +45,21 @@ const SOURCE_PROBE_METRICS = [
   "workouts",
 ];
 
-function supabaseWith(rowsFor: (metric: string) => Array<{ day: string; value: number }>) {
+/** One coverage row, as wearable_sync_days returns it. */
+interface CoveredRow {
+  day: string;
+  tz_offset_sec: number | null;
+  synced_at?: string;
+}
+
+function supabaseWith(
+  rowsFor: (metric: string) => Array<{ day: string; value: number; partial?: boolean }>,
+  coveredRows: () => CoveredRow[] = () => [],
+) {
   const calls: Array<Record<string, unknown>> = [];
 
-  const builder = () => {
-    const state: Record<string, unknown> = {};
+  const builder = (table: string) => {
+    const state: Record<string, unknown> = { table };
     const chain: Record<string, unknown> = {
       select: (cols: string) => {
         state.select = cols;
@@ -89,6 +99,12 @@ function supabaseWith(rowsFor: (metric: string) => Array<{ day: string; value: n
         calls.push(state);
         if (state.op === "delete") return resolve({ error: null });
 
+        // Coverage lives in its own table: which local days the phone read
+        // HealthKit for, data or not.
+        if (table === "wearable_sync_days") {
+          return resolve({ data: coveredRows(), error: null });
+        }
+
         // select("metric") with no metric filter is the observed-metrics
         // probe: it asks WHICH metrics this wallet has produced, so it must
         // answer with one row per metric that has data.
@@ -117,7 +133,7 @@ function supabaseWith(rowsFor: (metric: string) => Array<{ day: string; value: n
     return chain;
   };
 
-  from.mockImplementation(() => builder());
+  from.mockImplementation((table: string) => builder(table));
   getSupabaseServiceRole.mockReturnValue({ from: (t: string) => from(t) });
   return { calls };
 }
@@ -286,6 +302,35 @@ describe("getMetricProgress", () => {
       "2026-09-07",
     );
     expect(calls[0].metric).toBe("sleep_hours");
+  });
+});
+
+describe("read bounds reach one day past UTC today, so a wearer east of Greenwich is not read a day late", () => {
+  // Days are the phone's LOCAL calendar days. At 08:00 in Tokyo it is still
+  // yesterday in UTC, and last night's sleep is keyed to the Tokyo day, which
+  // is UTC tomorrow. A read bounded at UTC today dropped that night for nine
+  // hours. getMissEvidence already reaches to UTC today + 1; the dashboard
+  // reads must reach the same way or the card and the verdict disagree.
+  function utcTomorrow(): string {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  it("getRecent reads through UTC tomorrow", async () => {
+    const { calls } = supabaseWith(() => []);
+    await appleProvider.getRecent(ADDRESS, 7);
+    const reads = calls.filter((c) => c.table === "wearable_days" && c.op === undefined);
+    expect(reads.length).toBeGreaterThan(0);
+    for (const read of reads) expect(read.end).toBe(utcTomorrow());
+  });
+
+  it("getProgress with no window reads through UTC tomorrow", async () => {
+    const { calls } = supabaseWith(() => []);
+    await appleProvider.getProgress(ADDRESS, 75, 7);
+    const reads = calls.filter((c) => c.op === undefined && c.end !== undefined);
+    expect(reads.length).toBeGreaterThan(0);
+    for (const read of reads) expect(read.end).toBe(utcTomorrow());
   });
 });
 
@@ -573,8 +618,360 @@ describe("declared versus unknown, the distinction that stops an outage from sta
   });
 });
 
-describe("appleProvider and the miss rule", () => {
-  it("offers no miss evidence: its daily rows carry no timezone, so no miss is ever recorded from Apple", () => {
-    expect(appleProvider.getMissEvidence).toBeUndefined();
+describe("getProgress counts covered days as nights reported", () => {
+  it("an iPhone-only wallet (covered days, no sleep rows) is reported, not awaiting its first sync", async () => {
+    // QA 2026-09-26 major: a phone with no Watch syncs steps faithfully and
+    // never a night of sleep. nightsReported counted sleep rows only, so the
+    // dashboard said "awaiting first sync" for ever. A covered day IS the
+    // phone reporting, so the card can say the device sends no sleep data.
+    supabaseWith(
+      (metric) => (metric === "steps" ? [{ day: "2026-10-04", value: 9000 }] : []),
+      () => [
+        { day: "2026-10-04", tz_offset_sec: 32400 },
+        { day: "2026-10-05", tz_offset_sec: 32400 },
+      ],
+    );
+
+    const progress = await appleProvider.getProgress(ADDRESS, 75, 7, "2026-10-01", "2026-10-07");
+
+    expect(progress.days).toEqual([]);
+    expect(progress.streakDays).toBe(0);
+    expect(progress.nightsReported).toBe(2);
+  });
+
+  it("a wallet with a phone that has never synced still reads zero nights", async () => {
+    supabaseWith(() => [], () => []);
+    const progress = await appleProvider.getProgress(ADDRESS, 75, 7, "2026-10-01", "2026-10-07");
+    expect(progress.nightsReported).toBe(0);
+  });
+
+  it("counts a night once whether it is covered, scored or both", async () => {
+    supabaseWith(
+      (metric) =>
+        metric === "sleep_efficiency"
+          ? [
+              { day: "2026-10-04", value: 91 },
+              { day: "2026-10-05", value: 88 },
+            ]
+          : [],
+      () => [
+        { day: "2026-10-05", tz_offset_sec: 32400 },
+        { day: "2026-10-06", tz_offset_sec: 32400 },
+      ],
+    );
+
+    const progress = await appleProvider.getProgress(ADDRESS, 75, 7, "2026-10-01", "2026-10-07");
+
+    expect(progress.nightsReported).toBe(3);
+    expect(progress.streakDays).toBe(2);
+  });
+});
+
+describe("getMissEvidence: Apple on the wearer's own calendar", () => {
+  // The whole point: with this read, miss.ts treats an Apple player exactly
+  // like a WHOOP player. A miss is recorded only when the phone covered every
+  // local day of the challenge and synced after it; anything less refunds.
+
+  it("builds values, heartbeats and the offset from the phone's local days", async () => {
+    supabaseWith(
+      (metric) =>
+        metric === "workouts"
+          ? [
+              { day: "2026-10-03", value: 1 },
+              { day: "2026-10-05", value: 2 },
+            ]
+          : [],
+      () => [
+        { day: "2026-10-06", tz_offset_sec: 32400, synced_at: "2026-10-06T01:00:00Z" },
+        { day: "2026-10-05", tz_offset_sec: 32400, synced_at: "2026-10-06T01:00:00Z" },
+        { day: "2026-10-04", tz_offset_sec: 32400, synced_at: "2026-10-04T13:00:00Z" },
+        { day: "2026-10-03", tz_offset_sec: 32400, synced_at: "2026-10-04T13:00:00Z" },
+      ],
+    );
+
+    const ev = await appleProvider.getMissEvidence!(ADDRESS, "workouts", "2026-10-01");
+
+    expect(ev.values).toEqual({ "2026-10-03": 1, "2026-10-05": 2 });
+    // Heartbeats are COVERED days: a covered day with no workouts row is a
+    // real zero, and a day the phone never read is unknown.
+    expect([...ev.heartbeatDays].sort()).toEqual([
+      "2026-10-03",
+      "2026-10-04",
+      "2026-10-05",
+      "2026-10-06",
+    ]);
+    expect(ev.tzOffsetSec).toBe(32400);
+    expect(ev.sourceProblem ?? null).toBeNull();
+  });
+
+  it("takes the offset from the newest covered day, skipping rows that carry none", async () => {
+    supabaseWith(
+      () => [],
+      () => [
+        { day: "2026-10-06", tz_offset_sec: null },
+        { day: "2026-10-05", tz_offset_sec: -14400 },
+        { day: "2026-10-04", tz_offset_sec: 32400 },
+      ],
+    );
+    const ev = await appleProvider.getMissEvidence!(ADDRESS, "workouts", "2026-10-01");
+    expect(ev.tzOffsetSec).toBe(-14400);
+  });
+
+  it("reports a null offset when nothing is covered, which makes the miss rule skip", async () => {
+    // Rows from a phone built before coverage shipped: values exist, no
+    // calendar. The miss rule records nothing for this wallet (tz-unknown),
+    // which is the refund-only behaviour Apple had before.
+    supabaseWith(
+      (metric) => (metric === "sleep_hours" ? [{ day: "2026-10-04", value: 5 }] : []),
+      () => [],
+    );
+    const ev = await appleProvider.getMissEvidence!(ADDRESS, "sleep_hours", "2026-10-01");
+    expect(ev.values).toEqual({ "2026-10-04": 5 });
+    expect(ev.heartbeatDays).toEqual([]);
+    expect(ev.tzOffsetSec).toBeNull();
+  });
+
+  it("marks a partial night so the miss rule never counts it as covered", async () => {
+    supabaseWith(
+      (metric) =>
+        metric === "sleep_hours"
+          ? [
+              { day: "2026-10-04", value: 7.1, partial: false },
+              { day: "2026-10-05", value: 3.2, partial: true },
+            ]
+          : [],
+      () => [
+        { day: "2026-10-04", tz_offset_sec: 0 },
+        { day: "2026-10-05", tz_offset_sec: 0 },
+      ],
+    );
+
+    const ev = await appleProvider.getMissEvidence!(ADDRESS, "sleep_hours", "2026-10-01");
+
+    expect(ev.values).toEqual({ "2026-10-04": 7.1, "2026-10-05": 3.2 });
+    expect(ev.partialDays).toEqual(["2026-10-05"]);
+    expect(ev.tzOffsetSec).toBe(0);
+  });
+
+  it("sourceDays are the days the phone reported, so no sleep on a covered day reads as 'does not report', not 'still syncing'", async () => {
+    supabaseWith(
+      (metric) => (metric === "steps" ? [{ day: "2026-10-04", value: 9000 }] : []),
+      () => [{ day: "2026-10-05", tz_offset_sec: 0 }],
+    );
+    const ev = await appleProvider.getMissEvidence!(ADDRESS, "sleep_hours", "2026-10-01");
+    expect([...(ev.sourceDays ?? [])].sort()).toEqual(["2026-10-04", "2026-10-05"]);
+    expect(ev.values).toEqual({});
+  });
+
+  it("refuses a metric Apple does not serve", async () => {
+    supabaseWith(() => []);
+    await expect(
+      appleProvider.getMissEvidence!(ADDRESS, "sleep_score", "2026-10-01"),
+    ).rejects.toThrow(/sleep_score/);
+  });
+
+  it("flags a source problem when the phone covers days but has produced no row of any metric", async () => {
+    // iOS never tells an app whether Health read access was granted: a denied
+    // sheet and an idle wearer both read as "covered, nothing found". A phone
+    // that is syncing at all produces steps on its own, so zero rows across
+    // the whole read is inconclusive, and inconclusive must refund rather
+    // than forfeit a workouts stake.
+    supabaseWith(
+      () => [],
+      () => [
+        { day: "2026-10-06", tz_offset_sec: 0 },
+        { day: "2026-10-05", tz_offset_sec: 0 },
+      ],
+    );
+    const ev = await appleProvider.getMissEvidence!(ADDRESS, "workouts", "2026-10-01");
+    expect(ev.heartbeatDays).toHaveLength(2);
+    expect(ev.sourceProblem).toMatch(/no Apple Health data/);
+  });
+
+  it("flags no source problem once any metric has a row in the read", async () => {
+    supabaseWith(
+      (metric) => (metric === "steps" ? [{ day: "2026-10-05", value: 200 }] : []),
+      () => [
+        { day: "2026-10-06", tz_offset_sec: 0 },
+        { day: "2026-10-05", tz_offset_sec: 0 },
+      ],
+    );
+    const ev = await appleProvider.getMissEvidence!(ADDRESS, "workouts", "2026-10-01");
+    expect(ev.sourceProblem).toBeNull();
+  });
+});
+
+describe("appleProvider and the miss rule, end to end through miss.ts", () => {
+  // Pool 5's shape: 2026-09-26T02:39:43Z .. 2026-09-26T23:30:00Z, which in
+  // Tokyo is Saturday 11:39 to Sunday 08:30, local days 09-26 and 09-27.
+  const PERIOD_START = 1_790_390_383n;
+  const PERIOD_END = 1_790_465_400n;
+  const JST = 9 * 3600;
+
+  async function judge(goalSpec: string, metric: "workouts" | "sleep_hours") {
+    const { judgeMissEvidence, missRulePool, missEvidenceFromISO } = await import(
+      "@/lib/server/agent/miss"
+    );
+    const rule = missRulePool(
+      { id: 5n, bountyModel: 2, goalSpec },
+      1n,
+    );
+    if (!rule.ok) throw new Error(`fixture goal must qualify: ${goalSpec}`);
+    const evidence = await appleProvider.getMissEvidence!(
+      ADDRESS,
+      metric,
+      missEvidenceFromISO(PERIOD_START),
+    );
+    return judgeMissEvidence({
+      spec: rule.spec,
+      periodStart: PERIOD_START,
+      periodEnd: PERIOD_END,
+      evidence,
+    });
+  }
+
+  // A phone that is syncing produces steps on its own; the fixtures carry a
+  // steps row so the read is not "no data of any kind", which refunds.
+  const stepsOnly = (metric: string) =>
+    metric === "steps" ? [{ day: "2026-09-25", value: 4000 }] : [];
+
+  it("records a workouts miss only when every local day is covered and a sync landed after the window", async () => {
+    supabaseWith(stepsOnly, () => [
+      { day: "2026-09-28", tz_offset_sec: JST },
+      { day: "2026-09-27", tz_offset_sec: JST },
+      { day: "2026-09-26", tz_offset_sec: JST },
+    ]);
+    expect(await judge("Work out for 1 day", "workouts")).toEqual({
+      miss: true,
+      window: ["2026-09-26", "2026-09-27"],
+      qualifyingDays: 0,
+    });
+  });
+
+  it("refunds a workouts miss when the phone has produced no data of any kind (Health access may be denied)", async () => {
+    supabaseWith(
+      () => [],
+      () => [
+        { day: "2026-09-28", tz_offset_sec: JST },
+        { day: "2026-09-27", tz_offset_sec: JST },
+        { day: "2026-09-26", tz_offset_sec: JST },
+      ],
+    );
+    expect(await judge("Work out for 1 day", "workouts")).toEqual({
+      miss: false,
+      basis: "source-unhealthy",
+    });
+  });
+
+  it("refunds when the phone did not cover a day of the window", async () => {
+    supabaseWith(stepsOnly, () => [
+      { day: "2026-09-28", tz_offset_sec: JST },
+      { day: "2026-09-26", tz_offset_sec: JST },
+    ]);
+    expect(await judge("Work out for 1 day", "workouts")).toEqual({
+      miss: false,
+      basis: "coverage-gap",
+    });
+  });
+
+  it("refunds when the phone has not synced since the window closed", async () => {
+    supabaseWith(stepsOnly, () => [
+      { day: "2026-09-27", tz_offset_sec: JST },
+      { day: "2026-09-26", tz_offset_sec: JST },
+    ]);
+    expect(await judge("Work out for 1 day", "workouts")).toEqual({
+      miss: false,
+      basis: "no-sync-after-window",
+    });
+  });
+
+  it("records nothing when the offset is unknown (a phone built before coverage)", async () => {
+    supabaseWith(() => [], () => []);
+    expect(await judge("Work out for 1 day", "workouts")).toEqual({
+      miss: false,
+      basis: "tz-unknown",
+    });
+  });
+
+  it("reaches the met branch for an Apple hit, so the sweep flags it like WHOOP's", async () => {
+    supabaseWith(
+      (metric) => (metric === "workouts" ? [{ day: "2026-09-27", value: 1 }] : []),
+      () => [
+        { day: "2026-09-27", tz_offset_sec: JST },
+        { day: "2026-09-26", tz_offset_sec: JST },
+      ],
+    );
+    expect(await judge("Work out for 1 day", "workouts")).toEqual({
+      miss: false,
+      basis: "met",
+    });
+  });
+
+  it("a sleep miss needs a whole night on every local day of the window", async () => {
+    supabaseWith(
+      (metric) =>
+        metric === "sleep_hours"
+          ? [
+              { day: "2026-09-27", value: 6.1, partial: false },
+              { day: "2026-09-26", value: 5.5, partial: false },
+            ]
+          : [],
+      () => [
+        { day: "2026-09-27", tz_offset_sec: JST },
+        { day: "2026-09-26", tz_offset_sec: JST },
+      ],
+    );
+    expect(await judge("Sleep 7 hours for 1 night", "sleep_hours")).toEqual({
+      miss: true,
+      window: ["2026-09-26", "2026-09-27"],
+      qualifyingDays: 0,
+    });
+  });
+
+  it("a partial night refunds a sleep miss", async () => {
+    supabaseWith(
+      (metric) =>
+        metric === "sleep_hours"
+          ? [
+              { day: "2026-09-27", value: 3.0, partial: true },
+              { day: "2026-09-26", value: 5.5, partial: false },
+            ]
+          : [],
+      () => [
+        { day: "2026-09-27", tz_offset_sec: JST },
+        { day: "2026-09-26", tz_offset_sec: JST },
+      ],
+    );
+    expect(await judge("Sleep 7 hours for 1 night", "sleep_hours")).toEqual({
+      miss: false,
+      basis: "coverage-gap",
+    });
+  });
+
+  it("the pass path reads Apple on the wearer's local window once the offset is known", async () => {
+    // Before this read existed, runProgress fell back to UTC days for Apple
+    // and a Tokyo night landed on the wrong day. With the offset, Saturday
+    // night (keyed to Sunday 09-27 local) counts for pool 5.
+    const { runProgress } = await import("@/lib/server/agent/miss");
+    supabaseWith(
+      (metric) => (metric === "sleep_hours" ? [{ day: "2026-09-27", value: 8 }] : []),
+      () => [
+        { day: "2026-09-27", tz_offset_sec: JST },
+        { day: "2026-09-26", tz_offset_sec: JST },
+      ],
+    );
+
+    const { progress, window } = await runProgress(
+      appleProvider,
+      ADDRESS,
+      { metric: "sleep_hours", threshold: 7 },
+      PERIOD_START,
+      PERIOD_END,
+      new Date((Number(PERIOD_END) + 6 * 3600) * 1000),
+    );
+
+    expect(window).toEqual(["2026-09-26", "2026-09-27"]);
+    expect(progress.qualifyingDays).toBe(1);
+    expect(progress.daysWithSource).toBe(2);
   });
 });

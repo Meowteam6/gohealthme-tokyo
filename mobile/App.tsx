@@ -1,14 +1,15 @@
 // GoHealthMe iPhone app: Apple Watch data into your GoHealthMe wallet.
 //
-// Two steps, once each. Pair: type the code the GoHealthMe website showed you
-// (or open its link), and this phone is tied to that wallet. Connect: allow
-// Apple Health, and the last 30 days of daily totals are aggregated on device
-// and posted. After that the app syncs every time it is opened. Raw samples
-// never leave the phone.
+// One screen, and the fewest taps that are honest. Pair once: the GoHealthMe
+// website shows a code and, on this iPhone, a link that opens the app with
+// the code already filled in, so the only tap here is Pair. Allow Apple
+// Health when iOS asks. From then on the phone keeps the wallet's days
+// current on its own: when HealthKit wakes it in the background, on launch,
+// and whenever it returns to the foreground. Raw samples never leave the phone.
 //
-// The screen deliberately never claims success on its own. iOS does not tell an
-// app what the user granted on the HealthKit sheet, so the only honest proof is
-// how many day rows the server says it stored.
+// The screen never claims success on its own. iOS does not tell an app what
+// the user granted on the HealthKit sheet, so the only honest proof is how
+// many days the server says it stored, and that is what is shown.
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -25,7 +26,8 @@ import {
   View,
 } from "react-native";
 
-import { apiBase, NotPairedError, redeemCode, type Pairing } from "./lib/api";
+import { NotPairedError, redeemCode, type Pairing } from "./lib/api";
+import { createBackgroundListener, type BackgroundListener } from "./lib/background";
 import { healthDataAvailable, requestPermissions } from "./lib/healthkit";
 import {
   clearPairing,
@@ -35,37 +37,45 @@ import {
   saveConnected,
   savePairing,
 } from "./lib/pairing-store";
-import { syncNow } from "./lib/sync";
-
-type Phase = "idle" | "working" | "done" | "error";
+import { syncNow, type SyncOutcome } from "./lib/sync";
 
 const SYNC_DAYS = 30;
+
+/** How a failed step is retried: the same button, in place. */
+type Failure = { message: string; retry: "pair" | "connect" | "sync" };
+
+const REVOKED =
+  "This iPhone is no longer paired. Get a new code on the GoHealthMe website and pair again.";
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+function describe(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export default function App(): React.JSX.Element {
   // undefined while the Keychain is being read, null when unpaired.
   const [pairing, setPairing] = useState<Pairing | null | undefined>(undefined);
-  const [code, setCode] = useState("");
-  const [pairing_busy, setPairingBusy] = useState(false);
-  const [pairError, setPairError] = useState<string | null>(null);
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [sent, setSent] = useState<number | null>(null);
-  const [stored, setStored] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [log, setLog] = useState<string[]>([]);
-  const [available, setAvailable] = useState<boolean | null>(null);
-  const [lastSync, setLastSync] = useState<Date | null>(null);
+  // Whether the Apple Health sheet has been shown on this phone.
   const [connected, setConnected] = useState(false);
-  const syncing = useRef(false);
+  const [code, setCode] = useState("");
+  const [codeFromLink, setCodeFromLink] = useState(false);
+  // The pair form over a paired screen: a new link arrived, or the person
+  // asked to pair a different wallet.
+  const [repairing, setRepairing] = useState(false);
+  const [busy, setBusy] = useState<"pairing" | "connecting" | "syncing" | null>(null);
+  const [last, setLast] = useState<SyncOutcome | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [available, setAvailable] = useState<boolean | null>(null);
 
-  const addLine = (line: string): void =>
-    setLog((prev) => [
-      ...prev.slice(-99),
-      `${new Date().toLocaleTimeString()}  ${line}`,
-    ]);
+  const syncing = useRef(false);
+  // The one background listener this process holds. Pair, the permission
+  // step and the launch effect all ask it to listen, often for the same
+  // wallet within the same tick; it serialises them, because two live
+  // subscriptions for one type silence each other on the native side.
+  const listener = useRef<BackgroundListener | null>(null);
 
   useEffect(() => {
     try {
@@ -82,129 +92,144 @@ export default function App(): React.JSX.Element {
   }, []);
 
   // A gohealthme://pair?code=... link fills the code in, whether it opened the
-  // app cold or arrived while it was running.
+  // app cold or arrived while it was running. Over a paired screen it means
+  // the person is pairing again: the old token is revoked when the new one
+  // is issued, by design.
   useEffect(() => {
-    void Linking.getInitialURL().then((url) => {
+    const take = (url: string | null): void => {
       const c = codeFromUrl(url);
-      if (c !== null) setCode(c);
-    });
-    const sub = Linking.addEventListener("url", ({ url }) => {
-      const c = codeFromUrl(url);
-      if (c !== null) setCode(c);
-    });
+      if (c === null) return;
+      setCode(c);
+      setCodeFromLink(true);
+      setRepairing(true);
+      setFailure(null);
+    };
+    void Linking.getInitialURL().then(take);
+    const sub = Linking.addEventListener("url", ({ url }) => take(url));
     return () => sub.remove();
   }, []);
 
-  const busy = phase === "working";
-
-  const run = useCallback(
-    async (askFirst: boolean, current: Pairing): Promise<void> => {
-      if (syncing.current) return;
-      syncing.current = true;
-      setError(null);
-      setPhase("working");
-      try {
-        if (askFirst) {
-          addLine("Asking for Apple Health read access");
-          await requestPermissions();
-          // iOS hides grant and deny from apps by design, so there is nothing
-          // truthful to report here beyond "the sheet was shown".
-          addLine("Permission sheet closed. iOS does not say what was allowed.");
-          await saveConnected().catch(() => undefined);
-          setConnected(true);
-        }
-
-        addLine(`Reading the last ${SYNC_DAYS} days and aggregating on device`);
-        const { sent: sentRows, result } = await syncNow(current.deviceToken, SYNC_DAYS);
-        setSent(sentRows);
-        setStored(result.stored);
-        setLastSync(new Date());
-        addLine(`Sent ${sentRows} day rows, server stored ${result.stored}`);
-        setPhase("done");
-      } catch (err) {
-        if (err instanceof NotPairedError) {
-          // Revoked: this wallet paired another phone, or the pairing is gone.
-          await clearPairing().catch(() => undefined);
-          setPairing(null);
-          setPairError(
-            "This iPhone is no longer paired. Get a new code on the GoHealthMe website and pair again.",
-          );
-          setPhase("idle");
-          return;
-        }
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
-        addLine(`ERROR: ${message}`);
-        setPhase("error");
-      } finally {
-        syncing.current = false;
-      }
-    },
-    [],
-  );
-
-  // Once paired and connected, sync on launch and every time the app comes to
-  // the front, so a goal's days are on the server before the verdict reads
-  // them. Never before the player tapped Connect: that read would be empty.
-  useEffect(() => {
-    if (pairing === null || pairing === undefined || !connected) return;
-    void run(false, pairing);
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void run(false, pairing);
-    });
-    return () => sub.remove();
-  }, [pairing, connected, run]);
-
-  const pair = async (): Promise<void> => {
-    setPairError(null);
-    setPairingBusy(true);
-    try {
-      const result = await redeemCode(code.trim());
-      await savePairing(result);
-      setPairing(result);
-      setCode("");
-      addLine(`Paired with ${shortAddress(result.address)}`);
-    } catch (err) {
-      setPairError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setPairingBusy(false);
-    }
-  };
-
-  const unpair = async (): Promise<void> => {
+  const revoked = useCallback(async (): Promise<void> => {
+    void listener.current?.stop();
     await clearPairing().catch(() => undefined);
     setPairing(null);
-    setPhase("idle");
-    setSent(null);
-    setStored(null);
+    setLast(null);
+    setFailure({ message: REVOKED, retry: "pair" });
+  }, []);
+
+  const sync = useCallback(
+    async (current: Pairing): Promise<void> => {
+      if (syncing.current) return;
+      syncing.current = true;
+      setBusy("syncing");
+      setFailure(null);
+      try {
+        setLast(await syncNow(current.deviceToken, SYNC_DAYS));
+      } catch (err) {
+        if (err instanceof NotPairedError) {
+          await revoked();
+        } else {
+          setFailure({ message: describe(err), retry: "sync" });
+        }
+      } finally {
+        syncing.current = false;
+        setBusy(null);
+      }
+    },
+    [revoked],
+  );
+
+  const listen = useCallback(
+    async (current: Pairing): Promise<void> => {
+      if (listener.current === null) {
+        listener.current = createBackgroundListener({
+          onSynced: setLast,
+          onError: (err) => {
+            if (err instanceof NotPairedError) void revoked();
+            else console.warn("[background]", describe(err));
+          },
+        });
+      }
+      await listener.current.listen(current.deviceToken);
+    },
+    [revoked],
+  );
+
+  // Allow Apple Health, then listen for it and read the first month. The
+  // sheet is asked for exactly once per phone; iOS shows nothing on a second
+  // request, so asking again would be a tap that does nothing.
+  const connect = useCallback(
+    async (current: Pairing): Promise<void> => {
+      setBusy("connecting");
+      setFailure(null);
+      try {
+        await requestPermissions();
+        await saveConnected().catch(() => undefined);
+        setConnected(true);
+      } catch (err) {
+        setFailure({ message: describe(err), retry: "connect" });
+        setBusy(null);
+        return;
+      }
+      await listen(current);
+      await sync(current);
+    },
+    [listen, sync],
+  );
+
+  const pair = useCallback(async (): Promise<void> => {
+    setBusy("pairing");
+    setFailure(null);
+    let result: Pairing;
+    try {
+      result = await redeemCode(code.trim());
+      await savePairing(result);
+    } catch (err) {
+      setFailure({ message: describe(err), retry: "pair" });
+      setBusy(null);
+      return;
+    }
+    setPairing(result);
+    setLast(null);
+    setRepairing(false);
+    setCode("");
+    setCodeFromLink(false);
+    if (connected) {
+      await listen(result);
+      await sync(result);
+    } else {
+      await connect(result);
+    }
+  }, [code, connected, connect, listen, sync]);
+
+  // Once paired and allowed: listen for background delivery, sync on launch
+  // and every time the app comes to the front. A launch in the background
+  // (HealthKit woke us) skips the launch sync; the delivery itself syncs.
+  useEffect(() => {
+    if (pairing === null || pairing === undefined || !connected) return;
+    void listen(pairing);
+    if (AppState.currentState === "active") void sync(pairing);
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void sync(pairing);
+    });
+    return () => {
+      sub.remove();
+      void listener.current?.stop();
+    };
+  }, [pairing, connected, listen, sync]);
+
+  const retry = (): void => {
+    if (pairing === null || pairing === undefined || failure === null) return;
+    if (failure.retry === "connect") void connect(pairing);
+    else if (failure.retry === "sync") void sync(pairing);
   };
 
-  const verdict = ((): { title: string; body: string; good: boolean } | null => {
-    if (phase !== "done" || stored === null) return null;
-    if (stored > 0) {
-      return {
-        good: true,
-        title: `${stored} days of Apple Health are now in your wallet`,
-        body:
-          "GoHealthMe can verify a goal from this. Only the daily totals were " +
-          "sent: no individual readings, no times, no locations.",
-      };
-    }
-    return {
-      good: false,
-      title: "Nothing was sent, and this is inconclusive",
-      body:
-        "Three things look identical from here and iOS will not tell an app " +
-        "which one happened: Apple Health has no data for the last " +
-        `${SYNC_DAYS} days, the watch has not synced to this iPhone yet, or ` +
-        "access was denied on the permission sheet. Check the Health app has " +
-        "data, then run it again.",
-    };
-  })();
+  const showPairForm = pairing === null || repairing;
+  const codeReady = code.trim().length >= 8;
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <Text style={styles.h1}>GoHealthMe</Text>
         <Text style={styles.subtitle}>
           Apple Watch to your wallet. Daily totals only, never raw health data.
@@ -212,135 +237,128 @@ export default function App(): React.JSX.Element {
 
         {pairing === undefined ? (
           <ActivityIndicator />
-        ) : pairing === null ? (
+        ) : showPairForm ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Pair this iPhone</Text>
-            <Text style={styles.hint}>
-              On the GoHealthMe website, choose Apple Health as your wearable.
-              It shows a code. Type it here, or open the link it gives you on
-              this iPhone.
+            <Text style={styles.cardTitle}>
+              {pairing === null ? "Pair this iPhone" : "Pair a different wallet"}
             </Text>
+            {!codeFromLink && (
+              <Text style={styles.hint}>
+                On the GoHealthMe website, choose Apple Watch. Open the link it
+                shows on this iPhone, or type the code here.
+              </Text>
+            )}
             <TextInput
               style={[styles.input, styles.codeInput]}
               value={code}
-              onChangeText={setCode}
+              onChangeText={(v) => {
+                setCode(v);
+                setCodeFromLink(false);
+              }}
               autoCapitalize="characters"
               autoCorrect={false}
               placeholder="XXXX-XXXX"
               maxLength={9}
-              editable={!pairing_busy}
+              editable={busy === null}
             />
+            {failure !== null && <Text style={styles.errorLine}>{failure.message}</Text>}
             <Pressable
-              style={[styles.button, (pairing_busy || code.trim().length < 8) && styles.buttonDisabled]}
+              style={[styles.button, (busy !== null || !codeReady) && styles.buttonDisabled]}
               onPress={() => void pair()}
-              disabled={pairing_busy || code.trim().length < 8}
+              disabled={busy !== null || !codeReady}
             >
-              {pairing_busy ? (
+              {busy === "pairing" ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>Pair</Text>
+                <Text style={styles.buttonText}>{failure?.retry === "pair" ? "Try again" : "Pair"}</Text>
               )}
             </Pressable>
-            {pairError && (
-              <View style={[styles.banner, styles.bannerError]}>
-                <Text style={styles.bannerText}>{pairError}</Text>
-              </View>
+            {pairing !== null && busy === null && (
+              <Pressable
+                onPress={() => {
+                  setRepairing(false);
+                  setCode("");
+                  setCodeFromLink(false);
+                  setFailure(null);
+                }}
+              >
+                <Text style={styles.link}>Keep {shortAddress(pairing.address)}</Text>
+              </Pressable>
             )}
-            <Text style={styles.hint}>Pairing with {apiBase()}</Text>
           </View>
         ) : (
-          <>
-            <View style={styles.card}>
-              <Text style={styles.label}>Paired wallet</Text>
-              <Text style={styles.mono}>{shortAddress(pairing.address)}</Text>
-              {lastSync && (
-                <Text style={styles.hint}>
-                  Last synced {lastSync.toLocaleTimeString()}. Opening this app
-                  syncs again.
-                </Text>
-              )}
-              <Pressable onPress={() => void unpair()} disabled={busy}>
-                <Text style={styles.link}>Pair a different wallet</Text>
-              </Pressable>
-            </View>
+          <View style={styles.card}>
+            <Text style={styles.headline}>
+              {last !== null
+                ? last.result.stored > 0
+                  ? `Synced ${last.daysWithData} days for ${shortAddress(pairing.address)}`
+                  : `Nothing to sync yet for ${shortAddress(pairing.address)}`
+                : busy === "syncing"
+                  ? "Syncing Apple Health"
+                  : busy === "connecting"
+                    ? "Waiting for Apple Health"
+                    : connected
+                      ? `Paired with ${shortAddress(pairing.address)}`
+                      : "Allow Apple Health to finish"}
+            </Text>
 
-            {available === false && (
-              <View style={[styles.banner, styles.bannerWarn]}>
-                <Text style={styles.bannerText}>
-                  Apple Health is not available on this device. HealthKit needs
-                  a real iPhone; it does not exist in the simulator.
-                </Text>
-              </View>
+            {last !== null && last.result.stored === 0 && failure === null && (
+              <Text style={styles.hint}>
+                Apple Health had no data for the last {SYNC_DAYS} days, the Watch has
+                not synced to this iPhone yet, or access was not allowed. Check the
+                Health app, then try again.
+              </Text>
             )}
 
-            <Pressable
-              style={[styles.button, busy && styles.buttonDisabled]}
-              onPress={() => void run(true, pairing)}
-              disabled={busy}
-            >
-              {busy ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>
-                  {connected ? "Sync now" : "Connect Apple Health"}
-                </Text>
-              )}
-            </Pressable>
-          </>
-        )}
+            {failure !== null && <Text style={styles.errorLine}>{failure.message}</Text>}
 
-        {error && (
-          <View style={[styles.banner, styles.bannerError]}>
-            <Text style={styles.bannerText}>{error}</Text>
-          </View>
-        )}
+            {busy !== null ? (
+              <ActivityIndicator style={styles.spinner} />
+            ) : failure !== null ? (
+              <Pressable style={styles.button} onPress={retry}>
+                <Text style={styles.buttonText}>Try again</Text>
+              </Pressable>
+            ) : !connected ? (
+              <Pressable style={styles.button} onPress={() => void connect(pairing)}>
+                <Text style={styles.buttonText}>Allow Apple Health</Text>
+              </Pressable>
+            ) : last !== null && last.result.stored === 0 ? (
+              <Pressable style={styles.button} onPress={() => void sync(pairing)}>
+                <Text style={styles.buttonText}>Try again</Text>
+              </Pressable>
+            ) : null}
 
-        {verdict && (
-          <View
-            style={[
-              styles.banner,
-              verdict.good ? styles.bannerGood : styles.bannerWarn,
-            ]}
-          >
-            <Text style={styles.bannerTitle}>{verdict.title}</Text>
-            <Text style={styles.bannerText}>{verdict.body}</Text>
-          </View>
-        )}
-
-        {sent !== null && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Last sync</Text>
-            <Row k="day rows sent" v={String(sent)} />
-            <Row k="stored by server" v={stored === null ? "-" : String(stored)} />
-            <Row k="window" v={`${SYNC_DAYS} days`} />
-          </View>
-        )}
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Log</Text>
-          {log.length === 0 ? (
-            <Text style={styles.hint}>No activity yet.</Text>
-          ) : (
-            log.map((line, i) => (
-              <Text key={i} style={styles.logLine}>
-                {line}
+            <Text style={styles.label}>Paired wallet</Text>
+            <Text style={styles.mono}>{pairing.address}</Text>
+            {connected && (
+              <Text style={styles.hint}>
+                Syncs on its own when Apple Health changes, and every time you open
+                this app.
               </Text>
-            ))
-          )}
-        </View>
+            )}
+            {busy === null && (
+              <Pressable
+                onPress={() => {
+                  setRepairing(true);
+                  setFailure(null);
+                }}
+              >
+                <Text style={styles.link}>Pair a different wallet</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {available === false && (
+          <Text style={styles.errorLine}>
+            Apple Health is not available on this device. It needs a real iPhone, not
+            the simulator.
+          </Text>
+        )}
 
         <Text style={styles.footer}>Platform: {Platform.OS}</Text>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function Row({ k, v }: { k: string; v: string }): React.JSX.Element {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowKey}>{k}</Text>
-      <Text style={styles.rowVal}>{v}</Text>
-    </View>
   );
 }
 
@@ -357,15 +375,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: "#ece3d2",
-    gap: 6,
+    gap: 10,
   },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#16211b",
-    marginBottom: 4,
-  },
-  label: { fontSize: 12, fontWeight: "600", color: "#5f6f64" },
+  cardTitle: { fontSize: 15, fontWeight: "700", color: "#16211b" },
+  headline: { fontSize: 20, fontWeight: "800", color: "#16211b", lineHeight: 26 },
+  label: { fontSize: 12, fontWeight: "600", color: "#5f6f64", marginTop: 6 },
   mono: { fontSize: 12, color: "#16211b", fontFamily: mono },
   input: {
     borderWidth: 1,
@@ -377,7 +391,8 @@ const styles = StyleSheet.create({
     color: "#16211b",
     fontFamily: mono,
   },
-  hint: { fontSize: 11, color: "#5f6f64", lineHeight: 15 },
+  hint: { fontSize: 12, color: "#5f6f64", lineHeight: 17 },
+  errorLine: { fontSize: 13, color: "#9f1d1d", lineHeight: 18 },
   codeInput: { fontSize: 22, letterSpacing: 4, textAlign: "center" },
   link: { fontSize: 13, color: "#064e3b", fontWeight: "600", marginTop: 4 },
   button: {
@@ -388,31 +403,6 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: "#faf6ee", fontSize: 16, fontWeight: "700" },
   buttonDisabled: { opacity: 0.5 },
-  banner: { borderRadius: 12, padding: 14, gap: 4 },
-  bannerGood: {
-    backgroundColor: "#e7f2ed",
-    borderWidth: 1,
-    borderColor: "#a9dcc2",
-  },
-  bannerWarn: {
-    backgroundColor: "#fdf3e0",
-    borderWidth: 1,
-    borderColor: "#f0d69a",
-  },
-  bannerError: {
-    backgroundColor: "#fdecea",
-    borderWidth: 1,
-    borderColor: "#f2b8b0",
-  },
-  bannerTitle: { fontSize: 14, fontWeight: "700", color: "#16211b" },
-  bannerText: { fontSize: 12, color: "#3d4a43", lineHeight: 17 },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 3,
-  },
-  rowKey: { fontSize: 12, color: "#5f6f64", fontFamily: mono },
-  rowVal: { fontSize: 12, color: "#16211b", fontWeight: "600", fontFamily: mono },
-  logLine: { fontSize: 11, color: "#3d4a43", fontFamily: mono, lineHeight: 16 },
+  spinner: { paddingVertical: 12 },
   footer: { fontSize: 10, color: "#8a9089", textAlign: "center", marginTop: 4 },
 });

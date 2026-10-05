@@ -183,6 +183,16 @@ export interface SensorHoldCopy {
 }
 
 /**
+ * True for the Apple provider's device label, whichever name the server gives
+ * it ("Apple Health" today, "Apple Watch" on the pairing card). Lock copy
+ * carries the label and not the provider id, and Apple is the one provider
+ * whose sync advice differs: nothing pulls it, the iPhone posts.
+ */
+export function isAppleDeviceLabel(label: string | null): boolean {
+  return label !== null && /^apple\b/i.test(label.trim());
+}
+
+/**
  * Plain-English lock copy for a hold, in SPOTTER's voice. No provider
  * internals, no env names; what it means for the player and what to do.
  */
@@ -198,7 +208,12 @@ export function sensorHoldCopy(
         detail:
           (deviceLabel === null
             ? "Open your wearable's app so it syncs, then come back. "
-            : `Open the ${deviceLabel} app so it syncs, then come back. `) +
+            : isAppleDeviceLabel(deviceLabel)
+              ? // Opening Apple's own Health app sends SPOTTER nothing. The
+                // GoHealthMe app on the iPhone is what posts the day, on its
+                // own in the background or whenever it is opened.
+                "Open the GoHealthMe app on your iPhone so it syncs, or wait for its next background sync, then come back. "
+              : `Open the ${deviceLabel} app so it syncs, then come back. `) +
           // "may": a Dynamic session token checks with no prompt; only the
           // signature fallback asks the wallet (lib/client-auth.ts).
           "Checking may ask your wallet to sign; it never sends a payment.",

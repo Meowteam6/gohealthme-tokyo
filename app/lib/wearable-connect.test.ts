@@ -10,7 +10,13 @@ import {
   metricLabel,
   PhoneLinkRequiredError,
   PopupBlockedError,
+  PAIR_POLL_INTERVAL_MS,
+  isIphoneUserAgent,
+  pairPanelPhase,
+  pairPanelPolls,
+  phonePairingOf,
   providerOptionsQueryKey,
+  requestPhonePairing,
   startWearableLink,
   viewerMetricsOf,
   whoopReturnMessage,
@@ -475,5 +481,156 @@ describe("provider note", () => {
     });
     expect(options.providers.find((p) => p.id === "whoop")?.note).toBe("WHOOP's direct seats are full.");
     expect(options.providers.find((p) => p.id === "junction")?.note).toBeNull();
+  });
+});
+
+// The Apple Watch pairing panel's pure pieces (components/PhonePairPanel.tsx
+// renders them): which device the page is on, whether a code is still live,
+// and what the provider list says about the phone. Pinned here so the panel
+// can flip to paired on its own, off the same read the join gate uses, and
+// never off a button the player presses.
+describe("phone pairing", () => {
+  const PAIRING = {
+    code: "7KQ4MN9P",
+    deepLink: "gohealthme://pair?code=7KQ4MN9P",
+    expiresAt: 1_800_000_000_000,
+  };
+  const APP_LINK = {
+    provider: "apple",
+    kind: "app",
+    linkUrl: null,
+    instructions: "Open the app.",
+    pairing: PAIRING,
+    installUrl: "https://testflight.apple.com/join/abc",
+  };
+
+  it("knows an iPhone from its user agent and nothing else", () => {
+    expect(
+      isIphoneUserAgent(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+      ),
+    ).toBe(true);
+    expect(
+      isIphoneUserAgent(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+      ),
+    ).toBe(false);
+    expect(
+      isIphoneUserAgent(
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Mobile Safari/537.36",
+      ),
+    ).toBe(false);
+    expect(isIphoneUserAgent("")).toBe(false);
+  });
+
+  it("opens no popup when the phone provider is asked for by id", async () => {
+    respond(APP_LINK);
+    await expect(startWearableLink(ADDRESS, auth, "apple")).rejects.toBeInstanceOf(
+      PhoneLinkRequiredError,
+    );
+    // A blank tab that opens and closes again is a flash on the phone the
+    // player is about to pair, and nothing was ever going to load in it.
+    expect(opened).toEqual([]);
+  });
+
+  it("mints a fresh code without a popup, for the one-tap new code", async () => {
+    respond(APP_LINK);
+    const steps = await requestPhonePairing(ADDRESS, auth);
+    expect(steps.pairing).toEqual(PAIRING);
+    expect(steps.installUrl).toBe("https://testflight.apple.com/join/abc");
+    expect(opened).toEqual([]);
+  });
+
+  it("refuses a web link where a phone pairing was expected", async () => {
+    respond({ provider: "whoop", kind: "oauth", linkUrl: "/api/whoop/login" });
+    await expect(requestPhonePairing(ADDRESS, auth)).rejects.toThrow(/iPhone app/);
+  });
+
+  function apple(over: Record<string, unknown>) {
+    return parseOptions({
+      selected: "apple",
+      providers: [
+        {
+          id: "apple",
+          label: "Apple Health",
+          configured: true,
+          connected: false,
+          metrics: ["sleep_efficiency", "sleep_hours", "steps", "workouts"],
+          observedMetrics: null,
+          capability: "declared",
+          ...over,
+        },
+      ],
+    });
+  }
+
+  it("reads paired off the provider list once the phone has stored a sync", () => {
+    expect(
+      phonePairingOf(
+        apple({ connected: true, capability: "observed", observedMetrics: ["sleep_hours", "workouts"] }),
+      ),
+    ).toEqual({ kind: "paired", label: "Apple Health", metrics: ["sleep_hours", "workouts"] });
+  });
+
+  it("is awaiting-sync while the phone is linked and nothing has arrived", () => {
+    expect(phonePairingOf(apple({ connected: true, capability: "awaiting-sync" }))).toEqual({
+      kind: "awaiting-sync",
+      label: "Apple Health",
+    });
+  });
+
+  it("is unreadable when the phone is linked and the server could not say what it counts", () => {
+    expect(phonePairingOf(apple({ connected: true, capability: "unknown" }))).toEqual({
+      kind: "unreadable",
+      label: "Apple Health",
+    });
+  });
+
+  it("is unpaired until Apple itself is connected, whatever else the wallet linked", () => {
+    expect(phonePairingOf(apple({}))).toEqual({ kind: "unpaired" });
+    expect(phonePairingOf(undefined)).toEqual({ kind: "unpaired" });
+    expect(
+      phonePairingOf(
+        parseOptions({
+          selected: "whoop",
+          providers: [
+            { id: "whoop", label: "WHOOP", configured: true, connected: true, capability: "declared", metrics: ["sleep_hours"] },
+          ],
+        }),
+      ),
+    ).toEqual({ kind: "unpaired" });
+  });
+
+  it("phases the panel: live while the code is fresh, expired after, paired over both", () => {
+    const unpaired = { kind: "unpaired" } as const;
+    expect(pairPanelPhase(PAIRING, unpaired, PAIRING.expiresAt - 1)).toBe("live");
+    expect(pairPanelPhase(PAIRING, unpaired, PAIRING.expiresAt)).toBe("expired");
+    expect(pairPanelPhase(null, unpaired, 0)).toBe("no-code");
+    expect(
+      pairPanelPhase(PAIRING, { kind: "paired", label: "Apple Health", metrics: [] }, PAIRING.expiresAt + 1),
+    ).toBe("paired");
+    expect(pairPanelPhase(PAIRING, { kind: "awaiting-sync", label: "Apple Health" }, 0)).toBe(
+      "awaiting-sync",
+    );
+    expect(pairPanelPhase(PAIRING, { kind: "unreadable", label: "Apple Health" }, 0)).toBe(
+      "unreadable",
+    );
+  });
+
+  it("polls only while a pairing can still land, and never past the code's ten minutes", () => {
+    const fresh = PAIRING.expiresAt - 1;
+    expect(pairPanelPolls("live", PAIRING, fresh)).toBe(true);
+    expect(pairPanelPolls("awaiting-sync", PAIRING, fresh)).toBe(true);
+    // The phone redeemed the code and nothing arrived inside its window: the
+    // next focus of the tab re-reads anyway, so the timer stops here.
+    expect(pairPanelPolls("awaiting-sync", PAIRING, PAIRING.expiresAt)).toBe(false);
+    expect(pairPanelPolls("awaiting-sync", null, fresh)).toBe(false);
+    for (const phase of ["paired", "unreadable", "expired", "no-code"] as const) {
+      expect(pairPanelPolls(phase, PAIRING, fresh)).toBe(false);
+    }
+    // A re-pair reads paired before and after the new phone redeems the code,
+    // so there is nothing a poll could notice; the timer never starts.
+    expect(pairPanelPolls("live", PAIRING, fresh, true)).toBe(false);
+    expect(PAIR_POLL_INTERVAL_MS).toBe(3_000);
   });
 });

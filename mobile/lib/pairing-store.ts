@@ -48,9 +48,10 @@ export function codeFromUrl(url: string | null): string | null {
 const CONNECTED_KEY = "gohealthme.healthkit-asked.v1";
 
 /**
- * Whether the Apple Health sheet has been shown on this phone. Launch-time
- * syncs wait for it: syncing before the player tapped Connect would read
- * nothing and report an empty sync as if something had gone wrong.
+ * Whether the Apple Health sheet has been shown on this phone. It is shown
+ * right after Pair; launch-time syncs and background delivery wait for it,
+ * because reading before the sheet would return nothing and report an empty
+ * sync as if something had gone wrong.
  */
 export async function loadConnected(): Promise<boolean> {
   return (await SecureStore.getItemAsync(CONNECTED_KEY)) === "1";

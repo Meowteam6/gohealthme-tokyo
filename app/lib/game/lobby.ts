@@ -12,6 +12,7 @@ import { proofPolicyOf, type PoolInfo } from "@/lib/contract";
 import { poolCanPay, poolPhase, type PoolPhase } from "@/lib/pool-lifecycle";
 import { hideDocumentPools, hideEmptyCancelledPools } from "@/lib/pool-visibility";
 import {
+  isAppleDeviceLabel,
   sensorHoldCopy,
   wearableJoinBlock,
   type JoinBlock,
@@ -303,14 +304,43 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
     case "cannot-measure": {
       const metric = metricLabel(lock.metric);
       const device = lock.deviceLabel ?? "Your wearable";
+      const fix = {
+        kind: "link" as const,
+        label: "Change my wearable",
+        href: `/character?step=sensor&next=${next}`,
+      };
+      if (isAppleDeviceLabel(lock.deviceLabel)) {
+        // Apple declares sleep, so a sleep lock on an Apple wallet only ever
+        // comes from the observed narrowing: the phone synced and no sleep
+        // arrived. That is an iPhone with no Watch worn to bed, not hardware
+        // that cannot, and the fix is the Watch, said before any stake.
+        if (lock.metric === "sleep_hours" || lock.metric === "sleep_efficiency") {
+          return {
+            title: "Your iPhone has no sleep data",
+            detail:
+              "Sleep challenges need an Apple Watch worn to bed, and nothing has " +
+              "arrived from one. Wear a Watch tonight and the next sync unlocks " +
+              `this one, or pair a wearable that tracks ${metric}.`,
+            fix,
+            tone: "hardware",
+          };
+        }
+        if (lock.metric === "sleep_score") {
+          return {
+            title: "Apple Watch cannot measure this one",
+            detail:
+              "This challenge is scored on sleep score, and Apple publishes no " +
+              "sleep score, so no Watch can play it. Pick a challenge scored on " +
+              "hours of sleep or sleep efficiency instead.",
+            fix,
+            tone: "hardware",
+          };
+        }
+      }
       return {
         title: `${device} cannot measure this one`,
         detail: `This challenge is scored on ${metric}, and ${device} does not report it. That is the hardware, so waiting will not change it. Pair a wearable that tracks ${metric} to play it.`,
-        fix: {
-          kind: "link",
-          label: "Change my wearable",
-          href: `/character?step=sensor&next=${next}`,
-        },
+        fix,
         tone: "hardware",
       };
     }

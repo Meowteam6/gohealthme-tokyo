@@ -29,10 +29,12 @@ import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { displayGoalSpec, fetchGoalId, fetchPool } from "@/lib/contract";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import {
+  PhoneLinkRequiredError,
   PopupBlockedError,
   currentReturnPath,
   startWearableLink,
 } from "@/lib/wearable-connect";
+import PhonePairPanel, { type PhoneSteps } from "@/components/PhonePairPanel";
 import WhoopReturnNote from "@/components/WhoopReturnNote";
 import { classifyWearableGoal } from "@/lib/wearable-goal";
 import { missConfirmByMs, missDeadlineMs } from "@/lib/miss-grace";
@@ -299,6 +301,10 @@ function WearableCheckInner({
   const [connectFallbackUrl, setConnectFallbackUrl] = useState<string | null>(
     null,
   );
+  // An Apple wallet pairs from the iPhone app, not a page: the link route
+  // answers with a one-time code, rendered as the same pairing card the
+  // character step shows. Guidance, not an error. Null the rest of the time.
+  const [phoneSteps, setPhoneSteps] = useState<PhoneSteps | null>(null);
   // Which wallet address the ledger restore last completed for. Until it
   // matches the connected address the UI shows a loading state rather than an
   // idle box (a lie for anyone whose claim already ran) or the previous
@@ -1187,6 +1193,7 @@ function WearableCheckInner({
             onClick={() => {
               setConnectError(null);
               setConnectFallbackUrl(null);
+              setPhoneSteps(null);
               // A same-tab OAuth (WHOOP) comes back to this pool, not the
               // dashboard, so the player lands where they were about to claim.
               void startWearableLink(
@@ -1199,6 +1206,16 @@ function WearableCheckInner({
                   // Not a failure - the URL is good, the browser just refused
                   // the auto-open. Offer a link the user taps directly.
                   setConnectFallbackUrl(err.linkUrl);
+                  return;
+                }
+                if (err instanceof PhoneLinkRequiredError) {
+                  // The wallet's provider is Apple: nothing opens here, the
+                  // phone finishes it. The card below carries the code.
+                  setPhoneSteps({
+                    instructions: err.instructions,
+                    pairing: err.pairing,
+                    installUrl: err.installUrl,
+                  });
                   return;
                 }
                 setConnectError(
@@ -1220,6 +1237,9 @@ function WearableCheckInner({
             >
               Your browser blocked the popup. Tap here to connect
             </a>
+          ) : null}
+          {phoneSteps !== null ? (
+            <PhonePairPanel steps={phoneSteps} address={address} />
           ) : null}
           <Button
             type="button"

@@ -26,10 +26,6 @@
 // is using. Null narrows nothing, so an upstream hiccup can never take pools
 // off somebody's board.
 
-import { whoopSeatStatus } from "@/lib/server/wearable/whoop-seats";
-
-const WHOOP_FULL_NOTE =
-  "WHOOP's direct seats are full. Pair through Junction instead; it covers WHOOP straps too.";
 import { type NextRequest } from "next/server";
 import { isAddress } from "viem";
 import { jsonError } from "@/lib/server/http";
@@ -41,6 +37,20 @@ import {
   providerConfigured,
   providerIdFor,
 } from "@/lib/server/wearable";
+import { appleAppAvailable, appleConfigured } from "@/lib/server/wearable/apple";
+import { whoopSeatStatus } from "@/lib/server/wearable/whoop-seats";
+
+const WHOOP_FULL_NOTE =
+  "WHOOP's direct seats are full. Pair through Junction instead; it covers WHOOP straps too.";
+// The Apple store exists but APPLE_APP_AVAILABLE is off, so Apple is neither
+// offered nor read (lib/server/wearable/index.ts providerConfigured). A wallet
+// whose iPhone already synced is served by the fallback provider in that
+// state; this line keeps that from being silent.
+const APPLE_NOT_OPEN_NOTE = "Apple Watch is not open on this build yet.";
+
+function appleNote(): string | null {
+  return appleConfigured() && !appleAppAvailable() ? APPLE_NOT_OPEN_NOTE : null;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,7 +70,9 @@ export async function GET(request: NextRequest) {
           note:
             id === "whoop" && providerConfigured(id) && (await whoopSeatStatus(null)).seatsLeft === 0
               ? WHOOP_FULL_NOTE
-              : null,
+              : id === "apple"
+                ? appleNote()
+                : null,
           connected: false,
           metrics: providerById(id).metrics,
           capability: "declared",
@@ -123,7 +135,12 @@ export async function GET(request: NextRequest) {
           id,
           label: provider.label,
           configured: offered,
-          note: id === "whoop" && configured && !offered ? WHOOP_FULL_NOTE : null,
+          note:
+            id === "whoop" && configured && !offered
+              ? WHOOP_FULL_NOTE
+              : id === "apple"
+                ? appleNote()
+                : null,
           connected,
           metrics: provider.metrics,
           capability: capability.kind,

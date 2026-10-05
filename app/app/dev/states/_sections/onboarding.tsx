@@ -13,7 +13,8 @@ import type { HumanProof, StepId, StepState } from "@/lib/game/character";
 import { NAME_LOCKED_NOTE, NAME_NEEDS_WORLD_NOTE } from "@/lib/game/character";
 import { SWITCHES_QUERY_KEY } from "@/lib/game/useSwitches";
 import type { Switches } from "@/lib/switches";
-import type { ProviderOptions } from "@/lib/wearable-connect";
+import { providerOptionsQueryKey, type PhoneSteps, type ProviderOptions } from "@/lib/wearable-connect";
+import PhonePairPanel from "@/components/PhonePairPanel";
 import Link from "next/link";
 import { ClaimCard, FeedEmpty } from "@/app/agent/AgentFeed";
 import { FinishedRunRow, LoadingCard, MY_RUNS_LEAD, MyRunsFrame } from "@/components/DashboardContent";
@@ -50,6 +51,70 @@ const WHOOP_PAIRED: ProviderOptions = {
     p.id === "whoop" ? { ...p, connected: true, capability: "declared" } : p,
   ),
 } as ProviderOptions;
+
+// Apple on a build with the iPhone app (APPLE_APP_AVAILABLE=1): the Apple
+// Watch card is offered beside WHOOP and Junction, with the same shape.
+const APPLE_METRICS = ["sleep_efficiency", "sleep_hours", "steps", "workouts"];
+const APPLE_OFFERED: ProviderOptions = {
+  ...PROVIDERS,
+  providers: PROVIDERS.providers.map((p) =>
+    p.id === "apple" ? { ...p, configured: true, metrics: APPLE_METRICS } : p,
+  ),
+} as ProviderOptions;
+function appleWith(over: Record<string, unknown>): ProviderOptions {
+  return {
+    ...APPLE_OFFERED,
+    selected: "apple",
+    providers: APPLE_OFFERED.providers.map((p) =>
+      p.id === "apple" ? { ...p, connected: true, ...over } : p,
+    ),
+  } as ProviderOptions;
+}
+const APPLE_PAIRED = appleWith({ capability: "observed", observedMetrics: ["sleep_efficiency", "sleep_hours", "workouts"] });
+const APPLE_IPHONE_ONLY = appleWith({ capability: "observed", observedMetrics: ["steps"] });
+const APPLE_AWAITING = appleWith({ capability: "awaiting-sync" });
+const APPLE_UNREADABLE = appleWith({ capability: "unknown" });
+const APPLE_DEVICE = { provider: "apple", label: "Apple Health", metrics: ["sleep_efficiency", "sleep_hours", "workouts"] };
+const IPHONE_ONLY_DEVICE = { provider: "apple", label: "Apple Health", metrics: ["steps"] };
+
+// A pairing code as the link route mints it. Fixed instants, so the "until"
+// time renders the same on the server and the client.
+const INSTALL_URL = "https://testflight.apple.com/join/gohealthme";
+const PAIR_CODE = { code: "7KQ4MN9P", deepLink: "gohealthme://pair?code=7KQ4MN9P" };
+const PAIR_STEPS: PhoneSteps = {
+  instructions: "Apple Health can only be read on your iPhone. Open the GoHealthMe app there and enter this code.",
+  pairing: { ...PAIR_CODE, expiresAt: Date.UTC(2027, 0, 1, 23, 30) },
+  installUrl: INSTALL_URL,
+};
+const PAIR_EXPIRED: PhoneSteps = {
+  ...PAIR_STEPS,
+  pairing: { ...PAIR_CODE, expiresAt: Date.UTC(2026, 0, 1, 23, 30) },
+};
+
+/**
+ * A frame whose provider read is seeded for ADDRESS, so the pairing card can
+ * show what it does after the phone's first sync without a network. Nothing
+ * refetches; the card's own poll is off.
+ */
+function WithProviders({ options, children }: { options: ProviderOptions; children: React.ReactNode }) {
+  const [client] = useState(() => {
+    const c = new QueryClient({
+      defaultOptions: {
+        queries: {
+          staleTime: Infinity,
+          gcTime: Infinity,
+          retry: false,
+          refetchOnMount: false,
+          refetchOnWindowFocus: false,
+          refetchOnReconnect: false,
+        },
+      },
+    });
+    c.setQueryData(providerOptionsQueryKey(ADDRESS), options);
+    return c;
+  });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
 
 function view(over: {
   signedIn?: boolean;
@@ -291,7 +356,7 @@ export default function OnboardingStates({ meta }: SectionProps) {
           mode="page"
         />
       </StateFrame>
-      <StateFrame name="character-wearable" note="step 4: every option says what it measures; Apple says it cannot pair yet">
+      <StateFrame name="character-wearable" note="step 4: every option says what it measures; Apple is not offered until the iPhone app is on this build">
         <CharacterCreation
           view={view({ gate: true, steps: { human: HUMAN_DONE, name: NAME_DONE } })}
           onboarding={onboarding()}
@@ -362,6 +427,93 @@ export default function OnboardingStates({ meta }: SectionProps) {
           focus="sensor"
           mode="page"
         />
+      </StateFrame>
+      <StateFrame name="character-wearable-apple-offered" note="step 4 on a build with the iPhone app: the Apple Watch card reads like the WHOOP card">
+        <CharacterCreation
+          view={view({ gate: true, steps: { human: HUMAN_DONE, name: NAME_DONE }, providers: APPLE_OFFERED })}
+          onboarding={onboarding()}
+          focus="sensor"
+          mode="page"
+        />
+      </StateFrame>
+      <StateFrame name="character-wearable-apple-paired" note="step 4 after the phone's first sync: Apple Watch is paired, with what it counts">
+        <CharacterCreation
+          view={view({
+            gate: true,
+            steps: { human: HUMAN_DONE, name: NAME_DONE, sensor: { status: "done", summary: "Apple Watch" } },
+            sensor: { kind: "paired", device: APPLE_DEVICE },
+            providers: APPLE_PAIRED,
+          })}
+          onboarding={onboarding()}
+          focus="sensor"
+          mode="page"
+        />
+      </StateFrame>
+      <StateFrame name="character-wearable-apple-iphone-only" note="step 4, iPhone with no Watch: steps arrived and no sleep, so the sleep limit is named before any stake">
+        <CharacterCreation
+          view={view({
+            gate: true,
+            steps: { human: HUMAN_DONE, name: NAME_DONE, sensor: { status: "done", summary: "Apple Watch" } },
+            sensor: { kind: "paired", device: IPHONE_ONLY_DEVICE },
+            providers: APPLE_IPHONE_ONLY,
+          })}
+          onboarding={onboarding()}
+          focus="sensor"
+          mode="page"
+        />
+      </StateFrame>
+      <StateFrame name="character-wearable-apple-awaiting" note="step 4, code redeemed and nothing stored yet: the hold names the GoHealthMe app, not Apple Health">
+        <CharacterCreation
+          view={view({
+            gate: true,
+            steps: { human: HUMAN_DONE, name: NAME_DONE, sensor: { status: "waiting", note: "Waiting on its first sync" } },
+            sensor: { kind: "unreadable", label: "Apple Health" },
+            providers: APPLE_AWAITING,
+          })}
+          onboarding={onboarding()}
+          focus="sensor"
+          mode="page"
+        />
+      </StateFrame>
+      <StateFrame name="pair-apple-iphone" note="the pairing card on the iPhone: deep link first, Get the app second, the code after, expiry, one-tap new code" phone>
+        <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="iphone" poll={false} />
+      </StateFrame>
+      <StateFrame name="pair-apple-desktop" note="the pairing card on a computer: the code leads, typed into the app on the iPhone" phone>
+        <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="other" poll={false} />
+      </StateFrame>
+      <StateFrame name="pair-apple-no-install-link" note="iPhone, deployment without APPLE_APP_INSTALL_URL: the deep link alone" phone>
+        <PhonePairPanel steps={{ ...PAIR_STEPS, installUrl: null }} address={ADDRESS} platform="iphone" poll={false} />
+      </StateFrame>
+      <StateFrame name="pair-apple-expired" note="ten minutes passed: one line, one tap" phone>
+        <PhonePairPanel steps={PAIR_EXPIRED} address={ADDRESS} platform="iphone" poll={false} />
+      </StateFrame>
+      <StateFrame name="pair-apple-paired" note="the phone stored its first sync: the card flips by itself, no button" phone>
+        <WithProviders options={APPLE_PAIRED}>
+          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="iphone" poll={false} repair={false} />
+        </WithProviders>
+      </StateFrame>
+      <StateFrame name="pair-apple-iphone-only" note="first sync came from an iPhone alone (steps, no sleep): named as the iPhone, sleep limit said here" phone>
+        <WithProviders options={APPLE_IPHONE_ONLY}>
+          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="iphone" poll={false} repair={false} />
+        </WithProviders>
+      </StateFrame>
+      <StateFrame name="pair-apple-repair" note="Re-pair on a paired wallet: the code stays, the new phone replaces the old one, the app confirms it" phone>
+        <WithProviders options={APPLE_PAIRED}>
+          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="iphone" poll={false} repair />
+        </WithProviders>
+      </StateFrame>
+      <StateFrame name="pair-apple-no-code" note="the route answered without a code: one line, one tap, never a sentence about a code that is not there" phone>
+        <PhonePairPanel steps={{ ...PAIR_STEPS, pairing: null }} address={ADDRESS} platform="iphone" poll={false} />
+      </StateFrame>
+      <StateFrame name="pair-apple-awaiting-sync" note="code redeemed, first day not stored yet (Health sheet still open, or denied)" phone>
+        <WithProviders options={APPLE_AWAITING}>
+          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="iphone" poll={false} />
+        </WithProviders>
+      </StateFrame>
+      <StateFrame name="pair-apple-unreadable" note="paired, and the capability read failed this minute" phone>
+        <WithProviders options={APPLE_UNREADABLE}>
+          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="iphone" poll={false} />
+        </WithProviders>
       </StateFrame>
       <StateFrame name="my-runs-signed-out" note="/dashboard signed out: SPOTTER on the sign-in card">
         <div className={PAGE_COLUMN}>

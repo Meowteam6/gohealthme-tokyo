@@ -18,6 +18,15 @@ function nextAddress(): string {
   return `0x${RUN_SALT}${counter.toString(16).padStart(28, "0")}`;
 }
 
+// lib/server/supabase reads its env at import time, so the Apple store (which
+// decides appleConfigured) is toggled through a mock, the way apple.test.ts
+// does it. Off by default so every older test sees the deployment it expects.
+const appleStore = vi.hoisted(() => ({ on: false }));
+vi.mock("@/lib/server/supabase", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/supabase")>()),
+  getSupabaseServiceRole: () => (appleStore.on ? {} : null),
+}));
+
 const {
   PROVIDER_IDS,
   availableProviders,
@@ -65,6 +74,40 @@ describe("apple is offered only when its phone app ships", () => {
     vi.stubEnv("APPLE_APP_AVAILABLE", "1");
     expect(appleAppAvailable()).toBe(true);
     expect(providerConfigured("apple")).toBe(appleConfigured());
+  });
+});
+
+describe("a paired iPhone reads through Apple once the flag is on (2026-10-06)", () => {
+  // The first stored sync after a pairing records Apple as the wallet's
+  // provider (app/api/wearable/apple/sync). Whether SPOTTER then READS that
+  // wallet through Apple is decided by APPLE_APP_AVAILABLE, the same flag that
+  // gates the picker: a build that cannot send players to the app must not
+  // judge them on its data either.
+  afterEach(() => {
+    appleStore.on = false;
+  });
+
+  it("serves a wallet whose phone already synced through Apple with APPLE_APP_AVAILABLE=1", async () => {
+    appleStore.on = true;
+    vi.stubEnv("APPLE_APP_AVAILABLE", "1");
+    const address = nextAddress();
+    await setProviderId(address, "apple");
+    expect(providerConfigured("apple")).toBe(true);
+    expect(await providerIdFor(address)).toBe("apple");
+  });
+
+  it("falls back to junction with the flag off, and the picker says why", async () => {
+    // The fallback is deliberate (rule 1 in index.ts), but it must never be
+    // silent: /api/wearable/providers reports the Apple entry with the note
+    // "Apple Watch is not open on this build yet." for exactly this state,
+    // store present and flag off. Pinned in app/api/wearable/providers/route.test.ts.
+    appleStore.on = true;
+    vi.stubEnv("APPLE_APP_AVAILABLE", "");
+    const address = nextAddress();
+    await setProviderId(address, "apple");
+    expect(await storedProviderId(address)).toBe("apple");
+    expect(providerConfigured("apple")).toBe(false);
+    expect(await providerIdFor(address)).toBe("junction");
   });
 });
 

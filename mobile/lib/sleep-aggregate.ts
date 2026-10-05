@@ -2,7 +2,7 @@
 //
 // Separated from healthkit.ts so this arithmetic can be tested without a
 // device: healthkit.ts imports the native module and cannot be loaded off a
-// phone. What is here is pure, and it decides whether a sleep pool pays.
+// phone. What is here is pure, and it decides whether a sleep challenge pays.
 //
 // THE DEFECT THIS FILE EXISTS TO PREVENT
 //
@@ -21,7 +21,7 @@
 // Two sources can describe the same night: a watch plus a third-party sleep
 // app, or an iPhone's Sleep Schedule overlapping the watch's stages. Adding
 // their durations double counts, and a 7.7 hour night reading as 15.3 clears
-// any threshold a pool could sensibly set.
+// any threshold a challenge could sensibly set.
 //
 // HealthKit merges overlapping samples for QUANTITY types by default, which is
 // why steps need no such handling. Sleep is a CATEGORY sample and no statistics
@@ -40,6 +40,17 @@
 // sleeper's favour. Efficiency does NOT work that way: it takes the LONGEST
 // night, because otherwise a short nap at perfect efficiency would carry a day
 // whose actual night was broken.
+//
+// WHAT "PARTIAL" MEANS, and why the server needs it.
+// The server records a miss only on a day it can trust as final. Three shapes
+// of day are not: a day whose only sleep is a nap, a night the Watch stopped
+// recording early (under three hours asleep), and a night still in progress
+// when the phone synced (its last sample ended less than a night gap ago, so
+// the person may still be asleep or the Watch may still be sending). Those
+// days carry `partial: true`; the server waits for a later sync before judging
+// them. A later sync of the same day overwrites the row, flag included.
+
+import { localDay } from "./days";
 
 /**
  * HKCategoryValueSleepAnalysis raw values.
@@ -70,6 +81,12 @@ export interface DayValue {
   /** The wearer's local calendar day, YYYY-MM-DD. */
   day: string;
   value: number;
+  /**
+   * Set by the sleep stitcher only, and only when the day's sleep is not
+   * final: a nap alone, a night cut short, or a night still in progress.
+   * Omitted when the value stands, so the wire row stays {metric, day, value}.
+   */
+  partial?: true;
 }
 
 /** One raw HealthKit sleep sample, as this module needs it. */
@@ -80,13 +97,30 @@ export interface SleepSample {
 }
 
 /**
+ * A gap longer than this ends a night. Two hours survives a trip to the
+ * bathroom or a stretch the watch did not record, and is short enough that an
+ * afternoon nap is its own event rather than part of last night.
+ */
+const NIGHT_GAP_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * A day whose longest night is shorter than this is partial: a nap, or a
+ * night the Watch stopped recording. Three hours is far below any sleep goal a
+ * challenge would set and far above any nap, so it separates the two cleanly.
+ */
+const SHORT_NIGHT_MS = 3 * 60 * 60 * 1000;
+
+/**
  * Turn raw sleep samples into per-day hours and efficiency. Pure, and exported
  * so the money-path arithmetic can be tested without a device.
+ *
+ * `now` decides whether the most recent night is still open; it defaults to
+ * the clock and is passed explicitly by tests.
  */
 export function aggregateSleep(
   samples: ReadonlyArray<SleepSample>,
+  now: number = Date.now(),
 ): { hours: DayValue[]; efficiency: DayValue[] } {
-
   const spans = samples
     .map((s) => ({
       value: s.value,
@@ -127,6 +161,8 @@ export function aggregateSleep(
   }
 
   const hoursByDay = new Map<string, number>();
+  const longestByDay = new Map<string, number>();
+  const openDays = new Set<string>();
   const effByDay = new Map<string, { pct: number; asleepMs: number }>();
 
   for (const night of nights) {
@@ -134,7 +170,7 @@ export function aggregateSleep(
     // and a third-party sleep app both recording one night, or an iPhone's
     // Sleep Schedule overlapping the watch's stages. Adding their durations
     // double counts, and a 7.7 hour night reading as 15.3 clears any threshold
-    // a pool could sensibly set.
+    // a challenge could sensibly set.
     //
     // Unlike steps, HealthKit will NOT do this for us: statistics queries work
     // on quantity samples only, and sleep is a category sample. So the overlap
@@ -147,6 +183,12 @@ export function aggregateSleep(
     // Two nights ending on the same local day (a very early night plus a very
     // late one) are summed, not overwritten, because the person did sleep both.
     hoursByDay.set(day, (hoursByDay.get(day) ?? 0) + asleepMs);
+    longestByDay.set(day, Math.max(longestByDay.get(day) ?? 0, asleepMs));
+
+    // A night whose last sample ended less than a night gap ago may still be
+    // going: the person is asleep, or the Watch has more to send. Its total
+    // is a running count, not the night, and the day says so.
+    if (now - night.end < NIGHT_GAP_MS) openDays.add(day);
 
     // Some devices report asleep stretches and never inBed. Efficiency against
     // a missing denominator would be a fabricated 100, so such a night is left
@@ -156,8 +198,8 @@ export function aggregateSleep(
       // THE LONGEST NIGHT'S EFFICIENCY, NOT THE BEST.
       //
       // Taking the max let a twenty-minute nap at 100% overwrite a broken
-      // night and carry a sleep-efficiency pool on its own. Efficiency is a
-      // quality measure for a night's sleep, so the night that actually was
+      // night and carry a sleep-efficiency challenge on its own. Efficiency is
+      // a quality measure for a night's sleep, so the night that actually was
       // the sleep is the one that should answer for the day.
       const prev = effByDay.get(day);
       if (prev === undefined || asleepMs > prev.asleepMs) {
@@ -166,12 +208,15 @@ export function aggregateSleep(
     }
   }
 
+  const isPartial = (day: string): boolean =>
+    openDays.has(day) || (longestByDay.get(day) ?? 0) < SHORT_NIGHT_MS;
+
+  const dayValue = (day: string, value: number): DayValue =>
+    isPartial(day) ? { day, value, partial: true } : { day, value };
+
   return {
-    hours: [...hoursByDay].map(([day, ms]) => ({
-      day,
-      value: round(ms / 3_600_000, 2),
-    })),
-    efficiency: [...effByDay].map(([day, e]) => ({ day, value: round(e.pct, 1) })),
+    hours: [...hoursByDay].map(([day, ms]) => dayValue(day, round(ms / 3_600_000, 2))),
+    efficiency: [...effByDay].map(([day, e]) => dayValue(day, round(e.pct, 1))),
   };
 }
 
@@ -205,24 +250,3 @@ function round(n: number, places: number): number {
   const f = 10 ** places;
   return Math.round(n * f) / f;
 }
-
-/**
- * The wearer's local calendar day. Deliberately not toISOString().slice(0,10),
- * which converts to UTC first and would shift the day for anyone east of
- * Greenwich after their afternoon, or west of it before their morning. Junction
- * keys a night on the device's own calendar date, and Apple has to agree or the
- * same behaviour falls in different buckets per provider.
- */
-function localDay(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-/**
- * A gap longer than this ends a night. Two hours survives a trip to the
- * bathroom or a stretch the watch did not record, and is short enough that an
- * afternoon nap is its own event rather than part of last night.
- */
-const NIGHT_GAP_MS = 2 * 60 * 60 * 1000;

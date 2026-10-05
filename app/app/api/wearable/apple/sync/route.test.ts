@@ -24,6 +24,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const putDays = vi.fn();
+const putCoveredDays = vi.fn();
 const setProviderId = vi.fn();
 const appleConfigured = vi.fn();
 const deviceForToken = vi.fn();
@@ -31,6 +32,7 @@ const confirmDevice = vi.fn();
 
 vi.mock("@/lib/server/wearable/apple-store", () => ({
   putDays: (...args: unknown[]) => putDays(...args),
+  putCoveredDays: (...args: unknown[]) => putCoveredDays(...args),
 }));
 vi.mock("@/lib/server/wearable/apple", () => ({
   appleConfigured: () => appleConfigured(),
@@ -87,6 +89,9 @@ beforeEach(() => {
   deviceForToken.mockResolvedValue({ address: ADDRESS, confirmed: false });
   confirmDevice.mockResolvedValue(undefined);
   putDays.mockImplementation(async (_a: string, _m: string, rows: unknown[]) => rows.length);
+  putCoveredDays.mockImplementation(
+    async (_a: string, days: string[]) => new Set(days).size,
+  );
   setProviderId.mockResolvedValue(undefined);
 });
 
@@ -194,12 +199,12 @@ describe("POST /api/wearable/apple/sync", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ stored: 2, address: ADDRESS });
+    expect(await res.json()).toEqual({ stored: 2, covered: 1, address: ADDRESS });
     // Grouped per metric, because the upsert conflict target is
     // (address, metric, day).
     expect(putDays).toHaveBeenCalledTimes(2);
-    expect(putDays).toHaveBeenCalledWith(ADDRESS, "steps", [{ day, value: 9000 }]);
-    expect(putDays).toHaveBeenCalledWith(ADDRESS, "sleep_hours", [{ day, value: 7.5 }]);
+    expect(putDays).toHaveBeenCalledWith(ADDRESS, "steps", [{ day, value: 9000 }], null);
+    expect(putDays).toHaveBeenCalledWith(ADDRESS, "sleep_hours", [{ day, value: 7.5 }], null);
   });
 
   it("writes under the address the token was issued for, ignoring any address posted", async () => {
@@ -210,8 +215,9 @@ describe("POST /api/wearable/apple/sync", () => {
 
     const res = await POST(post({ address: stranger, days: ONE_DAY }));
 
-    expect(putDays).toHaveBeenCalledWith(ADDRESS, "steps", expect.anything());
-    expect(putDays).not.toHaveBeenCalledWith(stranger, "steps", expect.anything());
+    expect(putDays).toHaveBeenCalledWith(ADDRESS, "steps", expect.anything(), null);
+    expect(putDays).not.toHaveBeenCalledWith(stranger, "steps", expect.anything(), null);
+    expect(putCoveredDays).toHaveBeenCalledWith(ADDRESS, expect.anything(), null);
     expect((await res.json()).address).toBe(ADDRESS);
   });
 
@@ -273,8 +279,178 @@ describe("recording the provider choice", () => {
     const res = await POST(post({ days: ONE_DAY }));
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ stored: 1, address: ADDRESS });
+    expect(await res.json()).toEqual({ stored: 1, covered: 1, address: ADDRESS });
     expect(confirmDevice).not.toHaveBeenCalled();
+  });
+});
+
+describe("coverage: which local days the phone read, data or not", () => {
+  // This is what lets SPOTTER record an Apple miss the way it records a WHOOP
+  // one. A covered day with no workouts row is a real zero; an uncovered day
+  // is unknown, and unknown refunds. Without it an Apple player who missed
+  // was always refunded while a WHOOP player on the same challenge lost the
+  // stake.
+
+  function daysAgo(n: number): string {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  it("stores the offset beside every value and the covered days the phone names", async () => {
+    const covered = [daysAgo(3), daysAgo(2), daysAgo(1)];
+    const res = await POST(
+      post({
+        days: [{ metric: "workouts", day: daysAgo(2), value: 1 }],
+        tzOffsetSec: 9 * 3600,
+        coveredDays: covered,
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ stored: 1, covered: 3, address: ADDRESS });
+    expect(putDays).toHaveBeenCalledWith(
+      ADDRESS,
+      "workouts",
+      [{ day: daysAgo(2), value: 1 }],
+      32400,
+    );
+    expect(putCoveredDays).toHaveBeenCalledWith(ADDRESS, covered, 32400);
+  });
+
+  it("forwards a partial flag on a day, and defaults it to false", async () => {
+    const res = await POST(
+      post({
+        days: [
+          { metric: "sleep_hours", day: daysAgo(2), value: 7.1 },
+          { metric: "sleep_hours", day: daysAgo(1), value: 3.2, partial: true },
+        ],
+        tzOffsetSec: 0,
+        coveredDays: [daysAgo(2), daysAgo(1)],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(putDays).toHaveBeenCalledWith(
+      ADDRESS,
+      "sleep_hours",
+      [
+        { day: daysAgo(2), value: 7.1 },
+        { day: daysAgo(1), value: 3.2, partial: true },
+      ],
+      0,
+    );
+  });
+
+  it("an older phone that sends neither field still syncs: coverage is the days with data, offset unknown", async () => {
+    const res = await POST(
+      post({
+        days: [
+          { metric: "steps", day: daysAgo(2), value: 9000 },
+          { metric: "sleep_hours", day: daysAgo(2), value: 7 },
+          { metric: "steps", day: daysAgo(1), value: 4000 },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ stored: 3, covered: 2, address: ADDRESS });
+    expect(putCoveredDays).toHaveBeenCalledWith(ADDRESS, [daysAgo(2), daysAgo(1)], null);
+    expect(putDays).toHaveBeenCalledWith(ADDRESS, "steps", expect.anything(), null);
+  });
+
+  it("rejects an offset that is not an integer number of seconds on Earth", async () => {
+    // (NaN cannot travel through JSON; it arrives as null, which is "unknown".)
+    for (const tzOffsetSec of ["32400", 1.5, 15 * 3600, -15 * 3600, {}, true]) {
+      const res = await POST(post({ days: ONE_DAY, tzOffsetSec }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/tzOffsetSec/);
+    }
+    expect(putDays).not.toHaveBeenCalled();
+    expect(putCoveredDays).not.toHaveBeenCalled();
+  });
+
+  it("accepts the edges of the offset range and a null offset", async () => {
+    for (const tzOffsetSec of [14 * 3600, -14 * 3600, 0, null]) {
+      expect((await POST(post({ days: ONE_DAY, tzOffsetSec }))).status).toBe(200);
+    }
+  });
+
+  it("holds covered days to the same date rules as data days", async () => {
+    const future = new Date();
+    future.setUTCDate(future.getUTCDate() + 5);
+    const cases: unknown[] = [
+      "not-an-array",
+      ["2026-13-01"],
+      [future.toISOString().slice(0, 10)],
+      [daysAgo(90)],
+      [42],
+      Array.from({ length: 401 }, () => daysAgo(1)),
+    ];
+    for (const coveredDays of cases) {
+      const res = await POST(post({ days: ONE_DAY, coveredDays }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/coveredDays/);
+    }
+    // All-or-nothing: nothing was written for any of them.
+    expect(putDays).not.toHaveBeenCalled();
+    expect(putCoveredDays).not.toHaveBeenCalled();
+  });
+
+  it("a batch with no data of any kind records no coverage: a read that found nothing cannot vouch for days it did not read", async () => {
+    // The phone reads five HealthKit queries with allSettled and posts the
+    // whole window as covered whatever settled. A sync that fires while the
+    // phone is locked has every query throw errorDatabaseInaccessible, so it
+    // arrives here as days: [] plus thirty-one covered days. Recording that
+    // coverage would let SPOTTER read "covered, no workout" on a day whose
+    // workout the phone never saw, while an earlier sync's steps rows keep
+    // the no-data-at-all guard in getMissEvidence quiet. A carried iPhone
+    // produces steps every day, so a batch with no row of any metric is never
+    // a real read: answer it, write nothing, and say so in the response.
+    const covered = [daysAgo(2), daysAgo(1)];
+    const res = await POST(post({ days: [], tzOffsetSec: 3600, coveredDays: covered }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ stored: 0, covered: 0, address: ADDRESS });
+    expect(putDays).not.toHaveBeenCalled();
+    expect(putCoveredDays).not.toHaveBeenCalled();
+    expect(setProviderId).not.toHaveBeenCalled();
+    expect(confirmDevice).not.toHaveBeenCalled();
+  });
+
+  it("coverage is written only when the same batch carries data", async () => {
+    const covered = [daysAgo(2), daysAgo(1)];
+    const res = await POST(
+      post({
+        days: [{ metric: "steps", day: daysAgo(1), value: 120 }],
+        tzOffsetSec: 3600,
+        coveredDays: covered,
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ stored: 1, covered: 2, address: ADDRESS });
+    expect(putCoveredDays).toHaveBeenCalledWith(ADDRESS, covered, 3600);
+  });
+
+  it("rejects a sync that carries neither data nor coverage", async () => {
+    expect((await POST(post({ days: [], coveredDays: [] }))).status).toBe(400);
+    expect(putCoveredDays).not.toHaveBeenCalled();
+  });
+
+  it("rejects a partial flag that is not a boolean", async () => {
+    const res = await POST(
+      post({ days: [{ metric: "sleep_hours", day: daysAgo(1), value: 7, partial: "yes" }] }),
+    );
+    expect(res.status).toBe(400);
+    expect(putDays).not.toHaveBeenCalled();
+  });
+
+  it("writes coverage under the token's wallet after the values, and a coverage failure is a 502", async () => {
+    putCoveredDays.mockRejectedValue(new Error("wearable_sync_days upsert failed: relation missing"));
+    const res = await POST(post({ days: ONE_DAY, tzOffsetSec: 0, coveredDays: [daysAgo(1)] }));
+    expect(res.status).toBe(502);
+    expect(JSON.stringify(await res.json())).not.toContain("relation missing");
+    // The values landed first and stay: a re-sync upserts them again.
+    expect(putDays).toHaveBeenCalled();
   });
 });
 

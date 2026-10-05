@@ -43,10 +43,26 @@
 // claim. Two providers silently answering the same threshold with different
 // numbers was a money defect, not a wording one.
 
+//
+// HOW A MISS IS JUDGED FOR APPLE (and why it took a second table)
+//
+// The miss rule (lib/server/agent/miss.ts) forfeits a stake only when the
+// wearable covered every local day of the challenge and the data shows the
+// goal was not met. For a pulled provider the vendor's records say which days
+// the device reported. For Apple the phone says so itself: every sync posts
+// the local days it read HealthKit for, data or not (wearable_sync_days), and
+// the UTC offset it keyed them with. getMissEvidence turns that into the same
+// per-local-day evidence WHOOP and Junction give, so an Apple player who
+// misses loses the stake the way a WHOOP player does, and an Apple hit is
+// flagged by the sweep without the player opening the page. A phone that
+// never said its offset (a build before coverage) gets null, and the rule
+// records nothing for it, which is the refund-only behaviour Apple had before.
+
 import { PROVIDER_CAPABILITIES } from "@/lib/provider-capabilities";
 import {
   appleStoreConfigured,
   deleteAllAppleData,
+  getCoveredDays,
   getDays,
   getObservedMetrics,
   getSourcedDays,
@@ -61,6 +77,7 @@ import {
 import { mintPairingCode } from "@/lib/server/wearable/apple-pairing";
 import type {
   MetricProgress,
+  MissEvidence,
   ObservedCapability,
   WearableLink,
   WearableMetric,
@@ -145,13 +162,21 @@ export async function appleLinkState(address: string): Promise<AppleLinkState> {
  * sync, and reading it as zero would tell someone who walked 12,000 that they
  * missed. Junction and WHOOP mark every day sourced for these same two, so
  * diverging here would pay differently by provider.
+ *
+ * Days here, as everywhere in this module, are the phone's LOCAL calendar
+ * days: the phone keys each aggregate to the wearer's day and the server
+ * stores it as named. The miss rule needs more than "a row exists" to call a
+ * day a real zero (the phone must have covered it, getMissEvidence); the pass
+ * path only ever pays, so sourced-at-all is enough for it.
  */
 const EVERY_DAY_SOURCED: ReadonlySet<string> = new Set([
   "workouts",
   "distance_km",
 ]);
 
-/** Every UTC day in an inclusive window. */
+/** Every calendar day in an inclusive YYYY-MM-DD window. The arithmetic is
+ *  done in UTC on purpose: the keys are the wearer's local day names, and a
+ *  day name advances the same way whatever calendar it came from. */
 function daysInWindow(startISO: string, endISO: string): string[] {
   const out: string[] = [];
   const cursor = new Date(`${startISO}T00:00:00Z`);
@@ -330,6 +355,85 @@ export const appleProvider: WearableProvider = {
     };
   },
 
+  /**
+   * Per-local-day evidence for the miss rule (lib/server/agent/miss.ts).
+   *
+   * values         the stored value per local day for this metric (the phone
+   *                posts one aggregate per day, so no merging is needed)
+   * heartbeatDays  the days the phone COVERED (read HealthKit for, data or
+   *                not). A covered day with no workouts row is a real zero; a
+   *                day the phone never read is unknown, and unknown refunds.
+   *                A covered day after the window is the proof it synced
+   *                after the window closed.
+   * sourceDays     days the phone reported anything on: covered days plus
+   *                any day with a row (rows from a build before coverage).
+   *                Tells the pass path "no sleep on a day the phone reported"
+   *                (the device does not measure it) from "nothing synced yet".
+   * partialDays    sleep days the phone flagged incomplete; never covered.
+   * tzOffsetSec    the offset from the newest covered day that states one;
+   *                null when none does, and then no miss can be recorded.
+   */
+  async getMissEvidence(
+    address: string,
+    metric: WearableMetric,
+    fromISO: string,
+  ): Promise<MissEvidence> {
+    if (!appleProvider.metrics.includes(metric)) {
+      throw new Error(
+        `Apple Health cannot report ${metric}. Apple publishes no proprietary sleep score.`,
+      );
+    }
+    // Up to one day past UTC today: a wearer east of Greenwich can honestly
+    // have covered a local day that has not started in UTC.
+    const to = daysAfter(isoDay(new Date()), 1);
+    const [rows, covered, sourced] = await Promise.all([
+      getDays(address, metric, fromISO, to),
+      getCoveredDays(address, fromISO, to),
+      getSourcedDays(address, fromISO, to),
+    ]);
+
+    const values: Record<string, number> = {};
+    const partial: string[] = [];
+    for (const row of rows) {
+      values[row.day] = row.value;
+      if (row.partial === true) partial.push(row.day);
+    }
+
+    const heartbeatDays = [...new Set(covered.map((c) => c.day))];
+    const sourceDays = [...new Set([...heartbeatDays, ...sourced])];
+
+    // iOS never tells an app whether Health read access was granted: a
+    // denied sheet and an idle wearer both read as "covered, nothing found".
+    // A phone that is syncing at all produces steps on its own, so a read
+    // with no row of ANY metric is inconclusive, and the miss rule must
+    // refund on it (source-unhealthy) rather than forfeit a workouts stake.
+    // Sleep needs a value on every night regardless, so this only ever adds
+    // caution.
+    const sourceProblem =
+      heartbeatDays.length > 0 && rows.length === 0 && sourced.size === 0
+        ? "the phone covers days but has produced no Apple Health data of any kind; a denied Health permission cannot be told from an idle wearer"
+        : null;
+
+    // getCoveredDays answers newest day first; the first row that states an
+    // offset is the wearer's current calendar.
+    let tzOffsetSec: number | null = null;
+    for (const day of covered) {
+      if (day.tzOffsetSec !== null) {
+        tzOffsetSec = day.tzOffsetSec;
+        break;
+      }
+    }
+
+    return {
+      values,
+      heartbeatDays,
+      sourceDays,
+      partialDays: partial,
+      sourceProblem,
+      tzOffsetSec,
+    };
+  },
+
   async getProgress(
     address: string,
     threshold: number,
@@ -338,19 +442,36 @@ export const appleProvider: WearableProvider = {
     windowEndISO?: string,
   ): Promise<WearableProgress> {
     // The dashboard card is a sleep card for every provider. The window is
-    // widened backwards so baselineWeekAverage has its 8-14 days to work with.
-    const end = windowEndISO ?? isoDay(new Date());
-    const start = windowStartISO ?? daysBefore(end, Math.max(goalDays, 14) + 1);
-    const rows = await getDays(
-      address,
-      "sleep_efficiency",
-      daysBefore(start, 14),
-      end,
-    );
+    // widened backwards so baselineWeekAverage has its 8-14 days to work with,
+    // and forwards to UTC tomorrow so a wearer east of Greenwich, whose
+    // current local day has not started in UTC, is not read a night late.
+    const today = isoDay(new Date());
+    const end = windowEndISO ?? daysAfter(today, 1);
+    const start = windowStartISO ?? daysBefore(today, Math.max(goalDays, 14) + 1);
+    const readFrom = daysBefore(start, 14);
+    const [rows, covered, sourced] = await Promise.all([
+      getDays(address, "sleep_efficiency", readFrom, end),
+      getCoveredDays(address, readFrom, end),
+      getSourcedDays(address, readFrom, end),
+    ]);
     const byDay = bestScorePerDay(
       rows.map((r) => ({ day: r.day, value: r.value })),
     );
-    if (byDay.size === 0) return NO_PROGRESS;
+
+    // Nights the phone REPORTED, scored or not. A covered day is the phone
+    // reporting, whether or not a Watch produced a night: an iPhone with no
+    // Watch covers every day and scores none, and that must read as "this
+    // device sends no sleep data", not "awaiting first sync" for ever
+    // (QA 2026-09-26). Days with any row count too, for rows written before
+    // coverage existed.
+    const reported = new Set<string>([
+      ...byDay.keys(),
+      ...covered.map((c) => c.day),
+      ...sourced,
+    ]);
+    if (byDay.size === 0) {
+      return { ...NO_PROGRESS, nightsReported: reported.size };
+    }
 
     return {
       streakDays: countQualifyingDays(
@@ -362,13 +483,16 @@ export const appleProvider: WearableProvider = {
       ),
       baselineWeekAvg: baselineWeekAverage(byDay),
       days: daySeries(byDay),
-      nightsReported: byDay.size,
+      nightsReported: reported.size,
     };
   },
 
   async getRecent(address: string, days: number): Promise<WearableRecent> {
-    const end = isoDay(new Date());
-    const start = daysBefore(end, Math.max(days, 1));
+    // Through UTC tomorrow: last night in Tokyo is keyed to a local day that
+    // is still tomorrow in UTC for nine hours after the wearer woke up.
+    const today = isoDay(new Date());
+    const end = daysAfter(today, 1);
+    const start = daysBefore(today, Math.max(days, 1));
     const [score, hours, steps] = await Promise.all([
       getDays(address, "sleep_efficiency", start, end),
       getDays(address, "sleep_hours", start, end),
@@ -402,8 +526,14 @@ export const appleProvider: WearableProvider = {
 };
 
 // --------------------------------------------------------------- date helpers
+//
+// These compute the server's own read BOUNDS, in UTC, wide enough to include
+// any wearer's local day: every open-ended read reaches to UTC today + 1,
+// because a wearer at UTC+9 or beyond has a local day that UTC has not
+// started. The day KEYS inside those bounds are the phone's local days as
+// posted; nothing here re-keys them.
 
-/** The wearer's local calendar day, matching streak.ts's key format. */
+/** A YYYY-MM-DD key in streak.ts's format, from a UTC instant. */
 function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -412,4 +542,8 @@ function daysBefore(isoDayStr: string, days: number): string {
   const d = new Date(`${isoDayStr}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - days);
   return isoDay(d);
+}
+
+function daysAfter(isoDayStr: string, days: number): string {
+  return daysBefore(isoDayStr, -days);
 }

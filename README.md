@@ -45,7 +45,7 @@ This repository is the **ETHGlobal Tokyo 2026** build (Sep 25-27, 2026), entered
 - **Launch goals are the intersection.** A run can only be created on a goal every offered provider can verify (`LAUNCH_METRICS` in `app/lib/provider-capabilities.ts`: sleep efficiency, hours of sleep, workouts), so no player meets a run their wearable cannot prove. The steps run was cancelled and replaced for that reason (`DEPLOYMENTS.md` deploy log). Commit `9f611c7`, merge `3dbe671`.
 - **Limits before the stake.** An unsynced or unreadable device is a hold with its fix, shown at pairing and in the lobby, never after a stake. `app/lib/wearable-join-gate.ts`, `app/lib/game/join-checks.ts`, merges `37dda94`, `e48146f`.
 - **Gas drip for email wallets.** An email sign-in gives a plain EOA with 0 ETH, which dead-ended on every write in V3. Before the first write the treasury sends 0.0005 test ETH, capped per wallet and per day. `app/lib/server/gas-drip.ts`, `app/lib/ensure-gas.ts`, `app/app/api/gas/drip/route.ts`, merge `8eb8ab3`. First real join asserted on chain (USDC 50 to 49, pool 8 to 9).
-- **Apple Health: not yet.** Hidden until the phone app ships (`APPLE_APP_AVAILABLE`, `app/lib/server/wearable/apple.ts`); the pairing branch is not merged and not part of this submission.
+- **Apple Watch, equal to WHOOP.** Pair by one-time code in two taps on the phone (`app/lib/server/wearable/apple-pairing.ts`, `mobile/`), days pushed from the GoHealthMe iPhone app with HealthKit background delivery, local-day coverage so a miss is judged like WHOOP's (`supabase/migrations/20261006000000_wearable_days_coverage.sql`). In the product once `APPLE_APP_AVAILABLE=1` and `APPLE_APP_INSTALL_URL` (the TestFlight link) are set on the deployment; until then the picker says "Apple Watch is not open on this build yet." Launch checklist and `scripts/apple-launch-check.mjs` in `docs/WEARABLES.md`.
 
 ### The redesign: Night Shift
 
@@ -55,7 +55,7 @@ This repository is the **ETHGlobal Tokyo 2026** build (Sep 25-27, 2026), entered
 
 ### Privacy and terms
 
-- `app/app/privacy/page.tsx` and `app/app/terms/page.tsx` rewritten to be true for V4: World nullifier binding per action, ENS names and the hourly re-check of linked names, the gas drip, what Junction and WHOOP receive, Apple not offered yet, the 120-day wearable retention sweep that now runs daily (`/api/cron/wearable-retention`, commit `43ab4cd`), the commitment model in the terms. Two false V3 claims removed. Commits `b1b43b7`, `da8c894`.
+- `app/app/privacy/page.tsx` and `app/app/terms/page.tsx` rewritten to be true for V4: World nullifier binding per action, ENS names and the hourly re-check of linked names, the gas drip, what Junction and WHOOP receive, Apple not offered yet (since reversed: see Apple Watch above, and the privacy page now describes the iPhone app), the 120-day wearable retention sweep that now runs daily (`/api/cron/wearable-retention`, commit `43ab4cd`), the commitment model in the terms. Two false V3 claims removed. Commits `b1b43b7`, `da8c894`.
 
 ### Fixes V3 needed
 
