@@ -23,13 +23,11 @@
 //
 // Probed only for the provider actually backing this wallet, and only when it
 // is connected: a browse surface must not pay for a probe of a provider nobody
-// is using. Null narrows nothing, so an upstream hiccup can never take pools
-// off somebody's board.
+// is using. Apple is the one exception (see GET): it is linked from the moment
+// a phone redeems a code, before it is the stored choice, and its probe is a
+// read of our own table. Null narrows nothing, so an upstream hiccup can never
+// take challenges off somebody's board.
 
-import { whoopSeatStatus } from "@/lib/server/wearable/whoop-seats";
-
-const WHOOP_FULL_NOTE =
-  "WHOOP's direct seats are full. Pair through Junction instead; it covers WHOOP straps too.";
 import { type NextRequest } from "next/server";
 import { isAddress } from "viem";
 import { jsonError } from "@/lib/server/http";
@@ -41,6 +39,20 @@ import {
   providerConfigured,
   providerIdFor,
 } from "@/lib/server/wearable";
+import { appleAppAvailable, appleConfigured } from "@/lib/server/wearable/apple";
+import { whoopSeatStatus } from "@/lib/server/wearable/whoop-seats";
+
+const WHOOP_FULL_NOTE =
+  "WHOOP's direct seats are full. Pair through Junction instead; it covers WHOOP straps too.";
+// The Apple store exists but APPLE_APP_AVAILABLE is off, so Apple is neither
+// offered nor read (lib/server/wearable/index.ts providerConfigured). A wallet
+// whose iPhone already synced is served by the fallback provider in that
+// state; this line keeps that from being silent.
+const APPLE_NOT_OPEN_NOTE = "Apple Watch is not open on this build yet.";
+
+function appleNote(): string | null {
+  return appleConfigured() && !appleAppAvailable() ? APPLE_NOT_OPEN_NOTE : null;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,7 +72,9 @@ export async function GET(request: NextRequest) {
           note:
             id === "whoop" && providerConfigured(id) && (await whoopSeatStatus(null)).seatsLeft === 0
               ? WHOOP_FULL_NOTE
-              : null,
+              : id === "apple"
+                ? appleNote()
+                : null,
           connected: false,
           metrics: providerById(id).metrics,
           capability: "declared",
@@ -102,8 +116,17 @@ export async function GET(request: NextRequest) {
         // rather than fall back to the declared union - that fallback is how
         // a Junction outage handed a wallet all seven metrics on no evidence,
         // and how a WHOOP-via-Junction wallet was offered steps runs.
+        //
+        // Apple is probed whenever it is linked, selected or not. It records
+        // itself as the wallet's provider only when the first day arrives, so
+        // a phone that redeemed a code and has not synced is linked while the
+        // stored choice is still Junction or WHOOP. The pairing panel reads
+        // Apple's entry directly (lib/wearable-connect.ts phonePairingOf),
+        // and "declared" there renders as paired with every metric before a
+        // single day exists. The probe is a query against our own table, so
+        // nothing upstream is paid for a provider nobody is using.
         let capability: ObservedCapability = { kind: "declared" };
-        if (connected && id === selected) {
+        if (connected && (id === selected || id === "apple")) {
           try {
             capability = await provider.observedMetrics(address);
           } catch (err) {
@@ -123,7 +146,12 @@ export async function GET(request: NextRequest) {
           id,
           label: provider.label,
           configured: offered,
-          note: id === "whoop" && configured && !offered ? WHOOP_FULL_NOTE : null,
+          note:
+            id === "whoop" && configured && !offered
+              ? WHOOP_FULL_NOTE
+              : id === "apple"
+                ? appleNote()
+                : null,
           connected,
           metrics: provider.metrics,
           capability: capability.kind,

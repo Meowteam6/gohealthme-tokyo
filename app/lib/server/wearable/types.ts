@@ -176,7 +176,19 @@ export type WearableLink =
    * exists, and `instructions` is what to tell a user reading this on a
    * desktop, where the deep link cannot help them.
    */
-  | { kind: "app"; linkUrl: string | null; instructions: string };
+  | {
+      kind: "app";
+      linkUrl: string | null;
+      instructions: string;
+      /**
+       * A one-time code the phone app redeems to learn which wallet it syncs
+       * for (Apple Health; see apple-pairing.ts). Absent for providers whose
+       * app signs in on its own.
+       */
+      pairing?: { code: string; deepLink: string; expiresAt: number };
+      /** Where to get the phone app, when the deployment names one. */
+      installUrl?: string | null;
+    };
 
 /**
  * One health-data integration.
@@ -252,8 +264,10 @@ export interface WearableProvider {
   /**
    * Per-local-day evidence for the miss rule, from `fromISO` (a UTC date,
    * inclusive) to now. Optional: a provider that cannot place its data on
-   * the wearer's calendar (Apple rows carry no timezone) does not implement
-   * it, and SPOTTER then never records a miss for its wallets.
+   * the wearer's calendar does not implement it, and SPOTTER then never
+   * records a miss for its wallets. All three current providers implement
+   * it; Apple does so from the local days and UTC offset the phone posts
+   * with each sync (apple.ts getMissEvidence).
    */
   getMissEvidence?(
     address: string,

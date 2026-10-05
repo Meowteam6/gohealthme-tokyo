@@ -59,11 +59,167 @@ export class PopupBlockedError extends Error {
  */
 export class PhoneLinkRequiredError extends Error {
   readonly instructions: string;
-  constructor(instructions: string) {
+  /** The one-time code the phone app redeems, when the provider pairs by code. */
+  readonly pairing: PhonePairing | null;
+  /** Where to get the phone app, when the deployment names one. */
+  readonly installUrl: string | null;
+  constructor(
+    instructions: string,
+    pairing: PhonePairing | null = null,
+    installUrl: string | null = null,
+  ) {
     super("This device is connected from the phone app, not the browser.");
     this.name = "PhoneLinkRequiredError";
     this.instructions = instructions;
+    this.pairing = pairing;
+    this.installUrl = installUrl;
   }
+}
+
+/** A pairing code minted for this wallet by the link route. */
+export interface PhonePairing {
+  code: string;
+  deepLink: string;
+  expiresAt: number;
+}
+
+/** What the phone pairing panel renders: the link route's app-kind answer. */
+export interface PhoneSteps {
+  /** The server's fallback sentence, shown only when no code was minted. */
+  instructions: string;
+  pairing: PhonePairing | null;
+  installUrl: string | null;
+}
+
+/**
+ * Providers that pair from a phone app and never from a browser page. Known
+ * on the client so an explicit pick of one skips the speculative popup: a
+ * blank tab that opens and closes again is a flash on the very phone the
+ * player is about to pair, and nothing was ever going to load in it.
+ */
+const PHONE_PROVIDERS: ReadonlySet<ProviderId> = new Set<ProviderId>(["apple"]);
+
+const PHONE_FALLBACK_INSTRUCTIONS =
+  "Open the GoHealthMe app on your iPhone to finish pairing this device.";
+
+/**
+ * True on an iPhone, from the user agent. Only the iPhone can open the
+ * GoHealthMe app by deep link, so this decides whether the pairing panel leads
+ * with the deep link or with the code. An iPad or a Mac gets the code; the
+ * app is an iPhone app and the wrong guess here is a dead button.
+ */
+export function isIphoneUserAgent(userAgent: string): boolean {
+  return /\biPhone\b/.test(userAgent);
+}
+
+/**
+ * A fresh pairing code for the one-tap "Get a new code", with no popup and no
+ * navigation: the answer is rendered in place. Throws when the route answers
+ * with a web link, which would mean the phone provider is no longer the one
+ * being paired.
+ */
+export async function requestPhonePairing(
+  address: `0x${string}`,
+  requestAuth: WalletAuthRequester,
+): Promise<PhoneSteps> {
+  const target = await fetchLinkTarget(address, requestAuth, "apple");
+  if (target.kind !== "app") {
+    throw new Error(
+      "Apple Watch pairs from the iPhone app, and the server offered a web link instead.",
+    );
+  }
+  return {
+    instructions: target.instructions ?? PHONE_FALLBACK_INSTRUCTIONS,
+    pairing: target.pairing,
+    installUrl: target.installUrl,
+  };
+}
+
+/** How often the pairing panel re-reads the provider list while a code is live. */
+export const PAIR_POLL_INTERVAL_MS = 3_000;
+
+/**
+ * What the provider list says about the phone, for the pairing panel. Read
+ * off the same answer the join gate uses, so "paired" here and "paired" in
+ * the lobby can never disagree.
+ *
+ *   paired         the phone has stored a sync; `metrics` is what it counts
+ *   awaiting-sync  linked (a code was redeemed) and nothing has arrived yet
+ *   unreadable     linked, and the server could not say what it counts
+ *   unpaired       Apple is not connected for this wallet
+ */
+export type PhonePairState =
+  | { kind: "paired"; label: string; metrics: WearableMetric[] }
+  | { kind: "awaiting-sync"; label: string }
+  | { kind: "unreadable"; label: string }
+  | { kind: "unpaired" };
+
+export function phonePairingOf(options: ProviderOptions | undefined): PhonePairState {
+  if (options === undefined || options.status !== "known") return { kind: "unpaired" };
+  const apple = options.providers.find((p) => p.id === "apple");
+  if (apple === undefined || !apple.configured || !apple.connected) {
+    return { kind: "unpaired" };
+  }
+  switch (apple.capability) {
+    case "awaiting-sync":
+      return { kind: "awaiting-sync", label: apple.label };
+    case "unknown":
+      return { kind: "unreadable", label: apple.label };
+    default:
+      return {
+        kind: "paired",
+        label: apple.label,
+        metrics: apple.observedMetrics ?? apple.metrics,
+      };
+  }
+}
+
+/** The one state the pairing panel is in. The phone's answer beats the code. */
+export type PairPanelPhase =
+  | "paired"
+  | "awaiting-sync"
+  | "unreadable"
+  | "live"
+  | "expired"
+  | "no-code";
+
+export function pairPanelPhase(
+  pairing: PhonePairing | null,
+  pair: PhonePairState,
+  now: number,
+): PairPanelPhase {
+  if (pair.kind !== "unpaired") return pair.kind;
+  if (pairing === null) return "no-code";
+  return now < pairing.expiresAt ? "live" : "expired";
+}
+
+/**
+ * Whether a pairing can still land, so polling is worth it: a code is live,
+ * or the phone redeemed one and its first sync is still due, and either way
+ * only inside the code's own ten minutes. Past that the next focus of the tab
+ * re-reads on its own; a timer that never stops is a battery cost for nothing.
+ *
+ * A re-pair (`repair`) never polls: the wallet reads paired before the new
+ * phone redeems the code and paired after, so there is nothing to notice.
+ */
+export function pairPanelPolls(
+  phase: PairPanelPhase,
+  pairing: PhonePairing | null,
+  now: number,
+  repair = false,
+): boolean {
+  if (repair) return false;
+  if (phase !== "live" && phase !== "awaiting-sync") return false;
+  return pairing !== null && now < pairing.expiresAt;
+}
+
+function parsePairing(input: unknown): PhonePairing | null {
+  if (typeof input !== "object" || input === null) return null;
+  const { code, deepLink, expiresAt } = input as Record<string, unknown>;
+  if (typeof code !== "string" || typeof deepLink !== "string") return null;
+  if (!deepLink.startsWith("gohealthme://")) return null;
+  if (typeof expiresAt !== "number" || !Number.isFinite(expiresAt)) return null;
+  return { code, deepLink, expiresAt };
 }
 
 /** Where the connect flow wants to send the user. */
@@ -73,6 +229,8 @@ interface LinkTarget {
   kind: "oauth" | "app";
   linkUrl: string | null;
   instructions: string | null;
+  pairing: PhonePairing | null;
+  installUrl: string | null;
 }
 
 /**
@@ -105,6 +263,8 @@ export async function fetchLinkTarget(
     kind?: unknown;
     linkUrl?: unknown;
     instructions?: unknown;
+    pairing?: unknown;
+    installUrl?: unknown;
     error?: unknown;
   } | null;
 
@@ -137,6 +297,11 @@ export async function fetchLinkTarget(
     linkUrl,
     instructions:
       typeof body?.instructions === "string" ? body.instructions : null,
+    pairing: parsePairing(body?.pairing),
+    installUrl:
+      typeof body?.installUrl === "string" && body.installUrl.startsWith("https://")
+        ? body.installUrl
+        : null,
   };
 }
 
@@ -160,7 +325,11 @@ export async function startWearableLink(
   /** In-app path a same-tab OAuth (WHOOP) returns to. Defaults to /dashboard. */
   returnTo?: string,
 ): Promise<void> {
-  const popup = window.open("about:blank", "_blank");
+  // An explicit pick of a phone provider has no page to open, so no window is
+  // opened for it. The wallet's stored choice still goes through the popup
+  // dance below: which shape it is comes back with the route's answer.
+  const phoneOnly = provider !== undefined && PHONE_PROVIDERS.has(provider);
+  const popup = phoneOnly ? null : window.open("about:blank", "_blank");
   if (popup !== null) {
     try {
       // Static placeholder, built with DOM APIs (no markup parsing, so no
@@ -193,8 +362,9 @@ export async function startWearableLink(
       return;
     }
     throw new PhoneLinkRequiredError(
-      target.instructions ??
-        "Open the GoHealthMe app on your phone to finish connecting this device.",
+      target.instructions ?? PHONE_FALLBACK_INSTRUCTIONS,
+      target.pairing,
+      target.installUrl,
     );
   }
 

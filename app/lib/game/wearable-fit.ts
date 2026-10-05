@@ -125,11 +125,15 @@ export function brandHint(
   a: WearableAvailability,
 ): Segment[] {
   const label = BRAND_LABEL[brand];
+  // Every brand this build can pair is an alternative, Apple Watch included
+  // once APPLE_APP_AVAILABLE is on: it plays the same sleep and workout
+  // challenges WHOOP does.
   const others = pairableBrands(a)
-    .filter((b) => b !== brand && b !== "apple")
+    .filter((b) => b !== brand)
     .map((b) => BRAND_LABEL[b]);
+  const article = /^[aeiou]/i.test(others[0] ?? "") ? "An" : "A";
   const alternatives =
-    others.length > 0 ? ` A ${joinOr(others)} works today.` : "";
+    others.length > 0 ? ` ${article} ${joinOr(others)} works today.` : "";
 
   if (brand === "none") {
     const pairable = pairableBrands(a).map((b) => BRAND_LABEL[b]);
@@ -172,7 +176,23 @@ export function brandHint(
     ];
   }
   if (brand === "apple") {
-    return [{ text: lead, strong: true }, { text: " Set it up in the GoHealthMe app on your iPhone." }];
+    // The limits, named here the way WHOOP's are: sleep comes from the Watch
+    // (an iPhone alone has none; the join gate narrows that per wallet after
+    // the first sync), and the metrics Apple never reports (no proprietary
+    // sleep score) are read from the same table WHOOP's gap is. Then the
+    // pairing, once: after it the iPhone app posts each day on its own
+    // (HealthKit background delivery) and whenever it is opened.
+    const missing = WEARABLE_METRICS.filter((m) => !metrics.includes(m)).map(metricLabel);
+    return [
+      { text: lead, strong: true },
+      {
+        text:
+          missing.length > 0
+            ? ` Sleep needs the Watch, and it has no ${joinOr(missing)}.`
+            : " Sleep needs the Watch.",
+      },
+      { text: " Pair it once; the GoHealthMe iPhone app syncs on its own after that." },
+    ];
   }
   return [
     { text: lead, strong: true },

@@ -77,6 +77,7 @@ import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import VerifyWalletAction from "@/components/VerifyWalletAction";
 import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
+import PhonePairPanel, { type PhoneSteps } from "@/components/PhonePairPanel";
 import { resultLabel } from "@/lib/participant-status";
 import { missConfirmByMs, missGraceSeconds } from "@/lib/miss-grace";
 import { missRulePool } from "@/lib/miss-rule";
@@ -266,7 +267,7 @@ function ConnectButton({
   // A provider that can only be linked on a phone is not an error state: the
   // user did nothing wrong and a retry cannot help. It gets its own calm panel
   // rather than the red ErrorNote, which would read as a fault.
-  const [phoneSteps, setPhoneSteps] = useState<string | null>(null);
+  const [phoneSteps, setPhoneSteps] = useState<PhoneSteps | null>(null);
   const [opening, setOpening] = useState(false);
   const requestAuth = useWalletAuth();
 
@@ -293,7 +294,11 @@ function ConnectButton({
                 return;
               }
               if (err instanceof PhoneLinkRequiredError) {
-                setPhoneSteps(err.instructions);
+                setPhoneSteps({
+                  instructions: err.instructions,
+                  pairing: err.pairing,
+                  installUrl: err.installUrl,
+                });
                 return;
               }
               setError(
@@ -309,9 +314,9 @@ function ConnectButton({
         {opening ? "Opening the connect flow" : label}
       </Button>
       {phoneSteps !== null ? (
-        <Notice tone="info" role="status" live className="mt-3">
-          {phoneSteps}
-        </Notice>
+        <div className="mt-3">
+          <PhonePairPanel steps={phoneSteps} />
+        </div>
       ) : null}
       {error !== null ? (
         <div className="mt-3">
@@ -393,12 +398,12 @@ function ProviderChoice({ address }: { address: `0x${string}` }) {
       reconnect: "Reconnect WHOOP",
     },
     apple: {
-      blurb:
-        "Apple Watch and iPhone, through the GoHealthMe app. Set up on your iPhone: a browser cannot read Apple Health.",
-      // "Set up", not "Connect": the click finishes nothing here. It tells you
-      // what to do on the phone, and the connection happens there.
-      cta: "Set up Apple Health",
-      reconnect: "Set up Apple Health again",
+      blurb: "Apple Watch and iPhone. Sleep and workouts, read on your phone.",
+      // "Pair", like the WHOOP card: the tap hands the iPhone a one-time code
+      // and the pairing card below flips to paired on its own once the app
+      // has synced. Nothing is typed when the site is open on the iPhone.
+      cta: "Pair my Apple Watch",
+      reconnect: "Re-pair my Apple Watch",
     },
   };
 
@@ -509,12 +514,14 @@ function StreakCard({
         </>
       ) : providerMetricUnavailable(state) ? (
         // Syncing, but this device does not produce a sleep score. A delay
-        // message here would be advice that can never come true.
+        // message here would be advice that can never come true. Apple
+        // publishes no score at all, for any Watch: it sends sleep hours and
+        // sleep efficiency, and the line says which to pick instead.
         <>
           <Notice tone="limit" className="mt-3">
-            Your device is syncing, and it does not report a sleep score, so there
-            is no streak to show here. That is the hardware, not a delay. Connect a
-            device that scores your sleep and this fills in.
+            {progress?.provider === "apple"
+              ? "Your Apple Watch is syncing. It sends hours of sleep and sleep efficiency, not a sleep score, so there is no sleep-score streak to show here. Pick a challenge scored on hours of sleep or sleep efficiency and this fills in."
+              : "Your device is syncing, and it does not report a sleep score, so there is no streak to show here. That is the hardware, not a delay. Connect a device that scores your sleep and this fills in."}
           </Notice>
           <ProviderChoice address={address} />
           <ConnectButton
@@ -530,9 +537,11 @@ function StreakCard({
         // through this state.
         <>
           <Notice tone="info" className="mt-3">
-            Your device is connected and has not sent anything yet. The first sync
-            usually lands within a few minutes. SPOTTER will not check this goal
-            until the data is here, so nothing is charged while you wait.
+            {progress?.provider === "apple"
+              ? "Your iPhone is paired and has not sent anything yet. Open the GoHealthMe app on your iPhone, or wait for its next background sync. "
+              : "Your device is connected and has not sent anything yet. The first sync usually lands within a few minutes. "}
+            SPOTTER will not check this goal until the data is here, so nothing
+            is charged while you wait.
           </Notice>
           <ConnectButton
             address={address}
@@ -640,9 +649,10 @@ const SOURCE_NOTE: Record<WearableProviderId, string> = {
   whoop: "Data by WHOOP, pulled live.",
   junction: "Pulled live from your linked device via Junction.",
   // Not "pulled": Apple is the one provider we cannot pull from. These numbers
-  // were computed on the phone and sent here, and saying so is also the honest
-  // way to explain why they stop updating when the app is not opened.
-  apple: "Sent from your iPhone by the GoHealthMe app.",
+  // were computed on the phone and sent here, in the background on the
+  // phone's own schedule or whenever the app is opened, and saying so is the
+  // honest way to explain a day that has not landed yet.
+  apple: "Sent from your iPhone by the GoHealthMe app, on its own and whenever you open it.",
 };
 
 /** Shows the latest few days pulled from the linked provider (demo proof). */

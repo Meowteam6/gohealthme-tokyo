@@ -263,6 +263,38 @@ describe("GET /api/wearable/progress link states", () => {
     expect(body.linkState).toBe("metric-unavailable");
   });
 
+  it("an iPhone-only Apple wallet reads metric-unavailable, never awaiting-first-sync for ever", async () => {
+    // QA 2026-09-26 major. Apple's getProgress now counts the days the phone
+    // covered as nights reported, so a wallet syncing steps from a phone with
+    // no Watch is "synced, no sleep data" rather than stuck on "awaiting
+    // first sync", which waiting could never fix.
+    providerFor.mockResolvedValue(
+      stubProvider({
+        id: "apple",
+        label: "Apple Health",
+        metrics: ["sleep_efficiency", "sleep_hours", "steps", "workouts"],
+      }),
+    );
+    isConnected.mockResolvedValue(true);
+    getProgress.mockResolvedValue({
+      streakDays: 0,
+      baselineWeekAvg: null,
+      days: [],
+      nightsReported: 12,
+    });
+
+    const body = (await (await get(`?address=${USER}`)).json()) as {
+      linkState: string;
+      provider: string;
+      metric: string;
+      lastSync: string | null;
+    };
+    expect(body.provider).toBe("apple");
+    expect(body.linkState).toBe("metric-unavailable");
+    expect(body.metric).toContain("Sleep efficiency");
+    expect(body.lastSync).toBeNull();
+  });
+
   it("names the number the provider actually produces", async () => {
     providerFor.mockResolvedValue(
       stubProvider({

@@ -327,13 +327,15 @@ export default function PrivacyPage() {
             straps connect through Junction instead.
           </p>
           <p>
-            <strong className="text-foreground">Apple Health</strong> is not
-            offered yet, because our iPhone app has no public build. When it
-            is, the app adds up your day on the phone and sends us one total
-            per day per metric. Individual readings, heart-rate samples and
-            routes never leave your phone. Those daily totals are stored in our
-            database (Supabase) against your wallet address, and a daily job
-            deletes any total older than 120 days.
+            <strong className="text-foreground">Apple Health</strong> is
+            offered through the GoHealthMe iPhone app (TestFlight during the
+            beta). The app adds up your day on the phone and sends us one
+            total per day per metric, plus which days it read and your time
+            zone offset so a missed day can be judged fairly. Individual
+            readings, heart-rate samples, sleep stages and routes never leave
+            your phone. Those daily totals are stored in our database
+            (Supabase) against your wallet address, and a daily job deletes
+            any total older than 120 days.
           </p>
           <p>
             You can disconnect a wearable at any time from{" "}
@@ -343,7 +345,10 @@ export default function PrivacyPage() {
             . For WHOOP that revokes our access at WHOOP and deletes the stored
             token. For a Junction device the page tells you where to unlink it,
             because Junction holds that link. You can also revoke WHOOP inside
-            the WHOOP app.
+            the WHOOP app. For Apple Health it deletes every daily total and
+            covered day we hold; to stop the iPhone app from sending new ones,
+            turn off GoHealthMe under Health access in your iPhone&apos;s
+            Settings, or delete the app.
           </p>
           <p>
             So our server does see the wearable summary it uses for the
@@ -394,7 +399,7 @@ export default function PrivacyPage() {
             <li>Chainlink Confidential AI Attester - reads uploaded documents inside an enclave, when document proof is on</li>
             <li>
               Supabase - our database (handles, challenge metadata, feedback,
-              and Apple Health daily totals once the iPhone app ships)
+              and Apple Health daily totals from the iPhone app)
             </li>
             <li>
               Upstash - our key-value store (SPOTTER&apos;s ledger, World ID
@@ -411,7 +416,7 @@ export default function PrivacyPage() {
             <li>Base Sepolia - the public test network where challenges settle</li>
             <li>Junction - wearable summaries, only if you connect a device through Junction</li>
             <li>WHOOP - sleep and workout summaries, only if you connect WHOOP directly</li>
-            <li>Apple Health - daily totals, only through our iPhone app once it ships</li>
+            <li>Apple Health - daily totals, only through our iPhone app</li>
           </ul>
         </section>
 

@@ -24,6 +24,7 @@ import {
   appleConfigured,
   appleProvider,
 } from "@/lib/server/wearable/apple";
+import { deviceExistsFor } from "@/lib/server/wearable/apple-pairing";
 import {
   junctionConfigured,
   junctionProvider,
@@ -194,10 +195,17 @@ function defaultProviderId(): ProviderId {
   return "junction";
 }
 
-/** The provider id that should serve this wallet. */
+/**
+ * The provider id that should serve this wallet: the stored choice when it is
+ * still configured, else a redeemed iPhone (the stored choice is only written
+ * on Apple's first stored day, so a wallet whose first and only link is the
+ * phone would otherwise be read through the default and never see its
+ * awaiting-sync hold), else the default.
+ */
 export async function providerIdFor(address: string): Promise<ProviderId> {
   const stored = await storedProviderId(address);
   if (stored !== null && providerConfigured(stored)) return stored;
+  if (providerConfigured("apple") && (await deviceExistsFor(address))) return "apple";
   return defaultProviderId();
 }
 

@@ -14,9 +14,12 @@
 //   1. The link cannot end at a browser consent page, so startLink returns
 //      WearableLink kind "app" and hands the user to the phone. The interface
 //      already carries that shape.
-//   2. There is no credential to check, so isConnected asks whether data has
-//      ever arrived. For a pushed provider the first sync IS the evidence that
-//      a phone is really attached to this wallet.
+//   2. There is no credential to check, so isConnected asks whether a phone is
+//      attached: one holds a device token for this wallet (it redeemed a
+//      pairing code, apple-pairing.ts), or data has arrived from one. Tapping
+//      Set up creates neither. Between redeeming and the first stored day the
+//      wallet is linked and awaiting its first sync, and the web holds on that
+//      instead of waiting out the pairing code and calling it expired.
 //
 // WHAT WE DELIBERATELY NEVER RECEIVE
 //
@@ -43,10 +46,26 @@
 // claim. Two providers silently answering the same threshold with different
 // numbers was a money defect, not a wording one.
 
+//
+// HOW A MISS IS JUDGED FOR APPLE (and why it took a second table)
+//
+// The miss rule (lib/server/agent/miss.ts) forfeits a stake only when the
+// wearable covered every local day of the challenge and the data shows the
+// goal was not met. For a pulled provider the vendor's records say which days
+// the device reported. For Apple the phone says so itself: every sync posts
+// the local days it read HealthKit for, data or not (wearable_sync_days), and
+// the UTC offset it keyed them with. getMissEvidence turns that into the same
+// per-local-day evidence WHOOP and Junction give, so an Apple player who
+// misses loses the stake the way a WHOOP player does, and an Apple hit is
+// flagged by the sweep without the player opening the page. A phone that
+// never said its offset (a build before coverage) gets null, and the rule
+// records nothing for it, which is the refund-only behaviour Apple had before.
+
 import { PROVIDER_CAPABILITIES } from "@/lib/provider-capabilities";
 import {
   appleStoreConfigured,
   deleteAllAppleData,
+  getCoveredDays,
   getDays,
   getObservedMetrics,
   getSourcedDays,
@@ -58,8 +77,14 @@ import {
   countQualifyingDays,
   daySeries,
 } from "@/lib/server/wearable/streak";
+import {
+  deviceExistsFor,
+  mintPairingCode,
+  revokeDevicesFor,
+} from "@/lib/server/wearable/apple-pairing";
 import type {
   MetricProgress,
+  MissEvidence,
   ObservedCapability,
   WearableLink,
   WearableMetric,
@@ -102,27 +127,42 @@ export function appleAppAvailable(): boolean {
  * charged, and has anything of mine been read.
  */
 const APP_HANDOFF_INSTRUCTIONS =
-  "Apple Health can only be read on the device that holds it, so there is " +
-  "nothing for this browser to open. Open the GoHealthMe app on your iPhone " +
-  "and allow Apple Health when it asks, then sync. Your Apple Health " +
-  "totals sync to this wallet each time you open the app and sync. Nothing " +
-  "was charged and no health data has been read yet.";
+  "Apple Health is read on your iPhone. Open the GoHealthMe app there and " +
+  "allow Apple Health when it asks. Your challenges switch to Apple Health " +
+  "once the first day arrives from the phone; until then whatever you " +
+  "already connected keeps counting. Nothing was charged and no health data " +
+  "has been read yet.";
+
+/**
+ * Where a player gets the iPhone app (a TestFlight public link during the
+ * beta). Optional: without it the copy still says what to open, it just has
+ * no link to hand over.
+ */
+export function appleInstallUrl(): string | null {
+  const raw = process.env.APPLE_APP_INSTALL_URL?.trim() ?? "";
+  return raw.startsWith("https://") ? raw : null;
+}
 
 /**
  * Where a wallet sits in the Apple link, in the shared vocabulary.
  *
- * "not-linked" nothing has ever arrived from a phone for this wallet
- * "linked"     days have arrived; the watch is reporting
+ * "not-linked"          no phone holds a token for this wallet and nothing
+ *                       has ever arrived from one
+ * "awaiting-first-sync" a phone redeemed a pairing code and no day has been
+ *                       stored yet: the Health sheet is still up, was denied,
+ *                       or the phone has simply not synced. Waiting, or
+ *                       opening the app, fixes it
+ * "linked"              days have arrived; the watch is reporting
  *
- * Apple never reports "awaiting-first-sync": nothing is created server-side
- * when someone taps Set up, so there is no in-between to be in. Either a phone
- * has pushed or it has not. "metric-unavailable" is decided per goal by
- * daysWithSource, not here.
+ * Tapping Set up creates nothing server-side, so it moves nothing here. The
+ * in-between begins when the phone redeems the code. "metric-unavailable" is
+ * decided per goal by daysWithSource, not here.
  */
-export type AppleLinkState = "not-linked" | "linked";
+export type AppleLinkState = "not-linked" | "awaiting-first-sync" | "linked";
 
 export async function appleLinkState(address: string): Promise<AppleLinkState> {
-  return (await hasAnyAppleData(address)) ? "linked" : "not-linked";
+  if (await hasAnyAppleData(address)) return "linked";
+  return (await deviceExistsFor(address)) ? "awaiting-first-sync" : "not-linked";
 }
 
 /**
@@ -134,13 +174,21 @@ export async function appleLinkState(address: string): Promise<AppleLinkState> {
  * sync, and reading it as zero would tell someone who walked 12,000 that they
  * missed. Junction and WHOOP mark every day sourced for these same two, so
  * diverging here would pay differently by provider.
+ *
+ * Days here, as everywhere in this module, are the phone's LOCAL calendar
+ * days: the phone keys each aggregate to the wearer's day and the server
+ * stores it as named. The miss rule needs more than "a row exists" to call a
+ * day a real zero (the phone must have covered it, getMissEvidence); the pass
+ * path only ever pays, so sourced-at-all is enough for it.
  */
 const EVERY_DAY_SOURCED: ReadonlySet<string> = new Set([
   "workouts",
   "distance_km",
 ]);
 
-/** Every UTC day in an inclusive window. */
+/** Every calendar day in an inclusive YYYY-MM-DD window. The arithmetic is
+ *  done in UTC on purpose: the keys are the wearer's local day names, and a
+ *  day name advances the same way whatever calendar it came from. */
 function daysInWindow(startISO: string, endISO: string): string[] {
   const out: string[] = [];
   const cursor = new Date(`${startISO}T00:00:00Z`);
@@ -187,23 +235,31 @@ export const appleProvider: WearableProvider = {
   linkKind: "app",
   metrics: PROVIDER_CAPABILITIES.apple,
 
-  async startLink(): Promise<WearableLink> {
-    // Nothing to provision. The phone posts under the wallet it signs as, so
-    // the first sync creates everything that needs creating.
+  async startLink(address: string): Promise<WearableLink> {
+    // The link route verified this wallet's signature before calling here, so
+    // this is the one moment the server can vouch for the phone: a short,
+    // single-use code the phone redeems for its device token. Nothing else is
+    // provisioned, and no provider choice is recorded until data arrives.
     return {
       kind: "app",
       linkUrl: null,
       instructions: APP_HANDOFF_INSTRUCTIONS,
+      pairing: await mintPairingCode(address),
+      installUrl: appleInstallUrl(),
     };
   },
 
-  isConnected(address: string): Promise<boolean> {
+  async isConnected(address: string): Promise<boolean> {
     // For a pushed provider there is no credential to validate, so the honest
-    // question is whether a phone has ever reported. Answering "yes" because
-    // someone tapped a button would tell a person who never installed the app
-    // that their watch is connected, and then read zero days and say they
-    // missed the goal.
-    return hasAnyAppleData(address);
+    // question is whether a phone is attached: data has arrived from one, or
+    // one holds a device token for this wallet (it redeemed a pairing code).
+    // Answering "yes" because someone tapped Set up would tell a person who
+    // never installed the app that their watch is connected; neither of these
+    // is created by the tap. A paired phone with no rows yet reads as
+    // awaiting its first sync everywhere downstream (daysWithSource 0,
+    // capability awaiting-sync), never as a miss on zero days.
+    if (await hasAnyAppleData(address)) return true;
+    return deviceExistsFor(address);
   },
 
   /**
@@ -215,16 +271,23 @@ export const appleProvider: WearableProvider = {
    * what lets the join gate say so BEFORE somebody stakes on a sleep pool
    * instead of after.
    *
-   * TWO WAYS TO GET THIS WRONG, BOTH OF WHICH TAKE POOLS AWAY FROM SOMEONE:
+   * THREE WAYS TO GET THIS WRONG, EACH OF WHICH MISLEADS SOMEONE AT THE JOIN:
    *
    * Returning [] when nothing has synced yet. An empty array means "this
    * device produced none of these", which the gate honours by hiding every
-   * wearable pool. A wallet that linked ten minutes ago has observed nothing
-   * and must fall back to the declared list, so it gets null.
+   * wearable challenge.
+   *
+   * Returning "declared" for a phone that has paired and not synced. Declared
+   * is the whole Apple list, so the pairing panel would say the watch is
+   * paired and counts everything before a single day exists, and an iPhone
+   * with no Watch would be offered sleep. A paired phone with no rows is
+   * "awaiting-sync": linked, and the join waits for the first day to show
+   * what this device measures. Declared stays the answer only when no phone
+   * is paired at all, where there is nothing to wait for.
    *
    * Returning [] on a query failure. Narrowing the gate because our own
-   * database was unreachable takes pools away for a reason that has nothing
-   * to do with the user's device. Errors are null too.
+   * database was unreachable takes challenges away for a reason that has
+   * nothing to do with the user's device. Errors are "unknown".
    */
   async observedMetrics(address: string): Promise<ObservedCapability> {
     // The same horizon the phone collects and the verdict reads. Asking a
@@ -243,10 +306,16 @@ export const appleProvider: WearableProvider = {
       return { kind: "unknown" };
     }
 
-    // DECLARED, not observed-with-an-empty-list. Nothing has arrived yet, so
-    // there is nothing to narrow, and an empty observed list would blank the
-    // whole board of a wallet that linked ten minutes ago.
-    if (observed.length === 0) return { kind: "declared" };
+    // Nothing has arrived yet. A paired phone is AWAITING-SYNC: the join
+    // holds until its first day says what the device measures (the panel
+    // reads this as "waiting on its first sync"). No phone at all is
+    // DECLARED, never observed-with-an-empty-list, which would blank the
+    // whole board of a wallet with nothing to wait for.
+    if (observed.length === 0) {
+      return (await deviceExistsFor(address))
+        ? { kind: "awaiting-sync" }
+        : { kind: "declared" };
+    }
 
     // Intersect with what this provider declares, so a row written by an older
     // build under a retired metric name cannot widen the gate.
@@ -315,6 +384,85 @@ export const appleProvider: WearableProvider = {
     };
   },
 
+  /**
+   * Per-local-day evidence for the miss rule (lib/server/agent/miss.ts).
+   *
+   * values         the stored value per local day for this metric (the phone
+   *                posts one aggregate per day, so no merging is needed)
+   * heartbeatDays  the days the phone COVERED (read HealthKit for, data or
+   *                not). A covered day with no workouts row is a real zero; a
+   *                day the phone never read is unknown, and unknown refunds.
+   *                A covered day after the window is the proof it synced
+   *                after the window closed.
+   * sourceDays     days the phone reported anything on: covered days plus
+   *                any day with a row (rows from a build before coverage).
+   *                Tells the pass path "no sleep on a day the phone reported"
+   *                (the device does not measure it) from "nothing synced yet".
+   * partialDays    sleep days the phone flagged incomplete; never covered.
+   * tzOffsetSec    the offset from the newest covered day that states one;
+   *                null when none does, and then no miss can be recorded.
+   */
+  async getMissEvidence(
+    address: string,
+    metric: WearableMetric,
+    fromISO: string,
+  ): Promise<MissEvidence> {
+    if (!appleProvider.metrics.includes(metric)) {
+      throw new Error(
+        `Apple Health cannot report ${metric}. Apple publishes no proprietary sleep score.`,
+      );
+    }
+    // Up to one day past UTC today: a wearer east of Greenwich can honestly
+    // have covered a local day that has not started in UTC.
+    const to = daysAfter(isoDay(new Date()), 1);
+    const [rows, covered, sourced] = await Promise.all([
+      getDays(address, metric, fromISO, to),
+      getCoveredDays(address, fromISO, to),
+      getSourcedDays(address, fromISO, to),
+    ]);
+
+    const values: Record<string, number> = {};
+    const partial: string[] = [];
+    for (const row of rows) {
+      values[row.day] = row.value;
+      if (row.partial === true) partial.push(row.day);
+    }
+
+    const heartbeatDays = [...new Set(covered.map((c) => c.day))];
+    const sourceDays = [...new Set([...heartbeatDays, ...sourced])];
+
+    // iOS never tells an app whether Health read access was granted: a
+    // denied sheet and an idle wearer both read as "covered, nothing found".
+    // A phone that is syncing at all produces steps on its own, so a read
+    // with no row of ANY metric is inconclusive, and the miss rule must
+    // refund on it (source-unhealthy) rather than forfeit a workouts stake.
+    // Sleep needs a value on every night regardless, so this only ever adds
+    // caution.
+    const sourceProblem =
+      heartbeatDays.length > 0 && rows.length === 0 && sourced.size === 0
+        ? "the phone covers days but has produced no Apple Health data of any kind; a denied Health permission cannot be told from an idle wearer"
+        : null;
+
+    // getCoveredDays answers newest day first; the first row that states an
+    // offset is the wearer's current calendar.
+    let tzOffsetSec: number | null = null;
+    for (const day of covered) {
+      if (day.tzOffsetSec !== null) {
+        tzOffsetSec = day.tzOffsetSec;
+        break;
+      }
+    }
+
+    return {
+      values,
+      heartbeatDays,
+      sourceDays,
+      partialDays: partial,
+      sourceProblem,
+      tzOffsetSec,
+    };
+  },
+
   async getProgress(
     address: string,
     threshold: number,
@@ -323,19 +471,36 @@ export const appleProvider: WearableProvider = {
     windowEndISO?: string,
   ): Promise<WearableProgress> {
     // The dashboard card is a sleep card for every provider. The window is
-    // widened backwards so baselineWeekAverage has its 8-14 days to work with.
-    const end = windowEndISO ?? isoDay(new Date());
-    const start = windowStartISO ?? daysBefore(end, Math.max(goalDays, 14) + 1);
-    const rows = await getDays(
-      address,
-      "sleep_efficiency",
-      daysBefore(start, 14),
-      end,
-    );
+    // widened backwards so baselineWeekAverage has its 8-14 days to work with,
+    // and forwards to UTC tomorrow so a wearer east of Greenwich, whose
+    // current local day has not started in UTC, is not read a night late.
+    const today = isoDay(new Date());
+    const end = windowEndISO ?? daysAfter(today, 1);
+    const start = windowStartISO ?? daysBefore(today, Math.max(goalDays, 14) + 1);
+    const readFrom = daysBefore(start, 14);
+    const [rows, covered, sourced] = await Promise.all([
+      getDays(address, "sleep_efficiency", readFrom, end),
+      getCoveredDays(address, readFrom, end),
+      getSourcedDays(address, readFrom, end),
+    ]);
     const byDay = bestScorePerDay(
       rows.map((r) => ({ day: r.day, value: r.value })),
     );
-    if (byDay.size === 0) return NO_PROGRESS;
+
+    // Nights the phone REPORTED, scored or not. A covered day is the phone
+    // reporting, whether or not a Watch produced a night: an iPhone with no
+    // Watch covers every day and scores none, and that must read as "this
+    // device sends no sleep data", not "awaiting first sync" for ever
+    // (QA 2026-09-26). Days with any row count too, for rows written before
+    // coverage existed.
+    const reported = new Set<string>([
+      ...byDay.keys(),
+      ...covered.map((c) => c.day),
+      ...sourced,
+    ]);
+    if (byDay.size === 0) {
+      return { ...NO_PROGRESS, nightsReported: reported.size };
+    }
 
     return {
       streakDays: countQualifyingDays(
@@ -347,13 +512,16 @@ export const appleProvider: WearableProvider = {
       ),
       baselineWeekAvg: baselineWeekAverage(byDay),
       days: daySeries(byDay),
-      nightsReported: byDay.size,
+      nightsReported: reported.size,
     };
   },
 
   async getRecent(address: string, days: number): Promise<WearableRecent> {
-    const end = isoDay(new Date());
-    const start = daysBefore(end, Math.max(days, 1));
+    // Through UTC tomorrow: last night in Tokyo is keyed to a local day that
+    // is still tomorrow in UTC for nine hours after the wearer woke up.
+    const today = isoDay(new Date());
+    const end = daysAfter(today, 1);
+    const start = daysBefore(today, Math.max(days, 1));
     const [score, hours, steps] = await Promise.all([
       getDays(address, "sleep_efficiency", start, end),
       getDays(address, "sleep_hours", start, end),
@@ -380,15 +548,25 @@ export const appleProvider: WearableProvider = {
 
   async disconnect(address: string): Promise<void> {
     // Apple CAN be disconnected, unlike Junction, because the data is ours to
-    // delete. Deleting it also makes isConnected answer false again, so the
-    // user is not left connected to something they asked us to forget.
+    // delete and the phone is ours to cut off. The phone first: deleting the
+    // rows while its token stayed valid let the next background wake refill
+    // the table after the person asked us to forget them. With the token
+    // revoked the phone's next post is refused and it returns to its pair
+    // screen; with the rows gone isConnected answers false again.
+    await revokeDevicesFor(address);
     await deleteAllAppleData(address);
   },
 };
 
 // --------------------------------------------------------------- date helpers
+//
+// These compute the server's own read BOUNDS, in UTC, wide enough to include
+// any wearer's local day: every open-ended read reaches to UTC today + 1,
+// because a wearer at UTC+9 or beyond has a local day that UTC has not
+// started. The day KEYS inside those bounds are the phone's local days as
+// posted; nothing here re-keys them.
 
-/** The wearer's local calendar day, matching streak.ts's key format. */
+/** A YYYY-MM-DD key in streak.ts's format, from a UTC instant. */
 function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -397,4 +575,8 @@ function daysBefore(isoDayStr: string, days: number): string {
   const d = new Date(`${isoDayStr}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - days);
   return isoDay(d);
+}
+
+function daysAfter(isoDayStr: string, days: number): string {
+  return daysBefore(isoDayStr, -days);
 }

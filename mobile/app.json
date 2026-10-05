@@ -2,7 +2,8 @@
   "expo": {
     "name": "GoHealthMe",
     "slug": "gohealthme-mobile",
-    "version": "0.2.0",
+    "version": "1.0.0",
+    "icon": "./assets/icon.png",
     "orientation": "portrait",
     "scheme": "gohealthme",
     "userInterfaceStyle": "automatic",
@@ -13,15 +14,17 @@
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
-        }
+        },
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "plugins": [
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "GoHealthMe reads your daily step, distance, energy and sleep totals to verify the goals you chose. Only the daily totals leave your iPhone, never individual readings.",
-          "NSHealthUpdateUsageDescription": false
+          "NSHealthShareUsageDescription": "GoHealthMe reads your daily step, distance, energy, sleep and workout totals to verify the goals you chose. Only the daily totals leave your iPhone, never individual readings.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": true
         }
       ],
       "expo-dev-client",
@@ -32,7 +35,8 @@
             "deploymentTarget": "15.1"
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }

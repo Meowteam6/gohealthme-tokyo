@@ -1,101 +1,169 @@
 # GoHealthMe iPhone app: Apple Watch into your GoHealthMe wallet
 
-Expo (React Native) dev-client app that reads **Apple Health / Apple Watch**
-through the native **Open Wearables SDK** and streams it to a **self-hosted
-Open Wearables** backend (FastAPI, Postgres, Redis, Celery) running in Docker.
+Expo (React Native) app that reads Apple Health directly on the iPhone with
+`@kingstinct/react-native-healthkit`, aggregates each day on device, and posts
+one number per metric per day to the GoHealthMe V4 deployment. Raw samples
+(heart-rate series, sleep stage timings, routes) never leave the phone. There
+is no middleman service: HealthKit is readable only on the device that holds
+it, so this app is the Apple provider.
 
-Phase 1 scope: **our own metrics only** (Andre, Nikki). No public users, no
-paid Apple Developer account, backend on the Mac, phone on the same Wi-Fi.
+Stage: beta on testnet, like the rest of V4.
 
-The earlier Junction (Vital) SDK version of this spike is the first commit in
-git history.
+## How a player uses it
 
-## Why an app at all
+1. On the GoHealthMe website, choose **Apple Watch** as the sensor. The site
+   shows a one-time code (ten minutes, works once) and, on an iPhone, a button
+   that opens this app with the code already filled in.
+2. In the app, tap **Pair**. The code is exchanged for a device token kept in
+   the iPhone Keychain. The phone never holds a wallet key.
+3. iOS asks for Health access. **Allow**. The app registers for background
+   delivery and syncs the last 30 days. The screen then reads
+   "Synced N days for 0x1234...abcd", where N is what the server stored.
+4. Nothing after that. HealthKit wakes the app when sleep, a workout or steps
+   land, and the app posts the recent days. Opening the app also syncs.
 
-Apple exposes HealthKit only on the device. There is no cloud API for Apple
-Health, so every vendor (Open Wearables, Junction, Terra) ships a native SDK
-you embed in an iOS app. Open Wearables' iOS SDK reads HealthKit read-only,
-stores credentials in the Keychain, and POSTs batches to the backend:
+Four taps on an iPhone, two of them Apple's own sheets. From a computer the
+code is typed into the app instead of carried by the link. No settings screen.
 
+Pairing switches nothing on its own. The wallet's challenges move to Apple
+when the first day actually arrives, once per pairing. Pairing a second phone
+cuts off the first; the first phone says so and offers to pair again.
+
+## What one sync sends
+
+```json
+{
+  "days": [{ "metric": "sleep_hours", "day": "2026-10-05", "value": 7.5 }],
+  "tzOffsetSec": 32400,
+  "coveredDays": ["2026-09-06", "...", "2026-10-06"]
+}
 ```
-iPhone / Apple Watch
-  -> HealthKit (read-only, observer queries + background delivery)
-    -> OpenWearablesHealthSDK 0.14.0 (via open-wearables RN module 0.2.0)
-      -> POST {host}/api/v1/sdk/users/{userId}/sync   (202, queued)
-        -> Celery worker process_sdk_upload
-          -> Postgres: data_point_series (steps, HR, HRV ...), event_record (sleep, workouts)
-            -> GET /api/v1/users/{id}/summaries/{activity,sleep}  (what GoHealthMe will read)
-```
 
-## Layout
+- `days`: one row per metric per local day with data. A sleep row carries
+  `"partial": true` when the night is not final (a nap only, under three
+  hours, or still in progress when the phone synced).
+- `tzOffsetSec`: the device's UTC offset in seconds, positive east of
+  Greenwich, so the server can read the day strings.
+- `coveredDays`: every local day the phone read HealthKit for in full, data
+  or not. The server records a missed challenge only when the phone covered
+  every day of the window; anything less refunds. `days` may be empty;
+  coverage still counts. The read starts one day before the first covered
+  day so that day's night is whole; the margin day's own night is cut at
+  midnight by the query, so it is never posted or covered (`lib/days.ts`,
+  `reportFrom`).
+
+Hand-typed Health entries (`HKWasUserEntered`) are excluded on every read.
+Sleep stages are stitched into nights before a day is assigned, and
+overlapping sources are counted once. `lib/sleep-aggregate.test.ts` pins both.
+
+## Files
 
 | File | Purpose |
 |---|---|
-| `App.tsx` | The single screen: Connect, Sync again, Disconnect, SDK status, SDK log |
-| `lib/openwearables.ts` | SDK wiring: configure, signIn (token mode), requestAuthorization, startBackgroundSync, resumeSync, events |
-| `app.json` | Expo config: the `open-wearables` config plugin (HealthKit entitlements, Info.plist strings, background modes, BGTask ids) and local-network ATS exception |
-| `scripts/ow-setup.sh` | Mac-side, one time: developer login, API key and application credentials for the GoHealthMe backend. Prints the server env block |
-| `scripts/ow-check.sh` | Mac-side proof: recent sync events plus daily activity and sleep summaries for the user |
-| `.env.example` | The two values the app needs: the GoHealthMe base URL and the dev signer key |
+| `App.tsx` | The one screen: pair, allow Health, sync status |
+| `lib/api.ts` | Redeem a code, post a sync body with the device token |
+| `lib/pairing-store.ts` | Keychain storage for the device token, deep-link parsing |
+| `lib/healthkit.ts` | HealthKit reads, typed against the library, no casts |
+| `lib/sleep-aggregate.ts` | Nights, efficiency and the partial flag (pure, tested) |
+| `lib/days.ts` | Local calendar days, covered-day list, timezone offset (pure, tested) |
+| `lib/sync.ts` | Collect, build the body, post |
+| `lib/background.ts` | HealthKit background delivery: what is observed, how a wake syncs |
+| `eas.json` | `internal` for ad-hoc installs, `production` for TestFlight |
 
-## Prerequisites (one-time)
+## Background delivery
 
-1. **Xcode** from the App Store (the Command Line Tools alone cannot build for a device), then `sudo xcode-select -s /Applications/Xcode.app` and open Xcode once to accept the license.
-2. **Node 18+** and CocoaPods (`sudo gem install cocoapods` or `brew install cocoapods`).
-3. **The Open Wearables backend running** on this Mac: `cd ../../open-wearables && docker compose up -d`. The API is mapped to port **8010** here because 8000 was already in use; the developer portal is on 3000.
-4. **The React Native SDK checked out next to this folder** at `../../open-wearables-react-native-sdk` (the package is not on npm yet, so `package.json` installs it from that path).
-5. **A free Apple ID signed into Xcode** (Xcode > Settings > Accounts). A Personal Team can sign HealthKit apps. Limits: profiles expire after 7 days, up to 3 apps per device, up to 10 App IDs per week, rebuild after expiry.
+`app.json` passes `background: true` to the HealthKit config plugin, which
+adds the `com.apple.developer.healthkit.background-delivery` entitlement. The
+library's core pod registers observer queries at launch before JS boots and
+queues any event that fires in that gap, so no AppDelegate change is needed.
+`lib/background.ts` configures sleep, workouts and steps, asks Apple for
+immediate delivery on sleep and workouts and hourly on steps, and on a wake
+runs one sync of today and the two days before it through the ordinary path.
+Deliveries inside a two-second burst are coalesced into one sync. The app
+holds exactly one listener per process (`createBackgroundListener`): the
+native side keeps a single callback per type, so two live subscriptions for
+one wallet would silence each other.
 
-## Run it
+iOS decides when a wake actually happens; it is best effort, and a miss is
+never recorded for a day the phone did not cover.
+
+## Build
+
+HealthKit does not exist in the simulator. A physical iPhone is required.
 
 ```bash
-# 1. backend up (once per boot)
-cd ~/Desktop/eth/open-wearables && docker compose up -d
-
-# 2. one-time: mint the SERVER credentials the web app needs
-cd ~/Desktop/eth/gohealthme-base/mobile
-scripts/ow-setup.sh                # prints the OPEN_WEARABLES_* block for the web app
-
-# 3. install and generate the native project
+cd mobile
 npm install
-npx expo prebuild --clean          # applies the open-wearables config plugin to ios/
+npx eas-cli login              # Andre's expo.dev account
+npx eas-cli init               # links the project; Andre runs this once
+```
 
-# 4. sign with the Personal Team, once
-open ios/GoHealthMe.xcworkspace    # Signing & Capabilities > Team: your name (Personal Team)
-                                   # HealthKit + Background Modes are already present from the plugin
+TestFlight build and submit:
 
-# 5. build to the plugged-in iPhone
+```bash
+npx eas-cli build --platform ios --profile production
+npx eas-cli submit --platform ios --profile production
+```
+
+Ad-hoc install on registered devices (no App Store Connect):
+
+```bash
+npx eas-cli build --platform ios --profile internal
+```
+
+Local dev client on a plugged-in phone (Xcode installed):
+
+```bash
+npx expo prebuild --clean
 npx expo run:ios --device
 ```
 
-On the phone: trust the developer certificate (Settings > General > VPN &
-Device Management) the first time, open the app, tap **Connect Apple
-Health**, allow the requested types on the HealthKit sheet.
+`EXPO_PUBLIC_API_BASE` picks the deployment (defaults to
+`https://gohealthme-tokyo.vercel.app`, set in both EAS profiles). The website
+that shows the code and the app must point at the same deployment. Never the
+V3 pilot.
 
-On the Mac, prove it landed:
+`@react-native-healthkit/core` is installed automatically as an exact-pinned
+dependency of the HealthKit package; do not add it by hand.
+
+`app.json` points `icon` at `assets/icon.png` (1024x1024, no alpha). App
+Store Connect refuses a build that ships Expo's placeholder icon (ITMS-90717),
+so keep the key when touching `app.json`.
+
+## What Andre and Nikki must supply
+
+Nothing here needs a password or key pasted in chat. Keys land in files named
+below and stay out of git (`.gitignore` already covers them).
+
+| Gate | Who | What |
+|---|---|---|
+| Apple Developer team access | Nikki | Invite Andre's Apple ID to her team as Developer or Admin in App Store Connect, Users and Access, and give him the Team ID |
+| Bundle ID and App Store Connect app | Nikki or Andre (Admin) | Register `com.chuabiolabs.gohealthme` with the HealthKit capability; create the app "GoHealthMe" |
+| EAS account | Andre | expo.dev login on this Mac, then `npx eas-cli init` in `mobile/` |
+| App Store Connect API key | Nikki (Admin) | Users and Access, Integrations, App Store Connect API, App Manager role; the `.p8` goes under `mobile/.secrets/`, and `ascAppId` goes in `eas.json` under `submit.production.ios` once the app exists |
+| TestFlight testers | Andre | Internal group first (no review); external group goes through Beta App Review |
+| Prod env flags | Andre | `APPLE_APP_AVAILABLE=1` and `APPLE_APP_INSTALL_URL=<TestFlight link>` on the Vercel project, dashboard only |
+
+## Tests
 
 ```bash
-scripts/ow-check.sh 7
+npx vitest run
+npx tsc --noEmit
 ```
 
-Look for `sync` events and non-empty daily rows. The phone screen never
-claims success on its own, because iOS hides HealthKit grant or deny from
-apps; only rows in the backend count.
+Everything with money in it is pure and tested off a phone: sleep stitching,
+the partial flag, covered days, the sync body shape, the HealthKit call shapes
+(mocked, so a wrong argument shape fails here and not on a user's wrist), and
+the background-delivery registration and coalescing.
 
-## What the config plugin writes (for Xcode readers)
+The screen itself has no automated test. The device loop is the only proof:
+pair from the site on a phone, allow Health, see the count, sleep one night,
+confirm the night lands without opening the app.
 
-Entitlements: `com.apple.developer.healthkit` and
-`com.apple.developer.healthkit.background-delivery`. Info.plist:
-`NSHealthShareUsageDescription`, `NSHealthUpdateUsageDescription`,
-`UIBackgroundModes` (`fetch`, `processing`),
-`BGTaskSchedulerPermittedIdentifiers`
-(`com.openwearables.healthsdk.task.refresh`,
-`com.openwearables.healthsdk.task.process`). Plus, from `app.json`,
-`NSAppTransportSecurity.NSAllowsLocalNetworking` so plain http to the Mac's
-LAN address works in Phase 1 only.
+## Server side
 
-## Known limits
-
-- The SDK docs list a `syncNow`; the 0.2.0 native module does not export it. The first export starts inside `startBackgroundSync`, and `resumeSync` (the Sync again button) re-runs a round.
-- Token expiry is 60 minutes by default; the SDK refreshes on 401 with the refresh token. If the refresh token itself is rejected, re-run `scripts/ow-bootstrap.sh` and rebuild (Phase 1 only; Phase 2 fetches tokens from the GoHealthMe backend at runtime).
-- Phase 2 (real users) replaces `.env` credentials with a GoHealthMe backend route that calls `POST /api/v1/users/{id}/token` with the app credentials and maps the Open Wearables user to the wallet address, mirroring the existing Junction `mobile-token` route in `gohealthme-base`.
+- `/api/wearable/apple/pair/redeem` and `/api/wearable/apple/sync`, in `app/`.
+- Supabase `wearable_days` must exist on the deployment's project.
+- `APPLE_APP_AVAILABLE=1` offers Apple in the picker. Set it only once a build
+  players can install exists. `APPLE_APP_INSTALL_URL` (a TestFlight public
+  link) is shown next to the code.

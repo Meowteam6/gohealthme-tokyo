@@ -217,6 +217,23 @@ describe("wearableEvidenceSource", () => {
     expect(result.verdict?.reason).toMatch(/has not synced any steps data/);
   });
 
+  it("tells an Apple wallet to open the GoHealthMe app, not to wait a few minutes", async () => {
+    // Nothing pulls Apple: the iPhone posts the day on its own schedule, or
+    // when the app is opened. "Give it a few minutes" is WHOOP advice.
+    providerFor.mockResolvedValue(stubProvider({ id: "apple", label: "Apple Health" }));
+    isConnected.mockResolvedValue(true);
+    getMetricProgress.mockResolvedValue(metricProgress(0, 0));
+    const poll = wearableEvidenceSource(WINDOW);
+
+    const result = await poll("wearable-1750000000", "sleep 7 hours a night for 7 days");
+
+    expect(result.status).toBe("failed");
+    expect(result.verdict).toMatchObject({ verified: false, confidence: "low" });
+    expect(result.verdict?.reason).toMatch(/open the GoHealthMe app on your iPhone/i);
+    expect(result.verdict?.reason).toMatch(/background sync/i);
+    expect(result.verdict?.reason).not.toMatch(/few minutes/i);
+  });
+
   it("verifies a met goal at high confidence, naming the metric", async () => {
     isConnected.mockResolvedValue(true);
     getMetricProgress.mockResolvedValue(metricProgress(7));

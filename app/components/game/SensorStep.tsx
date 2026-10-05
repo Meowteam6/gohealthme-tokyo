@@ -6,7 +6,7 @@
 // lib/wearable-join-gate.ts uses. A WHOOP player learns "no step count" here,
 // not after a stake on a steps run.
 
-import { countsLine } from "@/lib/game/sensor-copy";
+import { countsLine, pairedDeviceName, providerCardLabel } from "@/lib/game/sensor-copy";
 import { COMING_LINE, LAUNCH_METRICS } from "@/lib/provider-capabilities";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,10 +19,12 @@ import {
   PopupBlockedError,
   capabilityHoldOf,
   currentReturnPath,
+  phonePairingOf,
   startWearableLink,
   type ProviderOption,
   type WearableProviderId,
 } from "@/lib/wearable-connect";
+import PhonePairPanel, { type PhoneSteps } from "@/components/PhonePairPanel";
 import {
   WEARABLE_METRICS,
   metricLabel,
@@ -34,13 +36,13 @@ import type { CharacterView } from "@/lib/game/useCharacter";
 const BLURB: Record<WearableProviderId, string> = {
   junction: "WHOOP, Oura, Fitbit or Garmin, through Junction.",
   whoop: "WHOOP only, connected directly. Sleep and workouts. No step count.",
-  apple: "Apple Watch and iPhone, set up in the GoHealthMe app on your iPhone.",
+  apple: "Apple Watch and iPhone. Sleep and workouts, read on your phone.",
 };
 
 const CTA: Record<WearableProviderId, string> = {
   junction: "Pair with Junction",
   whoop: "Pair my WHOOP",
-  apple: "Set up on my iPhone",
+  apple: "Pair my Apple Watch",
 };
 
 /**
@@ -75,7 +77,7 @@ function PairButton({
 }: {
   address: `0x${string}`;
   option: ProviderOption;
-  onPhoneSteps: (steps: string) => void;
+  onPhoneSteps: (steps: PhoneSteps) => void;
   onBlocked: (url: string) => void;
   onError: () => void;
 }) {
@@ -93,7 +95,8 @@ function PairButton({
         void startWearableLink(address, requestAuth, option.id, currentReturnPath())
           .catch((err: unknown) => {
             if (err instanceof PopupBlockedError) onBlocked(err.linkUrl);
-            else if (err instanceof PhoneLinkRequiredError) onPhoneSteps(err.instructions);
+            else if (err instanceof PhoneLinkRequiredError)
+              onPhoneSteps({ instructions: err.instructions, pairing: err.pairing, installUrl: err.installUrl });
             else onError();
           })
           .finally(() => setOpening(false));
@@ -105,7 +108,7 @@ function PairButton({
       {opening
         ? "Opening the pairing page"
         : option.connected
-          ? `Re-pair ${option.label}`
+          ? `Re-pair ${providerCardLabel(option.id, option.label)}`
           : CTA[option.id]}
     </Button>
   );
@@ -137,7 +140,10 @@ function SensorStepBody({
   onSkip?: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [phoneSteps, setPhoneSteps] = useState<string | null>(null);
+  // The code the link route minted, with whether Apple was already paired at
+  // that moment: a code minted for a paired wallet replaces its phone, and
+  // the card must stay on screen for it instead of claiming the old pairing.
+  const [phoneSteps, setPhoneSteps] = useState<{ steps: PhoneSteps; repair: boolean } | null>(null);
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [declined, setDeclined] = useState(false);
@@ -206,22 +212,27 @@ function SensorStepBody({
 
   const allOptions = view.providers?.providers ?? [];
   const offered = allOptions.filter((p) => p.configured);
-  // Apple is listed by the server and switched off until the iPhone app
-  // ships. Said plainly, so an Apple Watch wearer is not left wondering.
   const hold = capabilityHoldOf(view.providers);
+  const selected = view.providers?.selected ?? null;
+  const active = allOptions.find((p) => p.id === selected);
   const holdLabel =
-    allOptions.find((p) => p.id === view.providers?.selected)?.label ??
-    "Your wearable";
+    active !== undefined ? providerCardLabel(active.id, active.label) : "Your wearable";
   const paired = sensor.kind === "paired" ? sensor.device : null;
   const cannot =
     paired !== null
       ? WEARABLE_METRICS.filter((m) => !paired.metrics.includes(m)).map(metricLabel)
       : [];
+  // Once the phone has stored its first sync the paired notice above says
+  // so; keeping the code card under it would show a handoff already done.
+  // A re-pair is the exception: the read says paired throughout, and the
+  // code is the whole point.
+  const applePaired = phonePairingOf(view.providers).kind !== "unpaired";
+  const showPhoneSteps = phoneSteps !== null && (phoneSteps.repair || !applePaired);
 
   return (
     <div className="[&>*+*]:mt-4">
       {paired !== null ? (
-        <Notice tone="ok" title={`${paired.label} is paired`} live>
+        <Notice tone="ok" title={`${pairedDeviceName(paired.provider, paired.label, paired.metrics)} is paired`} live>
           <p className="m-0">
             Measures {paired.metrics.map((m) => metricLabel(m as WearableMetric)).join(", ")}.
           </p>
@@ -235,9 +246,12 @@ function SensorStepBody({
       ) : hold === "awaiting-sync" ? (
         <Notice tone="limit" title={`${holdLabel} is linked. Waiting on its first sync`} live>
           Nothing has come through from your device yet, so I cannot tell what
-          it measures. Open your wearable&apos;s own app so it syncs, then check
-          again. Wearable challenges stay locked until I can see it, so you
-          never stake on one your device cannot prove.
+          it measures.{" "}
+          {selected === "apple"
+            ? "Open the GoHealthMe app on your iPhone so it syncs, or wait for its next background sync, then check again."
+            : "Open your wearable's own app so it syncs, then check again."}{" "}
+          Wearable challenges stay locked until I can see it, so you never
+          stake on one your device cannot prove.
         </Notice>
       ) : sensor.kind === "unreadable" ? (
         <Notice tone="limit" title={`${sensor.label} is linked and I cannot read it right now`}>
@@ -263,7 +277,7 @@ function SensorStepBody({
               className="flex flex-col rounded-control bg-fill-quiet p-4 shadow-[inset_0_0_0_1px_var(--border-strong)]"
             >
               <p className="m-0 flex items-center justify-between gap-2 font-semibold text-foreground">
-                {option.label}
+                {providerCardLabel(option.id, option.label)}
                 {option.connected ? (
                   <span className="inline-flex h-[22px] items-center rounded-tag bg-moonlight/10 px-2 text-xs font-semibold text-moonlight">
                     Paired
@@ -275,7 +289,7 @@ function SensorStepBody({
               <PairButton
                 address={address}
                 option={option}
-                onPhoneSteps={setPhoneSteps}
+                onPhoneSteps={(steps) => setPhoneSteps({ steps, repair: applePaired })}
                 onBlocked={setBlockedUrl}
                 onError={() => setFailed(true)}
               />
@@ -293,10 +307,8 @@ function SensorStepBody({
         ))}
       <p className="m-0 text-[0.8125rem] text-haze">{COMING_LINE}</p>
 
-      {phoneSteps !== null ? (
-        <Notice tone="info" role="status">
-          {phoneSteps}
-        </Notice>
+      {showPhoneSteps ? (
+        <PhonePairPanel steps={phoneSteps.steps} address={address} repair={phoneSteps.repair} />
       ) : null}
       {blockedUrl !== null ? (
         <a

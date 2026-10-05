@@ -445,7 +445,7 @@ describe("evaluateMiss", () => {
     expect(provider.getMissEvidence).toHaveBeenCalled();
   });
 
-  it("a provider with no local calendar (Apple) records nothing", async () => {
+  it("a provider with no miss evidence records nothing", async () => {
     const provider = fakeProvider({ getMissEvidence: undefined });
     expect(await evaluateMiss(readDeps(provider), EVAL_INPUT)).toEqual({
       miss: false,
@@ -670,7 +670,7 @@ describe("F4/F8: SPOTTER never forfeits a player its own pass rule would pay", (
     });
   });
 
-  it("a provider with no local calendar (Apple) keeps the UTC window on the pass path", async () => {
+  it("a provider with no miss evidence keeps the UTC window on the pass path", async () => {
     const provider = fakeProvider({
       getMissEvidence: undefined,
       getMetricProgress: vi
@@ -714,6 +714,101 @@ describe("F5/F6: a hit on the pinned provider after a switch", () => {
       miss: false,
       basis: "met-on-pinned-only",
       final: true,
+    });
+  });
+});
+
+describe("Apple equal to WHOOP: the sweep flags an Apple hit and records an Apple miss", () => {
+  // Apple's evidence comes from the phone's covered days (the store), not a
+  // vendor API, but once it exists miss.ts treats the player the same way it
+  // treats a WHOOP player: a hit is flagged by the sweep without the player
+  // opening the page, and a miss with full coverage forfeits the stake.
+  const WORKOUT_POOL: MissPool = {
+    ...POOL5,
+    goalSpec: "Complete at least 1 workout for 1 day",
+    periodStart: 1_790_368_848n,
+    periodEnd: 1_790_463_600n,
+  };
+  const appleProvider = (ev: MissEvidence) =>
+    fakeProvider({
+      id: "apple",
+      metrics: ["sleep_efficiency", "sleep_hours", "steps", "active_calories", "distance_km", "workouts"],
+      getMissEvidence: vi.fn().mockResolvedValue(ev),
+    });
+  const appleDeps = (provider: WearableProvider) =>
+    readDeps(provider, {
+      pinnedProviderId: vi.fn().mockResolvedValue("apple"),
+      storedProviderId: vi.fn().mockResolvedValue("apple"),
+    });
+
+  it("an Apple hit reaches the met branch, so the sweep writes the met row for the cron to pay", async () => {
+    const provider = appleProvider(
+      evidence({
+        values: { "2026-09-27": 1 },
+        heartbeatDays: ["2026-09-26", "2026-09-27"],
+      }),
+    );
+    const decision = await evaluateMiss(appleDeps(provider), {
+      ...EVAL_INPUT,
+      pool: WORKOUT_POOL,
+      nowSec: WORKOUT_POOL.periodEnd + BigInt(GRACE),
+    });
+    expect(decision).toMatchObject({
+      miss: false,
+      basis: "met",
+      final: true,
+      met: { providerId: "apple", qualifyingDays: 1 },
+    });
+    expect(provider.getMissEvidence).toHaveBeenCalledWith(USER, "workouts", "2026-09-23");
+  });
+
+  it("an Apple miss with every local day covered and a sync after the window is recorded", async () => {
+    const provider = appleProvider(
+      evidence({ heartbeatDays: ["2026-09-26", "2026-09-27", "2026-09-28"] }),
+    );
+    const decision = await evaluateMiss(appleDeps(provider), {
+      ...EVAL_INPUT,
+      pool: WORKOUT_POOL,
+      nowSec: WORKOUT_POOL.periodEnd + BigInt(GRACE),
+    });
+    expect(decision).toMatchObject({
+      miss: true,
+      providerId: "apple",
+      window: ["2026-09-26", "2026-09-27"],
+      qualifyingDays: 0,
+    });
+  });
+
+  it("an Apple day the phone did not cover refunds", async () => {
+    const provider = appleProvider(evidence({ heartbeatDays: ["2026-09-26", "2026-09-28"] }));
+    expect(
+      await evaluateMiss(appleDeps(provider), {
+        ...EVAL_INPUT,
+        pool: WORKOUT_POOL,
+        nowSec: WORKOUT_POOL.periodEnd + BigInt(GRACE),
+      }),
+    ).toEqual({ miss: false, basis: "coverage-gap", final: true });
+  });
+
+  it("an Apple wallet whose phone never said its offset refunds, as before coverage shipped", async () => {
+    const provider = appleProvider(
+      evidence({ heartbeatDays: ["2026-09-26", "2026-09-27", "2026-09-28"], tzOffsetSec: null }),
+    );
+    expect(
+      await evaluateMiss(appleDeps(provider), {
+        ...EVAL_INPUT,
+        pool: WORKOUT_POOL,
+        nowSec: WORKOUT_POOL.periodEnd + BigInt(GRACE),
+      }),
+    ).toEqual({ miss: false, basis: "tz-unknown", final: true });
+  });
+
+  it("an Apple sleep hit on pool 5 is flagged on the Tokyo calendar", async () => {
+    const provider = appleProvider(evidence({ values: { "2026-09-26": 5, "2026-09-27": 8 } }));
+    expect(await evaluateMiss(appleDeps(provider), EVAL_INPUT)).toMatchObject({
+      miss: false,
+      basis: "met",
+      met: { providerId: "apple", qualifyingDays: 1 },
     });
   });
 });
