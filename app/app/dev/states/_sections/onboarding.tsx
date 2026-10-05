@@ -509,12 +509,12 @@ export default function OnboardingStates({ meta }: SectionProps) {
       </StateFrame>
       <StateFrame name="pair-apple-awaiting-sync" note="code redeemed, first day not stored yet (Health sheet still open, or denied)" phone>
         <WithProviders options={APPLE_AWAITING}>
-          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="iphone" poll={false} />
+          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="iphone" poll={false} repair={false} />
         </WithProviders>
       </StateFrame>
       <StateFrame name="pair-apple-unreadable" note="paired, and the capability read failed this minute" phone>
         <WithProviders options={APPLE_UNREADABLE}>
-          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="iphone" poll={false} />
+          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="iphone" poll={false} repair={false} />
         </WithProviders>
       </StateFrame>
       <StateFrame name="my-runs-signed-out" note="/dashboard signed out: SPOTTER on the sign-in card">
