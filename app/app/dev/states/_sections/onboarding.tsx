@@ -71,11 +71,13 @@ function appleWith(over: Record<string, unknown>): ProviderOptions {
   } as ProviderOptions;
 }
 const APPLE_PAIRED = appleWith({ capability: "observed", observedMetrics: ["sleep_efficiency", "sleep_hours", "workouts"] });
-const APPLE_IPHONE_ONLY = appleWith({ capability: "observed", observedMetrics: ["steps"] });
+// The server always adds workouts to an Apple wallet that has synced anything
+// (apple.ts observedMetrics): an iPhone records workouts without a Watch.
+const APPLE_IPHONE_ONLY = appleWith({ capability: "observed", observedMetrics: ["steps", "workouts"] });
 const APPLE_AWAITING = appleWith({ capability: "awaiting-sync" });
 const APPLE_UNREADABLE = appleWith({ capability: "unknown" });
 const APPLE_DEVICE = { provider: "apple", label: "Apple Health", metrics: ["sleep_efficiency", "sleep_hours", "workouts"] };
-const IPHONE_ONLY_DEVICE = { provider: "apple", label: "Apple Health", metrics: ["steps"] };
+const IPHONE_ONLY_DEVICE = { provider: "apple", label: "Apple Health", metrics: ["steps", "workouts"] };
 
 // A pairing code as the link route mints it. Fixed instants, so the "until"
 // time renders the same on the server and the client.

@@ -2,11 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // What is pinned here, and why each one is a money or a truth defect:
 //
-//   1. isConnected is "data has arrived", not "someone tapped a button".
-//      Apple is PUSHED, so there is no credential to validate; the first sync
-//      is the only evidence a phone is really attached. Answering yes early
-//      would tell someone who never installed the app that their watch is
-//      connected, then read zero days and say they missed the goal.
+//   1. isConnected is "a phone is attached", never "someone tapped a button".
+//      Apple is PUSHED, so there is no credential to validate. A phone that
+//      redeemed a pairing code holds a token for this wallet, and data that
+//      arrived is proof of the same thing. Tapping Set up creates neither, so
+//      someone who never installed the app is still not connected, and a
+//      phone that has paired but not synced reads as awaiting its first sync
+//      (capability awaiting-sync), never as paired with every declared metric
+//      and never as a miss on zero days.
 //   2. daysWithData counts days that actually reported. Zero is
 //      sync-in-progress, never a miss - the difference between "we cannot tell
 //      yet" and "you failed", on a stake.
@@ -27,8 +30,45 @@ vi.mock("@/lib/server/supabase", () => ({
 }));
 
 import { appleConfigured, appleLinkState, appleProvider } from "@/lib/server/wearable/apple";
+import {
+  deviceExistsFor,
+  deviceForToken,
+  mintPairingCode,
+  redeemPairingCode,
+} from "@/lib/server/wearable/apple-pairing";
 
 const ADDRESS = "0xAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaaAAaa";
+
+/** A wallet nobody else in the file store has paired. The pairing module is
+ *  real here (JSON files under .data), so device tests use their own address
+ *  rather than ADDRESS, and a leftover record can never flip the tests that
+ *  pin "nothing has ever been pushed". */
+function freshWallet(): string {
+  const hex = Array.from({ length: 40 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
+  return `0x${hex}`;
+}
+
+/** Pair a phone to `address` the way the app does: mint on the web, redeem on
+ *  the phone. Returns the phone's device token. */
+async function pairPhone(address: string): Promise<string> {
+  const paired = await redeemPairingCode((await mintPairingCode(address)).code);
+  if (!paired.ok) throw new Error("pairing failed");
+  return paired.deviceToken;
+}
+
+function yesterday(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function syncRequest(token: string, days: unknown): Request {
+  return new Request("https://app.test/api/wearable/apple/sync", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ days }),
+  });
+}
 
 /**
  * A query-builder stub shaped like the fluent chain the store uses. Every
@@ -191,6 +231,15 @@ describe("startLink", () => {
     // answer "was I charged".
     expect(link.instructions).toContain("iPhone");
     expect(link.instructions).toMatch(/nothing was charged/i);
+    expect(link.instructions).toMatch(/no health data has been read yet/i);
+    // The code is shown and deep-linked by the panel; the sentence must not
+    // tell a person to type something the panel is already handing them.
+    expect(link.instructions).not.toMatch(/enter this code/i);
+    // Player nouns: challenge and pot. Never run, pool, dare, bet, wager,
+    // odds or winner, and no exclamation marks or em-dashes.
+    expect(link.instructions).toMatch(/challenges/);
+    expect(link.instructions).not.toMatch(/\b(runs?|pools?|dares?|bets?|wagers?|odds|winners?)\b/i);
+    expect(link.instructions).not.toMatch(/[!—]/);
     // No health data is touched by tapping Set up: the only thing created is
     // a one-time pairing code the phone app redeems.
     expect(from).not.toHaveBeenCalled();
@@ -215,15 +264,80 @@ describe("isConnected", () => {
     await appleProvider.isConnected(ADDRESS);
     expect(calls[0].address).toBe(ADDRESS.toLowerCase());
   });
+
+  it("is true once a phone redeemed a code, before any day has arrived", async () => {
+    // The defect this pins: a phone that redeemed the code but has not stored
+    // a day yet (Health sheet denied, or simply not synced) read as not
+    // linked. The web then waited out the code's ten minutes and said it
+    // expired, hiding the awaiting-first-sync hold built for this case.
+    const address = freshWallet();
+    await pairPhone(address);
+    supabaseWith(() => []);
+    expect(await appleProvider.isConnected(address)).toBe(true);
+  });
 });
 
 describe("appleLinkState", () => {
-  it("is not-linked before the first sync and linked after it", async () => {
+  it("is not-linked before any pairing and linked once data arrived", async () => {
     supabaseWith(() => []);
     expect(await appleLinkState(ADDRESS)).toBe("not-linked");
 
     supabaseWith(() => [{ day: "2026-09-01", value: 1 }]);
     expect(await appleLinkState(ADDRESS)).toBe("linked");
+  });
+
+  it("is awaiting-first-sync when a phone redeemed a code and no day has arrived", async () => {
+    const address = freshWallet();
+    await pairPhone(address);
+    supabaseWith(() => []);
+    expect(await appleLinkState(address)).toBe("awaiting-first-sync");
+  });
+});
+
+describe("a paired phone that has not synced: the three answers agree", () => {
+  // Pinned as one table because the pairing panel, the join gate and the
+  // dashboard each read one of these, and they must describe the same wallet.
+  it("redeemed and no rows: connected, capability awaiting-sync", async () => {
+    const address = freshWallet();
+    await pairPhone(address);
+    supabaseWith(() => []);
+    expect(await appleProvider.isConnected(address)).toBe(true);
+    expect(await appleProvider.observedMetrics(address)).toEqual({ kind: "awaiting-sync" });
+  });
+
+  it("rows: connected, capability observed", async () => {
+    const address = freshWallet();
+    await pairPhone(address);
+    supabaseWith((metric) => (metric === "steps" ? [{ day: "2026-09-01", value: 9000 }] : []));
+    expect(await appleProvider.isConnected(address)).toBe(true);
+    expect((await appleProvider.observedMetrics(address)).kind).toBe("observed");
+  });
+
+  it("neither: not connected, capability declared", async () => {
+    const address = freshWallet();
+    supabaseWith(() => []);
+    expect(await appleProvider.isConnected(address)).toBe(false);
+    expect(await appleProvider.observedMetrics(address)).toEqual({ kind: "declared" });
+  });
+
+  it("a query failure is still unknown when a phone is paired, never awaiting-sync", async () => {
+    // We did not learn that no rows exist; we learned nothing. Reporting
+    // awaiting-sync would tell a syncing wallet to wait on a sync that has
+    // already landed.
+    const address = freshWallet();
+    await pairPhone(address);
+    getSupabaseServiceRole.mockReturnValue({
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              gte: () => Promise.resolve({ data: null, error: { message: "down" } }),
+            }),
+          }),
+        }),
+      }),
+    });
+    expect(await appleProvider.observedMetrics(address)).toEqual({ kind: "unknown" });
   });
 });
 
@@ -380,6 +494,45 @@ describe("disconnect", () => {
   it("is a no-op when Supabase is not configured", async () => {
     getSupabaseServiceRole.mockReturnValue(null);
     await expect(appleProvider.disconnect(ADDRESS)).resolves.toBeUndefined();
+  });
+
+  it("revokes the phone, so a sync with the old token is refused and writes nothing", async () => {
+    // Privacy defect this pins: disconnect deleted the rows but left the
+    // phone's device token valid, so the next background wake refilled the
+    // table after the person asked us to forget them. Driven through the real
+    // sync route and the real pairing store, with only Supabase stubbed.
+    const { POST } = await import("@/app/api/wearable/apple/sync/route");
+    const address = freshWallet();
+    const token = await pairPhone(address);
+    const batch = [{ metric: "steps", day: yesterday(), value: 9000 }];
+
+    // Before: the phone's token lands a day.
+    const before = supabaseWith(() => []);
+    const accepted = await POST(syncRequest(token, batch));
+    expect(accepted.status).toBe(200);
+    expect(before.calls.some((c) => c.op === "upsert")).toBe(true);
+
+    await appleProvider.disconnect(address);
+
+    // After: the token is dead, the wallet has no device, and the post is
+    // refused before anything is written.
+    expect(await deviceForToken(token)).toBeNull();
+    expect(await deviceExistsFor(address)).toBe(false);
+    const after = supabaseWith(() => []);
+    const refused = await POST(syncRequest(token, batch));
+    expect(refused.status).toBe(401);
+    expect(after.calls.some((c) => c.op === "upsert")).toBe(false);
+    expect(await appleProvider.isConnected(address)).toBe(false);
+  });
+
+  it("revokes the phone even when no day ever arrived", async () => {
+    // A paired, never-synced phone is still a phone that will post later.
+    const address = freshWallet();
+    const token = await pairPhone(address);
+    supabaseWith(() => []);
+    await appleProvider.disconnect(address);
+    expect(await deviceForToken(token)).toBeNull();
+    expect(await appleProvider.isConnected(address)).toBe(false);
   });
 });
 

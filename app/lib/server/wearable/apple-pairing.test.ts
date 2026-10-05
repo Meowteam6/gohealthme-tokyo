@@ -6,16 +6,23 @@
 //   - pairing a second phone revokes the first
 //   - every failure looks the same to a guesser
 //   - a fresh device is unconfirmed, so its first sync records the provider
+//   - a wallet knows whether a phone holds a token for it, before any data
+//     arrives, so the web can hold on "waiting for the first sync" instead of
+//     telling the person their code expired
+//   - forgetting a wallet revokes its phone: the next post is refused and the
+//     table cannot refill behind a person who asked to be forgotten
 
 import { describe, it, expect } from "vitest";
 
 import {
   confirmDevice,
+  deviceExistsFor,
   deviceForToken,
   mintPairingCode,
   normalizePairingCode,
   readDeviceToken,
   redeemPairingCode,
+  revokeDevicesFor,
 } from "@/lib/server/wearable/apple-pairing";
 
 function wallet(): string {
@@ -82,6 +89,82 @@ describe("apple pairing", () => {
   it("rejects a token that was never issued", async () => {
     expect(await deviceForToken("x".repeat(43))).toBeNull();
     expect(await deviceForToken("short")).toBeNull();
+  });
+
+  describe("deviceExistsFor: has a phone redeemed a code for this wallet", () => {
+    it("is false before any pairing and after a code is only minted", async () => {
+      const address = wallet();
+      expect(await deviceExistsFor(address)).toBe(false);
+      await mintPairingCode(address);
+      // Minting proves nothing about a phone; only redeeming does.
+      expect(await deviceExistsFor(address)).toBe(false);
+    });
+
+    it("is true once a phone redeemed the code, confirmed or not", async () => {
+      const address = wallet();
+      const paired = await redeemPairingCode((await mintPairingCode(address)).code);
+      if (!paired.ok) throw new Error("pairing failed");
+      expect(await deviceExistsFor(address)).toBe(true);
+      await confirmDevice(paired.deviceToken);
+      expect(await deviceExistsFor(address)).toBe(true);
+    });
+
+    it("answers for the wallet whatever the address casing", async () => {
+      const address = wallet();
+      await redeemPairingCode((await mintPairingCode(address)).code);
+      expect(await deviceExistsFor(address.toUpperCase().replace("0X", "0x"))).toBe(true);
+    });
+  });
+
+  describe("revokeDevicesFor: forgetting a wallet cuts its phone off", () => {
+    it("refuses the old token afterwards and reports no device", async () => {
+      const address = wallet();
+      const paired = await redeemPairingCode((await mintPairingCode(address)).code);
+      if (!paired.ok) throw new Error("pairing failed");
+      await confirmDevice(paired.deviceToken);
+
+      await revokeDevicesFor(address);
+
+      // The sync route turns a null here into its 401 "pair again" answer,
+      // so the phone goes back to its pair screen instead of refilling the
+      // table on its next background wake.
+      expect(await deviceForToken(paired.deviceToken)).toBeNull();
+      expect(await deviceExistsFor(address)).toBe(false);
+    });
+
+    it("is idempotent, including for a wallet that never paired", async () => {
+      const address = wallet();
+      await expect(revokeDevicesFor(address)).resolves.toBeUndefined();
+      await expect(revokeDevicesFor(address)).resolves.toBeUndefined();
+      expect(await deviceExistsFor(address)).toBe(false);
+    });
+
+    it("leaves the wallet free to pair a new phone", async () => {
+      const address = wallet();
+      const first = await redeemPairingCode((await mintPairingCode(address)).code);
+      if (!first.ok) throw new Error("pairing failed");
+      await revokeDevicesFor(address);
+
+      const second = await redeemPairingCode((await mintPairingCode(address)).code);
+      if (!second.ok) throw new Error("re-pairing failed");
+      expect(await deviceForToken(first.deviceToken)).toBeNull();
+      expect((await deviceForToken(second.deviceToken))?.confirmed).toBe(false);
+      expect(await deviceExistsFor(address)).toBe(true);
+    });
+
+    it("touches only the wallet it was asked about", async () => {
+      const a = wallet();
+      const b = wallet();
+      const pairedB = await redeemPairingCode((await mintPairingCode(b)).code);
+      if (!pairedB.ok) throw new Error("pairing failed");
+      await redeemPairingCode((await mintPairingCode(a)).code);
+
+      await revokeDevicesFor(a);
+
+      expect(await deviceExistsFor(a)).toBe(false);
+      expect(await deviceExistsFor(b)).toBe(true);
+      expect(await deviceForToken(pairedB.deviceToken)).not.toBeNull();
+    });
   });
 
   it("normalizes codes and reads bearer tokens", () => {
