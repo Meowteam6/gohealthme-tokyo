@@ -4,6 +4,7 @@ import {
   approvalModeOf,
   challengeCreateBlock,
   gateStateOf,
+  payoutPathOf,
   payoutStateOf,
   verifierStateOf,
   type GateInputs,
@@ -11,6 +12,9 @@ import {
 
 // Every read the join depends on maps "not answered" to a hold and "failed"
 // to a retry. None of them maps a failure to the permissive answer.
+
+/** New money open: the switches answered and nothing is paused. */
+const OPEN = { state: "open", reason: null } as const;
 
 function gate(overrides: Partial<GateInputs> = {}): GateInputs {
   return {
@@ -92,11 +96,11 @@ describe("verifierStateOf", () => {
 
 describe("challengeCreateBlock", () => {
   it("lets a dare be made only when the checker and the payout rule are known good", () => {
-    expect(challengeCreateBlock("available", "ready")).toEqual({ kind: "ok" });
+    expect(challengeCreateBlock("available", "ready", OPEN)).toEqual({ kind: "ok" });
   });
 
   it("pauses dares while the document checker is off, before any deposit", () => {
-    const block = challengeCreateBlock("off", "ready");
+    const block = challengeCreateBlock("off", "ready", OPEN);
     expect(block.kind).toBe("paused");
     if (block.kind === "paused") {
       expect(block.detail).toMatch(/nothing has been charged/i);
@@ -105,11 +109,11 @@ describe("challengeCreateBlock", () => {
   });
 
   it("pauses dares when payouts cannot be confirmed on this build", () => {
-    expect(challengeCreateBlock("available", "misconfigured").kind).toBe("paused");
+    expect(challengeCreateBlock("available", "misconfigured", OPEN).kind).toBe("paused");
   });
 
   it("says challenge, never run, reward or dare, in what the player reads", () => {
-    for (const block of [challengeCreateBlock("off", "ready"), challengeCreateBlock("available", "misconfigured")]) {
+    for (const block of [challengeCreateBlock("off", "ready", OPEN), challengeCreateBlock("available", "misconfigured", OPEN)]) {
       if (block.kind !== "paused") throw new Error("expected paused");
       expect(`${block.title} ${block.detail}`).not.toMatch(/\b(run|runs|reward|dare|pool)\b/i);
       expect(block.detail).toMatch(/nothing has been charged/i);
@@ -117,10 +121,57 @@ describe("challengeCreateBlock", () => {
   });
 
   it("holds while loading and retries on a failed read, never ok", () => {
-    expect(challengeCreateBlock("loading", "ready")).toEqual({ kind: "checking" });
-    expect(challengeCreateBlock("available", "loading")).toEqual({ kind: "checking" });
-    expect(challengeCreateBlock("error", "ready").kind).toBe("retry");
-    expect(challengeCreateBlock("available", "error").kind).toBe("retry");
+    expect(challengeCreateBlock("loading", "ready", OPEN)).toEqual({ kind: "checking" });
+    expect(challengeCreateBlock("available", "loading", OPEN)).toEqual({ kind: "checking" });
+    expect(challengeCreateBlock("error", "ready", OPEN).kind).toBe("retry");
+    expect(challengeCreateBlock("available", "error", OPEN).kind).toBe("retry");
+  });
+});
+
+// KILL_BASE_MONEY_IN (Andre, 2026-09-30): a new challenge is new money, so
+// the create form stops before anything is filled in, and again on submit.
+describe("challengeCreateBlock with new money paused", () => {
+  it("pauses a new challenge, says money in still comes out, and nothing was charged", () => {
+    const block = challengeCreateBlock("available", "ready", { state: "paused", reason: null });
+    expect(block.kind).toBe("paused");
+    if (block.kind !== "paused") return;
+    expect(block.title).toBe("Challenges are paused for now");
+    expect(block.detail).toContain("New stakes are paused for now");
+    expect(block.detail).toContain("Money already in still pays out and refunds as normal.");
+    expect(block.detail).toMatch(/nothing has been charged/i);
+    expect(`${block.title} ${block.detail}`).not.toMatch(/\b(run|runs|reward|dare|pool)\b|[!\u2014]|KILL_/i);
+  });
+
+  it("adds the operator's reason at the end", () => {
+    const block = challengeCreateBlock("available", "ready", { state: "paused", reason: "Back Friday." });
+    expect(block.kind === "paused" && block.detail.endsWith("Back Friday.")).toBe(true);
+  });
+
+  it("holds while the switches load and retries when the read failed, never ok", () => {
+    expect(challengeCreateBlock("available", "ready", { state: "loading", reason: null })).toEqual({ kind: "checking" });
+    const failed = challengeCreateBlock("available", "ready", { state: "error", reason: null });
+    expect(failed.kind).toBe("retry");
+    if (failed.kind === "retry") expect(failed.title).toMatch(/stakes are open/);
+  });
+
+  it("keeps the older pauses first when they also hold", () => {
+    const block = challengeCreateBlock("off", "ready", { state: "paused", reason: null });
+    expect(block.kind === "paused" && block.detail).toMatch(/document checker/);
+  });
+});
+
+// "Pay on the verdict" (Andre, 2026-10-02). A list player or an admin is paid
+// on the verdict, so their own stake can always follow the extra they put in:
+// the create form never stops them for World ID. Only build-wide limits stop
+// a create.
+describe("challengeCreateBlock for a list player or an admin", () => {
+  it("lets every proven creator through when nothing build-wide holds", () => {
+    expect(challengeCreateBlock("available", "ready", OPEN)).toEqual({ kind: "ok" });
+  });
+
+  it("keeps the build-wide pauses (regression)", () => {
+    expect(challengeCreateBlock("available", "ready", { state: "paused", reason: null }).kind).toBe("paused");
+    expect(challengeCreateBlock("available", "misconfigured", OPEN).kind).toBe("paused");
   });
 });
 
@@ -150,5 +201,33 @@ describe("approvalModeOf and payoutStateOf", () => {
     expect(payoutStateOf("misconfigured")).toBe("misconfigured");
     expect(payoutStateOf("loading")).toBe("loading");
     expect(payoutStateOf("error")).toBe("error");
+  });
+});
+
+// The client mirror of the server's payoutConfirmFor (approval.ts): who
+// confirms a payout with World ID, and who SPOTTER pays on the verdict.
+describe("payoutPathOf", () => {
+  it("asks a World-verified player to confirm wherever the confirmation is on", () => {
+    for (const approvalMode of ["world", "mock", "misconfigured"] as const) {
+      expect(payoutPathOf({ approvalMode, humanProof: "world" })).toBe("world");
+    }
+  });
+
+  it("pays a list player or an admin on the verdict, whatever the build", () => {
+    for (const approvalMode of ["world", "mock", "misconfigured", "off"] as const) {
+      expect(payoutPathOf({ approvalMode, humanProof: "list" })).toBe("verdict");
+      expect(payoutPathOf({ approvalMode, humanProof: "admin" })).toBe("verdict");
+    }
+  });
+
+  it("pays everyone on the verdict while the confirmation is off", () => {
+    expect(payoutPathOf({ approvalMode: "off", humanProof: "world" })).toBe("verdict");
+    expect(payoutPathOf({ approvalMode: "off", humanProof: null })).toBe("verdict");
+  });
+
+  it("never guesses: unknown while the mode is being read, world for an unproven wallet", () => {
+    expect(payoutPathOf({ approvalMode: "loading", humanProof: "list" })).toBeNull();
+    expect(payoutPathOf({ approvalMode: "error", humanProof: "list" })).toBeNull();
+    expect(payoutPathOf({ approvalMode: "world", humanProof: null })).toBe("world");
   });
 });

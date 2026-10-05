@@ -45,8 +45,8 @@ export default function TermsPage() {
         <h1 className="type-title text-[2.5rem] min-[900px]:text-[3.25rem]">Terms of Use</h1>
         <p className="max-w-[60ch] text-[1.0625rem] leading-[1.5] text-muted text-pretty">
           Last updated {LAST_UPDATED}. These are the plain-language rules for
-          GoHealthMe V4, the beta built at ETHGlobal Tokyo 2026 and running on
-          Base Sepolia test money. By using GoHealthMe you agree to them.
+          GoHealthMe V4, the beta built at ETHGlobal Tokyo 2026 on Base
+          Sepolia test money. By using GoHealthMe you agree to them.
         </p>
       </header>
 
@@ -102,7 +102,7 @@ export default function TermsPage() {
             Test money, no real value
           </h2>
           <p>
-            GoHealthMe runs on Base Sepolia, a test network. Every USDC amount
+            GoHealthMe is built on Base Sepolia, a test network. Every USDC amount
             you see is test USDC with no monetary value, and the test ETH we
             may send your wallet for network fees has none either. Nothing here
             pays real money or costs real money, and no test token can be
@@ -212,11 +212,12 @@ export default function TermsPage() {
             <li>
               Hit the goal: you get your stake back plus an equal share of the
               missed stakes and anything else in the pot, once your hit is
-              recorded. SPOTTER records a hit only after you open the challenge
-              and confirm it with World ID, and only before the challenge
-              settles. A hit
-              that is not confirmed by then gets its stake back without a
-              share.
+              recorded. If you joined with World ID, SPOTTER records a hit
+              only after you open the challenge and confirm it with World ID,
+              and only before the challenge settles; a hit that is not
+              confirmed by then gets its stake back without a share. If you
+              were approved through the closed-beta list, SPOTTER records your
+              hit on your wearable&apos;s verdict, with no confirmation step.
             </li>
             <li>
               Miss it, with your wearable showing the miss: your stake goes to
@@ -371,8 +372,8 @@ export default function TermsPage() {
 
         <section className="border-t border-edge pt-8 [&>*+*]:mt-3">
           <p className="text-[0.8125rem] text-haze">
-            GoHealthMe V4 is a beta built at ETHGlobal Tokyo 2026, running on
-            Base Sepolia test money. These terms are not legal advice and will
+            GoHealthMe V4 is a beta built at ETHGlobal Tokyo 2026 on Base
+            Sepolia test money. These terms are not legal advice and will
             be replaced by lawyer-reviewed terms before any real-money launch.
           </p>
         </section>

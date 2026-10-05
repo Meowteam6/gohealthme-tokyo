@@ -431,7 +431,7 @@ export async function settlePoolAsSpotter(
       );
       if (!recorded) {
         throw new Error(
-          `pool ${input.poolId} is oracle-only and ${input.participant} has no ` +
+          `challenge ${input.poolId} is oracle-only and ${input.participant} has no ` +
             "recorded result - settling now would pay this participant nothing. " +
             "Record the result first.",
         );
@@ -673,7 +673,7 @@ export async function recordVerdictAsSpotter(
   const registry = await deps.reader.verdictRegistry();
   if (registry === null) {
     throw new Error(
-      `recordVerdict called for goal ${input.goalId} on an oracle-only pool ` +
+      `recordVerdict called for goal ${input.goalId} on an oracle-only challenge ` +
         "(healthVerdict() = 0x0): there is no registry to write. Skip the " +
         "registry write; settle gates on recordResult alone.",
     );
@@ -942,7 +942,7 @@ export function arcReader(
     const address = await poolVerdictRegistry(pools());
     if (address === null) {
       throw new Error(
-        `pool ${pools()} is oracle-only (healthVerdict() = 0x0): there is no verdict registry to read`,
+        `HealthPools ${pools()} is oracle-only (healthVerdict() = 0x0): there is no verdict registry to read`,
       );
     }
     return address;
@@ -976,7 +976,7 @@ export function arcReader(
       // A settled pool implies a block past periodEnd exists; a tip that
       // disagrees is a stale or inconsistent RPC view. Unknown, not unpaid.
       throw new Error(
-        `chain tip ${latest.number} predates pool ${poolId} periodEnd; cannot reconcile the payout yet`,
+        `chain tip ${latest.number} predates challenge ${poolId} periodEnd; cannot reconcile the payout yet`,
       );
     }
     let lo = 0n;
@@ -1010,7 +1010,7 @@ export function arcReader(
       // The scan budget ran out before covering the tip. Refusing to
       // answer beats declaring a possibly-paid participant unpaid.
       throw new Error(
-        `${event.name} scan for pool ${poolId} exhausted its range budget before reaching the chain tip; refusing to declare the participant unpaid`,
+        `${event.name} scan for challenge ${poolId} exhausted its range budget before reaching the chain tip; refusing to declare the participant unpaid`,
       );
     }
     return [];

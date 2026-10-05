@@ -129,7 +129,7 @@ export default function SweepLeftover({
       <p className="mt-1 text-sm text-muted">
         {cancelled
           ? "Every player has their stake back. What is left is yours; one tap sends it to your wallet."
-          : "Winners were credited at settle. What is left in the pot is yours; one tap sends it to your wallet."}
+          : "Everyone owed a payout or a stake back was credited at settle. What is left in the pot is yours; one tap sends it to your wallet."}
       </p>
       <div className="mt-4 space-y-3">
         <Button type="button" pop disabled={busy} onClick={onSweep} className="w-full sm:w-auto">

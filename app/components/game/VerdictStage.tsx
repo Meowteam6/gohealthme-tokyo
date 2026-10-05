@@ -1,8 +1,11 @@
 "use client";
 
 // The Verdict (docs/DESIGN.md, "Verdict card"). After the run it takes the
-// stake card's place: SPOTTER read the wearable, asks the player to confirm it
-// is them (World ID for Agents) before any USDC moves, the payout is screened,
+// stake card's place: SPOTTER read the wearable, asks a World-verified player
+// to confirm it is them (World ID for Agents) before any USDC moves, or pays a
+// list player or an admin on the verdict with no extra step (Andre,
+// 2026-10-02, "Pay on the verdict"; the status route's confirm), the payout is
+// screened,
 // and the run ends on a real screen: paid on a paper receipt, not confirmed
 // with "Ask again", missed, nobody hit, or stopped for a reason that is not
 // the player's. SPOTTER's pose lives in the page hero, except on the paid
@@ -35,6 +38,8 @@ import { commitmentLostCopy, hitRange } from "@/lib/game/commitment-copy";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
 import { paidShareText } from "@/lib/game/run-page";
 import {
+  payoutPathOfStatus,
+  payoutPathQueryKey,
   verdictCopy,
   verdictScreenOf,
   type LocalApproval,
@@ -130,6 +135,26 @@ export function useVerdict(input: {
     { refetchInterval: pollWhileLive(input.runStatus) },
   );
 
+  // Who confirms this claim's payout (Andre, 2026-10-02, "Pay on the
+  // verdict"): the server's answer for this wallet, so a list player or an
+  // admin never sees a World ID card or its copy. Read once a minute at most,
+  // and again the moment SPOTTER starts or stops asking (payoutPathQueryKey),
+  // so a list player who adds World ID mid-challenge sees their confirm card;
+  // until it answers, the screens are the ones a World player sees.
+  const payoutQuery = useQuery({
+    queryKey: payoutPathQueryKey(goalId, input.address, input.runStatus),
+    queryFn: async () => {
+      if (goalParam === null || input.address === null) return null;
+      const response = await fetch(
+        `/api/agent/approval/status?goalId=${goalParam}&address=${encodeURIComponent(input.address)}`,
+      );
+      if (!response.ok) return null;
+      return payoutPathOfStatus(await response.json().catch(() => null));
+    },
+    enabled: goalParam !== null && input.address !== null,
+    staleTime: 60_000,
+  });
+
   const screen: VerdictScreen =
     input.pool === null
       ? { kind: "none" }
@@ -152,6 +177,7 @@ export function useVerdict(input: {
     missConfirmByMs: missRulePool(input.pool).ok
       ? missConfirmByMs(input.pool.periodEnd)
       : null,
+    payout: payoutQuery.data ?? null,
   });
 
   return {
@@ -274,7 +300,9 @@ export function verdictHeadOf(input: {
         body: base.body,
       };
     case "hit-unconfirmed":
-      return { eyebrow: "Not confirmed", headline: `${hit} Not confirmed in time.`, body: base.body };
+      return screen.onVerdict
+        ? { eyebrow: "Not recorded", headline: `${hit} Not recorded in time.`, body: base.body }
+        : { eyebrow: "Not confirmed", headline: `${hit} Not confirmed in time.`, body: base.body };
     case "settled-final":
       return { eyebrow: "Challenge settled", headline: "Every result is final.", body: base.body };
     case "bad-read":

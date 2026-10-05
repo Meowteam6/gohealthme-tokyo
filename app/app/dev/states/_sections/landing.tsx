@@ -258,6 +258,24 @@ export default function LandingStates({ meta }: SectionProps) {
           </li>
         </ul>
       </StateFrame>
+      <StateFrame name="lobby-money-in-paused" note="KILL_BASE_MONEY_IN: new stakes paused on every open card, the one I am in untouched" phone>
+        <div className="grid gap-2.5">
+          <RunSlip
+            row={row(SLEEP, { kind: "locked", lock: { kind: "money-in-paused", reason: null } })}
+            returnTo="/pools"
+            players={1}
+          />
+          <RunSlip
+            row={row(STEPS, {
+              kind: "locked",
+              lock: { kind: "money-in-paused", reason: "Back after the contract upgrade on Friday." },
+            })}
+            returnTo="/pools"
+            players={0}
+          />
+          <RunSlip row={row(WORKOUT, { kind: "in-run" })} returnTo="/pools" players={1} />
+        </div>
+      </StateFrame>
       <StateFrame name="lobby-signed-out-picked" note="signed out with WHOOP picked: the step run reads locked" phone>
         <div className="grid gap-2.5">
           <RunSlip
@@ -290,6 +308,15 @@ export default function LandingStates({ meta }: SectionProps) {
       </StateFrame>
       <StateFrame name="lobby-lock-paused" note="a build-wide pause: no fix, it clears on its own" phone>
         <LockPanel lock={{ kind: "payouts-paused" }} returnTo="/pools" />
+      </StateFrame>
+      <StateFrame name="lobby-lock-money-in-paused" note="the run page's lock while new money is paused, with the operator's note" phone>
+        <LockPanel
+          lock={{ kind: "money-in-paused", reason: "Back after the contract upgrade on Friday." }}
+          returnTo="/pools/5"
+        />
+      </StateFrame>
+      <StateFrame name="lobby-lock-switches-failed" note="the switches read failed: the stake is held behind a retry" phone>
+        <LockPanel lock={{ kind: "check-failed", check: "switches" }} returnTo="/pools/5" onRetry={() => {}} />
       </StateFrame>
 
     </GallerySection>

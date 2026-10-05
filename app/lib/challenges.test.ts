@@ -269,4 +269,39 @@ describe("challengePauseReason", () => {
       }),
     ).toBe("payouts");
   });
+
+  // KILL_BASE_MONEY_IN (Andre, 2026-09-30): no chip-in and no rally while new
+  // money is paused, with its own reason so the card says why.
+  it("pauses chipping in while new money is paused", () => {
+    expect(
+      challengePauseReason({
+        goalSpec: "Sleep at least 7 hours for 1 night",
+        documentCheckerAvailable: true,
+        payoutsMisconfigured: false,
+        moneyInPaused: true,
+      }),
+    ).toBe("money-in");
+  });
+
+  it("keeps the older reasons first when they also hold", () => {
+    expect(
+      challengePauseReason({
+        goalSpec: "Complete at least 1 workout for 1 day",
+        documentCheckerAvailable: true,
+        payoutsMisconfigured: true,
+        moneyInPaused: true,
+      }),
+    ).toBe("payouts");
+  });
+
+  it("is unchanged with new money open (regression)", () => {
+    expect(
+      challengePauseReason({
+        goalSpec: "Sleep at least 7 hours for 1 night",
+        documentCheckerAvailable: true,
+        payoutsMisconfigured: false,
+        moneyInPaused: false,
+      }),
+    ).toBeNull();
+  });
 });

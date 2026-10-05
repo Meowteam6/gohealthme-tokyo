@@ -41,6 +41,20 @@
 // recorded here through the same run loop the browser drives
 // (lib/server/agent/approved-record.ts), and its pool is held from the pool
 // phase meanwhile, so a confirmed win is never refunded as unadjudicated.
+// With the payout confirmation switched off (the World ID kill switch), a hit
+// whose request was still open is recorded the same way: nothing is left to
+// wait for, and the run loop's gate answers "off". The confirmation is also
+// off for one wallet at a time (Andre, 2026-10-02, "Pay on the verdict"): an
+// admin or an approved list player is paid on the verdict
+// (approval.ts payoutConfirmFor), so an ask opened for one before that
+// decision is recorded the same way. A World-bound wallet still needs a yes.
+//
+// BOUNDED QUEUE. SPOTTER queues a claim the moment it asks (approval.ts). One
+// that is not payable now (waiting on the human, or lapsed with the
+// confirmation on) stays queued only while its ask is inside the record hold
+// window (APPROVED_RECORD_HOLD_MS), so a lapsed ask nobody revisits leaves on
+// its own instead of sitting at the head of the queue every tick and crowding
+// out claims that are due to settle. A re-ask queues it again.
 //
 // THE MISS PHASE (commitment model, 2026-09-26). Between the claim phase and
 // the pool phase, every joined player of every pool that can record a miss
@@ -61,6 +75,7 @@ import { isAddress, type Address, type Hex } from "viem";
 import {
   settleRecordedClaim,
   livePoolSettleLock,
+  LEGACY_SETTLE_UNPAYABLE_MESSAGE,
   SETTLE_UNPAYABLE_MESSAGE,
   type SettleClaimDeps,
 } from "@/lib/server/agent/run";
@@ -101,6 +116,8 @@ import {
   withinRecordHold,
   type ApprovedRecordTarget,
 } from "@/lib/server/agent/approved-record";
+import { approvalModeStatus } from "@/lib/server/agent/approval-mode-status";
+import { payoutConfirmFor } from "@/lib/server/agent/approval";
 import { requireEnv, requireHealthPoolsAddress } from "@/lib/server/env";
 import { errorMessage, jsonError } from "@/lib/server/http";
 // --- ens ---
@@ -201,6 +218,8 @@ async function eligibility(
   goalId: string,
   ledger: LedgerEntry[],
   nowMs: number,
+  /** False when the payout confirmation is off on this deployment. */
+  confirmationRequired: boolean,
 ): Promise<Eligibility> {
   // --- miss rule ---
   // A recorded miss pays this player nothing, so the claim settle (which
@@ -217,7 +236,18 @@ async function eligibility(
     // ran because nobody polled after the confirmation (tab closed). Record
     // it now, and report the pool so the pool phase does not settle it
     // underneath this claim and refund a confirmed win.
-    const approved = approvedUnrecordedOf(ledger);
+    //
+    // The ask as it stands, yes or no (requested or expired count only with
+    // the confirmation off). Null when nothing on the ledger could make this
+    // claim payable: no pay decision, no ask, a decline or a cancel.
+    const asked = approvedUnrecordedOf(ledger, { confirmationRequired: false });
+    // The confirmation is per wallet (header): an admin or an approved list
+    // player is paid on the verdict even where the build asks others.
+    const required =
+      confirmationRequired &&
+      asked !== null &&
+      (await payoutConfirmFor(asked.participant)) === "world";
+    const approved = required ? approvedUnrecordedOf(ledger, { confirmationRequired: true }) : asked;
     if (approved !== null) {
       if (withinRecordHold(approved, nowMs)) {
         return { settle: false, record: approved, poolId: approved.poolId };
@@ -225,6 +255,17 @@ async function eligibility(
       console.error(
         `[agent/sweep] ${goalId}: approved claim still unrecorded after the hold window; releasing pool ${approved.poolId} to the pool phase`,
       );
+      await removePendingSettlement(goalId);
+    } else if (
+      (asked === null || !withinRecordHold(asked, nowMs)) &&
+      // Only an ask queues a claim that has no record (approval.ts). The
+      // fallback scan meets every claim still being played, every tick; a
+      // claim SPOTTER never asked about was never queued, so no write.
+      ledger.some((e) => e.kind === "approval")
+    ) {
+      // Not payable now, and either never can be from here or its ask is
+      // past the hold window (header, BOUNDED QUEUE): off the queue. A
+      // re-ask queues it again; nothing was paid.
       await removePendingSettlement(goalId);
     }
     // Otherwise nothing is on chain for this claim, so there is nothing to pay.
@@ -236,12 +277,14 @@ async function eligibility(
     return { settle: false };
   }
   // Terminal: the pool settled without this claim; retrying cannot help.
+  // Ledgers stored before the 2026-09-30 wording pass carry the legacy text.
   if (
     ledger.some(
       (e) =>
         e.kind === "error" &&
         e.stage === "settle" &&
-        e.message === SETTLE_UNPAYABLE_MESSAGE,
+        (e.message === SETTLE_UNPAYABLE_MESSAGE ||
+          e.message === LEGACY_SETTLE_UNPAYABLE_MESSAGE),
     )
   ) {
     await removePendingSettlement(goalId);
@@ -392,6 +435,9 @@ async function runSweep(): Promise<SweepCounts> {
     missSkips: [],
     missErrors: [],
   };
+  // Read once per sweep. A misconfigured confirmation stays required (fail
+  // closed): only a human yes is recorded, exactly as before.
+  const confirmationRequired = approvalModeStatus("agent/sweep") !== "off";
   const seen = new Set<string>();
   /** Pools the claim phase owns this tick; the pool phase must not touch them. */
   const claimPools = new Set<string>();
@@ -405,7 +451,7 @@ async function runSweep(): Promise<SweepCounts> {
     seen.add(goalId);
 
     const ledger = await readLedger(goalId);
-    const verdict = await eligibility(goalId, ledger, Date.now());
+    const verdict = await eligibility(goalId, ledger, Date.now(), confirmationRequired);
     if (verdict.poolId !== undefined) claimPools.add(verdict.poolId.toString());
     if (!verdict.settle && verdict.record !== undefined) {
       if (recordAttempts >= APPROVED_RECORDS_PER_SWEEP) return;

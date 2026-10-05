@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLobby,
+  creatorMoneyInOf,
   lobbyNeedsSensorCheck,
   lockCopy,
   runSlotOf,
@@ -26,6 +27,7 @@ function input(overrides: Partial<RunSlotInput> = {}): RunSlotInput {
     needsDocumentVerifier: false,
     verifier: "available",
     payouts: "ready",
+    moneyIn: "open",
     deviceLabel: "WHOOP",
     ...overrides,
   };
@@ -147,6 +149,16 @@ describe("runSlotOf", () => {
       });
     });
 
+    // The list proves a human too (2026-09-30). With World on and the list
+    // read failed, the player may well be on it: a retry, never "prove you
+    // are one human" on a guess.
+    it("retries a failed list read on a World-on build instead of asking for World ID", () => {
+      expect(runSlotOf(input({ worldLane: "on", humanVerified: false, gate: "error" }))).toEqual({
+        kind: "locked",
+        lock: { kind: "check-failed", check: "access" },
+      });
+    });
+
     it("never gates a run the player is already in", () => {
       expect(runSlotOf(input({ joined: true, gate: "not-approved" }))).toEqual({
         kind: "in-run",
@@ -215,6 +227,115 @@ describe("runSlotOf", () => {
     });
   });
 
+  // KILL_BASE_MONEY_IN (Andre, 2026-09-30): new stakes pause build-wide, said
+  // on the card before any stake, and money already in is never touched.
+  describe("new money paused", () => {
+    it("locks every open challenge with its own lock, ordered like the payout pause", () => {
+      expect(runSlotOf(input({ moneyIn: "paused" }))).toEqual({
+        kind: "locked",
+        lock: { kind: "money-in-paused", reason: null },
+      });
+      // Build-wide, so a signed-out visitor learns it before signing in.
+      expect(runSlotOf(input({ moneyIn: "paused", address: null }))).toEqual({
+        kind: "locked",
+        lock: { kind: "money-in-paused", reason: null },
+      });
+      // Ahead of every per-player lock.
+      expect(
+        runSlotOf(input({ moneyIn: "paused", worldLane: "on", gate: "not-approved", joinBlock: { kind: "no-device" } })),
+      ).toEqual({ kind: "locked", lock: { kind: "money-in-paused", reason: null } });
+      // The payout pause still reads first when both hold.
+      expect(runSlotOf(input({ moneyIn: "paused", payouts: "misconfigured" }))).toEqual({
+        kind: "locked",
+        lock: { kind: "payouts-paused" },
+      });
+    });
+
+    it("carries the operator's reason onto the lock", () => {
+      expect(runSlotOf(input({ moneyIn: "paused", moneyInReason: "Back Friday." }))).toEqual({
+        kind: "locked",
+        lock: { kind: "money-in-paused", reason: "Back Friday." },
+      });
+    });
+
+    it("holds while the switches load and retries when the read failed", () => {
+      expect(runSlotOf(input({ moneyIn: "loading" }))).toEqual({ kind: "checking" });
+      expect(runSlotOf(input({ moneyIn: "error" }))).toEqual({
+        kind: "locked",
+        lock: { kind: "check-failed", check: "switches" },
+      });
+    });
+
+    it("never stands in front of a challenge the player is already in, or a closed one", () => {
+      expect(runSlotOf(input({ joined: true, moneyIn: "paused" }))).toEqual({ kind: "in-run" });
+      expect(runSlotOf(input({ phase: "expired", joined: true, moneyIn: "paused" }))).toEqual({
+        kind: "closed",
+        joined: true,
+      });
+    });
+
+    it("lets a creator whose challenge already holds money stake in it", () => {
+      expect(runSlotOf(input({ moneyIn: "paused", creatorMoneyIn: true }))).toEqual({ kind: "playable" });
+      expect(runSlotOf(input({ moneyIn: "loading", creatorMoneyIn: true }))).toEqual({ kind: "playable" });
+      expect(runSlotOf(input({ moneyIn: "error", creatorMoneyIn: true }))).toEqual({ kind: "playable" });
+      // The exception opens only the pause: every other lock still holds.
+      expect(
+        runSlotOf(input({ moneyIn: "paused", creatorMoneyIn: true, joinBlock: { kind: "no-device" } })),
+      ).toEqual({ kind: "locked", lock: { kind: "no-sensor" } });
+      expect(runSlotOf(input({ moneyIn: "paused", creatorMoneyIn: true, payouts: "misconfigured" }))).toEqual({
+        kind: "locked",
+        lock: { kind: "payouts-paused" },
+      });
+    });
+
+    it("changes nothing while new money is open (regression)", () => {
+      for (const over of [
+        {},
+        { worldLane: "on" as const },
+        { worldLane: "on" as const, humanVerified: true },
+        { gate: "pending" as const },
+        { joinBlock: { kind: "no-device" as const } },
+        { payouts: "misconfigured" as const },
+        { needsDocumentVerifier: true, verifier: "off" as const },
+        { address: null },
+      ]) {
+        const open = runSlotOf(input({ ...over, moneyIn: "open" }));
+        const withCreator = runSlotOf(input({ ...over, moneyIn: "open", creatorMoneyIn: true }));
+        expect(withCreator).toEqual(open);
+      }
+    });
+  });
+
+  // "Pay on the verdict" (Andre, 2026-10-02). A list player or an admin is
+  // paid on the wearable verdict, like V3, so nothing about a hit waits on a
+  // World ID they do not have: the join is open to them like to anyone proven
+  // human.
+  describe("a list player or an admin on a build where World players confirm with World ID", () => {
+    it("is playable: SPOTTER pays them on the verdict", () => {
+      expect(runSlotOf(input({ worldLane: "on", humanVerified: true }))).toEqual({ kind: "playable" });
+    });
+
+    it("keeps every other lock in front of them (regression)", () => {
+      expect(
+        runSlotOf(input({ worldLane: "on", humanVerified: true, gate: "error" })),
+      ).toEqual({ kind: "locked", lock: { kind: "check-failed", check: "access" } });
+      expect(runSlotOf(input({ joined: true }))).toEqual({ kind: "in-run" });
+      expect(
+        runSlotOf(input({ worldLane: "on", humanVerified: true, joinBlock: { kind: "no-device" } })),
+      ).toEqual({ kind: "locked", lock: { kind: "no-sensor" } });
+    });
+  });
+
+  describe("creatorMoneyInOf", () => {
+    const CREATOR = "0x00000000000000000000000000000000000000Aa";
+    it("is the challenge's creator with money already in its pot", () => {
+      expect(creatorMoneyInOf({ creator: CREATOR, balance: 2_000_000n }, CREATOR.toLowerCase())).toBe(true);
+      expect(creatorMoneyInOf({ creator: CREATOR, balance: 0n }, CREATOR)).toBe(false);
+      expect(creatorMoneyInOf({ creator: CREATOR, balance: 2_000_000n }, "0xabc")).toBe(false);
+      expect(creatorMoneyInOf({ creator: CREATOR, balance: 2_000_000n }, null)).toBe(false);
+    });
+  });
+
   describe("linked sensor holds", () => {
     it("gives a sensor that has not synced its own lock, not the generic check", () => {
       expect(
@@ -278,10 +399,13 @@ describe("lockCopy", () => {
     { kind: "not-approved", pending: true },
     { kind: "verifier-off" },
     { kind: "payouts-paused" },
+    { kind: "money-in-paused", reason: null },
+    { kind: "money-in-paused", reason: "Back after the upgrade on Friday." },
     { kind: "check-failed", check: "human" },
     { kind: "check-failed", check: "access" },
     { kind: "check-failed", check: "payouts" },
     { kind: "check-failed", check: "verifier" },
+    { kind: "check-failed", check: "switches" },
   ] as const;
 
   it("gives every fixable lock a fix and names no plumbing", () => {
@@ -327,6 +451,24 @@ describe("lockCopy", () => {
       expect(copy.fix.kind).toBe("none");
       expect(copy.detail).toMatch(/not taking stakes/);
     }
+  });
+
+  it("says new stakes are paused, money in still comes out, and the reason when set", () => {
+    const copy = lockCopy({ kind: "money-in-paused", reason: null }, "/pools");
+    expect(copy.title).toBe("New stakes are paused for now");
+    expect(copy.detail).toContain("Money already in still pays out and refunds as normal.");
+    expect(copy.detail).toContain("Nothing has been charged.");
+    expect(copy.tone).toBe("wait");
+    expect(copy.fix.kind).toBe("none");
+    const withReason = lockCopy({ kind: "money-in-paused", reason: "Back after the upgrade on Friday." }, "/pools");
+    expect(withReason.detail).toMatch(/Nothing has been charged\. Back after the upgrade on Friday\.$/);
+    expect(`${copy.title} ${copy.detail}`).not.toMatch(/[!\u2014]|\b(bet|wager|odds|winner)\b/i);
+  });
+
+  it("gives a failed switches read a retry in place", () => {
+    const copy = lockCopy({ kind: "check-failed", check: "switches" }, "/pools");
+    expect(copy.fix).toEqual({ kind: "retry", label: "Check again" });
+    expect(copy.title).toMatch(/stakes are open/);
   });
 
   it("words a sensor hold with the wearable lane's copy and a re-check", () => {
@@ -394,6 +536,7 @@ describe("buildLobby", () => {
       asOfSeconds: NOW,
       verifier: "available",
       payouts: "ready",
+      moneyIn: "open",
       gate: "passed",
       joined: new Set(),
       highlightId: null,
@@ -521,6 +664,28 @@ describe("buildLobby", () => {
       { kind: "locked", lock: { kind: "payouts-paused" } },
       { kind: "locked", lock: { kind: "payouts-paused" } },
     ]);
+  });
+
+  it("pauses every open challenge while new money is paused, and not the ones I am in", () => {
+    const lobby = buildLobby(
+      lobbyInput({ pools: [pool(1), pool(2), pool(3)], joined: new Set(["3"]), moneyIn: "paused", moneyInReason: "Back Friday." }),
+    );
+    expect(lobby.open.map((r) => r.slot)).toEqual([
+      { kind: "locked", lock: { kind: "money-in-paused", reason: "Back Friday." } },
+      { kind: "locked", lock: { kind: "money-in-paused", reason: "Back Friday." } },
+    ]);
+    expect(lobby.mine.map((r) => r.slot)).toEqual([{ kind: "in-run" }]);
+  });
+
+  it("lets the creator lock in to their own challenge with money in, even while paused", () => {
+    const own = pool(2, { initiative: "challenge", creator: "0x00000000000000000000000000000000000000Ab", balance: 2_000_000n });
+    const lobby = buildLobby(
+      lobbyInput({ pools: [own], highlightId: "2", address: "0x00000000000000000000000000000000000000ab", moneyIn: "paused" }),
+    );
+    expect(lobby.highlighted?.slot).toEqual({ kind: "playable" });
+    // Anyone else on the same link sees the pause.
+    const friend = buildLobby(lobbyInput({ pools: [own], highlightId: "2", moneyIn: "paused" }));
+    expect(friend.highlighted?.slot).toEqual({ kind: "locked", lock: { kind: "money-in-paused", reason: null } });
   });
 
   describe("wearable holds and the upload fallback", () => {

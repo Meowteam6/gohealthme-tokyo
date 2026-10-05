@@ -21,6 +21,8 @@ vi.mock("@/lib/server/agent/run", () => ({
     release: vi.fn(),
   })),
   SETTLE_UNPAYABLE_MESSAGE:
+    "the challenge settled before this claim completed; a one-shot settle cannot pay it retroactively",
+  LEGACY_SETTLE_UNPAYABLE_MESSAGE:
     "pool settled before this claim completed; a one-shot settle cannot pay it retroactively",
 }));
 vi.mock("@/lib/server/agent/wallet", () => ({
@@ -161,6 +163,7 @@ describe("sweep eligibility", () => {
     const unrecorded = "0x" + "cc".repeat(32);
     const noLinkage = "0x" + "dd".repeat(32);
     const terminal = "0x" + "ee".repeat(32);
+    const terminalLegacy = "0x" + "ef".repeat(32);
 
     await appendLedger(eligible, plan());
     await appendLedger(eligible, record(eligible));
@@ -182,6 +185,16 @@ describe("sweep eligibility", () => {
     await appendLedger(terminal, plan());
     await appendLedger(terminal, record(terminal));
     await appendLedger(terminal, {
+      kind: "error",
+      stage: "settle",
+      message:
+        "the challenge settled before this claim completed; a one-shot settle cannot pay it retroactively",
+    });
+
+    // A ledger stored before the 2026-09-30 wording pass is just as terminal.
+    await appendLedger(terminalLegacy, plan());
+    await appendLedger(terminalLegacy, record(terminalLegacy));
+    await appendLedger(terminalLegacy, {
       kind: "error",
       stage: "settle",
       message:

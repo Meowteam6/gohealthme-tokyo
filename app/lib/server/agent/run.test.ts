@@ -848,6 +848,54 @@ describe("runAgentForGoal", () => {
     ).toHaveLength(1);
   });
 
+  it("reads a terminal row stored in the pre-2026-09-30 wording as the same failure", async () => {
+    const {
+      settleRecordedClaim,
+      SETTLE_UNPAYABLE_MESSAGE,
+      LEGACY_SETTLE_UNPAYABLE_MESSAGE,
+      isSettleUnpayableMessage,
+    } = await loadRun();
+    // Players can open the raw message behind the receipt's details tap.
+    expect(SETTLE_UNPAYABLE_MESSAGE).not.toMatch(/\bpool\b/i);
+    expect(isSettleUnpayableMessage(SETTLE_UNPAYABLE_MESSAGE)).toBe(true);
+    expect(isSettleUnpayableMessage(LEGACY_SETTLE_UNPAYABLE_MESSAGE)).toBe(true);
+    expect(isSettleUnpayableMessage("rpc down")).toBe(false);
+
+    const { appendLedger } = await import("@/lib/server/agent/ledger");
+    await appendLedger(GOAL, {
+      kind: "error",
+      stage: "settle",
+      message:
+        "pool settled before this claim completed; a one-shot settle cannot pay it retroactively",
+    });
+    const reader = fakeReader({
+      getPoolState: vi
+        .fn()
+        .mockResolvedValue({ settled: true, periodEnd: 1_000n }),
+      settledPayout: vi.fn().mockResolvedValue(null),
+    });
+    const deps = {
+      spotter: { circle: fakeExecutor(), reader, nowSeconds: () => 2_000n },
+      buy: fakeBuy(),
+    };
+
+    const outcome = await settleRecordedClaim(deps, {
+      goalId: GOAL,
+      poolId: 7n,
+      participant: USER,
+    });
+
+    expect(outcome.status).toBe("error");
+    const errors = outcome.ledger.filter(
+      (e) => e.kind === "error" && e.stage === "settle",
+    );
+    // The stored legacy row already says it; no second row in new words.
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as { message: string }).message).toBe(
+      LEGACY_SETTLE_UNPAYABLE_MESSAGE,
+    );
+  });
+
   it("keeps the claim retryable when the AchieverPaid reconciliation read fails", async () => {
     const { settleRecordedClaim, SETTLE_UNPAYABLE_MESSAGE } = await loadRun();
     const reader = fakeReader({

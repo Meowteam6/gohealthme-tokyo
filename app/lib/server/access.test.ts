@@ -133,6 +133,23 @@ describe("approval by World ID (prove-human)", () => {
     expect(await access.isAllowed(ADMIN)).toBe(true);
   });
 
+  // An admin who also proved with World ID is a World-bound human: the source
+  // says world (so the stamp reads One human, paused or not) and isAdmin stays.
+  it("reports a World-bound admin as source world, still an admin", async () => {
+    const { access, human } = await loadWithWorld("mock", ADMIN);
+    await human.bindHuman({
+      address: ADMIN,
+      nullifierHash: `0x${"9".padStart(64, "0")}`,
+      mode: "mock",
+      protocolVersion: "4.0",
+    });
+    expect(await access.getAccessStatus(ADMIN)).toEqual({
+      status: "approved",
+      isAdmin: true,
+      source: "world",
+    });
+  });
+
   it("does not let a World approval overwrite a stored denial record", async () => {
     const { access, human } = await loadWithWorld("mock", ADMIN);
     await access.requestAccess({ address: USER });
@@ -147,6 +164,42 @@ describe("approval by World ID (prove-human)", () => {
     // admin's record is still there for when the mode is turned off.
     expect((await access.getAccessStatus(USER)).source).toBe("world");
     expect((await access.getAccessRecord(USER))?.status).toBe("denied");
+  });
+});
+
+describe("World ID paused by the kill switch (KILL_WORLD_ID)", () => {
+  const NULLIFIER = `0x${"8".padStart(64, "0")}`;
+
+  it("keeps an existing World binding approved, so a verified player keeps their way in", async () => {
+    vi.stubEnv("WORLD_VERIFY_MODE", "mock");
+    const access = await load("");
+    const human = await import("@/lib/server/world/human");
+    await human.bindHuman({
+      address: USER,
+      nullifierHash: NULLIFIER,
+      mode: "mock",
+      protocolVersion: "4.0",
+    });
+    vi.stubEnv("KILL_WORLD_ID", "1");
+    expect(await access.getAccessStatus(USER)).toEqual({
+      status: "approved",
+      isAdmin: false,
+      source: "world",
+    });
+    // isAllowed gates withdraw, evidence and challenge pages: still open.
+    expect(await access.isAllowed(USER)).toBe(true);
+    // Nobody new gets in through World while it is paused.
+    expect(await access.isAllowed(OTHER)).toBe(false);
+  });
+
+  it("still lets the list and admins in while World is paused", async () => {
+    vi.stubEnv("WORLD_VERIFY_MODE", "mock");
+    vi.stubEnv("KILL_WORLD_ID", "true");
+    const access = await load(ADMIN);
+    await access.requestAccess({ address: USER });
+    await access.decideAccess({ address: USER, decision: "approve", adminAddress: ADMIN });
+    expect(await access.isAllowed(USER)).toBe(true);
+    expect(await access.isAllowed(ADMIN)).toBe(true);
   });
 });
 

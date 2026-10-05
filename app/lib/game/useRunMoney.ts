@@ -49,7 +49,7 @@ export function useCreatorStaked(
   const query = useQuery({
     queryKey: ["participant", pool?.id.toString() ?? "", pool?.creator ?? ""],
     queryFn: () => {
-      if (pool === null) throw new Error("No run.");
+      if (pool === null) throw new Error("No challenge.");
       return fetchParticipant(pool.id, pool.creator);
     },
     enabled: challenge,

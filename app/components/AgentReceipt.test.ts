@@ -26,7 +26,16 @@ describe("errorPresentation", () => {
     });
   });
 
-  it("names the pool-settled-first dead end", () => {
+  it("names the challenge-settled-first dead end", () => {
+    const p = errorPresentation(
+      "settle",
+      "the challenge settled before this claim completed; a one-shot settle cannot pay it retroactively",
+    );
+    expect(p.transient).toBe(false);
+    expect(p.label).toContain("challenge settled before this claim finished");
+  });
+
+  it("still names the dead end in the wording ledgers stored before 2026-09-30", () => {
     const p = errorPresentation(
       "settle",
       "pool settled before this claim completed; a one-shot settle cannot pay it retroactively",

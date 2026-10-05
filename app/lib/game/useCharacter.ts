@@ -56,8 +56,8 @@ export interface CharacterView {
   sensor: SensorRead;
   providers: ProviderOptions | undefined;
   access: ReturnType<typeof useAccess>;
-  /** Sign once so the sensor can be read. Resolves true when the player
-   *  signed and the re-read landed, false when they declined. */
+  /** Prove the wallet (at most once per session) so the wearable can be read.
+   *  Resolves true when proven and the re-read landed, false when declined. */
   checkSensor: () => Promise<boolean>;
   checkingSensor: boolean;
   /** Re-read everything after a step completes. */
@@ -110,8 +110,11 @@ export function useCharacter(): CharacterView {
   const checkSensor = useCallback(async (): Promise<boolean> => {
     setCheckingSensor(true);
     try {
-      // The PROMPTING requester, deliberately: the player tapped for this.
-      const auth = await requestAuth({ refresh: true });
+      // The PROMPTING requester, deliberately: the player tapped for this. No
+      // `refresh`: a session token or a fresh signature already in hand is
+      // reused, so a proven wallet (or an email login) sees no prompt at all,
+      // and an unproven wallet login gets its one session proof.
+      const auth = await requestAuth();
       if (auth.kind !== "ok") return false;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["wearable-providers"] }),
@@ -134,6 +137,7 @@ export function useCharacter(): CharacterView {
       isAdmin: access.isAdmin,
       loading: access.loading,
       error: access.error,
+      source: access.source,
     },
     world: {
       lane: worldLane,

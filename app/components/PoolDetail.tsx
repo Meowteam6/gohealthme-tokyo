@@ -52,7 +52,9 @@ import {
   type LedgerEntry,
   type RunStatus,
 } from "@/lib/agent-receipt";
-import { lockCopy, needsDocumentVerifier, runSlotOf } from "@/lib/game/lobby";
+import { creatorMoneyInOf, lockCopy, needsDocumentVerifier, runSlotOf } from "@/lib/game/lobby";
+import { Notice } from "@/components/night/kit";
+import { addToPotPausedDetail } from "@/lib/switches";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useJoinChecks } from "@/lib/game/useJoinChecks";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
@@ -236,7 +238,7 @@ function JoinedNight({
   address: `0x${string}`;
   base: Omit<Parameters<typeof YourNight>[0], "children">;
 }) {
-  const { nights, line } = useRunNights({ pool, address, promptForData: false });
+  const { nights, line } = useRunNights({ pool, address });
   const spec = classifyWearableGoal(pool.goalSpec);
   // A one-night run's caption is the goodnight line; a longer run's is where
   // the nights stand.
@@ -713,13 +715,21 @@ export default function PoolDetail({ id }: { id: string }) {
     needsDocumentVerifier: needsDocumentVerifier(pool.goalSpec),
     verifier: checks.verifier,
     payouts: checks.payouts,
+    // New money paused (KILL_BASE_MONEY_IN) locks the stake before any
+    // prompt. The creator of a challenge that already holds money may still
+    // lock in: their game is not stranded (creatorMoneyInOf).
+    moneyIn: checks.moneyIn,
+    moneyInReason: checks.switchReason,
+    creatorMoneyIn: creatorMoneyInOf(pool, address),
     deviceLabel: viewerProvider?.label ?? null,
   });
   // Nobody tops up a run that cannot be checked or whose win could not pay on
-  // this build, and nobody tops one up on a guess while that is unknown.
-  const fundingPaused =
+  // this build, nobody tops one up while new money is paused, and nobody tops
+  // one up on a guess while any of that is unknown.
+  const checksPauseFunding =
     (needsDocumentVerifier(pool.goalSpec) && checks.verifier !== "available") ||
     checks.payouts !== "ready";
+  const fundingPaused = checksPauseFunding || checks.moneyIn !== "open";
 
   // A participant who ALREADY joined and then switched device is in the worst
   // position of anyone: the stake is in and their new device cannot prove the
@@ -935,7 +945,13 @@ export default function PoolDetail({ id }: { id: string }) {
       });
     }
     const name = character.character?.name ?? null;
-    if (checks.worldLane === "on" && checks.humanVerified) {
+    // Only a World ID proof is worded as one: a list player on a World-on
+    // build is a proven human too (humanProofOf), and just joins by name.
+    if (
+      checks.worldLane === "on" &&
+      checks.humanVerified &&
+      character.character?.humanProof === "world"
+    ) {
       cleared.push({
         key: "human",
         glyph: "ok",
@@ -979,7 +995,7 @@ export default function PoolDetail({ id }: { id: string }) {
       {termsBlock}
       {solo !== null ? <SoloNote line={solo} /> : null}
       <StakeChecks items={cleared} />
-      <ApprovalNote />
+      <ApprovalNote humanProof={character.character?.humanProof ?? null} />
     </>
   );
 
@@ -1522,6 +1538,15 @@ export default function PoolDetail({ id }: { id: string }) {
               </details>
             </Card>
           )
+        ) : !over && canPay && !checksPauseFunding && checks.moneyIn === "paused" ? (
+          // Said, not hidden: a player in the challenge who came to add to
+          // the pot learns why the control is gone, and that their money in
+          // still comes out.
+          <Card as="section" aria-label="Add to the pot">
+            <Notice tone="limit" role="status" title="Adding to the pot is paused">
+              {addToPotPausedDetail(checks.switchReason)}
+            </Notice>
+          </Card>
         ) : null}
 
       </RunLayout>

@@ -39,12 +39,17 @@
 // closed-beta behaviour above. In "mock" mode (event build, proofs mocked) this
 // opens the beta to anyone who completes the mock step: deliberate for the
 // hackathon deployment, never for one with the pilot's real users.
+//
+// WORLD PAUSED (KILL_WORLD_ID, 2026-09-30). New World proofs stop, and the
+// bindings already made keep answering "approved" here, so nobody who got in
+// through World is locked out by the pause. The list and the admins work as
+// always.
 
 import { getAddress, isAddress } from "viem";
 import { optionalEnv } from "@/lib/server/env";
 import { readJson, writeJson, zaddNx, zrevrange } from "@/lib/server/store";
 import { stateBlockReason } from "@/lib/geo-blocklist";
-import { worldEnabled } from "@/lib/server/world/config";
+import { boundWorldNamespace } from "@/lib/server/world/config";
 import { isVerifiedHuman } from "@/lib/server/world/human";
 
 /** "none" means no request has ever been made for this address. */
@@ -140,13 +145,19 @@ export async function getAccessRecord(
 }
 
 /**
- * True when prove-human is enabled on this deployment AND this wallet has
- * proven it is one human. False, without touching the store, when the mode is
- * off, so a deployment without World configured never pays for the read.
+ * True when World is configured on this deployment AND this wallet has proven
+ * it is one human. False, without touching the store, when World is not
+ * configured, so a deployment without World never pays for the read.
+ *
+ * KILL_WORLD_ID pauses NEW proofs only: a binding World already made keeps
+ * counting here (boundWorldNamespace), so a World-verified player keeps their
+ * gate, their challenge pages, withdraw and refund while World is switched
+ * off (Andre, 2026-09-30).
  */
 async function approvedByWorld(address: string): Promise<boolean> {
-  if (!worldEnabled()) return false;
-  return isVerifiedHuman(address);
+  const namespace = boundWorldNamespace();
+  if (namespace === null) return false;
+  return isVerifiedHuman(address, namespace);
 }
 
 /**
@@ -158,10 +169,13 @@ export async function getAccessStatus(
   address: string,
 ): Promise<AccessStatusView> {
   if (!isAddress(address)) return { status: "none", isAdmin: false, source: "none" };
-  if (isAdmin(address)) return { status: "approved", isAdmin: true, source: "admin" };
+  // A World binding is reported first, admins included, so the stamp reads
+  // One human for a World-bound admin too (paused or not); isAdmin is kept.
+  const admin = isAdmin(address);
   if (await approvedByWorld(address)) {
-    return { status: "approved", isAdmin: false, source: "world" };
+    return { status: "approved", isAdmin: admin, source: "world" };
   }
+  if (admin) return { status: "approved", isAdmin: true, source: "admin" };
   const record = await getAccessRecord(address);
   if (record === null) return { status: "none", isAdmin: false, source: "none" };
   return { status: record.status, isAdmin: false, source: "request" };

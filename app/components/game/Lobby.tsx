@@ -262,7 +262,7 @@ export default function Lobby({
             <div className="grid gap-2">
               <EmptyState
                 title="No open challenges right now"
-                line="Nothing running. I'm on break."
+                line="Nothing to check. I'm on break."
                 detail="Nobody has put a goal on the board. Start one and I will read the wearables."
                 action={<ButtonLink href="/challenge/new">Start a challenge</ButtonLink>}
               />

@@ -158,6 +158,9 @@ describe("geminiReason", () => {
     expect(request.config.thinkingConfig.thinkingBudget).toBe(0);
     // Derived data only: the prompt must carry the verdict, never a document.
     expect(request.contents).toContain("verified=true");
+    // Players read the note, so the model gets the product's one vocabulary.
+    expect(request.contents).toContain("health goal\nchallenges");
+    expect(request.contents).toContain("never a pool or a run");
   });
 
   it("falls back to the anchor on empty or unparseable output", async () => {

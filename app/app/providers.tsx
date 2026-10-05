@@ -11,6 +11,7 @@ import { arcTestnet } from "@/lib/chains";
 import { DEMO_CHROME, EMAIL_AA_ENABLED, GUARD_INJECTED_WALLET } from "@/lib/config";
 import { arcEvmNetwork } from "@/lib/dynamic";
 import { externalConnectIntended } from "@/lib/wallet-connect-intent";
+import SessionProofSheet from "@/components/SessionProofSheet";
 
 // Optional guard against a browser wallet silently hijacking the session.
 // walletsFilter hides MetaMask from the modal LIST but does not stop Dynamic
@@ -51,7 +52,16 @@ const walletConnectors = EMAIL_AA_ENABLED
 // Base Sepolia only. The transports use the Base public RPCs from
 // lib/chains.ts; the fork deliberately does not carry the Arc-RPC ordering
 // drift the ancestor repo had here.
+//
+// multiInjectedProviderDiscovery: false is load-bearing. wagmi's default
+// EIP-6963 discovery creates its own MetaMask connector that races Dynamic's
+// connect: SyncDynamicWagmi sees no bound wallet mid-handshake, disconnects
+// wagmi, and the injected connector fires wallet_revokePermissions, revoking
+// the approval the player just gave (MetaMask 13.41 and later honour it, so
+// the failure is deterministic). Found in V1 (gohealthme 974eb25); Dynamic's
+// wagmi guide requires the flag. Dynamic is the only wallet lifecycle owner.
 const wagmiConfig = createConfig({
+  multiInjectedProviderDiscovery: false,
   chains: [arcTestnet],
   transports: {
     [arcTestnet.id]: fallback([
@@ -130,21 +140,23 @@ export default function Providers({ children }: { children: ReactNode }) {
       theme="dark"
       settings={{
         environmentId,
-        // connect-only skips the SIWE ownership signature on login — the step
-        // that surfaces as "Message signature denied" in the modal when a
-        // MetaMask user does not sign. The app never needs that signature:
-        // it gates on primaryWallet (see lib/wallet.ts, which treats a
-        // connected wallet as authenticated precisely because connect-only
-        // never sets isLoggedIn), and Unlink derives its own signature.
+        // connect-only: an external wallet connects without signing, so a
+        // declined or slow signature can never fail the connect itself (it
+        // used to surface as "Message signature denied" in the modal). The
+        // app shows a connected wallet straight away (lib/wallet.ts resolves
+        // primaryWallet ?? userWallets[0], because connect-only never
+        // promotes a primaryWallet for an external wallet).
         //
-        // This setting was NOT the reason sign-in was dead. Nor was the old
-        // hand-rolled button: DynamicContextProvider renders DynamicAuthFlow
-        // itself, and DynamicConnectButton's onClick is just
-        // setSelectedWalletConnectorKey(null) + setShowAuthFlow(true) — so the
-        // flag always had a listener. What was actually broken is in
-        // lib/wallet.ts: connect-only never promotes a primaryWallet for an
-        // external wallet, and the app read primaryWallet alone. Keep
-        // connect-only; it keeps the flow signature-free.
+        // Private reads still need proof the wallet is yours. A wallet login
+        // gives it ONCE per session: SessionProofSheet (mounted below) runs
+        // Dynamic's authenticateUser, the documented upgrade from
+        // connect-only, after one plain line and a tap. The session token it
+        // leaves lists the wallet, and lib/server/dynamic-jwt.ts accepts it
+        // for every read after, reloads included. Email and passkey logins
+        // already hold that token and are never asked. Where the proof cannot
+        // run, lib/client-auth.ts falls back to its short-lived signature.
+        // Either way no wallet opens cold: every prompt waits on the sheet's
+        // one-line question, whichever surface asked.
         initialAuthenticationMode: "connect-only",
         // Surface Base Account (Coinbase Smart Wallet) as a first-class option.
         // The Coinbase connector ships inside EthereumWalletConnectors;
@@ -199,7 +211,10 @@ export default function Providers({ children }: { children: ReactNode }) {
     >
       <WagmiProvider config={wagmiConfig}>
         <QueryClientProvider client={queryClient}>
-          <DynamicWagmiConnector>{children}</DynamicWagmiConnector>
+          <DynamicWagmiConnector>
+            {children}
+            <SessionProofSheet />
+          </DynamicWagmiConnector>
         </QueryClientProvider>
       </WagmiProvider>
     </DynamicContextProvider>

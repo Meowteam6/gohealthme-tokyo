@@ -121,7 +121,7 @@ const WRONG_WALLET =
  *  or a chain read that failed. Nothing about the claim is wrong, and signing
  *  again fixes every one of those. */
 const SIGN_AGAIN =
-  "Your wallet proof could not be confirmed just now - it may simply have expired. Sign again to see this claim.";
+  "Your wallet proof could not be confirmed just now. It may simply have expired. Sign again to see this claim.";
 
 /**
  * What a claim read is allowed to show, given the auth state the request was

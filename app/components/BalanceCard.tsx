@@ -266,7 +266,7 @@ export default function BalanceCard({ address }: { address: `0x${string}` }) {
             See the public receipt
           </a>
           <span className="mt-0.5 block text-xs text-muted">
-            (anyone can check this — that&apos;s the point)
+            (anyone can check this, which is the point)
           </span>
         </div>
       ) : null}

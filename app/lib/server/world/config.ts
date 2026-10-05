@@ -21,6 +21,13 @@
 // PLAYER_WORLD_PROBLEM instead, so a misconfigured deployment fails closed,
 // visibly, without printing configuration to a stranger.
 //
+// KILL SWITCH (Andre, 2026-09-30). KILL_WORLD_ID=1 (lib/server/kill-switches)
+// turns a working World setup off, marked `paused`, so every reader follows:
+// verify refuses new proofs, rp-context reports off, the lobby shows the list
+// path, requireHuman() stands down and the payout confirmation is off
+// (approval-provider.ts). Bindings World already made keep counting through
+// boundWorldNamespace() (access.ts), so a verified player keeps their way in.
+//
 // Production refusals (VERCEL_ENV=production, fail closed to "off"):
 //   - WORLD_VERIFY_MODE=mock (typed identities are not people)
 //   - live with WORLD_ENVIRONMENT anything but "production": staging proofs
@@ -32,6 +39,7 @@
 // shares the store with production can never count as a real human there.
 
 import { isProductionDeployment, optionalEnv } from "@/lib/server/env";
+import { killSwitches } from "@/lib/server/kill-switches";
 
 export type WorldMode = "live" | "mock" | "off";
 export type WorldEnvironment = "staging" | "production";
@@ -52,6 +60,9 @@ export interface WorldSetup {
   problem: string | null;
   /** Populated only in live mode. */
   live: LiveConfig | null;
+  /** True when a working setup is switched off by KILL_WORLD_ID. Absent
+   *  otherwise. */
+  paused?: true;
 }
 
 /** Default incognito action. One action for the whole app: one nullifier per
@@ -89,6 +100,17 @@ export function worldNamespace(setup: WorldSetup = worldSetup()): WorldNamespace
   return namespaceFor("live", setup.live?.environment ?? worldEnvironment());
 }
 
+/**
+ * The namespace the bindings World already made live in, even while
+ * KILL_WORLD_ID pauses new proofs. Access keeps honouring those bindings
+ * (lib/server/access.ts), so a World-verified player keeps their gate, their
+ * challenge pages, withdraw and refund. Null when World is not configured at
+ * all (unset, misconfigured or refused), exactly as worldNamespace() then.
+ */
+export function boundWorldNamespace(): WorldNamespace | null {
+  return worldNamespace(configuredWorldSetup());
+}
+
 /** What a player sees when prove-human is off because of a misconfiguration.
  *  The operator detail (setup.problem) goes to the server log only. */
 export const PLAYER_WORLD_PROBLEM =
@@ -98,14 +120,43 @@ export const PLAYER_WORLD_PROBLEM =
 export const PLAYER_WORLD_OFF =
   "Proving you're one human is not switched on for this build, so the closed-beta list decides who plays.";
 
-/** The player-safe line for an "off" setup; logs the operator detail. */
+/** What a player sees while World ID is switched off by the operator. */
+export const PLAYER_WORLD_PAUSED =
+  "Proving you're one human with World ID is paused for now. Nothing was recorded. The closed-beta list is the way in meanwhile.";
+
+/** The operator-side problem string for a deliberate pause. No env detail
+ *  reaches a player either way (playerWorldProblem maps it). */
+export const WORLD_PAUSED_PROBLEM = "World ID is switched off by the kill switch. Prove-human is off.";
+
+/** The player-safe line for an "off" setup; logs the operator detail. A
+ *  deliberate pause is not an error and logs nothing. */
 export function playerWorldProblem(setup: WorldSetup, correlationId: string): string {
+  if (setup.paused === true) return PLAYER_WORLD_PAUSED;
   if (setup.problem === null) return PLAYER_WORLD_OFF;
   console.error(`[${correlationId}] world config: ${setup.problem}`);
   return PLAYER_WORLD_PROBLEM;
 }
 
+/**
+ * The World setup every reader follows: the configured one, switched off
+ * (paused) while KILL_WORLD_ID is thrown. A build without World configured is
+ * unchanged by the switch: it was already off.
+ */
 export function worldSetup(): WorldSetup {
+  const configured = configuredWorldSetup();
+  if (configured.mode === "off" || !killSwitches().worldId) return configured;
+  return {
+    mode: "off",
+    action: configured.action,
+    problem: WORLD_PAUSED_PROBLEM,
+    live: null,
+    paused: true,
+  };
+}
+
+/** The setup the env configures, before the kill switch. Only
+ *  boundWorldNamespace() reads it directly. */
+function configuredWorldSetup(): WorldSetup {
   const action = worldAction();
   const raw = optionalEnv("WORLD_VERIFY_MODE", "").toLowerCase();
 

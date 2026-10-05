@@ -189,7 +189,22 @@ export interface RunResult {
  *  one-shot. Exported so the sweep can recognize the terminal state and stop
  *  retrying a claim that is beyond recovery. */
 export const SETTLE_UNPAYABLE_MESSAGE =
+  "the challenge settled before this claim completed; a one-shot settle cannot pay it retroactively";
+
+/** The same terminal message in the wording ledgers stored before the
+ *  2026-09-30 vocabulary pass. Persisted rows keep it forever, so every
+ *  reader of the terminal state (the sweep's filter, the dedupe below)
+ *  accepts both. */
+export const LEGACY_SETTLE_UNPAYABLE_MESSAGE =
   "pool settled before this claim completed; a one-shot settle cannot pay it retroactively";
+
+/** True for the settle-unpayable terminal message in either wording. */
+export function isSettleUnpayableMessage(message: string): boolean {
+  return (
+    message === SETTLE_UNPAYABLE_MESSAGE ||
+    message === LEGACY_SETTLE_UNPAYABLE_MESSAGE
+  );
+}
 
 /** Above the run route's maxDuration (60s) so a lambda killed mid-run always
  *  has its lock expire rather than wedging the claim until someone notices. */
@@ -427,7 +442,7 @@ async function purchaseService(
       ledger,
       message:
         `a ${quote.service} purchase for this claim is already in flight or ` +
-        "was left unreconciled by an interrupted run, and no spend row records " +
+        "was left unreconciled by an interrupted check, and no spend row records " +
         "it. SPOTTER will not buy the same read twice; this claim retries once " +
         "the intent marker expires.",
       refusal: "intent-held",
@@ -542,8 +557,13 @@ export async function appendErrorOnce(
   stage: string,
   message: string,
 ): Promise<LedgerEntry[]> {
+  // The unpayable terminal has two stored wordings; either one is the same
+  // failure, so a ledger carrying the old one does not grow a second row.
+  const same = (stored: string) =>
+    stored === message ||
+    (isSettleUnpayableMessage(stored) && isSettleUnpayableMessage(message));
   const seen = ledger.some(
-    (e) => e.kind === "error" && e.stage === stage && e.message === message,
+    (e) => e.kind === "error" && e.stage === stage && same(e.message),
   );
   if (seen) return ledger;
   return appendLedger(goalId, { kind: "error", stage, message });
@@ -947,7 +967,7 @@ async function runClaimUnlocked(
         kind: "error",
         stage: "attester",
         message:
-          `attester job ${input.attesterId} never ran - the attester was ` +
+          `attester job ${input.attesterId} never started - the attester was ` +
           "unreachable or unconfigured when this evidence was submitted. " +
           "SPOTTER is not buying a read of a job that never executed.",
       });
@@ -1184,6 +1204,12 @@ async function runClaimUnlocked(
   // keeps this claim out of the settlement sweep (it settles only recorded
   // claims); the stake comes back through the contract's unadjudicated
   // refund at period end.
+  //
+  // Paid on the verdict (Andre, 2026-10-02): an admin or an approved list
+  // player has no World ID to confirm with, so the gate answers "verdict" and
+  // the record below runs exactly as with the gate off, like V3. Only a
+  // World-bound wallet is asked (approval.ts, WHO CONFIRMS). The record is for
+  // input.address either way: the payout goes to the staker's own wallet.
   if (entryOf(ledger, "record") === undefined) {
     let gate: GateOutcome;
     try {
@@ -1214,7 +1240,7 @@ async function runClaimUnlocked(
       );
       return { status: "error", ledger };
     }
-    if (gate.status !== "off" && gate.status !== "approved") {
+    if (gate.status !== "off" && gate.status !== "verdict" && gate.status !== "approved") {
       const status: RunStatus =
         gate.status === "awaiting"
           ? "awaiting-approval"

@@ -43,7 +43,7 @@ export const CLAIM_STEPS: ClaimStepMeta[] = [
   {
     id: "paid",
     label: "Paid",
-    blurb: "USDC in your wallet the moment settlement runs.",
+    blurb: "USDC in your wallet the moment the challenge settles.",
   },
 ];
 

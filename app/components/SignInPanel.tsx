@@ -12,10 +12,16 @@
 // injected-wallet guard in providers.tsx lets that connection through while
 // still vetoing a silent load-time reconnect.
 //
-// Hard-won sign-in facts this leaves untouched: connect-only stays on (no SIWE
-// signature prompt), walletsFilter still hides MetaMask from the modal list,
-// and lib/wallet.ts still resolves primaryWallet ?? userWallets[0]. This panel
-// only chooses which flow to start.
+// Hard-won sign-in facts this leaves untouched: connect-only stays on (the
+// connect itself never asks for a signature), walletsFilter still hides
+// MetaMask from the modal list, and lib/wallet.ts still resolves
+// primaryWallet ?? userWallets[0]. This panel only chooses which flow to start.
+//
+// A wallet login proves itself once per session, after it connects. This
+// panel unmounts the moment a wallet connects, so the explained step lives in
+// components/SessionProofSheet.tsx; both external paths here mark the intent
+// that sheet waits for. The hints below say it is coming before either flow
+// opens, so the signature is never a surprise.
 //
 // One option stack everywhere: SignInOptions is the stack (Base first, then
 // email, then your own wallet as a quiet link), and both this panel and
@@ -232,7 +238,8 @@ export function SignInOptions() {
           </button>
           <p className={FIELD_HINT}>
             New here? This sets up your account. Already have one? The same
-            button signs you in.
+            button signs you in. Then one free signature proves it is yours,
+            once per session.
           </p>
 
           <div className="flex items-center gap-3 py-1" aria-hidden="true">
@@ -285,7 +292,9 @@ export function SignInOptions() {
             I already have a wallet
           </button>
           <p className="m-0 text-[0.8125rem] leading-[1.45] text-haze">
-            MetaMask, Coinbase Wallet or another wallet. Email is the simpler way in.
+            MetaMask, Coinbase Wallet or another wallet. Once it connects, one
+            free signature proves it is yours, once per session. Email is the
+            simpler way in.
           </p>
         </div>
       ) : null}

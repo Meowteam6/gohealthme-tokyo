@@ -20,7 +20,7 @@ export async function resolveNewPoolId(
 ): Promise<bigint> {
   const address = getHealthPoolsAddress();
   if (address === null) {
-    throw new Error("HealthPools contract address is not configured.");
+    throw new Error("The challenge contract address is not configured.");
   }
   const client = getArcPublicClient();
   const receipt = await client.getTransactionReceipt({ hash: depositHash });

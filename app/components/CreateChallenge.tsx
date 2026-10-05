@@ -86,6 +86,7 @@ import { MoneyChips, MoneyTermsList } from "@/components/game/MoneyTerms";
 import { missRuleWouldApply } from "@/lib/miss-rule";
 import { useApprovalProbe } from "@/components/game/ApprovalNote";
 import { challengeCreateBlock, payoutStateOf } from "@/lib/game/join-checks";
+import { useSwitches } from "@/lib/game/useSwitches";
 import AuthorCapabilityNotice from "@/components/AuthorCapabilityNotice";
 import { LAUNCH_GOAL_EXAMPLES, wearableGoalNotice } from "@/lib/launch-goal-check";
 import { COMING_LINE } from "@/lib/provider-capabilities";
@@ -397,11 +398,21 @@ function CreateChallengeInner() {
     healthQuery.data !== undefined && !healthQuery.data.ok ? healthQuery.data.message : null;
   const checkingChallenges = healthQuery.isLoading;
   // Every challenge is a wearable challenge on a launch goal, so the document
-  // checker never gates it. The one thing that can: a verified win that could
-  // not pay on this build. Decided before the form and again on submit, never
-  // after money moves.
+  // checker never gates it. What can: a verified win that could not pay on
+  // this build, or new money paused by the operator (KILL_BASE_MONEY_IN).
+  // Decided before the form and again on submit, and the create preflight
+  // refuses on the same switch, so nothing moves after a flip.
   const approvalProbe = useApprovalProbe();
-  const createBlock = challengeCreateBlock("available", payoutStateOf(approvalProbe.mode));
+  const switches = useSwitches();
+  // The creator's own stake goes in after the extra, through the join gate.
+  // Nothing about the creator holds it for World ID: a list player or an
+  // admin is paid on the verdict (Andre, 2026-10-02), so only build-wide
+  // limits stop a create.
+  const createBlock = challengeCreateBlock(
+    "available",
+    payoutStateOf(approvalProbe.mode),
+    { state: switches.moneyIn, reason: switches.reason },
+  );
   const goalNotice = wearableGoalNotice(goal);
 
   const stakeNum = Number(stake.trim()) || 0;
@@ -456,7 +467,7 @@ function CreateChallengeInner() {
       setFormError(
         createBlock.kind === "paused"
           ? createBlock.detail
-          : "I am still checking whether challenges can run right now. Try again in a moment.",
+          : "I am still checking whether new challenges can start right now. Try again in a moment.",
       );
       return;
     }
@@ -476,7 +487,9 @@ function CreateChallengeInner() {
     );
     switch (result.kind) {
       case "unavailable":
-        setPhase({ kind: "error", title: "Challenges are not live here yet", message: result.message });
+        // The preflight's own words: not live yet, or new stakes paused since
+        // the page loaded. Either way nothing was charged.
+        setPhase({ kind: "error", title: "No new challenge started", message: result.message });
         return;
       case "depositFailed":
         // Nothing moved. The deposit status note already says why.
@@ -552,7 +565,7 @@ function CreateChallengeInner() {
         <PerchedHeader title="Start a challenge" lead={PAGE_LEAD_COPY} pose="detective">
           <Card>
             <p className="sr-only" aria-live="polite">
-              Checking whether challenges can run
+              Checking whether new challenges can start
             </p>
             <Skeleton className="h-6 w-1/2" />
             <Skeleton className="mt-4 h-28 w-full" />
@@ -573,6 +586,7 @@ function CreateChallengeInner() {
               retryLabel="Check again"
               onRetry={() => {
                 approvalProbe.refetch();
+                switches.refetch();
               }}
             />
           </Card>

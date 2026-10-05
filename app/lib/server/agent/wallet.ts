@@ -107,7 +107,7 @@ export async function getSpotterWallet(
   const wallet = response.data?.wallet;
   if (!wallet?.address) {
     throw new Error(
-      `Circle has no wallet for CIRCLE_WALLET_ID=${walletId}; re-run provisioning or fix the env`,
+      `Circle has no wallet for CIRCLE_WALLET_ID=${walletId}; provision the wallet again or fix the env`,
     );
   }
   // Chain guard (money-path, no silent failures): a Circle wallet provisioned on

@@ -16,6 +16,12 @@ import {
 } from "viem";
 import { arcTestnet } from "@/lib/chains";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
+import {
+  canProveSession,
+  proveRegisteredSession,
+  proveWalletSession,
+  userListsWallet,
+} from "@/lib/session-proof";
 
 export type ArcWalletClient = WalletClient<Transport, Chain, Account>;
 
@@ -32,6 +38,25 @@ export interface EmbeddedWalletState {
   isEmbedded: boolean | null;
   /** The active wallet's connector name (for example "MetaMask"), or null. */
   connectorName: string | null;
+  /**
+   * True when Dynamic's signed-in user lists this wallet, so its session
+   * token proves the wallet to the server with no prompt: every email or
+   * passkey login, and a wallet login after its one session proof.
+   */
+  sessionProven: boolean;
+  /**
+   * True when the one session proof can run for this wallet: an external
+   * wallet, connected only, that Dynamic would sign with. False for email and
+   * passkey logins (already proven) and when Dynamic is signed in with another
+   * credential (only the plain signature can run then).
+   */
+  sessionProofPossible: boolean;
+  /**
+   * Ask the wallet for the one session proof (Dynamic's authenticateUser, via
+   * components/SessionProofSheet.tsx). True once proven; false on a decline,
+   * a proof that cannot run, or any error. Never throws.
+   */
+  proveSession: () => Promise<boolean>;
   login: () => void;
   logout: () => Promise<void>;
   getArcWalletClient: () => Promise<ArcWalletClient>;
@@ -50,6 +75,9 @@ function useStubWallet(): EmbeddedWalletState {
     address: null,
     isEmbedded: null,
     connectorName: null,
+    sessionProven: false,
+    sessionProofPossible: false,
+    proveSession: async () => false,
     login: () => {
       console.warn(
         "Dynamic is not configured (NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID unset); sign-in is unavailable.",
@@ -74,7 +102,7 @@ function useStubWallet(): EmbeddedWalletState {
  * unused by consumers (grep -rn ".wallet" app/components app/lib returned 0 hits).
  */
 function useDynamicWallet(): EmbeddedWalletState {
-  const { sdkHasLoaded, primaryWallet, setShowAuthFlow, handleLogOut } =
+  const { sdkHasLoaded, primaryWallet, setShowAuthFlow, handleLogOut, user } =
     useDynamicContext();
   const isLoggedIn = useIsLoggedIn();
   const userWallets = useUserWallets();
@@ -99,6 +127,23 @@ function useDynamicWallet(): EmbeddedWalletState {
   const isEmbedded = connector !== null ? Boolean(connector.isEmbeddedWallet) : null;
   const connectorName = connector?.name ?? null;
 
+  // The session proof (lib/session-proof.ts). Dynamic signs it with
+  // connectedWallets[0], which is userWallets[0] while nobody is signed in.
+  const signedIn = user != null;
+  const proofWalletAddress = signedIn ? null : (userWallets[0]?.address ?? null);
+  const sessionProven = userListsWallet(user, address);
+  const sessionProofPossible = canProveSession({
+    address,
+    isEmbedded,
+    signedIn,
+    proofWalletAddress,
+  });
+  const proveSession = useCallback(
+    async (): Promise<boolean> =>
+      (await proveWalletSession(address, proveRegisteredSession)) === "proven",
+    [address],
+  );
+
   const getArcWalletClient = useCallback(async (): Promise<ArcWalletClient> => {
     if (activeWallet == null || !isEthereumWallet(activeWallet)) {
       throw new Error("No EVM wallet connected. Sign in first.");
@@ -110,12 +155,16 @@ function useDynamicWallet(): EmbeddedWalletState {
 
   return {
     ready: sdkHasLoaded,
-    // connect-only mode never sets isLoggedIn (no SIWE), but the app only needs
-    // a connected wallet address — so treat a connected wallet as authenticated.
+    // A connect-only wallet has no isLoggedIn until its one session proof
+    // (sessionProven), but the app only needs a connected wallet address to
+    // show it, so a connected wallet counts as authenticated.
     authenticated: isLoggedIn || address !== null,
     address,
     isEmbedded,
     connectorName,
+    sessionProven,
+    sessionProofPossible,
+    proveSession,
     login: () => setShowAuthFlow(true),
     logout: handleLogOut,
     getArcWalletClient,

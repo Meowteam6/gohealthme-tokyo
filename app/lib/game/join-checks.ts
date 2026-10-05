@@ -15,6 +15,8 @@ import type {
   VerifierState,
 } from "@/lib/game/lobby";
 import type { AccessStatus } from "@/lib/useAccess";
+import type { HumanProof, HumanStatus } from "@/lib/game/character";
+import { challengeCreatePausedDetail, type MoneyInState } from "@/lib/switches";
 
 /**
  * The closed-beta gate is off only for the Playwright suite
@@ -76,10 +78,18 @@ export function approvalModeOf(probe: {
 }
 
 /**
- * Whether a dare can be created right now. Every dare the create form makes
- * is an upload-proof run (CreateChallenge encodeGoal), so with the document
- * checker off it would fund a reward nobody can ever be verified on. Checked
- * before the form, and again on submit, never after the deposit.
+ * Whether a challenge can be created right now. Checked before the form, and
+ * again on submit, never after the deposit. The document checker and the
+ * payout rule come first (a challenge nobody could be checked or paid on);
+ * then new money (KILL_BASE_MONEY_IN): a new challenge is new money, and its
+ * creator's own stake could not go in while the pause holds. The create
+ * preflight (/api/challenges/health) refuses on the same switch, so a flip
+ * between page load and submit still stops before any money moves.
+ *
+ * Nothing about the creator themself stops a create (Andre, 2026-10-02, "Pay
+ * on the verdict"): a list player or an admin is paid on the verdict, so
+ * their own stake can always follow their extra. The "needs-world" block that
+ * sent them to World ID first is retired.
  */
 export type CreateBlock =
   | { kind: "ok" }
@@ -90,6 +100,7 @@ export type CreateBlock =
 export function challengeCreateBlock(
   verifier: VerifierState,
   payouts: PayoutState,
+  money: { state: MoneyInState; reason: string | null },
 ): CreateBlock {
   if (verifier === "off") {
     return {
@@ -107,10 +118,43 @@ export function challengeCreateBlock(
         "Players who hit confirm with World ID before the contract pays, and that step is not set up here right now. I am not letting you put money on a challenge that could not pay out. Nothing has been charged.",
     };
   }
+  if (money.state === "paused") {
+    return {
+      kind: "paused",
+      title: "Challenges are paused for now",
+      detail: challengeCreatePausedDetail(money.reason, "has been"),
+    };
+  }
   if (verifier === "error") return { kind: "retry", title: "I could not check my document checker just now" };
   if (payouts === "error") return { kind: "retry", title: "I could not check how payouts work here just now" };
-  if (verifier === "loading" || payouts === "loading") return { kind: "checking" };
+  if (money.state === "error") return { kind: "retry", title: "I could not check whether stakes are open just now" };
+  if (verifier === "loading" || payouts === "loading" || money.state === "loading") {
+    return { kind: "checking" };
+  }
   return { kind: "ok" };
+}
+
+/** How a player's hit is released: a World ID confirm, or SPOTTER pays it on
+ *  the wearable verdict with no extra step. */
+export type PayoutPath = "world" | "verdict";
+
+/**
+ * The client mirror of the server's payoutConfirmFor (Andre, 2026-10-02,
+ * "Pay on the verdict"). A World-verified player confirms each payout with
+ * World ID wherever the confirmation is switched on; a list player or an
+ * admin is paid on the verdict, whatever the build; with the confirmation off
+ * everyone is. A wallet that is not proven human reads "world", never the
+ * verdict, though the join never lets it stake. Null while the mode is still
+ * being read or its read failed: copy waits rather than guessing.
+ */
+export function payoutPathOf(i: {
+  approvalMode: ApprovalModeView;
+  humanProof: HumanProof | null;
+}): PayoutPath | null {
+  if (i.approvalMode === "loading" || i.approvalMode === "error") return null;
+  if (i.approvalMode === "off") return "verdict";
+  if (i.humanProof === "list" || i.humanProof === "admin") return "verdict";
+  return "world";
 }
 
 /** Whether a verified win can pay on this build. */

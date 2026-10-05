@@ -19,7 +19,8 @@ import {
 } from "@/components/night/kit";
 import { Card, Tag, buttonClasses } from "@/components/ui";
 import { formatUsdc } from "@/lib/contract";
-import type { DarePot } from "@/lib/challenges";
+import type { ChallengePauseReason, DarePot } from "@/lib/challenges";
+import { addToPotPausedDetail } from "@/lib/switches";
 import { MoneyChips, MoneyTermsList } from "@/components/game/MoneyTerms";
 import { runMoneyOf } from "@/lib/game/money-flow";
 import {
@@ -260,8 +261,28 @@ export function ChallengeIntro({
   );
 }
 
-/** Challenges that cannot be checked or paid on this build take no money. */
-export function ChallengePausedCard({ reason }: { reason: "checker" | "payouts" }) {
+/** Challenges that cannot be checked or paid on this build take no money,
+ *  and nothing takes new money while the operator has it paused
+ *  ("money-in", with their note). */
+export function ChallengePausedCard({
+  reason,
+  note = null,
+}: {
+  reason: ChallengePauseReason;
+  /** The operator's note for a money-in pause (KILL_REASON), or null. */
+  note?: string | null;
+}) {
+  if (reason === "money-in") {
+    // Nothing for the player to do: it clears when stakes are back on, like
+    // every other "wait" lock, so no action that leads to another pause.
+    return (
+      <Card>
+        <Notice tone="limit" role="status" title="Chipping in is paused too">
+          {addToPotPausedDetail(note)}
+        </Notice>
+      </Card>
+    );
+  }
   return (
     <Card>
       <Notice
@@ -297,6 +318,7 @@ export function BackerView({
   pot,
   backers,
   canGrow,
+  pause = null,
   chipIn,
 }: {
   token: string;
@@ -307,6 +329,9 @@ export function BackerView({
   backers: string[];
   /** Live, can pay, and checkable and payable on this build. */
   canGrow: boolean;
+  /** Why a live challenge takes no backers right now, when that is the
+   *  reason it cannot grow (said plainly instead of the closed copy). */
+  pause?: { reason: ChallengePauseReason; note: string | null } | null;
   /** Who the chip-in warning names and how the run pays. */
   chipIn: ChipInTerms;
 }) {
@@ -335,6 +360,9 @@ export function BackerView({
             prizeUsd={pot.prize !== null ? formatUsdc(pot.prize) : null}
             chipIn={chipIn}
           />
+        ) : pause !== null && pause.reason === "money-in" ? (
+          // Nothing to do but come back: no action that leads to another pause.
+          <EmptyCard title="Backing is paused for now" detail={addToPotPausedDetail(pause.note)} />
         ) : (
           <EmptyCard
             title="This challenge is not taking backers anymore"

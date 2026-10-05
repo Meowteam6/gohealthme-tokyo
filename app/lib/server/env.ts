@@ -56,7 +56,7 @@ export class FrozenPoolsError extends Error {
   constructor(name: string) {
     super(
       `${name} is the frozen V3 pilot HealthPools (${FROZEN_V3_POOLS_ADDRESS}). ` +
-        "V4 must never read, record or settle against V3 users' pools. Deploy the Tokyo " +
+        "V4 must never read, record or settle against V3 users' challenges. Deploy the Tokyo " +
         "HealthPoolsV3 (scripts/tokyo-deploy.sh) and point HEALTH_POOLS_ADDRESS, " +
         "NEXT_PUBLIC_HEALTH_POOLS_ADDRESS and HEALTH_POOLS_FROM_BLOCK at it.",
     );

@@ -66,14 +66,14 @@ export function createCommitmentCopy(
       "Everyone stakes the same entry fee on their own goal. Hit it and confirm it, and " +
       "your stake comes back plus an equal share of the missed stakes. A miss the " +
       "wearable shows goes to the players who hit; no wearable data for the challenge, nobody " +
-      "hitting, or a cancel before settle gives the stake back. No sponsor needed - " +
-      "initial funding can be zero."
+      "hitting, or a cancel before settle gives the stake back. No sponsor needed. " +
+      "Initial funding can be zero."
     );
   }
   return (
     "Everyone stakes the same entry fee on their own goal. Hit it and your stake comes " +
     "back plus an equal share of any initial funding. With this goal and proof the challenge " +
-    "cannot record a miss, so a miss is refunded at settle. No sponsor needed - initial " +
+    "cannot record a miss, so a miss is refunded at settle. No sponsor needed. Initial " +
     "funding can be zero."
   );
 }

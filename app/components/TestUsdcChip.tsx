@@ -30,7 +30,9 @@ import { buttonClasses } from "@/components/ui";
  *  real failures; `enough` and `capped` are not failures and get no link. */
 type ChipState =
   | { kind: "idle" }
-  | { kind: "done" }
+  /** `note` says what the player should know beside the delivery (new test
+   *  USDC paused, while what was waiting still moved). */
+  | { kind: "done"; note?: string }
   | { kind: "enough" }
   | { kind: "capped"; message: string }
   | { kind: "fallback"; message: string };
@@ -61,7 +63,7 @@ export default function TestUsdcChip() {
     const baseline = balanceQuery.data ?? 0n;
     const result = await fund(address);
     if (result.kind === "funded") {
-      setState({ kind: "done" });
+      setState({ kind: "done", note: result.note });
       // Existing invalidation: one immediate refetch. On its own this often
       // reads the pre-fund figure, because the RPC read replica lags the tx.
       await queryClient.invalidateQueries({
@@ -105,7 +107,7 @@ export default function TestUsdcChip() {
   return (
     <div className="flex flex-wrap items-center gap-2 py-1">
       <span
-        title="Not real money — for trying things out, never charged."
+        title="Not real money. For trying things out, never charged."
         className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-edge bg-surface px-3 text-xs text-muted"
       >
         <span className="font-semibold">Practice money</span>
@@ -119,20 +121,20 @@ export default function TestUsdcChip() {
         onClick={() => {
           void run();
         }}
-        title="Add practice money to your account. Not real money — never charged."
+        title="Add practice money to your account. Not real money, never charged."
         className={`${buttonClasses({ variant: "secondary", size: "sm" })} px-3`}
       >
         {label}
       </button>
       {state.kind === "done" ? (
         <span className="text-[11px] text-accent-deep sm:text-xs" aria-live="polite">
-          Added
+          {state.note !== undefined ? state.note : "Added"}
         </span>
       ) : null}
       {state.kind === "enough" ? (
         <span className="text-[11px] text-muted sm:text-xs" aria-live="polite">
-          you already have enough to play - the faucet tops up wallets that run
-          low
+          you already have enough to play - the faucet only tops up wallets
+          that are low
         </span>
       ) : null}
       {state.kind === "capped" ? (

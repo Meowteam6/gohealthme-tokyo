@@ -12,18 +12,19 @@
 // used to look identical to one still being judged, with nothing on screen
 // saying when the money arrives - the chain already knows, so the card says it.
 //
-// The two /api/wearable/* reads on this page are signature-gated: a streak and
-// a week of sleep hours are health data, and a wallet address is public, so
-// knowing the address is not permission to read them. This is the one surface
-// where a signature prompt on load is the right call - it is the signed-in
-// user's own dashboard, asking for their own data - and one signature covers
-// every read for the session. A refused prompt shows the reason and a way to
-// try again, never an empty card that reads as "you have no wearable".
+// The /api/wearable/* reads on this page are wallet-gated: a streak and a week
+// of sleep hours are health data, and a wallet address is public, so knowing
+// the address is not permission to read them. Every read here is cachedOnly:
+// opening the dashboard never opens a wallet. Email and passkey logins, and a
+// wallet login that proved itself once this session, hold a Dynamic session
+// token, so the data simply loads. Without one, the card says the data is
+// locked and offers the quiet Verify wallet action (one explained signature,
+// once per session), never an empty card that reads as "you have no wearable".
 
 import { SignInLoadingCard } from "@/components/night/SlowSignInNotice";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import BalanceCard from "@/components/BalanceCard";
 import ClaimPayout from "@/components/ClaimPayout";
 import RefundClaim from "@/components/RefundClaim";
@@ -74,6 +75,7 @@ import {
 } from "@/lib/wearable-provider";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useWalletAuth } from "@/lib/useWalletAuth";
+import VerifyWalletAction from "@/components/VerifyWalletAction";
 import { PopupBlockedError, startWearableLink } from "@/lib/wearable-connect";
 import { resultLabel } from "@/lib/participant-status";
 import { missConfirmByMs, missGraceSeconds } from "@/lib/miss-grace";
@@ -84,7 +86,7 @@ import {
   type RunApprovalStatus,
 } from "@/lib/game/verdict";
 import { parseStatus } from "@/lib/world/approval-client";
-import RunBoard from "@/components/game/RunBoard";
+import RunBoard, { runNightsQuery, verifyActionOwner } from "@/components/game/RunBoard";
 import CharacterCard from "@/components/game/CharacterCard";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { MY_RUNS_KEY, fetchMyRuns } from "@/lib/game/useLobby";
@@ -99,6 +101,7 @@ import {
 } from "@/lib/wearable-connect";
 import {
   authBlockReason,
+  cachedOnlyRequester,
   fetchWithWalletAuth,
   type WalletAuthRequester,
 } from "@/lib/client-auth";
@@ -351,7 +354,7 @@ function ConnectButton({
  * entitled to know that before they hand over health data.
  */
 function ProviderChoice({ address }: { address: `0x${string}` }) {
-  const requestAuth = useWalletAuth();
+  const requestAuth = cachedOnlyRequester(useWalletAuth());
   const { data, isPending } = useQuery({
     queryKey: providerOptionsQueryKey(address),
     queryFn: () => fetchProviderOptions(address, requestAuth),
@@ -431,15 +434,20 @@ function ProviderChoice({ address }: { address: `0x${string}` }) {
   );
 }
 
+const STREAK_LOCKED = "Your streak is private to your wallet.";
+
 function StreakCard({
   address,
   pool,
+  verifyAction = true,
 }: {
   address: `0x${string}`;
   pool?: PoolInfo;
+  /** Whether a locked streak offers the Verify wallet button. Off when an
+   *  earlier locked card on the page already carries it. */
+  verifyAction?: boolean;
 }) {
-  const requestAuth = useWalletAuth();
-  const queryClient = useQueryClient();
+  const requestAuth = cachedOnlyRequester(useWalletAuth());
   const healthQuery = useQuery({
     queryKey: providerQueryKey(address, pool?.id),
     queryFn: () => fetchProviderState(address, requestAuth, pool),
@@ -450,21 +458,6 @@ function StreakCard({
   const downReason = providerDownReason(state);
   const authReason = providerAuthReason(state);
   const progress = state?.kind === "ok" ? state.progress : null;
-
-  /** Sign, then re-read every junction card on the page. This button is the
-   *  only place to sign from, so refetching just this card would leave the
-   *  synced-data card below it hidden until a reload. */
-  const unlock = () => {
-    void (async () => {
-      await requestAuth({ refresh: true });
-      // These are the CURRENT key prefixes. They were still the old
-      // junction-* names after the routes were renamed, so signing did not
-      // refetch anything and the button silently did nothing.
-      await queryClient.invalidateQueries({ queryKey: ["wearable-progress"] });
-      await queryClient.invalidateQueries({ queryKey: ["wearable-data"] });
-      await queryClient.invalidateQueries({ queryKey: ["wearable-providers"] });
-    })();
-  };
 
   return (
     <Card>
@@ -492,15 +485,16 @@ function StreakCard({
         </>
       ) : authReason !== null ? (
         // Locked, not empty. Offering the connect flow here would tell someone
-        // with a linked device to link it again.
-        <>
-          <Notice tone="info" className="mt-3">
-            {authReason}
-          </Notice>
-          <Button type="button" size="sm" onClick={unlock} className="mt-3">
-            Sign and show my streak
-          </Button>
-        </>
+        // with a linked device to link it again. Verifying re-reads every
+        // wallet-gated card on the page (lib/session-proof.ts), the synced-data
+        // card below included, so a page shows the button once.
+        verifyAction ? (
+          <VerifyWalletAction lead={STREAK_LOCKED} className="mt-3" />
+        ) : (
+          <p className="m-0 mt-3 text-[0.9375rem] leading-[1.45] text-muted">
+            {STREAK_LOCKED} The Verify wallet button above unlocks it too.
+          </p>
+        )
       ) : !providerConnected(state) ? (
         <>
           <p className="m-0 mt-2 text-[0.9375rem] text-muted">
@@ -653,7 +647,7 @@ const SOURCE_NOTE: Record<WearableProviderId, string> = {
 
 /** Shows the latest few days pulled from the linked provider (demo proof). */
 function RecentDataCard({ address }: { address: `0x${string}` }) {
-  const requestAuth = useWalletAuth();
+  const requestAuth = cachedOnlyRequester(useWalletAuth());
   const recentQuery = useQuery({
     queryKey: ["wearable-data", address],
     queryFn: () => fetchRecentData(address, requestAuth),
@@ -780,7 +774,7 @@ function WhoopReturnNote({ liveConnected }: { liveConnected: boolean | null }) {
 
 export default function DashboardContent() {
   const { ready, authenticated, address } = useEmbeddedWallet();
-  const requestAuth = useWalletAuth();
+  const requestAuth = cachedOnlyRequester(useWalletAuth());
   const character = useCharacter();
 
   const joinedQuery = useQuery({
@@ -854,6 +848,21 @@ export default function DashboardContent() {
     refetchInterval: 15_000,
   });
 
+  // The nights read of every open wearable challenge, in page order: the same
+  // cache entries the boards render from (one fetch each, not two). A locked
+  // page offers Verify wallet once, in the first locked card, because one tap
+  // re-reads every card; this is how the page knows which card that is.
+  const openWearableRuns = (joinedQuery.data ?? []).filter(
+    ({ pool }) =>
+      !pool.settled && !pool.cancelled && evidenceTypeOf(pool.goalSpec) === "wearable",
+  );
+  const boardReads = useQueries({
+    queries:
+      address === null
+        ? []
+        : openWearableRuns.map(({ pool }) => runNightsQuery(address, pool, requestAuth)),
+  });
+
   if (!ready) {
     return (
       <MyRunsFrame pose="detective">
@@ -883,12 +892,27 @@ export default function DashboardContent() {
   const runs = joinedQuery.data ?? [];
   // An unsettled run is on the board; a settled or cancelled one is a
   // result line with whatever is left to do on it.
-  const wearableRun = runs.find(
-    ({ pool }) =>
-      !pool.settled && !pool.cancelled && evidenceTypeOf(pool.goalSpec) === "wearable",
-  );
+  const wearableRun = openWearableRuns[0];
   const openRuns = runs.filter(({ pool }) => !pool.settled && !pool.cancelled);
   const finishedRuns = runs.filter(({ pool }) => pool.settled || pool.cancelled);
+
+  // The general streak card earns its place only when no live wearable run
+  // already shows the nights on its own board.
+  const streakShown =
+    wearableRun === undefined &&
+    (wearableConnected || providerAuthReason(connectionQuery.data) !== null);
+  // Which locked card carries the one Verify wallet button. Every other locked
+  // card says its data is locked and points at it. With nothing locked, no
+  // card is told to drop a button, so a read this page has not seen yet can
+  // never leave a card locked with no way in.
+  const verifyOwner = verifyActionOwner([
+    ...openWearableRuns.map(({ pool }, i) => ({
+      id: `board:${pool.id.toString()}`,
+      state: boardReads[i]?.data,
+    })),
+    ...(streakShown ? [{ id: "streak", state: connectionQuery.data }] : []),
+  ]);
+  const offersVerify = (id: string) => verifyOwner === null || verifyOwner === id;
 
   // The one otter on the page: a run board carries its own scene, so when a
   // live run leads the page the header stands no second pose; otherwise
@@ -983,7 +1007,12 @@ export default function DashboardContent() {
             );
             return (
               <div key={entry.pool.id.toString()} className="[&>*+*]:mt-3">
-                <RunBoard pool={entry.pool} address={address} promptForData showLink />
+                <RunBoard
+                  pool={entry.pool}
+                  address={address}
+                  showLink
+                  verifyAction={offersVerify(`board:${entry.pool.id.toString()}`)}
+                />
                 {approvalLine !== null ? (
                   <ApprovalRunNote line={approvalLine} poolId={entry.pool.id} />
                 ) : null}
@@ -1029,11 +1058,8 @@ export default function DashboardContent() {
         </>
       ) : null}
 
-      {/* The general streak card earns its place only when no live wearable
-       *  run already shows the nights on its own board. */}
-      {wearableRun === undefined &&
-      (wearableConnected || providerAuthReason(connectionQuery.data) !== null) ? (
-        <StreakCard address={address} />
+      {streakShown ? (
+        <StreakCard address={address} verifyAction={offersVerify("streak")} />
       ) : null}
       <RecentDataCard address={address} />
       <BalanceCard address={address} />

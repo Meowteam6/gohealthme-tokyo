@@ -2,8 +2,9 @@
 
 // The join's non-chain reads, gathered once for the lobby, the run page and
 // the dare link: World proof-of-human, the closed-beta gate, SPOTTER's
-// document checker and the World ID payout confirmation. The mapping to lock
-// states is lib/game/join-checks.ts; the decision is runSlotOf.
+// document checker, the World ID payout confirmation and the pre-launch
+// kill switches (new money paused). The mapping to lock states is
+// lib/game/join-checks.ts; the decision is runSlotOf.
 
 import { useCallback } from "react";
 import { useApprovalProbe } from "@/components/game/ApprovalNote";
@@ -17,10 +18,12 @@ import {
 import type {
   GateState,
   HumanLane,
+  MoneyInState,
   PayoutState,
   VerifierState,
 } from "@/lib/game/lobby";
 import type { CharacterView } from "@/lib/game/useCharacter";
+import { useSwitches } from "@/lib/game/useSwitches";
 import { useDocumentProofQuery } from "@/lib/useProofStatus";
 
 export interface JoinChecks {
@@ -30,6 +33,10 @@ export interface JoinChecks {
   verifier: VerifierState;
   payouts: PayoutState;
   approvalMode: ApprovalModeView;
+  /** Whether new money may go in on this build (KILL_BASE_MONEY_IN). */
+  moneyIn: MoneyInState;
+  /** The operator's note for a pause, or null. */
+  switchReason: string | null;
   /** Read every check again (the "Check again" fix on a failed one). */
   retry: () => void;
 }
@@ -37,6 +44,7 @@ export interface JoinChecks {
 export function useJoinChecks(view: CharacterView): JoinChecks {
   const approval = useApprovalProbe();
   const proof = useDocumentProofQuery();
+  const switches = useSwitches();
 
   const gate = gateStateOf({
     gateDisabled: accessGateDisabled(),
@@ -53,19 +61,29 @@ export function useJoinChecks(view: CharacterView): JoinChecks {
   const { refresh } = view;
   const { refetch: refetchApproval } = approval;
   const { refetch: refetchProof } = proof;
+  const { refetch: refetchSwitches } = switches;
   const retry = useCallback(() => {
     refresh();
     refetchApproval();
     refetchProof();
-  }, [refresh, refetchApproval, refetchProof]);
+    refetchSwitches();
+  }, [refresh, refetchApproval, refetchProof, refetchSwitches]);
+
+  // A World-on build where the human answer is still being read (World's own
+  // status, or the list read that can also prove it): hold the stake on a
+  // skeleton instead of flashing "prove you are one human" at a list player.
+  const worldLane: HumanLane =
+    view.worldLane === "on" && view.character?.human === "unknown" ? "loading" : view.worldLane;
 
   return {
-    worldLane: view.worldLane,
+    worldLane,
     humanVerified: view.character?.human === "verified",
     gate,
     verifier: verifierStateOf(proof),
     payouts: payoutStateOf(approval.mode),
     approvalMode: approval.mode,
+    moneyIn: switches.moneyIn,
+    switchReason: switches.reason,
     retry,
   };
 }

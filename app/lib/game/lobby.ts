@@ -18,6 +18,14 @@ import {
   type SensorHold,
 } from "@/lib/wearable-join-gate";
 import { metricLabel, type WearableMetric } from "@/lib/wearable-goal";
+import {
+  MONEY_ALREADY_IN_LINE,
+  MONEY_IN_PAUSED_TITLE,
+  withKillReason,
+  type MoneyInState,
+} from "@/lib/switches";
+
+export type { MoneyInState };
 
 export type RunLock =
   | { kind: "sign-in" }
@@ -47,12 +55,15 @@ export type RunLock =
   /** The World ID payout confirmation is switched on and cannot run on this
    *  build, so no win could pay. Nobody stakes into that. */
   | { kind: "payouts-paused" }
+  /** New money into Base is switched off by the operator (KILL_BASE_MONEY_IN).
+   *  Money already in is untouched. `reason` is the operator's note. */
+  | { kind: "money-in-paused"; reason: string | null }
   /** A read the join depends on keeps failing. The stake is held, never
    *  offered on a guess, and the fix is a retry. */
   | { kind: "check-failed"; check: JoinCheck };
 
 /** The reads a join depends on besides the chain and the sensor. */
-export type JoinCheck = "human" | "access" | "payouts" | "verifier";
+export type JoinCheck = "human" | "access" | "payouts" | "verifier" | "switches";
 
 /** World proof-of-human for this build: on, off, not known yet, or the read
  *  failed. "error" is never "off": that is how an unverified wallet got a
@@ -102,8 +113,32 @@ export interface RunSlotInput {
   needsDocumentVerifier: boolean;
   verifier: VerifierState;
   payouts: PayoutState;
+  /** Whether new money may go in on this build (GET /api/switches). */
+  moneyIn: MoneyInState;
+  /** The operator's note for the money-in pause, or null. */
+  moneyInReason?: string | null;
+  /** The viewer created this challenge and its pot already holds money
+   *  (creatorMoneyInOf). The money-in pause does not strand their game. */
+  creatorMoneyIn?: boolean;
   /** Label of the player's paired device, for the cannot-measure copy. */
   deviceLabel: string | null;
+}
+
+/**
+ * The one exception to the money-in pause: the creator of a challenge whose
+ * pot already holds money (their extra at create, or a friend's stake or
+ * chip-in since) may still lock in their own stake. Blocking them would strand
+ * a game that already has money in it. Every other lock still applies.
+ */
+export function creatorMoneyInOf(
+  pool: Pick<PoolInfo, "creator" | "balance">,
+  address: string | null,
+): boolean {
+  return (
+    address !== null &&
+    address.toLowerCase() === pool.creator.toLowerCase() &&
+    pool.balance > 0n
+  );
 }
 
 /** Upload-floor runs need SPOTTER's document checker; the same predicate
@@ -122,12 +157,15 @@ function locked(lock: RunLock): RunSlot {
  *  1. A closed run is closed; a run that cannot pay is never offered.
  *  2. Already in: the stake is spent and nothing should stand in front of it.
  *  3. Build-wide limits every player hits alike: the document checker is off
- *     for an upload run, or payouts cannot be confirmed on this build.
+ *     for an upload run, payouts cannot be confirmed on this build, or new
+ *     money is paused (KILL_BASE_MONEY_IN; a creator whose challenge already
+ *     holds money is the one exception, creatorMoneyInOf).
  *  4. Nobody signed in.
  *  5. The device can never measure this goal (a hardware fact, not a delay).
  *  6. The provider is down (clears on its own).
  *  7. Not proven human (World on).
- *  8. Not on the closed-beta list.
+ *  8. Not on the closed-beta list. A list player or an admin is not held
+ *     for World ID: SPOTTER pays them on the verdict (Andre, 2026-10-02).
  *  9. No sensor, then sensor not checked this visit.
  * Any of those reads still loading holds the slot on "checking", and one that
  * failed locks it with a retry. Neither ever falls through to "playable".
@@ -148,6 +186,14 @@ export function runSlotOf(input: RunSlotInput): RunSlot {
   if (input.payouts === "loading") return CHECKING;
   if (input.payouts === "error") return locked({ kind: "check-failed", check: "payouts" });
 
+  if (input.creatorMoneyIn !== true) {
+    if (input.moneyIn === "paused") {
+      return locked({ kind: "money-in-paused", reason: input.moneyInReason ?? null });
+    }
+    if (input.moneyIn === "loading") return CHECKING;
+    if (input.moneyIn === "error") return locked({ kind: "check-failed", check: "switches" });
+  }
+
   if (input.address === null) return { kind: "locked", lock: { kind: "sign-in" } };
   const block = input.joinBlock;
   if (block.kind === "unsupported") {
@@ -165,6 +211,9 @@ export function runSlotOf(input: RunSlotInput): RunSlot {
   if (input.worldLane === "loading") return CHECKING;
   if (input.worldLane === "error") return locked({ kind: "check-failed", check: "human" });
   if (input.worldLane === "on" && !input.humanVerified) {
+    // The list proves a human too (humanProofOf): with its read failed, the
+    // player may well be on it, so that is a retry, not a World ID ask.
+    if (input.gate === "error") return locked({ kind: "check-failed", check: "access" });
     return { kind: "locked", lock: { kind: "not-human" } };
   }
 
@@ -305,6 +354,16 @@ export function lockCopy(lock: RunLock, returnTo: string): LockCopy {
         fix: { kind: "none" },
         tone: "wait",
       };
+    case "money-in-paused":
+      return {
+        title: MONEY_IN_PAUSED_TITLE,
+        detail: withKillReason(
+          `${MONEY_ALREADY_IN_LINE} This challenge opens again when stakes are back on. Nothing has been charged.`,
+          lock.reason,
+        ),
+        fix: { kind: "none" },
+        tone: "wait",
+      };
     case "check-failed":
       return {
         title: CHECK_FAILED_TITLE[lock.check],
@@ -321,6 +380,7 @@ const CHECK_FAILED_TITLE: Record<JoinCheck, string> = {
   access: "I could not check the beta list just now",
   payouts: "I could not check how payouts work here just now",
   verifier: "I could not check my document checker just now",
+  switches: "I could not check whether stakes are open just now",
 };
 
 // ------------------------------------------------------------ the lobby list
@@ -337,6 +397,10 @@ export interface LobbyInput {
   asOfSeconds: bigint;
   verifier: VerifierState;
   payouts: PayoutState;
+  /** Whether new money may go in on this build (GET /api/switches). */
+  moneyIn: MoneyInState;
+  /** The operator's note for the money-in pause, or null. */
+  moneyInReason?: string | null;
   gate: GateState;
   /** Pool ids (decimal strings) this wallet has entered. */
   joined: ReadonlySet<string>;
@@ -420,6 +484,9 @@ export function buildLobby(input: LobbyInput): Lobby {
         needsDocumentVerifier: needsDocumentVerifier(pool.goalSpec),
         verifier: input.verifier,
         payouts: input.payouts,
+        moneyIn: input.moneyIn,
+        moneyInReason: input.moneyInReason ?? null,
+        creatorMoneyIn: creatorMoneyInOf(pool, input.address),
         deviceLabel: input.deviceLabel,
       }),
     };

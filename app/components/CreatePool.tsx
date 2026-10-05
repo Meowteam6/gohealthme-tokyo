@@ -40,6 +40,8 @@ import {
 } from "@/components/night/kit";
 import GaslessBadge from "@/components/GaslessBadge";
 import SignInGate from "@/components/SignInGate";
+import { useSwitches } from "@/lib/game/useSwitches";
+import { MONEY_IN_PAUSED_TITLE, challengeCreatePausedDetail } from "@/lib/switches";
 
 const DURATION_OPTIONS: { label: string; days: number }[] = [
   { label: "1 day", days: 1 },
@@ -127,6 +129,10 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
   const [initialFunding, setInitialFunding] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState<boolean>(false);
+  // New money paused by the operator (KILL_BASE_MONEY_IN): a new challenge is
+  // new money (its funding now, its stakes after), so the form says so before
+  // anything is filled in, and submit checks again.
+  const switches = useSwitches();
 
   const poolsAddress = getHealthPoolsAddress();
   if (poolsAddress === null) {
@@ -136,6 +142,20 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
         detail="Starting a challenge is not switched on for this build yet. Nothing is wrong on your side."
       />
     );
+  }
+  // A create already in flight keeps its form and its status.
+  if (switches.moneyIn === "paused" && !busy && !redirecting) {
+    const detail = challengeCreatePausedDetail(switches.reason, "has been");
+    if (embedded) {
+      return (
+        <Card>
+          <Notice tone="limit" role="status" title={MONEY_IN_PAUSED_TITLE}>
+            {detail}
+          </Notice>
+        </Card>
+      );
+    }
+    return <RunsOff title={MONEY_IN_PAUSED_TITLE} detail={detail} />;
   }
 
   const applyTemplate = (template: DocTemplate) => {
@@ -193,6 +213,14 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
 
   const submit = async () => {
     setFormError(null);
+    if (switches.moneyIn !== "open") {
+      setFormError(
+        switches.moneyIn === "paused"
+          ? challengeCreatePausedDetail(switches.reason, "has been")
+          : "I am still checking whether new stakes are open. Nothing has been charged. Try again in a moment.",
+      );
+      return;
+    }
     let entryFeeUsdc: bigint;
     let fundingUsdc: bigint;
 
@@ -291,8 +319,12 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
     }
   };
 
-  const primaryLabel =
-    status.kind === "fueling"
+  // The switches read has not answered (or failed): the create is held, never
+  // offered on a guess.
+  const moneyInHeld = switches.moneyIn !== "open" && !busy && !redirecting;
+  const primaryLabel = moneyInHeld && switches.moneyIn === "loading"
+    ? "Checking stakes are open"
+    : status.kind === "fueling"
       ? "One moment"
       : status.kind === "approving"
       ? "Approving USDC"
@@ -672,7 +704,7 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
                   type="button"
                   block
                   aria-busy={busy || redirecting}
-                  disabled={!ready || busy || redirecting}
+                  disabled={!ready || busy || redirecting || moneyInHeld}
                   onClick={() => {
                     if (!authenticated) {
                       openSignIn();
@@ -686,6 +718,15 @@ function CreatePoolInner({ embedded }: { embedded: boolean }) {
               )}
             </SignInGate>
             <Fine className="text-center">Test USDC on Base Sepolia during beta.</Fine>
+
+            {moneyInHeld && switches.moneyIn === "error" ? (
+              <ErrorNote
+                title="I could not check whether stakes are open just now"
+                detail="It did not answer, so no challenge starts on a guess. Nothing has been charged."
+                retryLabel="Check again"
+                onRetry={switches.refetch}
+              />
+            ) : null}
 
             {authenticated ? <GaslessBadge status={gasless} /> : null}
 

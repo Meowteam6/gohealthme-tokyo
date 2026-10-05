@@ -112,6 +112,79 @@ describe("approvedUnrecordedOf", () => {
   });
 });
 
+// KILL_WORLD_ID (Andre, 2026-09-30): with World paused the payout
+// confirmation is off, so a hit that was still waiting on the human when the
+// switch flipped has nothing left to wait for. The sweep records it on the
+// verdict, the way the run loop now would, instead of letting the pool phase
+// refund a verified win for want of an open tab.
+describe("approvedUnrecordedOf with the payout confirmation off", () => {
+  const off = { confirmationRequired: false };
+
+  it("picks a hit whose confirmation was still open when the confirmation went off", () => {
+    const ledger = [plan, verdict("wearable-100"), reason("pay", "wearable-100"), approval("requested")];
+    expect(approvedUnrecordedOf(ledger, off)).toEqual({
+      poolId: 7n,
+      participant: USER,
+      attesterId: "wearable-100",
+      evidenceKind: "wearable",
+      approvedAtMs: Date.parse(AT),
+    });
+    // An approved one still qualifies, exactly as before.
+    expect(
+      approvedUnrecordedOf([...ledger, approval("approved")], off)?.attesterId,
+    ).toBe("wearable-100");
+  });
+
+  it("still respects a human no and a settled pool", () => {
+    for (const status of ["declined", "cancelled"] as const) {
+      expect(
+        approvedUnrecordedOf([plan, verdict("job-1"), reason("pay", "job-1"), approval(status)], off),
+      ).toBeNull();
+    }
+  });
+
+  // Reading GET /api/agent/approval/status materializes expiry, and the
+  // dashboard reads it for every open challenge. So a request that was open
+  // when the switch flipped turns "expired" the first time the player looks
+  // at their dashboard after its ten minutes. With the confirmation off
+  // nothing waits on the human any more (the run route records it on the next
+  // poll), so the sweep must not leave that hit to be refunded.
+  it("picks a hit whose ask lapsed, because nothing waits on the human any more", () => {
+    const ledger = [
+      plan,
+      verdict("wearable-100"),
+      reason("pay", "wearable-100"),
+      approval("requested"),
+      approval("expired", "2026-09-26T03:10:00.000Z"),
+    ];
+    expect(approvedUnrecordedOf(ledger, off)).toEqual({
+      poolId: 7n,
+      participant: USER,
+      attesterId: "wearable-100",
+      evidenceKind: "wearable",
+      approvedAtMs: Date.parse("2026-09-26T03:10:00.000Z"),
+    });
+    // With the confirmation on, a lapsed ask is still no payout (regression).
+    expect(approvedUnrecordedOf(ledger)).toBeNull();
+  });
+
+  it("still needs a pay decision, no record yet, and the pool linkage", () => {
+    const open = [plan, verdict("job-1"), reason("pay", "job-1"), approval("requested")];
+    expect(approvedUnrecordedOf([...open, record], off)).toBeNull();
+    expect(approvedUnrecordedOf([...open, reason("no-pay", "job-1")], off)).toBeNull();
+    const noLink = { ...plan, poolId: undefined, participant: undefined } as LedgerEntry;
+    expect(approvedUnrecordedOf([noLink, ...open.slice(1)], off)).toBeNull();
+    // No ask at all: the run loop records those itself, the sweep leaves them.
+    expect(approvedUnrecordedOf([plan, verdict("job-1"), reason("pay", "job-1")], off)).toBeNull();
+  });
+
+  it("keeps an open request out when the confirmation is on (regression)", () => {
+    const open = [plan, verdict("job-1"), reason("pay", "job-1"), approval("requested")];
+    expect(approvedUnrecordedOf(open)).toBeNull();
+    expect(approvedUnrecordedOf(open, { confirmationRequired: true })).toBeNull();
+  });
+});
+
 describe("withinRecordHold", () => {
   const target = {
     poolId: 7n,

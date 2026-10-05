@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import EnsName from "@/components/ens/EnsName";
 import SpotterCaption from "@/components/spotter/SpotterCaption";
-import { Button, Card, Skeleton, Stat, StatRow, TEXT_LINK } from "@/components/ui";
+import { Card, Skeleton, Stat, StatRow, TEXT_LINK } from "@/components/ui";
 import NightTally from "@/components/game/NightTally";
 import {
   displayGoalSpec,
@@ -30,13 +30,18 @@ import {
   providerDownReason,
   providerMetricUnavailable,
   providerQueryKey,
+  type ProviderState,
 } from "@/lib/wearable-provider";
 import { useWalletAuth } from "@/lib/useWalletAuth";
+import { cachedOnlyRequester, type WalletAuthRequester } from "@/lib/client-auth";
+import VerifyWalletAction from "@/components/VerifyWalletAction";
 import { nightTally, runClock, type NightTally as Tally, type RunStanding } from "@/lib/game/tally";
 import { runFigureOf } from "@/lib/game/run-scene";
 import { useNowSeconds } from "@/lib/game/useNowSeconds";
 import { commitmentReminder, hitRange, recordsMissesOf } from "@/lib/game/commitment-copy";
 import { useCommitmentFee } from "@/lib/game/useCommitmentFee";
+
+const NIGHTS_LOCKED = "Your nights are private to your wallet.";
 
 export const STANDING_LINE: Record<RunStanding, string> = {
   "on-target": "That is enough nights. Have me check it and the verdict is mine to make.",
@@ -67,40 +72,64 @@ export function usePlayers(poolId: bigint) {
 }
 
 /**
+ * The nights read for one player on one challenge: the period and metric
+ * scoped progress read, cachedOnly. useRunNights renders from it, and the
+ * dashboard watches the same cache entry (one fetch, not two) to know which
+ * locked card carries the one Verify wallet button.
+ */
+export function runNightsQuery(
+  address: `0x${string}`,
+  pool: PoolInfo,
+  requestAuth: WalletAuthRequester,
+) {
+  const metric = classifyWearableGoal(pool.goalSpec).metric ?? undefined;
+  return {
+    queryKey: providerQueryKey(address, pool.id, metric),
+    queryFn: () => fetchProviderState(address, requestAuth, pool, metric),
+    enabled: evidenceTypeOf(pool.goalSpec) === "wearable",
+    retry: false,
+  } as const;
+}
+
+/**
+ * Which locked card on a page carries the Verify wallet button: the first, in
+ * page order, whose wallet-gated read came back locked. One tap unlocks every
+ * card (lib/session-proof.ts re-reads them all), so a page with several locked
+ * cards offers it once. Null when nothing is locked: then no card is told to
+ * hide a button, because no card has one to hide.
+ */
+export function verifyActionOwner(
+  cards: ReadonlyArray<{ id: string; state: ProviderState | undefined }>,
+): string | null {
+  return cards.find((card) => providerAuthReason(card.state) !== null)?.id ?? null;
+}
+
+/**
  * The nights for one player on one run, in whichever state the wearable read
  * is in. Every branch says what is true and what, if anything, the player can
- * do. `promptForData` lets the dashboard ask for the one signature; the run
- * page never opens a prompt on load and shows a button instead.
+ * do. The read is cachedOnly everywhere: opening a page never opens a wallet.
+ * With a session token (email, passkey, or a wallet proven once this session)
+ * the nights simply load; without one they say so and offer Verify wallet,
+ * unless another locked card on the page already carries that button
+ * (`verifyAction` false), in which case they say so and point at it.
  */
 export function useRunNights({
   pool,
   address,
-  promptForData,
+  verifyAction = true,
 }: {
   pool: PoolInfo;
   address: `0x${string}`;
-  promptForData: boolean;
+  /** Whether a locked read offers the Verify wallet button here. Off on every
+   *  locked card but the first on a page that shows several. */
+  verifyAction?: boolean;
 }): { nights: ReactNode; tally: Tally | null; line: string | undefined } {
-  const requestAuth = useWalletAuth();
+  const requestAuth = cachedOnlyRequester(useWalletAuth());
   const now = useNowSeconds();
   const wearable = evidenceTypeOf(pool.goalSpec) === "wearable";
   const spec = classifyWearableGoal(pool.goalSpec);
-  const metric = spec.metric ?? undefined;
 
-  const progressQuery = useQuery({
-    queryKey: providerQueryKey(address, pool.id, metric),
-    queryFn: () =>
-      fetchProviderState(
-        address,
-        promptForData
-          ? requestAuth
-          : (options) => requestAuth({ ...options, cachedOnly: true }),
-        pool,
-        metric,
-      ),
-    enabled: wearable,
-    retry: false,
-  });
+  const progressQuery = useQuery(runNightsQuery(address, pool, requestAuth));
 
   const state = progressQuery.data;
   const banked = state?.kind === "ok" ? state.progress.streakDays : null;
@@ -140,22 +169,14 @@ export function useRunNights({
       </p>
     );
   } else if (providerAuthReason(state) !== null) {
-    nights = (
-      <div className="grid justify-items-start gap-3">
-        <p className={quiet}>
-          Your nights are private, so I need one signature to count them. Free,
-          no transaction.
-        </p>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            void requestAuth({ refresh: true }).then(() => progressQuery.refetch());
-          }}
-        >
-          Show my nights
-        </Button>
-      </div>
+    // Verifying re-reads every wallet-gated query, this one included, so the
+    // one button above unlocks this card as well.
+    nights = verifyAction ? (
+      <VerifyWalletAction lead={NIGHTS_LOCKED} />
+    ) : (
+      <p className={quiet}>
+        {NIGHTS_LOCKED} The Verify wallet button above unlocks them too.
+      </p>
     );
   } else if (providerMetricUnavailable(state)) {
     nights = (
@@ -184,21 +205,21 @@ export function useRunNights({
 export default function RunBoard({
   pool,
   address,
-  promptForData,
   showLink = false,
   showTitle = true,
+  verifyAction = true,
 }: {
   pool: PoolInfo;
   address: `0x${string}`;
-  /** The dashboard asks for a signature to read your own data; the run page
-   *  does not open a prompt on load. */
-  promptForData: boolean;
   showLink?: boolean;
   /** Off where the page's own heading already names the run. */
   showTitle?: boolean;
+  /** Whether a locked board offers the Verify wallet button (see
+   *  useRunNights). The dashboard turns it off on all but the first. */
+  verifyAction?: boolean;
 }) {
   const now = useNowSeconds();
-  const { nights, line } = useRunNights({ pool, address, promptForData });
+  const { nights, line } = useRunNights({ pool, address, verifyAction });
   const players = usePlayers(pool.id);
   const selfStaked = pool.bountyModel === 2;
   const feeBps = useCommitmentFee(selfStaked).bps;

@@ -75,6 +75,37 @@ describe("requestApproval", () => {
     expect(await readLedger(GOAL)).toHaveLength(1);
   });
 
+  it("queues the claim for the settlement sweep, due now, the moment SPOTTER asks", async () => {
+    // A hit waiting on its confirm when KILL_WORLD_ID flips is recorded by the
+    // sweep; the queue is how the sweep finds it, not the bounded fallback scan.
+    const { requestApproval, mockApprovalProvider } = await load();
+    const lock = await import("@/lib/server/agent/lock");
+    lock.resetLocalCoordinationState();
+    await requestApproval({ goalId: "0x" + "AB".repeat(32), poolId: 7n, address: USER, provider: mockApprovalProvider(), askedBy: "spotter", nowMs: T0 });
+    expect(await lock.listDuePendingSettlements(Math.floor(T0 / 1000), 10)).toEqual([GOAL]);
+  });
+
+  it("re-queues a re-ask after a decline", async () => {
+    const mod = await load();
+    const lock = await import("@/lib/server/agent/lock");
+    lock.resetLocalCoordinationState();
+    const provider = mod.mockApprovalProvider();
+    const first = await mod.requestApproval({ goalId: GOAL, poolId: 7n, address: USER, provider, askedBy: "spotter", nowMs: T0 });
+    await mod.completeApproval({ requestId: first.record.requestId, address: USER, decision: { decision: "decline" }, provider, nowMs: T0 + 1_000 });
+    expect(await lock.listDuePendingSettlements(Math.floor(T0 / 1000) + 10, 10)).toEqual([]);
+    await mod.requestApproval({ goalId: GOAL, poolId: 7n, address: USER, provider, askedBy: "human", nowMs: T0 + 2_000 });
+    expect(await lock.listDuePendingSettlements(Math.floor(T0 / 1000) + 10, 10)).toEqual([GOAL]);
+  });
+
+  it("keeps a lapsed ask queued: once World is switched off it is paid on the verdict", async () => {
+    const { requestApproval, mockApprovalProvider, readApproval } = await load();
+    const lock = await import("@/lib/server/agent/lock");
+    lock.resetLocalCoordinationState();
+    await requestApproval({ goalId: GOAL, poolId: 7n, address: USER, provider: mockApprovalProvider(), askedBy: "spotter", nowMs: T0 });
+    expect((await readApproval(GOAL, T0 + 601_000))?.status).toBe("expired");
+    expect(await lock.listDuePendingSettlements(Math.floor(T0 / 1000) + 700, 10)).toEqual([GOAL]);
+  });
+
   it("uses the static Portal action, overridable by WORLD_APPROVAL_ACTION", async () => {
     vi.stubEnv("WORLD_APPROVAL_ACTION", "settle-staging");
     const { requestApproval, mockApprovalProvider } = await load();
@@ -144,11 +175,12 @@ describe("completeApproval", () => {
     expect(JSON.stringify(rows)).not.toContain(mockNullifier(USER, record.action));
   });
 
-  it("queues an approved claim for the settlement sweep, due now, so a closed tab cannot strand it", async () => {
+  it("keeps an approved claim queued for the settlement sweep, due now, so a closed tab cannot strand it", async () => {
     const { completeApproval, provider, record, proof } = await opened();
     const lock = await import("@/lib/server/agent/lock");
     const nowS = Math.floor((T0 + 10_000) / 1000);
-    expect(await lock.listDuePendingSettlements(nowS, 10)).toEqual([]);
+    // Queued on request (below), and still queued once approved.
+    expect(await lock.listDuePendingSettlements(nowS, 10)).toEqual([GOAL]);
     await completeApproval({
       requestId: record.requestId,
       address: USER,
@@ -159,7 +191,7 @@ describe("completeApproval", () => {
     expect(await lock.listDuePendingSettlements(nowS, 10)).toEqual([GOAL]);
   });
 
-  it("does not queue a declined claim for the sweep", async () => {
+  it("drops a declined claim from the sweep's queue: a human no is never paid", async () => {
     const { completeApproval, provider, record } = await opened();
     const lock = await import("@/lib/server/agent/lock");
     await completeApproval({
@@ -170,6 +202,25 @@ describe("completeApproval", () => {
       nowMs: T0 + 10_000,
     });
     expect(await lock.listDuePendingSettlements(Math.floor(T0 / 1000) + 3600, 10)).toEqual([]);
+  });
+
+  it("never drops a recorded claim's settle from the queue when a stale ask is declined", async () => {
+    // The result landed while the ask was still open (KILL_WORLD_ID, or a
+    // list player paid on the verdict), and run.ts queued its settle for
+    // period end. A "no" to the stale ask cannot take that settle away.
+    const { completeApproval, provider, record, appendLedger } = await opened();
+    const lock = await import("@/lib/server/agent/lock");
+    const periodEndS = Math.floor(T0 / 1000) + 86_400;
+    await appendLedger(GOAL, { kind: "record", goalId: GOAL, registryStatus: "skipped" });
+    await lock.addPendingSettlement(GOAL, periodEndS);
+    await completeApproval({
+      requestId: record.requestId,
+      address: USER,
+      decision: { decision: "decline" },
+      provider,
+      nowMs: T0 + 10_000,
+    });
+    expect(await lock.listDuePendingSettlements(periodEndS, 10)).toEqual([GOAL]);
   });
 
   it("declines without a proof and is idempotent afterwards", async () => {
@@ -387,6 +438,9 @@ describe("cancelApproval", () => {
     expect(cancelled?.status).toBe("cancelled");
     const again = await mod.cancelApproval(GOAL, "pool settled first", T0 + 2_000);
     expect(again?.status).toBe("cancelled");
+    // The pool settled: the claim can never be paid, so it leaves the queue.
+    const lock = await import("@/lib/server/agent/lock");
+    expect(await lock.listDuePendingSettlements(Math.floor(T0 / 1000) + 10, 10)).toEqual([]);
     const rows = await mod.readLedger(GOAL);
     expect(rows).toHaveLength(2);
     expect(rows[1]).toMatchObject({ kind: "approval", status: "cancelled", requestId: record.requestId });
@@ -483,6 +537,9 @@ describe("approvalGate", () => {
     expect(
       await mod.approvalGate({ goalId: GOAL, poolId: 7n, address: USER, poolSettled: async () => true, nowMs: T0 + 3_000 }),
     ).toEqual({ status: "unpayable" });
+    // settle() is one-shot and already refunded it: nothing left to queue.
+    const lock = await import("@/lib/server/agent/lock");
+    expect(await lock.listDuePendingSettlements(Math.floor(T0 / 1000) + 10, 10)).toEqual([]);
   });
 
   it("in world mode with no env, throws with the variable name instead of falling back to mock", async () => {

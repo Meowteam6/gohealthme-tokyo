@@ -6,9 +6,12 @@ import {
   currentStep,
   gatePassed,
   hardGateClosed,
+  humanProofOf,
+  humanStampOf,
   isReadyToPlay,
   measurableGoalsOf,
   NAME_LOCKED_NOTE,
+  NAME_NEEDS_WORLD_NOTE,
   sensorFromOptions,
   type CharacterInputs,
 } from "@/lib/game/character";
@@ -221,7 +224,11 @@ describe("characterSteps and currentStep", () => {
     expect(currentStep(steps, true, none, false)).toBeNull();
   });
 
-  it("offers World once to an allowlisted player, skippably", () => {
+  // The list path (Andre, 2026-09-30): an approved list player on a World-on
+  // build is a proven human, so step 2 is done and nothing re-asks for it.
+  // Before this, step 2 stayed "to do", the player got in, and every
+  // challenge locked "prove you are one human" (a dead end behind a way in).
+  it("counts an allowlisted player's step 2 as done while World is on, and never re-asks", () => {
     const i = inputs({
       access: { status: "approved", isAdmin: false, loading: false, error: false },
       ens: { lane: "on", name: "x.gohealthme.eth" },
@@ -230,20 +237,26 @@ describe("characterSteps and currentStep", () => {
         device: { provider: "junction", label: "Junction", metrics: ["steps"] },
       },
     });
-    expect(currentStep(characterSteps(i), gatePassed(i), none, false)).toBe("human");
-    expect(currentStep(characterSteps(i), gatePassed(i), new Set(["human"]), false)).toBeNull();
+    expect(characterSteps(i).human).toEqual({ status: "done", summary: "On the list" });
+    expect(currentStep(characterSteps(i), gatePassed(i), none, false)).toBeNull();
   });
 
   it("locks the ENS name step until the human step is done while World is on", () => {
+    const i = inputs();
+    const steps = characterSteps(i);
+    expect(steps.name).toEqual({ status: "locked", note: NAME_LOCKED_NOTE });
+    expect(NAME_LOCKED_NOTE).toBe("Prove you are one human first, then pick your name.");
+  });
+
+  it("tells a list player a name needs World ID, and walks past it", () => {
     const i = inputs({
       access: { status: "approved", isAdmin: false, loading: false, error: false },
     });
     const steps = characterSteps(i);
-    expect(steps.name).toEqual({ status: "locked", note: NAME_LOCKED_NOTE });
-    expect(NAME_LOCKED_NOTE).toBe("Prove you are one human first, then pick your name.");
-    // The locked name is walked past; the human proof is what gets offered.
+    expect(steps.name).toEqual({ status: "locked", note: NAME_NEEDS_WORLD_NOTE });
+    expect(NAME_NEEDS_WORLD_NOTE).not.toMatch(/[!\u2014]|\b(run|pool|dare)\b/i);
     expect(currentStep(steps, gatePassed(i), none, false)).toBe("sensor");
-    expect(currentStep(steps, gatePassed(i), new Set(["sensor"]), false)).toBe("human");
+    expect(currentStep(steps, gatePassed(i), new Set(["sensor"]), false)).toBeNull();
   });
 
   it("does not lock the name once the human step is done, or with World off", () => {
@@ -301,6 +314,75 @@ describe("the character card", () => {
       }),
     );
     expect(c?.human).toBe("verified");
+  });
+
+  it("counts an approved list player as a proven human while World is on (the list path)", () => {
+    const i = inputs({
+      access: { status: "approved", isAdmin: false, loading: false, error: false },
+    });
+    const c = characterOf(i);
+    expect(c?.human).toBe("verified");
+    expect(c?.humanProof).toBe("list");
+    expect(c !== null && humanStampOf(c, "world")).toBe("On the list");
+  });
+
+  it("counts an admin as a proven human while World is on", () => {
+    const i = inputs({ access: { status: "approved", isAdmin: true, loading: false, error: false } });
+    expect(characterOf(i)).toMatchObject({ human: "verified", humanProof: "admin" });
+    expect(characterSteps(i).human).toEqual({ status: "done", summary: "Admin" });
+  });
+
+  it("names World as the proof when the player verified, list or not", () => {
+    for (const status of ["none", "approved"] as const) {
+      const c = characterOf(
+        inputs({
+          world: { lane: "on", human: "verified" },
+          access: { status, isAdmin: false, loading: false, error: false },
+        }),
+      );
+      expect(c).toMatchObject({ human: "verified", humanProof: "world" });
+      expect(c !== null && humanStampOf(c, "world")).toBe("One human");
+    }
+  });
+
+  it("keeps a pending, denied or unknown list player unproven while World is on", () => {
+    for (const status of ["none", "pending", "denied"] as const) {
+      const c = characterOf(inputs({ access: { status, isAdmin: false, loading: false, error: false } }));
+      expect(c).toMatchObject({ human: "unverified", humanProof: null });
+      expect(c !== null && humanStampOf(c, "world")).toBeNull();
+    }
+    // Not known yet while the list read is in flight: the join holds on a
+    // skeleton instead of flashing "prove you are one human" at a list player.
+    const loading = characterOf(inputs({ access: { status: "none", isAdmin: false, loading: true, error: false } }));
+    expect(loading?.human).toBe("unknown");
+  });
+
+  it("shows a pending list request as waiting on step 2 while World is on", () => {
+    const steps = characterSteps(
+      inputs({ access: { status: "pending", isAdmin: false, loading: false, error: false } }),
+    );
+    expect(steps.human.status).toBe("waiting");
+    if (steps.human.status === "waiting") expect(steps.human.note).toMatch(/World ID/);
+  });
+
+  it("keeps World off exactly as before (regression)", () => {
+    const listed = inputs({
+      world: { lane: "off", human: "unknown" },
+      access: { status: "approved", isAdmin: false, loading: false, error: false },
+    });
+    expect(characterOf(listed)).toMatchObject({ human: "verified", humanProof: "list" });
+    expect(characterSteps(listed).human).toEqual({ status: "done", summary: "On the list" });
+    const c = characterOf(listed);
+    expect(c !== null && humanStampOf(c, "allowlist")).toBe("On the list");
+    const waiting = inputs({
+      world: { lane: "off", human: "unknown" },
+      access: { status: "pending", isAdmin: false, loading: false, error: false },
+    });
+    expect(characterSteps(waiting).human).toEqual({
+      status: "waiting",
+      note: "Your request is in. You get in as soon as it is approved.",
+    });
+    expect(characterOf(waiting)?.human).toBe("unverified");
   });
 
   it("has no character before sign-in", () => {
@@ -418,5 +500,34 @@ describe("hardGateClosed (is this player creating their character here)", () => 
     expect(hardGateClosed({ ...settled, accessLoading: true })).toBe(false);
     expect(hardGateClosed({ ...settled, worldLane: "loading" })).toBe(false);
     expect(hardGateClosed({ ...settled, gate: true })).toBe(false);
+  });
+});
+
+// While KILL_WORLD_ID pauses World, the lane reads off but a binding World
+// already made still counts (lib/server/access.ts approvedByWorld). The
+// server says so in the access source; step 2 and the proof must not call a
+// World-verified player "On the list" for the length of the pause.
+describe("a World-bound player while World is paused", () => {
+  const paused = (access: Partial<CharacterInputs["access"]>) =>
+    inputs({
+      world: { lane: "off", human: "unverified" },
+      access: { status: "approved", isAdmin: false, loading: false, error: false, ...access },
+    });
+
+  it("keeps the World proof and the World summary", () => {
+    const i = paused({ source: "world" });
+    expect(humanProofOf(i)).toBe("world");
+    expect(characterSteps(i).human).toMatchObject({ status: "done" });
+    expect(characterSteps(i).human).not.toMatchObject({ summary: "On the list" });
+  });
+
+  it("keeps a World-bound admin on the World proof too", () => {
+    expect(humanProofOf(paused({ source: "world", isAdmin: true }))).toBe("world");
+  });
+
+  it("still calls a list player and an admin what they are", () => {
+    expect(humanProofOf(paused({ source: "request" }))).toBe("list");
+    expect(characterSteps(paused({ source: "request" })).human).toMatchObject({ summary: "On the list" });
+    expect(humanProofOf(paused({ source: "admin", isAdmin: true }))).toBe("admin");
   });
 });

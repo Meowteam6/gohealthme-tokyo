@@ -20,6 +20,14 @@
 //                              one-shot nullifier.
 //   unset                      the gate is off and SPOTTER pays as before.
 //
+// KILL SWITCH (Andre, 2026-09-30). While KILL_WORLD_ID is thrown
+// (lib/server/kill-switches.ts) the mode is "off" whatever is set, so World ID
+// is off everywhere at once: SPOTTER pays on the verdict alone, the join shows
+// no confirmation note, and a hit that was still waiting on its confirmation
+// when the switch flipped is recorded by the next poll or the sweep
+// (approved-record.ts) instead of being refunded for want of a confirmation
+// nobody can give.
+//
 // WHAT AN APPROVAL MEANS. An approved proof means one human consented to one
 // payout. The World action is the static, Portal-registered `settle` (World ID
 // 4.0 verifies only actions created in the Developer Portal, so a per-payout
@@ -46,6 +54,7 @@ import { signRequest, type RpSignature } from "@worldcoin/idkit/signing";
 import { hashSignal } from "@worldcoin/idkit-core/hashing";
 import type { RpContext } from "@worldcoin/idkit";
 import { optionalEnv, requireEnv } from "@/lib/server/env";
+import { killSwitches } from "@/lib/server/kill-switches";
 import {
   credentialFromIdentifier,
   LEGACY_FALLBACK_ENABLED,
@@ -106,8 +115,9 @@ export interface ApprovalProvider {
 
 /** Reads WORLD_APPROVAL_MODE. Unset is "off" (today's behaviour). A value that
  *  is neither mode is a misconfiguration and throws, so a typo can never
- *  silently turn the human step off. */
+ *  silently turn the human step off. KILL_WORLD_ID forces "off" (above). */
 export function approvalMode(): ApprovalMode {
+  if (killSwitches().worldId) return "off";
   const raw = optionalEnv("WORLD_APPROVAL_MODE", "").toLowerCase();
   if (raw === "") return "off";
   if (raw === "mock" && process.env.VERCEL_ENV === "production") {

@@ -36,7 +36,7 @@ function result(
           ? "Intercepta did not answer within 5000ms. Payout held until screening answers."
           : status === "clear"
             ? "Intercepta reports no risk traits; toxicScore 0."
-            : "INTERCEPTA_API_KEY is not set on this deployment; no payout screening ran.",
+            : "INTERCEPTA_API_KEY is not set on this deployment, so no payout was screened.",
     rule: "block if any trait in {sanction_address}; toxicScore is reported, not decisive",
     checkedAt: "2026-09-26T00:00:00.000Z",
     cached: false,

@@ -35,6 +35,7 @@ import {
   USDC_ADDRESS,
 } from "@/lib/contract";
 import { WITHDRAW_DAILY_CAP_UUSDC } from "@/lib/money-guards";
+import { parseSwitches, testUsdcPausedDetail, type Switches } from "@/lib/switches";
 
 /** Which leg of the chain is in flight, for an honest button label. */
 export type FundingPhase = "idle" | "claiming" | "moving";
@@ -46,7 +47,11 @@ export type FundingPhase = "idle" | "claiming" | "moving";
  * treat it as "the wallet now holds spendable USDC" and continue.
  */
 export type FundingResult =
-  | { kind: "funded"; movedUusdc: bigint }
+  // `note`, when present, is a plain line the player should read beside the
+  // delivery. Today it is set only while new test USDC is paused
+  // (KILL_BASE_MONEY_IN): the top-up was skipped and only balance already
+  // waiting in the app was delivered.
+  | { kind: "funded"; movedUusdc: bigint; note?: string }
   // Nothing was available to move onto Arc: the faucet was a same-window no-op
   // and the address held no prior in-app balance. Not an error, just nothing
   // happened.
@@ -56,8 +61,9 @@ export type FundingResult =
   // applied:false), and there was no undelivered in-app balance to move. Not a
   // failure and not a cap - the honest thing to show is "you have enough".
   | { kind: "enough" }
-  // A server cap said no (faucet budget/cooldown, or the withdraw daily cap).
-  // Expected, not a fault; carry the server's own honest message.
+  // A server cap said no (faucet budget/cooldown, or the withdraw daily cap),
+  // or new test USDC is paused (KILL_BASE_MONEY_IN) and nothing was waiting.
+  // Expected, not a fault; carry the honest message.
   | { kind: "budget-exhausted"; message: string }
   | { kind: "error"; message: string };
 
@@ -72,6 +78,21 @@ interface BalanceResponse {
 interface WithdrawResponse {
   txHash?: string;
   error?: string;
+}
+
+/**
+ * The build's kill switches, read only after the faucet answered 503 so the
+ * player can be told the true reason. Null when the read fails or answers
+ * something unusable: the caller then keeps the faucet's own words.
+ */
+async function readSwitches(): Promise<Switches | null> {
+  try {
+    const res = await fetch("/api/switches", { cache: "no-store" });
+    if (!res.ok) return null;
+    return parseSwitches(await res.json().catch(() => null));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -169,6 +190,16 @@ export interface FundingOptions {
  * A faucet refusal is not fatal on its own: the address may still hold in-app
  * balance from an earlier grant that step 3 can deliver. Only when there is
  * nothing to move does a faucet refusal become the reported outcome.
+ *
+ * NEW MONEY PAUSED (KILL_BASE_MONEY_IN). The faucet answers 503 before any
+ * grant. That pauses new test USDC only: balance already waiting in the app is
+ * money already in, and it must still come out. So a 503 is held like a 429,
+ * the switches are read to tell a pause apart from the faucet's other 503s
+ * (treasury floor, unreadable balance, busy ledger), and a pause is said
+ * plainly either way: as `note` on a delivery, or as the refusal when nothing
+ * was waiting. Any other 503 also lets waiting balance through (the withdraw
+ * route keeps its own treasury floor and caps) and is reported as before when
+ * nothing was waiting.
  */
 export async function runTestUsdcFunding(
   address: string,
@@ -178,7 +209,11 @@ export async function runTestUsdcFunding(
   const auto = options.auto === true;
   // 1. Grant into the in-app ledger. Best-effort.
   onPhase?.("claiming");
-  let faucetRefusal: string | null = null;
+  // A refusal held until we know whether there is waiting balance to deliver.
+  // `kind` is how it is reported when there is not.
+  let faucetRefusal: { kind: "budget-exhausted" | "error"; message: string } | null = null;
+  // Set when the refusal was the money-in pause: the delivery carries it.
+  let pausedNote: string | null = null;
   // 200 with applied:false is the route's balance-aware skip (spendable USDC
   // already at or above the refill threshold), distinct from a same-window
   // no-op grant, which also answers 200 but with applied:true.
@@ -193,7 +228,26 @@ export async function runTestUsdcFunding(
     if (res.status === 429) {
       // Cooldown or global budget. Hold it: if the address already has in-app
       // balance we can still move it onto Arc below.
-      faucetRefusal = body.error ?? "The in-app faucet is not available right now.";
+      faucetRefusal = {
+        kind: "budget-exhausted",
+        message: body.error ?? "The in-app faucet is not available right now.",
+      };
+    } else if (res.status === 503) {
+      // Nothing was granted, but nothing already in is at stake: hold it like
+      // a 429 and deliver any waiting balance below.
+      const switches = await readSwitches();
+      if (switches?.baseMoneyIn === true) {
+        faucetRefusal = {
+          kind: "budget-exhausted",
+          message: testUsdcPausedDetail(switches.reason, false),
+        };
+        pausedNote = testUsdcPausedDetail(switches.reason, true);
+      } else {
+        faucetRefusal = {
+          kind: "error",
+          message: body.error ?? `The faucet responded with status ${res.status}.`,
+        };
+      }
     } else if (!res.ok) {
       return {
         kind: "error",
@@ -225,9 +279,7 @@ export async function runTestUsdcFunding(
   if (inApp <= 0n) {
     // Nothing to move. If the faucet refused, that refusal is the reason; if it
     // stood down because the wallet already holds enough, say that instead.
-    if (faucetRefusal !== null) {
-      return { kind: "budget-exhausted", message: faucetRefusal };
-    }
+    if (faucetRefusal !== null) return faucetRefusal;
     return faucetStoodDown ? { kind: "enough" } : { kind: "empty" };
   }
 
@@ -262,7 +314,9 @@ export async function runTestUsdcFunding(
     }
     // The withdraw route only returns a tx hash after the transfer landed, so
     // the wallet genuinely holds this much more spendable USDC now.
-    return { kind: "funded", movedUusdc: amount };
+    return pausedNote === null
+      ? { kind: "funded", movedUusdc: amount }
+      : { kind: "funded", movedUusdc: amount, note: pausedNote };
   } catch {
     return { kind: "error", message: "Could not move your balance onto Base." };
   }

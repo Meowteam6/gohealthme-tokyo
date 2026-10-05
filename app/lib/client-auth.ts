@@ -34,10 +34,38 @@
 // before any prompt, getWalletAuth asks Dynamic for the token, decodes it
 // WITHOUT trusting it (the server is what verifies), and, when it lists the
 // connected wallet, sends `Authorization: Bearer <token>` plus the address
-// header. No wallet prompt at all. A wallet with no token, as a connect-only
-// external wallet may be, signs exactly as before. A token the server refuses
-// is remembered and not sent again, so the 401 retry signs once instead of
-// looping on the same token.
+// header. No wallet prompt at all. A token the server refuses is set aside, so
+// the 401 retry uses the signature instead of looping on the same token. Set
+// aside, not banned: a 401 can be the server failing to reach Dynamic's keys
+// (a JWKS timeout) rather than a bad token, so the token is tried again after
+// a short window that doubles with each further refusal of the same token, and
+// a token the server accepts again starts clean. A signature the tab already
+// holds is kept through a token's 401, because the signature is not what the
+// server refused. The claim read never answers 401 (it redacts instead), so a
+// refused token is not retried there at all: only a route that can refuse it
+// may take it back (routeRedactsRefusedProof).
+//
+// A WALLET LOGIN PROVES ONCE PER SESSION. A connect-only external wallet
+// (MetaMask, Coinbase, Base Account, WalletConnect) has no token until it
+// signs Dynamic's own sign-in once. So when a prompt is unavoidable, the first
+// thing tried is that session proof (`proveSession`, lib/session-proof.ts):
+// the one signature buys a token that outlives the tab's reloads, instead of
+// an eight-minute signature that is gone on the next reload. Only when the
+// proof cannot run (Dynamic already signed in with another credential, no
+// Dynamic client) does the ad-hoc signature below open instead, in the same
+// tap. A declined proof is final for that tap (no second prompt), and later
+// taps fall back to the ad-hoc signature, so a proof Dynamic cannot complete
+// never becomes a loop. The explicit "Verify wallet" action clears that
+// memory first (forgetSessionProofDecline) to offer the proof again. The
+// ad-hoc signature path, and the server's acceptance of it, stay: the e2e
+// suite signs it directly.
+//
+// NEVER A COLD POPUP. Whatever asked (a page load, a Join tap, the verdict
+// card), the wallet does not open until the player has read one plain line
+// and said yes: `confirmPrompt` is the sheet's in-page question
+// (components/SessionProofSheet.tsx). Surfaces asking together share it, a
+// Not now is a no for that request only, and a Verify tap whose explanation
+// is already on screen passes `confirmed` and is not asked twice.
 
 import { decodeJwt } from "jose";
 
@@ -56,6 +84,13 @@ export const SESSION_TOKEN_EXPIRY_MARGIN_MS = 60 * 1000;
 /** How long a signed credential is reused. The server allows ten minutes;
  *  the two-minute margin covers client clock drift and a slow request. */
 export const CLIENT_WALLET_AUTH_TTL_MS = 8 * 60 * 1000;
+
+/** How long a session token the server refused is set aside before it is
+ *  tried again. Each further refusal of the same token doubles the wait, up to
+ *  the cap, so a transient refusal heals within half a minute and a token that
+ *  really is bad costs one extra request per window, never a loop. */
+export const REFUSED_SESSION_TOKEN_RETRY_MS = 30 * 1000;
+export const REFUSED_SESSION_TOKEN_RETRY_MAX_MS = 10 * 60 * 1000;
 
 /** Mirror of lib/server/wallet-auth.ts's walletAuthMessage. Wire format. */
 export function clientWalletAuthMessage(
@@ -188,9 +223,9 @@ export function authBlockReason(auth: ClientAuth): string | null {
     case "no-wallet":
       return "Connect your wallet to see this claim. It is private to the wallet that made it.";
     case "unsigned":
-      return "This is private to your wallet. Sign to unlock it - nothing is charged and no transaction is sent.";
+      return "This is private to your wallet. One free signature unlocks it. Nothing is charged and no transaction is sent.";
     case "declined":
-      return "This claim is private to your wallet, so it stays hidden until you sign. Nothing is charged and no transaction is sent - the signature only proves the wallet is yours.";
+      return "This claim is private to your wallet, so it stays hidden until you sign. Nothing is charged and no transaction is sent. The signature only proves the wallet is yours.";
     case "failed":
       return `Your wallet could not sign the proof of ownership: ${auth.message}`;
   }
@@ -222,6 +257,39 @@ export type SignMessageFn = (message: string) => Promise<string>;
 /** Reads Dynamic's session token (getAuthToken); undefined when signed out. */
 export type SessionTokenFn = () => string | null | undefined;
 
+/**
+ * How a session proof ended. "proven": the session token now lists the wallet
+ * (with or without a prompt). "declined": the wallet was asked and no token
+ * came of it. "dismissed": the player said Not now to the explanation, so the
+ * wallet was never opened. "unavailable": nothing was asked because the proof
+ * cannot run here; the caller may sign instead.
+ */
+export type SessionProofResult = "proven" | "declined" | "dismissed" | "unavailable";
+
+/** `confirmed`: the player already tapped a Verify button whose explanation
+ *  sits right above it, so the wallet may open with no further question. */
+export interface ProveSessionOptions {
+  confirmed?: boolean;
+}
+
+/** Upgrade the Dynamic session so its token lists `address`. Never throws on
+ *  purpose, but callers still guard it. */
+export type ProveSessionFn = (
+  address: string,
+  options?: ProveSessionOptions,
+) => Promise<SessionProofResult>;
+
+/** What a prompt is about to ask of the wallet: the one session proof, or the
+ *  plain short-lived signature. The explanation differs. */
+export type PromptKind = "session" | "signature";
+
+/**
+ * Ask the player, in the page, before the wallet opens. Resolves true on a
+ * yes and false on a Not now. The app binds the sheet's question
+ * (lib/session-proof.ts confirmRegisteredPrompt); omitted, nothing is asked.
+ */
+export type ConfirmPromptFn = (address: string, kind: PromptKind) => Promise<boolean>;
+
 // ------------------------------------------------------------------ the cache
 //
 // Keyed by lower-cased address so a wallet switch cannot serve the previous
@@ -232,24 +300,119 @@ export type SessionTokenFn = () => string | null | undefined;
 const credentials = new Map<string, WalletAuthCredential>();
 const inflight = new Map<string, Promise<ClientAuth>>();
 
-// Session tokens the server refused (a refresh was asked for while the token
-// was the thing being sent). Never sent again; the wallet signs instead. A
-// token Dynamic rotates in is a different string and gets its own try. Bounded
-// because a tab could in principle see many rotations.
-const refusedSessionTokens = new Set<string>();
+// Session tokens the server refused, each with how often and until when it
+// is set aside (Date.now() clock, the same one the fetch that saw the 401
+// reads). While set aside the wallet's signature serves instead; afterwards
+// the token gets another try. A token Dynamic rotates in is a different string
+// and gets its own try at once. Bounded because a tab could in principle see
+// many rotations.
+interface RefusedToken {
+  refusals: number;
+  untilMs: number;
+}
+const refusedSessionTokens = new Map<string, RefusedToken>();
 const MAX_REFUSED_SESSION_TOKENS = 8;
 
-/** Set aside the session token an auth result carried, if it carried one. */
-function refuseSessionTokenIn(auth: ClientAuth): void {
-  if (auth.kind !== "ok" || auth.credential !== null) return;
+/** The wait after the `refusals`-th refusal of one token. */
+export function refusedTokenRetryMs(refusals: number): number {
+  const doublings = Math.max(0, Math.min(refusals - 1, 16));
+  return Math.min(
+    REFUSED_SESSION_TOKEN_RETRY_MS * 2 ** doublings,
+    REFUSED_SESSION_TOKEN_RETRY_MAX_MS,
+  );
+}
+
+/** Whether `token` is inside a refusal window right now. */
+function sessionTokenSetAside(token: string, nowMs: number): boolean {
+  const refused = refusedSessionTokens.get(token);
+  return refused !== undefined && nowMs < refused.untilMs;
+}
+
+// Routes that answer a proof they cannot check with a redacted 200, never a
+// 401: the claim read (app/api/agent/run/[goalId], "the redaction is never a
+// reason to refuse the request"). Such a route can never tell this tab a token
+// is bad, and its 200 says nothing about the token. So a token refused in this
+// tab is not sent to one again until a route that CAN refuse it has accepted
+// it (which clears the refusal); until then the signature serves there, or
+// the wallet is asked. Sending it once its window passed would show the owner
+// a withheld claim with a good signature in hand, and the claim's Sign again
+// (a refresh) would hand back the same token instead of signing.
+const REDACTING_ROUTES: readonly RegExp[] = [/^\/api\/agent\/run\//];
+
+/** True when `url` addresses a route that redacts instead of refusing. */
+export function routeRedactsRefusedProof(url: string): boolean {
+  let path: string;
+  try {
+    path = new URL(url, "http://localhost").pathname;
+  } catch {
+    return false;
+  }
+  return REDACTING_ROUTES.some((route) => route.test(path));
+}
+
+// Wallets whose session proof was declined (or could not finish) in this tab.
+// Ordinary taps then sign the ad-hoc message instead of reopening the proof.
+// Survives refresh, which is what a tap asks for; a reload starts clean.
+const declinedSessionProofs = new Set<string>();
+
+/** True when this wallet's session proof was declined in this tab. */
+export function sessionProofWasDeclined(address: string): boolean {
+  return declinedSessionProofs.has(address.toLowerCase());
+}
+
+/** Record a proof declined outside getWalletAuth (the sign-in sheet), so the
+ *  next ordinary tap signs instead of reopening it. */
+export function rememberSessionProofDecline(address: string): void {
+  declinedSessionProofs.add(address.toLowerCase());
+}
+
+/** Offer the session proof again: the explicit "Verify wallet" tap, or a
+ *  proof that succeeded after all. */
+export function forgetSessionProofDecline(address: string): void {
+  declinedSessionProofs.delete(address.toLowerCase());
+}
+
+/** The session token an auth result carried, or null when it carried a
+ *  signature (or nothing). */
+function sessionTokenIn(auth: ClientAuth): string | null {
+  if (auth.kind !== "ok" || auth.credential !== null) return null;
   const header = auth.headers[WALLET_AUTH_AUTHORIZATION_HEADER] ?? "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
-  if (token === "") return;
-  refusedSessionTokens.add(token);
+  return token === "" ? null : token;
+}
+
+/** Set aside the session token an auth result carried, for a window that
+ *  grows with each refusal of the same token. Returns true when there was a
+ *  token to set aside (the 401 was about the token, not a signature).
+ *
+ *  A refusal that lands while the token is already set aside is the same
+ *  refusal: several cards read at once, all sent the token, and one blip
+ *  answered all of them. Counting each would turn one JWKS hiccup into a
+ *  two-minute wait, so only a refusal of a try made after the window counts. */
+function refuseSessionTokenIn(auth: ClientAuth, nowMs: number = Date.now()): boolean {
+  const token = sessionTokenIn(auth);
+  if (token === null) return false;
+  const previous = refusedSessionTokens.get(token);
+  if (previous !== undefined && nowMs < previous.untilMs) return true;
+  const refusals = (previous?.refusals ?? 0) + 1;
+  // Re-inserted so the map's order is most recently refused last.
+  refusedSessionTokens.delete(token);
+  refusedSessionTokens.set(token, {
+    refusals,
+    untilMs: nowMs + refusedTokenRetryMs(refusals),
+  });
   if (refusedSessionTokens.size > MAX_REFUSED_SESSION_TOKENS) {
-    const oldest = refusedSessionTokens.values().next().value;
+    const oldest = refusedSessionTokens.keys().next().value;
     if (oldest !== undefined) refusedSessionTokens.delete(oldest);
   }
+  return true;
+}
+
+/** A token the server just accepted starts clean: its next refusal, if any,
+ *  gets the short window again. */
+function acceptSessionTokenIn(auth: ClientAuth): void {
+  const token = sessionTokenIn(auth);
+  if (token !== null) refusedSessionTokens.delete(token);
 }
 
 /** Dynamic's token, or null. Reading it must never break the signing path. */
@@ -271,6 +434,7 @@ export function clearWalletAuth(address?: string): void {
     credentials.clear();
     inflight.clear();
     refusedSessionTokens.clear();
+    declinedSessionProofs.clear();
     return;
   }
   const key = address.toLowerCase();
@@ -296,15 +460,64 @@ function ok(credential: WalletAuthCredential): ClientAuth {
   return { kind: "ok", credential, headers: authHeadersOf(credential) };
 }
 
+/** The session token as proof for `address`, or null when there is none this
+ *  app may send: absent, inside a refusal window, refused at all when the
+ *  route cannot refuse it (`holdRefused`), or not listing the wallet.
+ *  Re-read from Dynamic on every call, so a rotated token is used at once. */
+function sessionAuthFor(
+  getSessionToken: SessionTokenFn | null | undefined,
+  address: string,
+  nowMs: number,
+  holdRefused: boolean,
+): ClientAuth | null {
+  const token = readSessionToken(getSessionToken);
+  if (
+    token === null ||
+    // The refusal window runs on the wall clock the 401 was stamped with.
+    sessionTokenSetAside(token, Date.now()) ||
+    (holdRefused && refusedSessionTokens.has(token)) ||
+    !sessionTokenCoversAddress(token, address, nowMs)
+  ) {
+    return null;
+  }
+  return { kind: "ok", credential: null, headers: sessionAuthHeaders(token, address) };
+}
+
+const PROOF_RESULTS: ReadonlySet<string> = new Set([
+  "proven",
+  "declined",
+  "dismissed",
+  "unavailable",
+]);
+
+/** Run the session proof. A throw or a nonsense answer is "unavailable": the
+ *  proof never got as far as a prompt, so signing instead is not a second one. */
+async function runProof(
+  proveSession: ProveSessionFn,
+  address: string,
+  confirmed: boolean,
+): Promise<SessionProofResult> {
+  try {
+    const result: unknown = await proveSession(address, { confirmed });
+    return typeof result === "string" && PROOF_RESULTS.has(result)
+      ? (result as SessionProofResult)
+      : "unavailable";
+  } catch {
+    return "unavailable";
+  }
+}
+
 /**
  * Produce (or reuse) proof of control of `address`: the Dynamic session token
- * when it covers the wallet, otherwise a signature.
+ * when it covers the wallet; otherwise, when a prompt is allowed, the session
+ * proof first and the ad-hoc signature only when the proof cannot run.
  *
  * Never throws: a declined prompt and a broken signer are states the UI has to
  * render, not exceptions to escape into a render. `refresh` forces a new
- * signature, which is what a 401 on a cached credential calls for; a token
- * the server refused has already been set aside by the fetch that saw the
- * 401, so the same refresh signs instead of resending it.
+ * signature, which is what a 401 on a cached credential calls for. A 401 on
+ * the session token is not that: the fetch that saw it sets the token aside
+ * and asks again without `refresh`, so a signature already in hand serves and
+ * nothing prompts twice.
  */
 export async function getWalletAuth(params: {
   address: string | null;
@@ -316,11 +529,27 @@ export async function getWalletAuth(params: {
   cachedOnly?: boolean;
   /** Dynamic's getAuthToken. Omitted or null means signatures only. */
   getSessionToken?: SessionTokenFn | null;
+  /** Upgrade the Dynamic session so its token lists the wallet (one prompt,
+   *  session long). Omitted or null means the ad-hoc signature is the only
+   *  prompt, exactly as before. */
+  proveSession?: ProveSessionFn | null;
+  /** Ask in the page before the wallet opens (never a cold popup). Omitted or
+   *  null means the wallet opens straight away, exactly as before. */
+  confirmPrompt?: ConfirmPromptFn | null;
+  /** The player tapped a Verify button that already explains the signature,
+   *  so nothing more is asked before the wallet opens. */
+  confirmed?: boolean;
+  /** The request goes to a route that redacts instead of refusing
+   *  (routeRedactsRefusedProof): a token refused in this tab is not sent,
+   *  window or not, until a route that can refuse it accepts it again. */
+  holdRefusedToken?: boolean;
   now?: () => number;
 }): Promise<ClientAuth> {
   const { address, signMessage } = params;
   const now = params.now ?? Date.now;
   if (address === null || signMessage === null) return { kind: "no-wallet" };
+  const confirmed = params.confirmed === true;
+  const holdRefused = params.holdRefusedToken === true;
 
   const key = address.toLowerCase();
   if (params.refresh === true) clearWalletAuth(address);
@@ -329,18 +558,8 @@ export async function getWalletAuth(params: {
   // one because the player tapped, and a good token must not turn that tap
   // into a prompt. Only a 401 against the token itself (fetchWithWalletAuth,
   // walletAuthFetch) marks it refused.
-  const sessionToken = readSessionToken(params.getSessionToken);
-  if (
-    sessionToken !== null &&
-    !refusedSessionTokens.has(sessionToken) &&
-    sessionTokenCoversAddress(sessionToken, address, now())
-  ) {
-    return {
-      kind: "ok",
-      credential: null,
-      headers: sessionAuthHeaders(sessionToken, address),
-    };
-  }
+  const session = sessionAuthFor(params.getSessionToken, address, now(), holdRefused);
+  if (session !== null) return session;
 
   const cached = cachedWalletAuth(address, now());
   if (cached !== null) return ok(cached);
@@ -353,34 +572,56 @@ export async function getWalletAuth(params: {
   // signature another surface is in the middle of collecting.
   if (params.cachedOnly === true) return { kind: "unsigned" };
 
+  const proveSession = params.proveSession ?? null;
+  const confirmPrompt = params.confirmPrompt ?? null;
+
   const attempt = (async (): Promise<ClientAuth> => {
-    const timestamp = new Date(now()).toISOString();
     try {
-      const signature = await signMessage(
-        clientWalletAuthMessage(address, timestamp),
-      );
-      if (typeof signature !== "string" || !/^0x[0-9a-fA-F]+$/.test(signature)) {
-        return {
-          kind: "failed",
-          message: "the wallet returned a signature this app cannot use",
-        };
+      // The session proof first: the one signature buys a token that lasts
+      // the session instead of eight minutes. A decline ends this tap (no
+      // second prompt) and is remembered, so the next ordinary tap signs the
+      // ad-hoc message instead of reopening a proof that may never finish.
+      // The proof asks its own question before the wallet opens; a Not now
+      // there is a no for this tap only, never remembered as a decline.
+      if (proveSession !== null && !declinedSessionProofs.has(key)) {
+        const proof = await runProof(proveSession, address, confirmed);
+        if (proof === "dismissed") return { kind: "declined" };
+        if (proof === "declined") {
+          declinedSessionProofs.add(key);
+          return { kind: "declined" };
+        }
+        if (proof === "proven") {
+          const proven = sessionAuthFor(params.getSessionToken, address, now(), holdRefused);
+          if (proven !== null) {
+            declinedSessionProofs.delete(key);
+            return proven;
+          }
+          // Proven, but the token is one the server already refused: nothing
+          // was prompted (Dynamic was signed in), so signing is the one prompt.
+        }
       }
-      const credential: WalletAuthCredential = {
-        address,
-        timestamp,
-        signature,
-      };
-      credentials.set(key, credential);
-      return ok(credential);
-    } catch (err) {
-      if (isUserRejection(err)) return { kind: "declined" };
-      return {
-        kind: "failed",
-        message:
-          err instanceof Error && err.message !== ""
-            ? err.message
-            : "the wallet could not sign",
-      };
+      // The plain signature, asked about first unless a Verify tap already
+      // did. Whatever landed while the question was open (a proof from
+      // another surface, a signature) is used instead of opening the wallet.
+      if (!confirmed && confirmPrompt !== null) {
+        let yes = false;
+        try {
+          yes = (await confirmPrompt(address, "signature")) === true;
+        } catch {
+          yes = false;
+        }
+        if (!yes) return { kind: "declined" };
+        const landedSession = sessionAuthFor(
+          params.getSessionToken,
+          address,
+          now(),
+          holdRefused,
+        );
+        if (landedSession !== null) return landedSession;
+        const landedSignature = cachedWalletAuth(address, now());
+        if (landedSignature !== null) return ok(landedSignature);
+      }
+      return await signAdHoc(address, signMessage, now);
     } finally {
       inflight.delete(key);
     }
@@ -390,12 +631,86 @@ export async function getWalletAuth(params: {
   return attempt;
 }
 
+/** The ad-hoc "prove control" signature, cached for the reuse window. The
+ *  fallback when the session proof cannot run, and the path the e2e suite
+ *  signs directly. */
+async function signAdHoc(
+  address: string,
+  signMessage: SignMessageFn,
+  now: () => number,
+): Promise<ClientAuth> {
+  // Stamped here, after any proof, so time spent in a proof modal does not eat
+  // into the signature's freshness window.
+  const timestamp = new Date(now()).toISOString();
+  try {
+    const signature = await signMessage(clientWalletAuthMessage(address, timestamp));
+    if (typeof signature !== "string" || !/^0x[0-9a-fA-F]+$/.test(signature)) {
+      return {
+        kind: "failed",
+        message: "the wallet returned a signature this app cannot use",
+      };
+    }
+    const credential: WalletAuthCredential = { address, timestamp, signature };
+    credentials.set(address.toLowerCase(), credential);
+    return ok(credential);
+  } catch (err) {
+    if (isUserRejection(err)) return { kind: "declined" };
+    return {
+      kind: "failed",
+      message:
+        err instanceof Error && err.message !== ""
+          ? err.message
+          : "the wallet could not sign",
+    };
+  }
+}
+
 // -------------------------------------------------------------- signed fetch
 
 export type WalletAuthRequester = (options?: {
   refresh?: boolean;
   cachedOnly?: boolean;
+  /** A Verify tap whose explanation is on screen: open the wallet with no
+   *  further question. */
+  confirmed?: boolean;
+  /** Set by the fetch wrappers for a route that redacts instead of refusing
+   *  (routeRedactsRefusedProof); see getWalletAuth. */
+  holdRefusedToken?: boolean;
 }) => Promise<ClientAuth>;
+
+/** Everything a requester needs from the wallet and the Dynamic session. */
+export interface WalletAuthBinding {
+  address: string | null;
+  signMessage: SignMessageFn | null;
+  getSessionToken: SessionTokenFn | null;
+  proveSession: ProveSessionFn | null;
+  /** The in-page question asked before the wallet opens. */
+  confirmPrompt?: ConfirmPromptFn | null;
+}
+
+/**
+ * Bind getWalletAuth to one wallet. lib/useWalletAuth.ts is a thin React
+ * wrapper over this, kept here so the binding is testable in node.
+ */
+export function walletAuthRequester(binding: WalletAuthBinding): WalletAuthRequester {
+  return (options) =>
+    getWalletAuth({
+      ...binding,
+      refresh: options?.refresh,
+      cachedOnly: options?.cachedOnly,
+      confirmed: options?.confirmed,
+      holdRefusedToken: options?.holdRefusedToken,
+    });
+}
+
+/**
+ * A requester that can never open a wallet prompt, whatever its caller asks:
+ * page loads read through this. fetchWithWalletAuth's 401 retry asks for
+ * `refresh`, and on a page load that must still be silent.
+ */
+export function cachedOnlyRequester(requester: WalletAuthRequester): WalletAuthRequester {
+  return (options) => requester({ ...options, cachedOnly: true });
+}
 
 export interface WalletAuthFetchResult {
   response: Response;
@@ -414,8 +729,10 @@ export interface WalletAuthFetchResult {
  * blank box. A 401 against a credential that WAS attached means the cached
  * signature aged past the server's window, so it is dropped and re-signed once
  * - a stale cache must never look like a permission failure. A 401 against a
- * session token sets that token aside first, so the one retry is a signature
- * and never the same token again: no loop, and nobody locked out.
+ * session token sets that token aside for a while instead, and the one retry
+ * keeps any signature the tab already holds (the signature is not what was
+ * refused), so there is no loop, no second prompt, and nobody locked out. A
+ * token the server accepts starts its refusal count over.
  */
 export async function fetchWithWalletAuth(
   url: string,
@@ -423,7 +740,17 @@ export async function fetchWithWalletAuth(
   requestAuth: WalletAuthRequester,
   fetchImpl: typeof fetch = fetch,
 ): Promise<WalletAuthFetchResult> {
-  const auth = await requestAuth();
+  // A route that redacts cannot refuse a token, so a refused one is held back
+  // from it (routeRedactsRefusedProof). Asked with no options otherwise.
+  const hold = routeRedactsRefusedProof(url);
+  const ask = (refresh: boolean) =>
+    refresh || hold
+      ? requestAuth({
+          ...(refresh ? { refresh: true } : {}),
+          ...(hold ? { holdRefusedToken: true } : {}),
+        })
+      : requestAuth();
+  const auth = await ask(false);
   const send = (current: ClientAuth) => {
     const headers = new Headers(init?.headers);
     if (current.kind === "ok") {
@@ -435,12 +762,13 @@ export async function fetchWithWalletAuth(
   };
 
   const response = await send(auth);
+  if (response.ok) acceptSessionTokenIn(auth);
   if (response.status !== 401 || auth.kind !== "ok") {
     return { response, auth };
   }
 
-  refuseSessionTokenIn(auth);
-  const retryAuth = await requestAuth({ refresh: true });
+  const tokenRefused = refuseSessionTokenIn(auth);
+  const retryAuth = await ask(!tokenRefused);
   if (retryAuth.kind !== "ok") return { response, auth: retryAuth };
   return { response: await send(retryAuth), auth: retryAuth };
 }
@@ -489,7 +817,9 @@ export function walletAuthFetch(
     if (!shouldAttachWalletAuth(fetchInputUrl(input), origin)) {
       return fetchImpl(input, init);
     }
-    const auth = await requestAuth();
+    const auth = await (routeRedactsRefusedProof(fetchInputUrl(input))
+      ? requestAuth({ holdRefusedToken: true })
+      : requestAuth());
     // An unsigned request is sent as-is and the route answers 401: the SDK
     // surfaces that as a failure, which is the loud direction for a money
     // path. Silently dropping the call would look like a hung UI.
@@ -511,8 +841,10 @@ export function walletAuthFetch(
       response = await fetchImpl(new Request(input, { headers: merged }), init);
     }
     // No retry here (the SDK owns the body), but a refused session token is
-    // set aside so the SDK's next call signs instead of repeating it.
+    // set aside so the SDK's next call signs instead of repeating it, and an
+    // accepted one starts its refusal count over.
     if (response.status === 401) refuseSessionTokenIn(auth);
+    else if (response.ok) acceptSessionTokenIn(auth);
     return response;
   };
 }

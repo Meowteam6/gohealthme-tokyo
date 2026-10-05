@@ -227,7 +227,7 @@ function JoinPoolInner({
       });
       if (joinReceipt.status !== "success") {
         throw new Error(
-          `The joinPool transaction ${joinHash} reverted on Base Sepolia.`,
+          `The join transaction ${joinHash} reverted on Base Sepolia.`,
         );
       }
 
