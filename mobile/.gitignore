@@ -20,3 +20,7 @@ expo-env.d.ts
 
 # Open Wearables server-side secrets written by scripts/ow-bootstrap.sh
 .ow-server.env
+
+# Apple signing and submit material, never committed
+.secrets/
+.env.submit
