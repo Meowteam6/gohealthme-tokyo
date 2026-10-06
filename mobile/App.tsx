@@ -13,16 +13,22 @@
 // server answered with nothing stored and nothing covered gets one plain
 // line pointing at Settings, never a silent success; a read HealthKit
 // refused outright gets one line and a retry.
+//
+// The look is Night Shift, the website's system, from lib/theme.ts.
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
+  Image,
+  type ImageSourcePropType,
+  KeyboardAvoidingView,
   Linking,
   Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -41,8 +47,12 @@ import {
   savePairing,
 } from "./lib/pairing-store";
 import { syncNotice, syncNow, type SyncOutcome } from "./lib/sync";
+import { colors, controls, noticeTones, space, type, type NoticeTone } from "./lib/theme";
 
 const SYNC_DAYS = 30;
+
+/** The brand mark: the otter, the same file as the app icon. */
+const OTTER: ImageSourcePropType = require("./assets/icon.png");
 
 /**
  * The newest sync that landed, and whether this screen asked for it. A
@@ -56,6 +66,10 @@ type Failure = { message: string; retry: "pair" | "connect" | "sync" };
 
 const REVOKED =
   "This iPhone is no longer paired. Get a new code on the GoHealthMe website and pair again.";
+// The code was accepted but the Keychain refused the token, so the code is
+// spent and the phone holds nothing. Pairing again revokes the lost token.
+const SAVE_FAILED =
+  "This iPhone could not save the pairing. Get a new code on the GoHealthMe website and try again.";
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -63,6 +77,20 @@ function shortAddress(address: string): string {
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** One quiet row with a left accent bar, like the web's Notice. Presentation only. */
+function Notice({ tone, children }: { tone: NoticeTone; children: string }): React.JSX.Element {
+  const t = noticeTones[tone];
+  return (
+    <View
+      style={[controls.notice, { backgroundColor: t.background, borderColor: t.border }]}
+      accessibilityRole={tone === "error" ? "alert" : undefined}
+    >
+      <View style={[controls.noticeBar, { backgroundColor: t.bar }]} />
+      <Text style={[controls.noticeText, { color: t.text }]}>{children}</Text>
+    </View>
+  );
 }
 
 export default function App(): React.JSX.Element {
@@ -195,9 +223,15 @@ export default function App(): React.JSX.Element {
     let result: Pairing;
     try {
       result = await redeemCode(code.trim());
-      await savePairing(result);
     } catch (err) {
       setFailure({ message: describe(err), retry: "pair" });
+      setBusy(null);
+      return;
+    }
+    try {
+      await savePairing(result);
+    } catch {
+      setFailure({ message: SAVE_FAILED, retry: "pair" });
       setBusy(null);
       return;
     }
@@ -243,178 +277,210 @@ export default function App(): React.JSX.Element {
   // only while no error is showing in its place.
   const notice = last !== null && last.manual && failure === null ? syncNotice(last.outcome) : null;
 
+  // The Pair button is disabled while busy or until a code is in; it only
+  // dims when the person could not press it anyway, never while it is working.
+  const pairDisabled = busy !== null || !codeReady;
+  const pairDimmed = pairDisabled && busy !== "pairing";
+
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.h1}>GoHealthMe</Text>
-        <Text style={styles.subtitle}>
-          Apple Watch to your wallet. Daily totals only, never raw health data.
-        </Text>
-
-        {pairing === undefined ? (
-          <ActivityIndicator />
-        ) : showPairForm ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>
-              {pairing === null ? "Pair this iPhone" : "Pair a different wallet"}
+      <StatusBar barStyle="light-content" />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
+          <View style={styles.brand}>
+            <View style={styles.brandRow}>
+              <Image source={OTTER} style={styles.mark} accessibilityIgnoresInvertColors />
+              <Text style={type.wordmark}>GoHealthMe</Text>
+            </View>
+            <Text style={type.body}>
+              Apple Watch to your wallet. Daily totals only, never raw health data.
             </Text>
-            {!codeFromLink && (
-              <Text style={styles.hint}>
-                On the GoHealthMe website, choose Apple Watch. Open the link it
-                shows on this iPhone, or type the code here.
+          </View>
+
+          {pairing === undefined ? (
+            <ActivityIndicator color={colors.haze} style={styles.spinner} />
+          ) : showPairForm ? (
+            <View style={controls.card}>
+              <Text style={type.heading}>
+                {pairing === null ? "Pair this iPhone" : "Pair a different wallet"}
               </Text>
-            )}
-            <TextInput
-              style={[styles.input, styles.codeInput]}
-              value={code}
-              onChangeText={(v) => {
-                setCode(v);
-                setCodeFromLink(false);
-              }}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              placeholder="XXXX-XXXX"
-              maxLength={9}
-              editable={busy === null}
-            />
-            {failure !== null && <Text style={styles.errorLine}>{failure.message}</Text>}
-            <Pressable
-              style={[styles.button, (busy !== null || !codeReady) && styles.buttonDisabled]}
-              onPress={() => void pair()}
-              disabled={busy !== null || !codeReady}
-            >
-              {busy === "pairing" ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>{failure?.retry === "pair" ? "Try again" : "Pair"}</Text>
+              {!codeFromLink && (
+                <Text style={type.body}>
+                  On the GoHealthMe website, choose Apple Watch. Open the link it
+                  shows on this iPhone, or type the code here.
+                </Text>
               )}
-            </Pressable>
-            {pairing !== null && busy === null && (
-              <Pressable
-                onPress={() => {
-                  setRepairing(false);
-                  setCode("");
+              <TextInput
+                style={[controls.field, styles.codeInput]}
+                value={code}
+                onChangeText={(v) => {
+                  setCode(v);
                   setCodeFromLink(false);
-                  setFailure(null);
                 }}
-              >
-                <Text style={styles.link}>Keep {shortAddress(pairing.address)}</Text>
-              </Pressable>
-            )}
-          </View>
-        ) : (
-          <View style={styles.card}>
-            <Text style={styles.headline}>
-              {last !== null
-                ? stored > 0
-                  ? `Synced ${last.outcome.daysWithData} days for ${shortAddress(pairing.address)}`
-                  : `Nothing synced for ${shortAddress(pairing.address)}`
-                : busy === "syncing"
-                  ? "Syncing Apple Health"
-                  : busy === "connecting"
-                    ? "Waiting for Apple Health"
-                    : connected
-                      ? `Paired with ${shortAddress(pairing.address)}`
-                      : "Allow Apple Health to finish"}
-            </Text>
-
-            {notice !== null && (
-              <Text style={stored === 0 ? styles.errorLine : styles.hint}>{notice}</Text>
-            )}
-
-            {failure !== null && <Text style={styles.errorLine}>{failure.message}</Text>}
-
-            {busy !== null ? (
-              <ActivityIndicator style={styles.spinner} />
-            ) : failure !== null ? (
-              <Pressable style={styles.button} onPress={retry}>
-                <Text style={styles.buttonText}>Try again</Text>
-              </Pressable>
-            ) : !connected ? (
-              <Pressable style={styles.button} onPress={() => void connect(pairing)}>
-                <Text style={styles.buttonText}>Allow Apple Health</Text>
-              </Pressable>
-            ) : last !== null && stored === 0 ? (
-              <Pressable style={styles.button} onPress={() => void sync(pairing)}>
-                <Text style={styles.buttonText}>Try again</Text>
-              </Pressable>
-            ) : null}
-
-            <Text style={styles.label}>Paired wallet</Text>
-            <Text style={styles.mono}>{pairing.address}</Text>
-            {connected && (
-              <Text style={styles.hint}>
-                Syncs on its own when Apple Health changes, and every time you open
-                this app.
-              </Text>
-            )}
-            {busy === null && (
+                autoCapitalize="characters"
+                autoCorrect={false}
+                placeholder="XXXX-XXXX"
+                placeholderTextColor={colors.haze}
+                keyboardAppearance="dark"
+                selectionColor={colors.moonlight}
+                returnKeyType="done"
+                maxLength={9}
+                editable={busy === null}
+              />
               <Pressable
-                onPress={() => {
-                  setRepairing(true);
-                  setFailure(null);
-                }}
+                style={({ pressed }) => [
+                  controls.buttonPrimary,
+                  pressed && !pairDisabled && controls.buttonPressed,
+                  pairDimmed && controls.buttonDisabled,
+                ]}
+                onPress={() => void pair()}
+                disabled={pairDisabled}
+                accessibilityRole="button"
               >
-                <Text style={styles.link}>Pair a different wallet</Text>
+                {busy === "pairing" ? (
+                  <ActivityIndicator color={colors.accentForeground} />
+                ) : (
+                  <Text style={[type.buttonPrimary, pairDimmed && styles.buttonTextDimmed]}>
+                    {failure?.retry === "pair" ? "Try again" : "Pair"}
+                  </Text>
+                )}
               </Pressable>
-            )}
-          </View>
-        )}
+              {failure !== null && <Text style={type.danger}>{failure.message}</Text>}
+              {pairing !== null && busy === null && (
+                <Pressable
+                  style={controls.textAction}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setRepairing(false);
+                    setCode("");
+                    setCodeFromLink(false);
+                    setFailure(null);
+                  }}
+                >
+                  <Text style={type.link}>Keep {shortAddress(pairing.address)}</Text>
+                </Pressable>
+              )}
+            </View>
+          ) : (
+            <View style={controls.card}>
+              <Text style={type.display}>
+                {last !== null
+                  ? stored > 0
+                    ? `Synced ${last.outcome.daysWithData} days for ${shortAddress(pairing.address)}`
+                    : `Nothing synced for ${shortAddress(pairing.address)}`
+                  : busy === "syncing"
+                    ? "Syncing Apple Health"
+                    : busy === "connecting"
+                      ? "Waiting for Apple Health"
+                      : connected
+                        ? `Paired with ${shortAddress(pairing.address)}`
+                        : "Allow Apple Health to finish"}
+              </Text>
 
-        {available === false && (
-          <Text style={styles.errorLine}>
-            Apple Health is not available on this device. It needs a real iPhone, not
-            the simulator.
-          </Text>
-        )}
+              {notice !== null && <Notice tone={stored === 0 ? "limit" : "info"}>{notice}</Notice>}
 
-        <Text style={styles.footer}>Platform: {Platform.OS}</Text>
-      </ScrollView>
+              {failure !== null && <Notice tone="error">{failure.message}</Notice>}
+
+              {busy !== null ? (
+                <ActivityIndicator color={colors.haze} style={styles.spinner} />
+              ) : failure !== null ? (
+                <Pressable
+                  style={({ pressed }) => [controls.buttonSecondary, pressed && controls.buttonPressed]}
+                  onPress={retry}
+                  accessibilityRole="button"
+                >
+                  <Text style={type.buttonSecondary}>Try again</Text>
+                </Pressable>
+              ) : !connected ? (
+                <Pressable
+                  style={({ pressed }) => [controls.buttonPrimary, pressed && controls.buttonPressed]}
+                  onPress={() => void connect(pairing)}
+                  accessibilityRole="button"
+                >
+                  <Text style={type.buttonPrimary}>Allow Apple Health</Text>
+                </Pressable>
+              ) : last !== null && stored === 0 ? (
+                <Pressable
+                  style={({ pressed }) => [controls.buttonSecondary, pressed && controls.buttonPressed]}
+                  onPress={() => void sync(pairing)}
+                  accessibilityRole="button"
+                >
+                  <Text style={type.buttonSecondary}>Try again</Text>
+                </Pressable>
+              ) : null}
+
+              <View style={styles.wallet}>
+                <Text style={type.label}>Paired wallet</Text>
+                <Text style={type.mono} selectable>
+                  {pairing.address}
+                </Text>
+              </View>
+              {connected && (
+                <Text style={type.body}>
+                  Syncs on its own when Apple Health changes, and every time you open
+                  this app.
+                </Text>
+              )}
+              {busy === null && (
+                <Pressable
+                  style={controls.textAction}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setRepairing(true);
+                    setFailure(null);
+                  }}
+                >
+                  <Text style={type.link}>Pair a different wallet</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {available === false && (
+            <Notice tone="limit">
+              Apple Health is not available on this device. It needs a real iPhone, not
+              the simulator.
+            </Notice>
+          )}
+
+          <Text style={styles.footer}>GoHealthMe beta</Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const mono = Platform.OS === "ios" ? "Menlo" : "monospace";
-
+// Screen layout only; colours, type and controls come from lib/theme.ts.
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#faf6ee" },
-  container: { padding: 20, gap: 12 },
-  h1: { fontSize: 30, fontWeight: "800", color: "#16211b" },
-  subtitle: { fontSize: 13, color: "#5f6f64", marginBottom: 6 },
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#ece3d2",
-    gap: 10,
+  safe: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
+  container: {
+    flexGrow: 1,
+    paddingHorizontal: space.gutter,
+    paddingTop: space.lg,
+    paddingBottom: space.xxl,
+    gap: space.xxl,
   },
-  cardTitle: { fontSize: 15, fontWeight: "700", color: "#16211b" },
-  headline: { fontSize: 20, fontWeight: "800", color: "#16211b", lineHeight: 26 },
-  label: { fontSize: 12, fontWeight: "600", color: "#5f6f64", marginTop: 6 },
-  mono: { fontSize: 12, color: "#16211b", fontFamily: mono },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ece3d2",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 13,
-    color: "#16211b",
-    fontFamily: mono,
+  brand: { gap: space.sm },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: space.md },
+  mark: { width: 32, height: 32, borderRadius: 16 },
+  // The code reads as the website shows it: mono, semibold, wide tracking, centred.
+  codeInput: {
+    fontFamily: type.mono.fontFamily,
+    fontSize: 24,
+    fontWeight: "600",
+    letterSpacing: 5,
+    textAlign: "center",
   },
-  hint: { fontSize: 12, color: "#5f6f64", lineHeight: 17 },
-  errorLine: { fontSize: 13, color: "#9f1d1d", lineHeight: 18 },
-  codeInput: { fontSize: 22, letterSpacing: 4, textAlign: "center" },
-  link: { fontSize: 13, color: "#064e3b", fontWeight: "600", marginTop: 4 },
-  button: {
-    backgroundColor: "#059669",
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  buttonText: { color: "#faf6ee", fontSize: 16, fontWeight: "700" },
-  buttonDisabled: { opacity: 0.5 },
-  spinner: { paddingVertical: 12 },
-  footer: { fontSize: 10, color: "#8a9089", textAlign: "center", marginTop: 4 },
+  buttonTextDimmed: { color: colors.haze },
+  wallet: { gap: space.xs },
+  spinner: { paddingVertical: space.md, alignSelf: "flex-start" },
+  footer: { ...type.fine, marginTop: "auto", paddingTop: space.lg },
 });

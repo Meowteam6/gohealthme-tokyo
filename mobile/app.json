@@ -6,7 +6,8 @@
     "icon": "./assets/icon.png",
     "orientation": "portrait",
     "scheme": "gohealthme",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0b1330",
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.chuabiolabs.gohealthme",
