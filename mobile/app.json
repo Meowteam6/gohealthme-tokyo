@@ -23,7 +23,7 @@
         "@kingstinct/react-native-healthkit",
         {
           "NSHealthShareUsageDescription": "GoHealthMe reads your daily step, distance, energy, sleep and workout totals to verify the goals you chose. Only the daily totals leave your iPhone, never individual readings.",
-          "NSHealthUpdateUsageDescription": false,
+          "NSHealthUpdateUsageDescription": "GoHealthMe never writes to Apple Health. Apple requires this notice because the Health library includes write functions the app does not use.",
           "background": true
         }
       ],
