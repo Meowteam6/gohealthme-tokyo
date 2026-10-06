@@ -72,10 +72,10 @@ POOL4_END="${POOL4_END:-1790478000}"   # Sun 2026-09-27 12:00 JST (03:00 UTC); t
 # initiative = the short title the pool list shows; goalSpec = the text
 # app/lib/wearable-goal.ts classifies. No proof marker means wearable floor.
 # "for 1 night" / "for 1 day" sets goalDays = 1 so a one-day window can pay.
-POOL1_INIT="Sleep 7 hours Saturday night";  POOL1_GOAL="Sleep at least 7 hours for 1 night"     # sleep_hours 7 (replaced "Sleep 7 hours tonight", cancelled 2026-09-26: its window held no night)
-POOL2_INIT="One workout today";      POOL2_GOAL="Complete at least 1 workout for 1 day"  # workouts 1
-POOL3_INIT="Sleep efficiency 85 tonight"; POOL3_GOAL="Sleep efficiency 85% or better for 1 night"
-POOL4_INIT="One workout Sunday";      POOL4_GOAL="Complete at least 1 workout for 1 day"  # workouts 1, the judged commitment-model run (pool 6)  # sleep_efficiency 85 (replaced the steps run, cancelled 2026-09-26: steps is not a launch goal)
+POOL1_INIT="${POOL1_INIT:-Sleep 7 hours Saturday night}";  POOL1_GOAL="${POOL1_GOAL:-Sleep at least 7 hours for 1 night}"     # sleep_hours 7 (replaced "Sleep 7 hours tonight", cancelled 2026-09-26: its window held no night)
+POOL2_INIT="${POOL2_INIT:-One workout today}";      POOL2_GOAL="${POOL2_GOAL:-Complete at least 1 workout for 1 day}"  # workouts 1
+POOL3_INIT="${POOL3_INIT:-Sleep efficiency 85 tonight}"; POOL3_GOAL="${POOL3_GOAL:-Sleep efficiency 85% or better for 1 night}"
+POOL4_INIT="${POOL4_INIT:-One workout Sunday}";      POOL4_GOAL="${POOL4_GOAL:-Complete at least 1 workout for 1 day}"  # workouts 1, the judged commitment-model run (pool 6)  # sleep_efficiency 85 (replaced the steps run, cancelled 2026-09-26: steps is not a launch goal)
 
 DRY_RUN="${DRY_RUN:-0}"
 

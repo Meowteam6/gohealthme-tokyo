@@ -52,6 +52,16 @@ else
   record FAIL "iphoneos SDK present" "Xcode > Settings > Components, install the iOS platform"
 fi
 
+# The SDK headers ship with Xcode; the iOS platform RUNTIME is a separate
+# download, and without it every device build dies with "iOS x.y is not
+# installed" after prebuild and pods have already run (seen 2026-10-07).
+# Xcode lists installed platforms via its component manager.
+if xcrun simctl runtime list 2>/dev/null | grep -qiE "^iOS .*\(Ready\)"; then
+  record PASS "iOS platform runtime installed"
+else
+  record FAIL "iOS platform runtime installed" "run: xcodebuild -downloadPlatform iOS (several GB), or Xcode > Settings > Components > iOS"
+fi
+
 check "node on PATH" "brew install node" command -v node
 check "npm on PATH" "brew install node" command -v npm
 
