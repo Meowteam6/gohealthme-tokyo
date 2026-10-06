@@ -55,6 +55,13 @@ project; both values are the new contract address, never `0x66815e3A…`):
 
 ### Deploy log
 <!-- tokyo-deploy-log -->
+- 2026-10-06T15:55:26Z reuse: HealthPoolsV3 `0x0B6E8D477313599aBB746218a1AE45BAb333A12F` (seed-only run)
+- 2026-10-06T15:55:26Z pool 7: **Sleep 7 hours this week** | goalSpec "Sleep at least 7 hours for 1 night" | model 2 (commitment) | entry 1000000 uUSDC | sponsor pot 2000000 uUSDC
+  - periodStart 1791302167 (Wed 2026-10-07 00:56 JST), periodEnd 1791558000 (Sat 2026-10-10 00:00 JST); settler-only until 1791644400 (Sun 2026-10-11 00:00 JST), then anyone
+  - create tx https://sepolia.basescan.org/tx/0xff37daf481984b0134c2070f0558030e3f7cb338e6dc1d35114197c9a37a717f
+- 2026-10-06T15:55:26Z pool 8: **One workout this week** | goalSpec "Complete at least 1 workout for 1 day" | model 2 (commitment) | entry 1000000 uUSDC | sponsor pot 2000000 uUSDC
+  - periodStart 1791302169 (Wed 2026-10-07 00:56 JST), periodEnd 1791558000 (Sat 2026-10-10 00:00 JST); settler-only until 1791644400 (Sun 2026-10-11 00:00 JST), then anyone
+  - create tx https://sepolia.basescan.org/tx/0x7d91abbc78ab95b9c0a5223aaf774330f18a0c4137932b121d83ccdc975ef8e7
 - 2026-09-26T20:38:00Z reuse: HealthPoolsV3 `0x0B6E8D477313599aBB746218a1AE45BAb333A12F` (seed-only run)
 - 2026-09-26T20:38:00Z pool 6: **One workout Sunday** | goalSpec "Complete at least 1 workout for 1 day" | model 2 (commitment) | entry 1000000 uUSDC | sponsor pot 2000000 uUSDC
   - periodStart 1790455107 (Sun 2026-09-27 05:38 JST), periodEnd 1790478000 (Sun 2026-09-27 12:00 JST); settler-only until 1790564400 (Mon 2026-09-28 12:00 JST), then anyone
