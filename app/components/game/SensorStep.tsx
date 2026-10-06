@@ -280,7 +280,7 @@ function SensorStepBody({
                 {providerCardLabel(option.id, option.label)}
                 {option.connected ? (
                   <span className="inline-flex h-[22px] items-center rounded-tag bg-moonlight/10 px-2 text-xs font-semibold text-moonlight">
-                    Paired
+                    {option.id === selected ? "Paired, counting" : "Paired"}
                   </span>
                 ) : null}
               </p>
