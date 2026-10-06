@@ -56,9 +56,7 @@ fi
 # download, and without it every device build dies with "iOS x.y is not
 # installed" after prebuild and pods have already run (seen 2026-10-07).
 # Xcode lists installed platforms via its component manager.
-if xcodebuild -showsdks 2>/dev/null | grep -q -- '-sdk iphoneos' \
-   && ls "$(xcode-select -p)/Platforms/iPhoneOS.platform/Library/Developer/CoreSimulator/Profiles/Runtimes" >/dev/null 2>&1 \
-   || xcrun simctl runtime list 2>/dev/null | grep -qi "iOS .* Ready"; then
+if xcrun simctl runtime list 2>/dev/null | grep -qiE "^iOS .*\(Ready\)"; then
   record PASS "iOS platform runtime installed"
 else
   record FAIL "iOS platform runtime installed" "run: xcodebuild -downloadPlatform iOS (several GB), or Xcode > Settings > Components > iOS"
