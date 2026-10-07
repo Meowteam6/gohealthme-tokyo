@@ -1,4 +1,4 @@
-# GoHealthMe iPhone app: Apple Watch into your GoHealthMe wallet
+# GoHealthMe iPhone app: the whole product, with Apple Watch pairing native
 
 Expo (React Native) app that reads Apple Health directly on the iPhone with
 `@kingstinct/react-native-healthkit`, aggregates each day on device, and posts
@@ -11,23 +11,29 @@ Stage: beta on testnet, like the rest of V4.
 
 ## How a player uses it
 
-1. On the GoHealthMe website, choose **Apple Watch** as the sensor. The site
-   shows a one-time code (ten minutes, works once) and, on an iPhone, a button
-   that opens this app with the code already filled in.
-2. In the app, tap **Pair**. The code is exchanged for a device token kept in
-   the iPhone Keychain. The phone never holds a wallet key.
+The app is GoHealthMe itself. It opens the site (https://gohealthme-tokyo.vercel.app)
+in a native shell, so signing in, making a player, joining and creating
+challenges, verdicts and payouts all happen the same way they do on the web.
+The one thing the shell does natively is Apple Watch pairing.
+
+1. Open the app. Sign in with your email; the code arrives by mail and the
+   wallet is made from the email. (Base Account and own-wallet sign-in cannot
+   finish inside an in-app browser, so the shell says so in one line and
+   those accounts keep using Safari.)
+2. In character creation, choose **Apple Watch** and tap **Pair my Apple
+   Watch**. The page hands a one-time code to the shell over the bridge; the
+   code is never shown. The shell exchanges it for a device token kept in the
+   iPhone Keychain. The phone never holds a wallet key.
 3. iOS asks for Health access. **Allow**. The app registers for background
-   delivery and syncs the last 30 days. The screen then reads
-   "Synced N days for 0x1234...abcd", where N is what the server stored.
+   delivery, reads the last 30 days and the card flips to paired the moment
+   the server has stored a day.
 4. Nothing after that. HealthKit wakes the app when sleep, a workout or steps
    land, and the app posts the recent days. Opening the app also syncs.
 
-Four taps on an iPhone, two of them Apple's own sheets. From a computer the
-code is typed into the app instead of carried by the link. No settings screen.
-
-Pairing switches nothing on its own. The wallet's challenges move to Apple
-when the first day actually arrives, once per pairing. Pairing a second phone
-cuts off the first; the first phone says so and offers to pair again.
+Two taps, one of them Apple's sheet. The standalone pairing screen from the
+first build still exists (`components/PairScreen.tsx`) and only appears when
+the site cannot load; a `gohealthme://pair?code=` link from Safari still
+pairs the phone too.
 
 ## What one sync sends
 
