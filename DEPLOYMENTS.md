@@ -7,12 +7,7 @@ SPOTTER never acts on the frozen V3 pilot pools below. Deployed and seeded by
 `scripts/tokyo-deploy.sh` (idempotent, forge create + cast send); state printed by
 `scripts/tokyo-status.sh`. Demo flow pinned in `contracts/test/TokyoDemo.t.sol`.
 
-**Status: NOT YET DEPLOYED.** `contracts/.env` `PRIVATE_KEY` does not parse (forge:
-"expected at least one digit"; cast: "Failed to decode private key"), so the deployer
-`0xc278e8e4621A0Ba02bACB6291E595ecd168A04e1` cannot sign from this machine. Fill it with the
-0xc278 key (`demo-reset.sh` reads the same key as `DEPLOYER_PRIVATE_KEY` from the V3 repo's
-root `.env`) and run `./scripts/tokyo-deploy.sh`; the script appends addresses and tx hashes
-under "Deploy log" below.
+**Status: deployed and live on the beta.** HealthPoolsV3 `0x0B6E8D477313599aBB746218a1AE45BAb333A12F` on Base Sepolia (chain 84532) serves https://gohealthme-tokyo.vercel.app; every seed run is listed under "Deploy log" below. The 2026-09-25 note about an unparseable deployer key is history: the key was fixed and `./scripts/tokyo-deploy.sh` ran the same day.
 
 Constructor and roles (identical to what the V3 contract reports ON CHAIN; the V3 heading
 below lists two stale addresses):
