@@ -146,6 +146,7 @@ export function useLobby(view: CharacterView, highlightId: string | null): Lobby
           uploadAvailable: checks.verifier === "available",
           worldLane: checks.worldLane,
           humanVerified: checks.humanVerified,
+          openBeta: checks.openBeta,
           deviceLabel,
         });
 

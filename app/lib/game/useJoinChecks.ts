@@ -9,7 +9,6 @@
 import { useCallback } from "react";
 import { useApprovalProbe } from "@/components/game/ApprovalNote";
 import {
-  accessGateDisabled,
   gateStateOf,
   payoutStateOf,
   verifierStateOf,
@@ -24,12 +23,16 @@ import type {
 } from "@/lib/game/lobby";
 import type { CharacterView } from "@/lib/game/useCharacter";
 import { useSwitches } from "@/lib/game/useSwitches";
+import { openBeta } from "@/lib/open-beta";
 import { useDocumentProofQuery } from "@/lib/useProofStatus";
 
 export interface JoinChecks {
   worldLane: HumanLane;
   humanVerified: boolean;
   gate: GateState;
+  /** openBeta() (lib/open-beta.ts): World ID is optional at the join, and
+   *  the closed-beta gate is off. Passed through to runSlotOf. */
+  openBeta: boolean;
   verifier: VerifierState;
   payouts: PayoutState;
   approvalMode: ApprovalModeView;
@@ -46,8 +49,9 @@ export function useJoinChecks(view: CharacterView): JoinChecks {
   const proof = useDocumentProofQuery();
   const switches = useSwitches();
 
+  const open = openBeta();
   const gate = gateStateOf({
-    gateDisabled: accessGateDisabled(),
+    gateDisabled: open,
     gate: view.gate,
     gateLoading: view.gateLoading,
     address: view.address,
@@ -79,6 +83,7 @@ export function useJoinChecks(view: CharacterView): JoinChecks {
     worldLane,
     humanVerified: view.character?.human === "verified",
     gate,
+    openBeta: open,
     verifier: verifierStateOf(proof),
     payouts: payoutStateOf(approval.mode),
     approvalMode: approval.mode,

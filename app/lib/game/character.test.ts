@@ -531,3 +531,119 @@ describe("a World-bound player while World is paused", () => {
     expect(humanProofOf(paused({ source: "admin", isAdmin: true }))).toBe("admin");
   });
 });
+
+// Open beta (Andre and Nikki, 2026-10-07). World ID is optional: the hard
+// gate is sign-in alone, step 2 is a soft step with a skip, the list and the
+// admin allowlist no longer prove anything (an old list player is an ordinary
+// player), and a name needs no World ID. With the flag absent every case
+// above holds byte for byte; the last test here pins that.
+describe("open beta", () => {
+  const none = new Set<never>();
+  const ob = (overrides: Partial<CharacterInputs> = {}) => inputs({ openBeta: true, ...overrides });
+  const listed = { status: "approved", isAdmin: false, loading: false, error: false } as const;
+  const pending = { status: "pending", isAdmin: false, loading: false, error: false } as const;
+  const denied = { status: "denied", isAdmin: false, loading: false, error: false } as const;
+  const VERIFIED = { status: "done", summary: "Verified human, one entry per challenge" };
+
+  it("opens the gate to any signed-in wallet, whatever World or the list says", () => {
+    expect(gatePassed(ob())).toBe(true);
+    expect(gatePassed(ob({ world: { lane: "off", human: "unknown" } }))).toBe(true);
+    expect(gatePassed(ob({ world: { lane: "error", human: "unknown" } }))).toBe(true);
+    expect(gatePassed(ob({ access: pending }))).toBe(true);
+    expect(gatePassed(ob({ access: denied }))).toBe(true);
+  });
+
+  it("never passes a signed-out visitor", () => {
+    expect(gatePassed(ob({ authenticated: false, address: null }))).toBe(false);
+  });
+
+  it("makes step 2 optional: to do for an unverified wallet, a pending or approved list record included", () => {
+    expect(characterSteps(ob()).human).toEqual({ status: "todo" });
+    expect(characterSteps(ob({ access: pending })).human).toEqual({ status: "todo" });
+    expect(characterSteps(ob({ access: listed })).human).toEqual({ status: "todo" });
+    expect(characterSteps(ob({ access: { ...listed, isAdmin: true } })).human).toEqual({ status: "todo" });
+  });
+
+  it("keeps step 2 done for a World-verified wallet, and loading while World answers", () => {
+    expect(characterSteps(ob({ world: { lane: "on", human: "verified" } })).human).toEqual(VERIFIED);
+    expect(characterSteps(ob({ world: { lane: "on", human: "unknown" } })).human).toEqual({ status: "loading" });
+    expect(characterSteps(ob({ world: { lane: "loading", human: "unknown" } })).human).toEqual({ status: "loading" });
+  });
+
+  it("says World is off or not answering on step 2, and never mentions the list", () => {
+    expect(characterSteps(ob({ world: { lane: "off", human: "unknown" } })).human).toEqual({
+      status: "off",
+      note: "World ID is not switched on for this build.",
+    });
+    expect(characterSteps(ob({ world: { lane: "error", human: "unknown" } })).human).toEqual({
+      status: "error",
+      note: "SPOTTER could not reach World ID just now.",
+    });
+    expect(characterSteps(ob({ world: { lane: "off", human: "unknown" }, access: pending })).human.status).toBe("off");
+  });
+
+  it("keeps a World binding made before a pause as done", () => {
+    const i = ob({ world: { lane: "off", human: "unverified" }, access: { ...listed, source: "world" } });
+    expect(characterSteps(i).human).toEqual(VERIFIED);
+    expect(humanProofOf(i)).toBe("world");
+    expect(characterOf(i)).toMatchObject({ human: "verified", humanProof: "world" });
+  });
+
+  it("never locks the name on World ID", () => {
+    expect(characterSteps(ob()).name).toEqual({ status: "todo" });
+    expect(characterSteps(ob({ access: listed })).name).toEqual({ status: "todo" });
+    expect(characterSteps(ob({ ens: { lane: "on", name: "dre.gohealthme.eth" } })).name).toEqual({
+      status: "done",
+      summary: "dre.gohealthme.eth",
+    });
+  });
+
+  it("retires the list and the admin proofs: only World ID proves a human", () => {
+    expect(humanProofOf(ob({ access: listed }))).toBeNull();
+    expect(humanProofOf(ob({ access: { ...listed, isAdmin: true } }))).toBeNull();
+    expect(humanProofOf(ob({ world: { lane: "on", human: "verified" } }))).toBe("world");
+    expect(characterOf(ob({ access: listed }))).toMatchObject({ human: "unverified", humanProof: null });
+    expect(characterOf(ob({ access: { ...listed, isAdmin: true } }))).toMatchObject({ human: "unverified", humanProof: null });
+  });
+
+  it("walks sign-in, then World ID, then name, then wearable, and skips World ID on request", () => {
+    const signedOut = characterSteps(ob({ authenticated: false, address: null }));
+    expect(currentStep(signedOut, false, none, false, true)).toBe("sign-in");
+    const steps = characterSteps(ob());
+    expect(currentStep(steps, true, none, false, true)).toBe("human");
+    expect(currentStep(steps, true, new Set(["human"]), false, true)).toBe("name");
+    expect(currentStep(steps, true, new Set(["human", "name"]), false, true)).toBe("sensor");
+    expect(currentStep(steps, true, new Set(["human", "name", "sensor"]), false, true)).toBeNull();
+    expect(currentStep(steps, true, none, true, true)).toBeNull();
+  });
+
+  it("walks past step 2 on a World-off build without asking for a skip", () => {
+    const steps = characterSteps(ob({ world: { lane: "off", human: "unknown" } }));
+    expect(steps.human.status).toBe("off");
+    expect(currentStep(steps, true, none, false, true)).toBe("name");
+  });
+
+  it("is ready to play with a wearable alone", () => {
+    const c = characterOf(
+      ob({ sensor: { kind: "paired", device: { provider: "junction", label: "Junction", metrics: ["steps"] } } }),
+    );
+    expect(c?.human).toBe("unverified");
+    expect(c !== null && isReadyToPlay(c, true)).toBe(true);
+    expect(c !== null && isReadyToPlay(c)).toBe(false);
+    expect(c !== null && isReadyToPlay(c, false)).toBe(false);
+    const bare = characterOf(ob());
+    expect(bare !== null && isReadyToPlay(bare, true)).toBe(false);
+  });
+
+  it("changes nothing with the flag absent or false (regression)", () => {
+    for (const flag of [{}, { openBeta: false }] as const) {
+      expect(gatePassed(inputs(flag))).toBe(false);
+      expect(characterSteps(inputs({ ...flag, access: listed })).human).toEqual({ status: "done", summary: "On the list" });
+      expect(characterSteps(inputs({ ...flag, access: pending })).human.status).toBe("waiting");
+      expect(characterSteps(inputs(flag)).name).toEqual({ status: "locked", note: NAME_LOCKED_NOTE });
+      expect(humanProofOf(inputs({ ...flag, access: listed }))).toBe("list");
+      expect(currentStep(characterSteps(inputs(flag)), false, new Set(["human"]), false)).toBe("human");
+      expect(currentStep(characterSteps(inputs(flag)), false, new Set(["human"]), false, false)).toBe("human");
+    }
+  });
+});

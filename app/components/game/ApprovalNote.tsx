@@ -24,6 +24,7 @@ import {
   type ApprovalModeView,
   type PayoutPath,
 } from "@/lib/game/join-checks";
+import { openBeta } from "@/lib/open-beta";
 
 const ZERO_GOAL = `0x${"0".repeat(64)}`;
 
@@ -41,10 +42,13 @@ export function useApprovalMode(): ApprovalModeView {
 }
 
 /** The note's words for this player, or null when there is nothing to say
- *  (the confirmation is off, or the mode is not known yet). */
+ *  (the confirmation is off, or the mode is not known yet). In open beta a
+ *  wallet that skipped World ID is paid on the verdict and reads that line
+ *  (payoutPathOf). */
 export function approvalNoteOf(i: {
   approvalMode: ApprovalModeView;
   humanProof: HumanProof | null;
+  openBeta?: boolean;
 }): { path: PayoutPath; text: string; mocked: boolean } | null {
   if (i.approvalMode !== "mock" && i.approvalMode !== "world") return null;
   const path = payoutPathOf(i);
@@ -65,7 +69,7 @@ export function approvalNoteOf(i: {
 
 export default function ApprovalNote({ humanProof }: { humanProof: HumanProof | null }) {
   const approvalMode = useApprovalMode();
-  const note = approvalNoteOf({ approvalMode, humanProof });
+  const note = approvalNoteOf({ approvalMode, humanProof, openBeta: openBeta() });
   if (note === null) return null;
   return (
     <p className="m-0 mt-2 flex items-start gap-2.5 text-sm leading-[1.45] text-muted">

@@ -32,4 +32,29 @@ describe("approvalNoteOf", () => {
       expect(approvalNoteOf({ approvalMode, humanProof: "world" })).toBeNull();
     }
   });
+
+  // Open beta (Andre and Nikki, 2026-10-07): a wallet that skipped World ID
+  // is paid on the verdict and reads that line; a World-verified player still
+  // reads the World ID line. Flag off, an unproven wallet reads "world".
+  describe("in open beta", () => {
+    it("tells a wallet that skipped World ID it is paid on the verdict", () => {
+      const note = approvalNoteOf({ approvalMode: "world", humanProof: null, openBeta: true });
+      expect(note?.path).toBe("verdict");
+      expect(note?.text).not.toMatch(/World ID/);
+      expect(note?.text).toBe("SPOTTER pays your hit on your wearable's verdict, with no extra step.");
+      expect(note?.mocked).toBe(false);
+      expect(approvalNoteOf({ approvalMode: "mock", humanProof: null, openBeta: true })?.mocked).toBe(false);
+    });
+
+    it("keeps the World ID line for a World-verified player", () => {
+      const note = approvalNoteOf({ approvalMode: "world", humanProof: "world", openBeta: true });
+      expect(note?.path).toBe("world");
+      expect(note?.text).toMatch(/confirm with World ID/);
+    });
+
+    it("changes nothing with the flag off (regression)", () => {
+      expect(approvalNoteOf({ approvalMode: "world", humanProof: null })?.path).toBe("world");
+      expect(approvalNoteOf({ approvalMode: "world", humanProof: null, openBeta: false })?.path).toBe("world");
+    });
+  });
 });

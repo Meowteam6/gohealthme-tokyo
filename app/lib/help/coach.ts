@@ -28,12 +28,17 @@ export interface CoachInputs {
   steps: Record<StepId, StepState>;
   humanMode: HumanMode;
   /** Steps the player skipped in character creation (lib/game/onboarding-
-   *  store). Only the soft steps (name, sensor) can be skipped; the hard
-   *  steps are never walked past on a skip. */
+   *  store). Only the soft steps (name, sensor, and human in open beta) can
+   *  be skipped; the hard steps are never walked past on a skip. */
   skipped?: ReadonlySet<StepId>;
+  /** openBeta() (lib/open-beta.ts): World ID is optional, so the human step
+   *  is skippable like a name or a sensor (lib/game/character.ts
+   *  OPEN_BETA_HARD_STEPS). Absent reads false: the closed beta. */
+  openBeta?: boolean;
 }
 
 const SKIPPABLE: ReadonlySet<StepId> = new Set<StepId>(["name", "sensor"]);
+const OPEN_BETA_SKIPPABLE: ReadonlySet<StepId> = new Set<StepId>(["human", "name", "sensor"]);
 
 export interface CoachStep {
   id: CoachAction;
@@ -65,11 +70,12 @@ function passed(state: StepState): boolean {
  * widget pulses instead of flashing a later step.
  */
 export function resolveCoachStep(input: CoachInputs): CoachStep {
+  const skippable = input.openBeta === true ? OPEN_BETA_SKIPPABLE : SKIPPABLE;
   for (let index = 0; index < ORDER.length; index += 1) {
     const { step, action } = ORDER[index];
     const state = input.steps[step];
     if (passed(state)) continue;
-    if (SKIPPABLE.has(step) && input.skipped?.has(step) === true) continue;
+    if (skippable.has(step) && input.skipped?.has(step) === true) continue;
     return {
       id: action,
       index,
@@ -94,13 +100,14 @@ export interface ChecklistRow {
   gold?: boolean;
 }
 
-/** Always six rows, always the same order as character creation. */
-export function coachChecklist(humanMode: HumanMode): ChecklistRow[] {
+/** Always six rows, always the same order as character creation. In open
+ *  beta the human row is World ID alone, never the list (which is gone). */
+export function coachChecklist(humanMode: HumanMode, openBeta = false): ChecklistRow[] {
   return [
     { id: "signIn", label: "Sign in" },
     {
       id: "proveHuman",
-      label: humanMode === "world" ? "Prove you are human" : "Get your spot",
+      label: openBeta || humanMode === "world" ? "Prove you are human" : "Get your spot",
     },
     { id: "pickName", label: "Pick a name" },
     { id: "pairSensor", label: "Pair your wearable" },
@@ -114,12 +121,13 @@ export interface CoachCopy {
   body: string;
   /** Absent for signIn, which renders the sign-in panel instead. */
   primary?: string;
-  /** Only the skippable steps and enterRun offer a second path. */
+  /** Only the skippable steps (human included in open beta) and enterRun
+   *  offer a second path. */
   secondary?: string;
 }
 
 /** Scripted copy per step. GoHealthMe voice: direct, no emoji, no exclamations. */
-export function coachCopy(id: CoachAction, humanMode: HumanMode): CoachCopy {
+export function coachCopy(id: CoachAction, humanMode: HumanMode, openBeta = false): CoachCopy {
   switch (id) {
     case "signIn":
       return {
@@ -127,6 +135,16 @@ export function coachCopy(id: CoachAction, humanMode: HumanMode): CoachCopy {
         body: "Sign in with an email address. We make the wallet for you: no seed phrase, no extension, nothing to install.",
       };
     case "proveHuman":
+      // Open beta: the same line and the same skip as character creation's
+      // step 2 (components/game/CharacterCreation.tsx OPEN_BETA_HUMAN_LINE).
+      if (openBeta) {
+        return {
+          headline: "World ID, optional",
+          body: "Optional. Scan once for the one human, one entry badge, or skip it.",
+          primary: "Prove I am human",
+          secondary: "Skip for now",
+        };
+      }
       return humanMode === "world"
         ? {
             headline: "Prove you are one human",

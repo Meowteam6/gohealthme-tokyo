@@ -10,6 +10,7 @@ import HeroActivityTicker from "@/components/HeroActivityTicker";
 import FeaturedRunCard from "@/components/landing/FeaturedRunCard";
 import HeroStage from "@/components/landing/HeroStage";
 import HowItPays from "@/components/landing/HowItPays";
+import { entryBadge } from "@/components/landing/entry-badge";
 import OpenRunsList from "@/components/landing/OpenRunsList";
 import { ButtonLink, ChevronLink } from "@/components/ui";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
@@ -61,6 +62,9 @@ export interface LandingFlags {
   missRule: boolean;
   /** Which wearable providers this build can pair. */
   availability: WearableAvailability;
+  /** The open-beta switch (lib/open-beta.ts): World ID is optional and the
+   *  closed-beta list is off the player's path. Absent means the closed beta. */
+  openBeta?: boolean;
 }
 
 export interface LandingData {
@@ -88,7 +92,7 @@ function PersonIcon() {
   );
 }
 
-function HeroMore({ status, count, human, className }: { status: OpenRunsStatus; count: number; human: boolean; className: string }) {
+function HeroMore({ status, count, flags, className }: { status: OpenRunsStatus; count: number; flags: LandingFlags; className: string }) {
   const label =
     status !== "ready" || count === 0
       ? "See the open challenges"
@@ -107,7 +111,7 @@ function HeroMore({ status, count, human, className }: { status: OpenRunsStatus;
         </li>
         <li className="inline-flex min-h-6 items-center gap-1.5">
           <PersonIcon />
-          {human ? "One person, one entry" : "Invite-only beta"}
+          {entryBadge(flags)}
         </li>
       </ul>
     </div>
@@ -152,7 +156,7 @@ export function LandingView({
             <span className="block">Stake on your sleep or workouts.</span>
             <span className="block">Your wearable decides.</span>
           </p>
-          <HeroMore status={data.status} count={count} human={flags.human} className="hidden gap-2 min-[900px]:mt-[26px] min-[900px]:flex" />
+          <HeroMore status={data.status} count={count} flags={flags} className="hidden gap-2 min-[900px]:mt-[26px] min-[900px]:flex" />
         </div>
 
         <HeroStage woke={woke} kind={featuredKind}>
@@ -170,7 +174,7 @@ export function LandingView({
           />
         </HeroStage>
 
-        <HeroMore status={data.status} count={count} human={flags.human} className="mt-2.5 flex gap-0.5 min-[900px]:hidden" />
+        <HeroMore status={data.status} count={count} flags={flags} className="mt-2.5 flex gap-0.5 min-[900px]:hidden" />
       </section>
 
       <section id="how" aria-labelledby="how-h" className="scroll-mt-20 pb-10 pt-6 min-[900px]:pb-[88px]">
@@ -181,7 +185,13 @@ export function LandingView({
         <p className="m-0 mt-2.5 max-w-[44ch] text-[1.0625rem] text-muted text-pretty">
           Your result depends only on what your own wearable records.
         </p>
-        <HowItPays terms={terms} confirm={flags.confirm} missRule={flags.missRule} initial={outcome} />
+        <HowItPays
+          terms={terms}
+          confirm={flags.confirm}
+          missRule={flags.missRule}
+          openBeta={flags.openBeta === true}
+          initial={outcome}
+        />
       </section>
 
       <section id="open-challenges" aria-labelledby="open-challenges-h" className="scroll-mt-20 pb-10 min-[900px]:pb-[88px]">

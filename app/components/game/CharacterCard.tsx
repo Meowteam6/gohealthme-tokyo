@@ -37,6 +37,10 @@ function CheckChip({ children }: { children: React.ReactNode }) {
  * which stamped World-verified players "On the list". The server's access
  * `source` still says "world" for a binding World already made, so it decides
  * the stamp whether or not World is paused right now.
+ *
+ * In open beta (2026-10-07) an unproven player is not told "Human not
+ * proven": World ID is optional, so HumanStamp offers it with a link to step
+ * 2 instead. A World binding keeps its "One human" stamp.
  */
 export function characterStampOf(
   character: Character,
@@ -48,16 +52,22 @@ export function characterStampOf(
   return humanStampOf(character, mode);
 }
 
+const QUIET_CHIP =
+  "inline-flex h-[26px] items-center whitespace-nowrap rounded-tag bg-fill-quiet px-2.5 text-[0.8125rem] font-semibold text-haze shadow-[inset_0_0_0_1px_var(--border-strong)]";
+
 function HumanStamp({ view, character }: { view: CharacterView; character: Character }) {
   const stamp = characterStampOf(character, view.humanMode, view.access.source);
   if (stamp !== null) {
     return <CheckChip>{stamp}</CheckChip>;
   }
-  return (
-    <span className="inline-flex h-[26px] items-center whitespace-nowrap rounded-tag bg-fill-quiet px-2.5 text-[0.8125rem] font-semibold text-haze shadow-[inset_0_0_0_1px_var(--border-strong)]">
-      Human not proven
-    </span>
-  );
+  if (view.openBeta === true) {
+    return (
+      <Link href="/character?step=human" className={QUIET_CHIP}>
+        World ID optional
+      </Link>
+    );
+  }
+  return <span className={QUIET_CHIP}>Human not proven</span>;
 }
 
 function SensorLine({ view }: { view: CharacterView }) {

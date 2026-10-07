@@ -16,7 +16,14 @@
 // actually happens (isAllowed on gated routes). The two stay separate so a
 // determined caller cannot talk their way past enforcement by editing client
 // state. With World off for a build, the allowlist behaves exactly as it did
-// before V4, and there is no skip that works on a deployed environment.
+// before V4.
+//
+// Open beta (Andre and Nikki, 2026-10-07; lib/open-beta.ts): the browser gate
+// is off on purpose. Every page renders; a gated page shows its own
+// SignInPanel or SignInGate while signed out; character creation lives on
+// /character, where the header's Sign in and every lock fix link go, with
+// World ID as an optional step 2. With the flag off, the closed beta above
+// holds, and the Playwright suite's meaning of the flag is unchanged.
 
 import { useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
@@ -27,6 +34,7 @@ import CharacterCreation from "@/components/game/CharacterCreation";
 import { useCharacter } from "@/lib/game/useCharacter";
 import { useOnboarding } from "@/lib/game/onboarding-store";
 import { creationBlocks, hardGateClosed } from "@/lib/game/character";
+import { openBeta } from "@/lib/open-beta";
 import { rendersWithoutGate } from "@/lib/public-paths";
 import { useEmbeddedWallet } from "@/lib/wallet";
 
@@ -100,9 +108,9 @@ function CharacterGate({ children }: { children: ReactNode }) {
 export default function AccessGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { ready, authenticated } = useEmbeddedWallet();
-  // Playwright-only switch (playwright.config.ts). Never set on a deployed
-  // environment: it opens the closed beta (CLAUDE.md landmine 3).
-  const gateDisabled = process.env.NEXT_PUBLIC_ACCESS_GATE_DISABLED === "1";
+  // Open beta: the browser gate is off on purpose (header). The same reader
+  // the join checks and the server's isAllowed use, so the three agree.
+  const gateDisabled = openBeta();
   // A run page is a read-only preview while signed out (lib/public-paths.ts).
   if (gateDisabled || rendersWithoutGate(pathname, { ready, signedIn: authenticated })) {
     return <>{children}</>;

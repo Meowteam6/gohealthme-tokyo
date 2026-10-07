@@ -214,6 +214,7 @@ export default function ChallengeAccept({
     // stake, a failed read locks it behind a retry.
     worldLane: checks.worldLane,
     humanVerified: checks.humanVerified,
+    openBeta: checks.openBeta,
     gate: checks.gate,
     needsDocumentVerifier: needsDocumentVerifier(pool.goalSpec),
     verifier: checks.verifier,

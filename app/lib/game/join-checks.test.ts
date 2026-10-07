@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  accessGateDisabled,
   approvalModeOf,
   challengeCreateBlock,
   gateStateOf,
@@ -32,8 +31,11 @@ describe("gateStateOf", () => {
     expect(gateStateOf(gate({ gate: true }))).toBe("passed");
   });
 
-  it("passes everyone only when the test-suite switch is on", () => {
+  it("passes everyone when the gate is switched off (open beta, and the suite)", () => {
     expect(gateStateOf(gate({ gateDisabled: true }))).toBe("passed");
+    expect(
+      gateStateOf(gate({ gateDisabled: true, access: { status: "denied", loading: false, error: false } })),
+    ).toBe("passed");
   });
 
   it("refuses a wallet that never asked", () => {
@@ -63,21 +65,6 @@ describe("gateStateOf", () => {
     expect(gateStateOf(gate({ access: { status: "none", loading: false, error: true } }))).toBe(
       "error",
     );
-  });
-});
-
-describe("accessGateDisabled", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it("is off unless the suite switch is exactly 1", () => {
-    vi.stubEnv("NEXT_PUBLIC_ACCESS_GATE_DISABLED", "");
-    expect(accessGateDisabled()).toBe(false);
-    vi.stubEnv("NEXT_PUBLIC_ACCESS_GATE_DISABLED", "true");
-    expect(accessGateDisabled()).toBe(false);
-    vi.stubEnv("NEXT_PUBLIC_ACCESS_GATE_DISABLED", "1");
-    expect(accessGateDisabled()).toBe(true);
   });
 });
 
@@ -229,5 +216,33 @@ describe("payoutPathOf", () => {
     expect(payoutPathOf({ approvalMode: "loading", humanProof: "list" })).toBeNull();
     expect(payoutPathOf({ approvalMode: "error", humanProof: "list" })).toBeNull();
     expect(payoutPathOf({ approvalMode: "world", humanProof: null })).toBe("world");
+  });
+
+  // Open beta (Andre and Nikki, 2026-10-07): a wallet that skipped World ID
+  // is paid on the verdict, like a list player was. Only a World-verified
+  // player reads the World ID line. With the flag off an unproven wallet
+  // still reads "world", as above.
+  describe("in open beta", () => {
+    it("pays a wallet that skipped World ID on the verdict", () => {
+      for (const approvalMode of ["world", "mock", "misconfigured"] as const) {
+        expect(payoutPathOf({ approvalMode, humanProof: null, openBeta: true })).toBe("verdict");
+      }
+    });
+
+    it("still asks a World-verified player to confirm", () => {
+      expect(payoutPathOf({ approvalMode: "world", humanProof: "world", openBeta: true })).toBe("world");
+      expect(payoutPathOf({ approvalMode: "mock", humanProof: "world", openBeta: true })).toBe("world");
+    });
+
+    it("still waits while the mode is being read, and pays on the verdict with the confirmation off", () => {
+      expect(payoutPathOf({ approvalMode: "loading", humanProof: null, openBeta: true })).toBeNull();
+      expect(payoutPathOf({ approvalMode: "error", humanProof: null, openBeta: true })).toBeNull();
+      expect(payoutPathOf({ approvalMode: "off", humanProof: "world", openBeta: true })).toBe("verdict");
+    });
+
+    it("changes nothing with the flag off (regression)", () => {
+      expect(payoutPathOf({ approvalMode: "world", humanProof: null, openBeta: false })).toBe("world");
+      expect(payoutPathOf({ approvalMode: "world", humanProof: "list", openBeta: false })).toBe("verdict");
+    });
   });
 });

@@ -14,6 +14,14 @@
 // and a player without a wearable can browse the lobby and sees every wearable
 // run locked with "pair your wearable" as the fix. Making them hard would be a new
 // wall, which is the thing this module exists to remove.
+//
+// Open beta (Andre and Nikki, 2026-10-07; lib/open-beta.ts): one hard step,
+// sign-in. World ID is a soft step with a skip: a player who verifies keeps
+// the "one human, one entry" badge and the World ID payout confirmation; a
+// player who skips it still claims a name, joins, and is paid on the verdict.
+// The closed-beta list proves nothing any more (an old list player, or an
+// admin, is an ordinary player here; isAdmin stays on access for /admin). Every
+// branch below is on `openBeta === true`; absent, the closed beta holds.
 
 import type { AccessSource, AccessStatus } from "@/lib/useAccess";
 import type { LaneAvailability } from "@/lib/game/lanes";
@@ -48,10 +56,11 @@ export interface Character {
 /**
  * Ready to enter a run: a verified human with a paired sensor. The name is
  * deliberately NOT required; it is how friends find you, not what makes a claim
- * verifiable, and requiring it would put a wall in front of the stake.
+ * verifiable, and requiring it would put a wall in front of the stake. In open
+ * beta the sensor alone is enough: World ID is optional.
  */
-export function isReadyToPlay(c: Character): boolean {
-  return c.human === "verified" && c.device !== null;
+export function isReadyToPlay(c: Character, openBeta = false): boolean {
+  return (openBeta || c.human === "verified") && c.device !== null;
 }
 
 // ------------------------------------------------------------------ sensor
@@ -137,13 +146,15 @@ export type StepState =
   | { status: "locked"; note: string };
 
 /** Shown on step 3 while World is on and step 2 is not done. The server
- *  refuses the claim with the same line (lib/server/ens/human-gate.ts). */
+ *  refuses the claim with the same line (lib/server/ens/human-gate.ts). Never
+ *  shown in open beta: names are capped per wallet there, not per human. */
 export const NAME_LOCKED_NOTE = "Prove you are one human first, then pick your name.";
 
 /** Shown on step 3 to a player who got in through the list while World is
  *  on: names are minted one per World ID human (lib/server/ens/human-gate.ts),
  *  so the list alone does not carry one. Optional; they play under their
- *  short wallet address, and step 2 offers World ID for it. */
+ *  short wallet address, and step 2 offers World ID for it. Never shown in
+ *  open beta, where there is no list and a name needs no World ID. */
 export const NAME_NEEDS_WORLD_NOTE =
   "Names come with World ID, one per human. Add World ID in step 2 to pick one.";
 
@@ -172,6 +183,8 @@ export interface CharacterInputs {
   /** The existing off-chain @handle, the name fallback when ENS is off. */
   handle: string | null;
   sensor: SensorRead;
+  /** openBeta() (lib/open-beta.ts). Absent reads false: the closed beta. */
+  openBeta?: boolean;
 }
 
 export function humanModeOf(i: CharacterInputs): HumanMode {
@@ -190,11 +203,15 @@ export function nameModeOf(i: CharacterInputs): NameMode {
  * approved list player used to get in and then find every challenge locked
  * "prove you are one human". The server agrees (lib/server/world/
  * require-human.ts). World stays the self-serve way in.
+ *
+ * In open beta only World ID proves a human: the list and the admin proofs
+ * retire, so an old list player or an admin is an ordinary player.
  */
 export function humanProofOf(i: CharacterInputs): HumanProof | null {
   if (i.world.lane === "on" && i.world.human === "verified") return "world";
   // A binding World made before a pause, admins included.
   if (i.access.status === "approved" && i.access.source === "world") return "world";
+  if (i.openBeta === true) return null;
   if (i.access.isAdmin) return "admin";
   if (i.access.status === "approved") return "list";
   return null;
@@ -205,19 +222,41 @@ export function humanProofOf(i: CharacterInputs): HumanProof | null {
  * allowlist entry, or a World-verified human. This is the same bar the
  * closed-beta gate used, with World as the self-serve way past it, so a
  * deployment without the World lane behaves exactly as V3 did (no new dead
- * end, and no dev-only skip).
+ * end, and no dev-only skip). In open beta, signed in is the whole gate.
  */
 export function gatePassed(i: CharacterInputs): boolean {
   if (!i.authenticated || i.address === null) return false;
+  if (i.openBeta === true) return true;
   if (i.access.isAdmin || i.access.status === "approved") return true;
   return i.world.lane === "on" && i.world.human === "verified";
 }
 
+const VERIFIED_SUMMARY = "Verified human, one entry per challenge";
+
+/** Step 2 in open beta: optional, World ID alone, never the list. */
+function openBetaHumanStep(i: CharacterInputs): StepState {
+  if (i.world.lane === "loading") return { status: "loading" };
+  if (i.world.lane === "on") {
+    if (i.world.human === "verified") return { status: "done", summary: VERIFIED_SUMMARY };
+    if (i.world.human === "unknown") return { status: "loading" };
+    return { status: "todo" };
+  }
+  // A binding World made before a pause still counts (humanProofOf).
+  if (i.access.status === "approved" && i.access.source === "world") {
+    return { status: "done", summary: VERIFIED_SUMMARY };
+  }
+  if (i.world.lane === "error") {
+    return { status: "error", note: "SPOTTER could not reach World ID just now." };
+  }
+  return { status: "off", note: "World ID is not switched on for this build." };
+}
+
 function humanStep(i: CharacterInputs): StepState {
+  if (i.openBeta === true) return openBetaHumanStep(i);
   if (i.world.lane === "loading") return { status: "loading" };
   if (i.world.lane === "on") {
     if (i.world.human === "verified") {
-      return { status: "done", summary: "Verified human, one entry per challenge" };
+      return { status: "done", summary: VERIFIED_SUMMARY };
     }
     // The list is a way in on a World-on build too, and it counts as the
     // human step (humanProofOf): nothing re-asks an admin or an approved
@@ -236,7 +275,7 @@ function humanStep(i: CharacterInputs): StepState {
   // allowlist is the step, exactly as it worked before V4. A World binding made
   // before a pause still reads as one (humanProofOf).
   if (i.access.status === "approved" && i.access.source === "world") {
-    return { status: "done", summary: "Verified human, one entry per challenge" };
+    return { status: "done", summary: VERIFIED_SUMMARY };
   }
   if (i.access.isAdmin) return { status: "done", summary: "Admin" };
   if (i.access.loading) return { status: "loading" };
@@ -259,6 +298,9 @@ function nameStep(i: CharacterInputs): StepState {
   if (i.ens.lane === "loading") return { status: "loading" };
   if (i.ens.lane === "on") {
     if (i.ens.name !== null) return { status: "done", summary: i.ens.name };
+    // Open beta: a name needs no World ID (capped per wallet server-side), so
+    // neither World lock below applies.
+    if (i.openBeta === true) return { status: "todo" };
     // Names cost GoHealthMe gas, so the server mints one only for a World
     // verified human while World is on. Say so here, before any signature.
     if (i.world.lane === "loading") return { status: "loading" };
@@ -317,26 +359,34 @@ export function characterSteps(i: CharacterInputs): Record<StepId, StepState> {
 /** Hard steps must be done before anything else renders. */
 export const HARD_STEPS: StepId[] = ["sign-in", "human"];
 
+/** In open beta, sign-in is the one hard step; World ID is soft. */
+const OPEN_BETA_HARD_STEPS: StepId[] = ["sign-in"];
+
 /**
  * The step character creation should show, or null when there is nothing to
  * show. Hard steps come first and cannot be skipped. Soft steps are an
  * onboarding pass shown once, on the device where the player is made (see
  * creationBlocks): after the player finishes or skips
  * them (`onboarded`), creation never interrupts again and the lobby carries
- * any lock that is left, with its fix, on the run it affects.
+ * any lock that is left, with its fix, on the run it affects. In open beta
+ * the pass visits World ID in its natural second place, skippable, and walks
+ * past it on a World-off build ("off") without asking.
  */
 export function currentStep(
   steps: Record<StepId, StepState>,
   gate: boolean,
   skipped: ReadonlySet<StepId>,
   onboarded: boolean,
+  openBeta = false,
 ): StepId | null {
   if (steps["sign-in"].status !== "done") return "sign-in";
   if (!gate) return "human";
   if (onboarded) return null;
+  const hard = openBeta ? OPEN_BETA_HARD_STEPS : HARD_STEPS;
   for (const id of STEP_ORDER) {
-    if (HARD_STEPS.includes(id)) continue;
-    if (steps[id].status === "done" || steps[id].status === "locked" || skipped.has(id)) continue;
+    if (hard.includes(id)) continue;
+    const status = steps[id].status;
+    if (status === "done" || status === "locked" || status === "off" || skipped.has(id)) continue;
     return id;
   }
   // Safety net: a passed gate with step 2 still to do is offered once,
@@ -387,9 +437,10 @@ export function creationBlocks(g: {
 }
 
 /** The character the rest of the app reads. A proven human by World ID, the
- *  list or the admin allowlist (humanProofOf); "unknown" while a read that
- *  could still prove it is in flight, so the join holds on a skeleton instead
- *  of flashing "prove you are one human" at a list player. */
+ *  list or the admin allowlist (humanProofOf; World ID alone in open beta);
+ *  "unknown" while a read that could still prove it is in flight, so the join
+ *  holds on a skeleton instead of flashing "prove you are one human" at a
+ *  list player. */
 export function characterOf(i: CharacterInputs): Character | null {
   if (!i.authenticated || i.address === null) return null;
   const humanProof = humanProofOf(i);

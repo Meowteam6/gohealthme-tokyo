@@ -31,7 +31,8 @@ export type { MoneyInState };
 export type RunLock =
   | { kind: "sign-in" }
   /** World is on for this build and this player has not proven they are one
-   *  human. One human, one entry is checked at the join, so it is shown here. */
+   *  human. One human, one entry is checked at the join, so it is shown here.
+   *  Never in open beta, where World ID is optional. */
   | { kind: "not-human" }
   | { kind: "no-sensor" }
   /** A wallet is connected and SPOTTER has not looked at the sensor this
@@ -47,7 +48,9 @@ export type RunLock =
    *  hardware, and it clears on its own. */
   | { kind: "outage" }
   /** Signed in, World is not how this player got in, and the closed-beta list
-   *  has not approved them. Ordered after not-human. */
+   *  has not approved them. Ordered after not-human. In open beta the gate
+   *  answers "passed" for everyone (gateStateOf), so this only ever shows on
+   *  an explicit refusal: fail closed. */
   | { kind: "not-approved"; pending: boolean }
   /** An upload-proof run while SPOTTER's document checker is off for this
    *  build. The run stays visible (a dare link must never just vanish); the
@@ -107,6 +110,9 @@ export interface RunSlotInput {
   /** World proof-of-human for this build. */
   worldLane: HumanLane;
   humanVerified: boolean;
+  /** openBeta() (lib/open-beta.ts): World ID is optional, so not-human and a
+   *  failed World read never lock. Absent reads false. */
+  openBeta?: boolean;
   /** The closed-beta gate for this wallet. */
   gate: GateState;
   /** True when the run's proof floor is an upload (document or photo), which
@@ -164,7 +170,8 @@ function locked(lock: RunLock): RunSlot {
  *  4. Nobody signed in.
  *  5. The device can never measure this goal (a hardware fact, not a delay).
  *  6. The provider is down (clears on its own).
- *  7. Not proven human (World on).
+ *  7. Not proven human (World on). Not in open beta: World ID is optional
+ *     there, and a wallet that skipped it is paid on the verdict.
  *  8. Not on the closed-beta list. A list player or an admin is not held
  *     for World ID: SPOTTER pays them on the verdict (Andre, 2026-10-02).
  *  9. No sensor, then sensor not checked this visit.
@@ -209,13 +216,17 @@ export function runSlotOf(input: RunSlotInput): RunSlot {
   }
   if (block.kind === "outage") return { kind: "locked", lock: { kind: "outage" } };
 
+  // The skeleton holds for every build while the World read is in flight, so
+  // the payout note beside the stake never guesses who confirms with World ID.
   if (input.worldLane === "loading") return CHECKING;
-  if (input.worldLane === "error") return locked({ kind: "check-failed", check: "human" });
-  if (input.worldLane === "on" && !input.humanVerified) {
-    // The list proves a human too (humanProofOf): with its read failed, the
-    // player may well be on it, so that is a retry, not a World ID ask.
-    if (input.gate === "error") return locked({ kind: "check-failed", check: "access" });
-    return { kind: "locked", lock: { kind: "not-human" } };
+  if (input.openBeta !== true) {
+    if (input.worldLane === "error") return locked({ kind: "check-failed", check: "human" });
+    if (input.worldLane === "on" && !input.humanVerified) {
+      // The list proves a human too (humanProofOf): with its read failed, the
+      // player may well be on it, so that is a retry, not a World ID ask.
+      if (input.gate === "error") return locked({ kind: "check-failed", check: "access" });
+      return { kind: "locked", lock: { kind: "not-human" } };
+    }
   }
 
   if (input.gate === "loading") return CHECKING;
@@ -449,6 +460,8 @@ export interface LobbyInput {
   uploadAvailable: boolean;
   worldLane: HumanLane;
   humanVerified: boolean;
+  /** openBeta() (lib/open-beta.ts); absent reads false. See RunSlotInput. */
+  openBeta?: boolean;
   deviceLabel: string | null;
 }
 
@@ -510,6 +523,7 @@ export function buildLobby(input: LobbyInput): Lobby {
         joinBlock,
         worldLane: input.worldLane,
         humanVerified: input.humanVerified,
+        openBeta: input.openBeta,
         gate: input.gate,
         needsDocumentVerifier: needsDocumentVerifier(pool.goalSpec),
         verifier: input.verifier,

@@ -23,6 +23,9 @@
 //   off   Prove-human is not enabled on this deployment. Said plainly; the
 //         closed-beta allowlist keeps working, so nobody is stuck here.
 //
+// In open beta (lib/open-beta.ts) the step is optional, so the heading and
+// the lead offer the one human, one entry badge instead of stating the rule.
+//
 // Nothing about the person is shown or stored beyond the wallet address and
 // World's nullifier; the nullifier is never rendered.
 
@@ -48,6 +51,7 @@ import {
 } from "@/lib/world/credentials";
 import { idkitErrorView } from "@/lib/world/idkit-errors";
 import { buildMockProof } from "@/lib/world/mock-proof";
+import { openBeta } from "@/lib/open-beta";
 
 // The only import of @worldcoin/idkit lives in the host; it pulls the SDK's
 // WASM and must never render on the server.
@@ -312,7 +316,11 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
       className="rounded-card bg-[linear-gradient(180deg,var(--surface-top)_0%,var(--surface)_120px)] px-4 py-[18px] shadow-card min-[960px]:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="type-heading m-0 text-[1.75rem] text-balance">Prove you&apos;re one human.</h2>
+        {/* Open beta (lib/open-beta.ts): a player who skips still plays, so
+            the card offers the badge and never states the rule as the rule. */}
+        <h2 className="type-heading m-0 text-[1.75rem] text-balance">
+          {openBeta() ? "Add World ID." : "Prove you're one human."}
+        </h2>
         {/* A player sees a chip only when the proof is not the real thing:
             mocked on a dev or preview build, or World's test network. The
             real World ID needs no label. */}
@@ -323,8 +331,9 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
         ) : null}
       </div>
       <p className="mt-2 text-sm text-muted">
-        One human, one entry. World ID checks that you are a person, not who you
-        are. GoHealthMe never sees your name, and World never sees your health data.
+        {openBeta() ? "The one human, one entry badge. " : "One human, one entry. "}
+        World ID checks that you are a person, not who you are. GoHealthMe never
+        sees your name, and World never sees your health data.
       </p>
 
       {phase.kind === "loading" ? (
@@ -350,7 +359,10 @@ export default function ProveHuman({ address, onVerified, onFailed }: ProveHuman
             Prove-human is not enabled on this deployment.
           </p>
           <p className="mt-1 text-sm text-muted">
-            {phase.problem ?? "It is not switched on for this build, so this step is skipped and the closed-beta list decides who can play."}
+            {phase.problem ??
+              (openBeta()
+                ? "It is not switched on for this build, so this step is skipped."
+                : "It is not switched on for this build, so this step is skipped and the closed-beta list decides who can play.")}
           </p>
         </div>
       ) : null}

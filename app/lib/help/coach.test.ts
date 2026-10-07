@@ -95,6 +95,48 @@ describe("resolveCoachStep follows character creation", () => {
   });
 });
 
+// Open beta (lib/open-beta.ts): World ID is optional, so the human step is
+// skippable like a name or a sensor, and the coach never routes a player who
+// skipped it back to step 2. With the flag off the step stays hard.
+describe("resolveCoachStep in open beta", () => {
+  it("still surfaces a todo human step, as an optional one", () => {
+    const step = resolveCoachStep({ ...inputs({ human: TODO, name: TODO }), openBeta: true });
+    expect(step.id).toBe("proveHuman");
+    expect(step.index).toBe(1);
+  });
+
+  it("walks past a skipped human step", () => {
+    const skipped = new Set<StepId>(["human"]);
+    expect(
+      resolveCoachStep({ ...inputs({ human: TODO, name: TODO }), skipped, openBeta: true }).id,
+    ).toBe("pickName");
+    expect(
+      resolveCoachStep({ ...inputs({ human: TODO }), skipped, openBeta: true }).id,
+    ).toBe("enterRun");
+  });
+
+  it("flag off: a skipped human step is still the human step", () => {
+    const skipped = new Set<StepId>(["human"]);
+    for (const flag of [{}, { openBeta: false }] as const) {
+      expect(
+        resolveCoachStep({ ...inputs({ human: TODO }), skipped, ...flag }).id,
+      ).toBe("proveHuman");
+    }
+  });
+
+  it("holds on a loading human step and carries a World read error", () => {
+    expect(
+      resolveCoachStep({ ...inputs({ human: { status: "loading" } }), openBeta: true }).loading,
+    ).toBe(true);
+    expect(
+      resolveCoachStep({
+        ...inputs({ human: { status: "error", note: "World did not answer" } }),
+        openBeta: true,
+      }).error,
+    ).toBe("World did not answer");
+  });
+});
+
 describe("coach copy", () => {
   it("labels the human step by how this build runs it", () => {
     expect(coachChecklist("world")[1].label).toBe("Prove you are human");
@@ -138,5 +180,43 @@ describe("coach copy", () => {
     }
     expect(coachChecklist("world")[4].label).toBe("Join a challenge");
     expect(coachCopy("enterRun", "world").secondary).toBe("Start a challenge");
+  });
+});
+
+describe("coach copy in open beta", () => {
+  it("says the human step is optional and offers the same skip as character creation", () => {
+    for (const mode of ["world", "allowlist"] as const) {
+      const copy = coachCopy("proveHuman", mode, true);
+      expect(copy.headline).toBe("World ID, optional");
+      expect(copy.body).toBe("Optional. Scan once for the one human, one entry badge, or skip it.");
+      expect(copy.primary).toBe("Prove I am human");
+      expect(copy.secondary).toBe("Skip for now");
+    }
+  });
+
+  it("flag off: the human step has no skip", () => {
+    expect(coachCopy("proveHuman", "world").secondary).toBeUndefined();
+    expect(coachCopy("proveHuman", "world", false).secondary).toBeUndefined();
+    expect(coachCopy("proveHuman", "allowlist").primary).toBe("Ask for a spot");
+  });
+
+  it("never labels the human row by the list, which is gone", () => {
+    expect(coachChecklist("world", true)[1].label).toBe("Prove you are human");
+    expect(coachChecklist("allowlist", true)[1].label).toBe("Prove you are human");
+    expect(coachChecklist("allowlist", false)[1].label).toBe("Get your spot");
+  });
+
+  it("keeps the voice: no exclamation, no run, pool or dare", () => {
+    const actions: CoachAction[] = ["signIn", "proveHuman", "pickName", "pairSensor", "enterRun"];
+    for (const mode of ["world", "allowlist"] as const) {
+      for (const row of coachChecklist(mode, true)) {
+        expect(row.label).not.toMatch(/!|\b(runs?|pools?|dares?)\b/i);
+      }
+      for (const id of actions) {
+        const copy = coachCopy(id, mode, true);
+        const text = `${copy.headline} ${copy.body} ${copy.primary ?? ""} ${copy.secondary ?? ""}`;
+        expect(text).not.toMatch(/!|\b(runs?|pools?|dares?)\b/i);
+      }
+    }
   });
 });

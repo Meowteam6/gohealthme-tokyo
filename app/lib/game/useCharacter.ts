@@ -39,6 +39,7 @@ import {
 } from "@/lib/game/character";
 import { parseEnsName } from "@/lib/game/lanes";
 import { useLaneProbe } from "@/lib/game/useLaneProbe";
+import { openBeta } from "@/lib/open-beta";
 
 export interface CharacterView {
   ready: boolean;
@@ -49,6 +50,9 @@ export interface CharacterView {
   gate: boolean;
   /** True while the hard gate is still being evaluated. */
   gateLoading: boolean;
+  /** openBeta() (lib/open-beta.ts): World ID is optional and the gate is
+   *  sign-in alone. Optional so older fixtures type; absent reads false. */
+  openBeta?: boolean;
   humanMode: HumanMode;
   nameMode: NameMode;
   worldLane: CharacterInputs["world"]["lane"];
@@ -127,8 +131,10 @@ export function useCharacter(): CharacterView {
   }, [queryClient, requestAuth]);
 
   const human: HumanStatus = humanHook.status;
+  const open = openBeta();
 
   const inputs: CharacterInputs = {
+    openBeta: open,
     ready,
     authenticated,
     address,
@@ -180,6 +186,7 @@ export function useCharacter(): CharacterView {
     steps,
     gate,
     gateLoading,
+    openBeta: open,
     humanMode: humanModeOf(inputs),
     nameMode: nameModeOf(inputs),
     worldLane,

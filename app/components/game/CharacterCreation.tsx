@@ -11,7 +11,9 @@
 // The World, ENS and sensor steps mount the other lanes' components through
 // their contracts (docs/LANES.md) and never assume the lane is on: a lane that
 // is not on this build is said plainly and walked past, and with World off the
-// allowlist request is the way in, exactly as before V4.
+// allowlist request is the way in, exactly as before V4. In open beta
+// (lib/open-beta.ts) step 2 is optional: the row title says so, then one
+// line, the scan, and a skip, with no list anywhere.
 
 import { useState, type ReactNode } from "react";
 import ProveHuman from "@/components/world/ProveHuman";
@@ -46,12 +48,23 @@ const TITLE: Record<StepId, string> = {
   sensor: "Pair your wearable",
 };
 
+/** Step 2's row title is an order with the flag off; in open beta it is an
+ *  offer, said in the title itself, not only in a muted line below it. */
+const OPEN_BETA_HUMAN_TITLE = "World ID, optional";
+
+function titleOf(id: StepId, openBeta: boolean): string {
+  return id === "human" && openBeta ? OPEN_BETA_HUMAN_TITLE : TITLE[id];
+}
+
 const SPOTTER_LINE: Record<StepId, string> = {
   "sign-in": "Email in, wallet out. I do the crypto part.",
   human: "One human, one entry. No bots, no twins.",
   name: "Your friends should see a name on the board, not 0x-something.",
   sensor: "I read your wearable, so show me what it can see. The contract pays on what it says.",
 };
+
+/** Step 2 is optional in open beta, and SPOTTER says so. */
+const OPEN_BETA_HUMAN_LINE = "Scan once for the one human, one entry badge, or skip it.";
 
 const SCENE: Record<StepId, SpotterScreenState> = {
   "sign-in": "onboarding-welcome",
@@ -67,10 +80,10 @@ const DONE_LINE = "That is your player. Every challenge reads this card.";
  *  pose changes with the step. */
 const FIGURE_HEIGHT: StageWidth = [124, 188];
 
-function sceneOf(step: StepId | null): { state: SpotterScreenState; line: string } {
-  return step !== null
-    ? { state: SCENE[step], line: SPOTTER_LINE[step] }
-    : { state: "onboarding-welcome", line: DONE_LINE };
+function sceneOf(step: StepId | null, openBeta: boolean): { state: SpotterScreenState; line: string } {
+  if (step === null) return { state: "onboarding-welcome", line: DONE_LINE };
+  const line = step === "human" && openBeta ? OPEN_BETA_HUMAN_LINE : SPOTTER_LINE[step];
+  return { state: SCENE[step], line };
 }
 
 function StatusText({
@@ -138,6 +151,80 @@ function HumanBody({
   if (address === null) return null;
   const state = view.steps.human;
   const proof = view.character?.humanProof ?? null;
+
+  if (view.openBeta === true) {
+    // Open beta: World ID is optional. One line, the scan, and a skip. Never
+    // the list request, the pending notice, or "ask for a spot on the list".
+    if (state.status === "done") {
+      return (
+        <Notice tone="ok" title={state.summary}>
+          It covers every challenge you enter.
+        </Notice>
+      );
+    }
+    if (state.status === "loading") {
+      return <p className="m-0 text-[0.9375rem] text-muted">Checking your World ID.</p>;
+    }
+    // Before the lane check: a lane in "error" is also not "on", and the
+    // read that failed gets a retry, not "not switched on".
+    if (state.status === "error") {
+      return (
+        <div className="[&>*+*]:mt-3">
+          <Notice
+            tone="limit"
+            live
+            action={
+              <Button type="button" variant="secondary" size="sm" onClick={() => view.refresh()}>
+                Check again
+              </Button>
+            }
+          >
+            {state.note}
+          </Notice>
+          {onSkip !== undefined ? <SkipLink onSkip={onSkip} /> : null}
+        </div>
+      );
+    }
+    if (view.worldLane !== "on") {
+      return (
+        <div className="[&>*+*]:mt-3">
+          <p className="m-0 text-[0.9375rem] text-muted">
+            {switches.worldPaused
+              ? "World ID is paused for now. You can play without it."
+              : "World ID is not switched on for this build. You can play without it."}
+          </p>
+          {onSkip !== undefined ? <SkipLink onSkip={onSkip} /> : null}
+        </div>
+      );
+    }
+    return (
+      <div className="[&>*+*]:mt-3">
+        <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
+          Optional. Verify with World ID to carry the one human, one entry badge.
+        </p>
+        {confirmsWithWorld ? (
+          // Money changes where the message appears: said before the scan.
+          <p className="m-0 text-[0.9375rem] leading-[1.5] text-muted">
+            After that, you confirm each payout with World ID before it moves.
+          </p>
+        ) : null}
+        <ProveHuman
+          address={address}
+          onVerified={() => {
+            setFailure(null);
+            view.refresh();
+          }}
+          onFailed={(reason) => setFailure(reason)}
+        />
+        {failure !== null ? (
+          <Notice tone="error" live>
+            {failure} Nothing was recorded. You can try the scan again.
+          </Notice>
+        ) : null}
+        {onSkip !== undefined ? <SkipLink onSkip={onSkip} /> : null}
+      </div>
+    );
+  }
 
   if (view.humanMode === "world" && !useList) {
     if (state.status === "done" && proof !== "admin" && proof !== "list") {
@@ -375,17 +462,19 @@ export default function CharacterCreation({
   above?: ReactNode;
 }) {
   const [picked, setPicked] = useState<StepId | null>(null);
+  const openBeta = view.openBeta === true;
   const current = currentStep(
     view.steps,
     view.gate,
     onboarding.skipped,
     mode === "page" ? false : onboarding.done,
+    openBeta,
   );
   const hardOpen = current === "sign-in" || (current === "human" && !view.gate);
   // Hard steps cannot be bypassed by picking another row.
   const open: StepId | null = hardOpen ? current : (picked ?? focus ?? current);
   const signedIn = view.steps["sign-in"].status === "done";
-  const scene = sceneOf(open);
+  const scene = sceneOf(open, openBeta);
   const pose = poseFor(scene.state).pose;
   const meta = poseMeta(pose);
   const figure: StageWidth = [
@@ -433,7 +522,7 @@ export default function CharacterCreation({
               <span className="min-w-0 flex-1">
                 <span className="block break-words text-[1.0625rem] font-semibold leading-tight text-foreground">
                   <span className="sr-only">Step {index + 1}: </span>
-                  {TITLE[id]}
+                  {titleOf(id, openBeta)}
                 </span>
                 <span className="mt-0.5 block truncate text-sm">
                   <StatusText state={state} skipped={onboarding.skipped.has(id)} />

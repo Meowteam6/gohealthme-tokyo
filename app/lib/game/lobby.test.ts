@@ -326,6 +326,58 @@ describe("runSlotOf", () => {
     });
   });
 
+  // Open beta (Andre and Nikki, 2026-10-07): World ID is optional, so a
+  // wallet that skipped it is never locked on not-human, and a failed World
+  // read is not a lock either. The skeleton while the read is in flight stays
+  // (the payout note waits on it), and the sensor locks and an explicit list
+  // refusal still hold: fail closed.
+  describe("in open beta", () => {
+    it("never locks a wallet that skipped World ID", () => {
+      expect(runSlotOf(input({ openBeta: true, worldLane: "on", humanVerified: false }))).toEqual({
+        kind: "playable",
+      });
+      expect(
+        runSlotOf(input({ openBeta: true, worldLane: "on", joinBlock: { kind: "ok", proof: "upload" } })),
+      ).toEqual({ kind: "playable", proof: "upload" });
+    });
+
+    it("plays through a failed World read", () => {
+      expect(runSlotOf(input({ openBeta: true, worldLane: "error" }))).toEqual({ kind: "playable" });
+    });
+
+    it("still holds the skeleton while the World read is in flight", () => {
+      expect(runSlotOf(input({ openBeta: true, worldLane: "loading" }))).toEqual({ kind: "checking" });
+    });
+
+    it("keeps the sensor locks and an explicit list refusal", () => {
+      expect(runSlotOf(input({ openBeta: true, worldLane: "on", joinBlock: { kind: "no-device" } }))).toEqual({
+        kind: "locked",
+        lock: { kind: "no-sensor" },
+      });
+      expect(runSlotOf(input({ openBeta: true, gate: "not-approved" }))).toEqual({
+        kind: "locked",
+        lock: { kind: "not-approved", pending: false },
+      });
+      expect(runSlotOf(input({ openBeta: true, worldLane: "on", gate: "error" }))).toEqual({
+        kind: "locked",
+        lock: { kind: "check-failed", check: "access" },
+      });
+    });
+
+    it("changes nothing with the flag off or absent (regression)", () => {
+      for (const flag of [{}, { openBeta: false }] as const) {
+        expect(runSlotOf(input({ ...flag, worldLane: "on" }))).toEqual({
+          kind: "locked",
+          lock: { kind: "not-human" },
+        });
+        expect(runSlotOf(input({ ...flag, worldLane: "error" }))).toEqual({
+          kind: "locked",
+          lock: { kind: "check-failed", check: "human" },
+        });
+      }
+    });
+  });
+
   describe("creatorMoneyInOf", () => {
     const CREATOR = "0x00000000000000000000000000000000000000Aa";
     it("is the challenge's creator with money already in its pot", () => {
@@ -792,6 +844,14 @@ describe("buildLobby", () => {
       lobbyInput({ pools: [pool(1), pool(2)], viewerMetrics: null, needsDevice: true }),
     );
     expect(lobby.open.every((r) => r.slot.kind === "locked")).toBe(true);
+  });
+
+  it("offers every challenge to a wallet that skipped World ID in open beta, and locks it otherwise", () => {
+    const skipped = { worldLane: "on" as const, humanVerified: false };
+    const open = buildLobby(lobbyInput({ pools: [pool(1), pool(2)], ...skipped, openBeta: true }));
+    expect(open.open.map((r) => r.slot)).toEqual([{ kind: "playable" }, { kind: "playable" }]);
+    const closed = buildLobby(lobbyInput({ pools: [pool(1)], ...skipped }));
+    expect(closed.open[0].slot).toEqual({ kind: "locked", lock: { kind: "not-human" } });
   });
 });
 

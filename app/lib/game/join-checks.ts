@@ -18,16 +18,10 @@ import type { AccessStatus } from "@/lib/useAccess";
 import type { HumanProof, HumanStatus } from "@/lib/game/character";
 import { challengeCreatePausedDetail, type MoneyInState } from "@/lib/switches";
 
-/**
- * The closed-beta gate is off only for the Playwright suite
- * (playwright.config.ts). The same flag AccessGate and the server's isAllowed
- * read, so the three agree. Never set on a deployed environment.
- */
-export function accessGateDisabled(): boolean {
-  return process.env.NEXT_PUBLIC_ACCESS_GATE_DISABLED === "1";
-}
-
 export interface GateInputs {
+  /** openBeta() (lib/open-beta.ts): the closed-beta gate is off for everyone.
+   *  The same reader AccessGate and the server's isAllowed use, so the three
+   *  agree. */
   gateDisabled: boolean;
   /** gatePassed() from lib/game/character.ts. */
   gate: boolean;
@@ -40,7 +34,8 @@ export interface GateInputs {
 /**
  * Where this wallet stands on the closed-beta gate. /c/<token> is a public
  * path, so AccessGate never runs there: this is what keeps an unapproved
- * wallet from staking into a dare it then cannot open.
+ * wallet from staking into a dare it then cannot open. In open beta every
+ * wallet passes, before any list read.
  */
 export function gateStateOf(i: GateInputs): GateState {
   if (i.gateDisabled || i.gate) return "passed";
@@ -144,16 +139,21 @@ export type PayoutPath = "world" | "verdict";
  * World ID wherever the confirmation is switched on; a list player or an
  * admin is paid on the verdict, whatever the build; with the confirmation off
  * everyone is. A wallet that is not proven human reads "world", never the
- * verdict, though the join never lets it stake. Null while the mode is still
- * being read or its read failed: copy waits rather than guessing.
+ * verdict, though the join never lets it stake. In open beta (2026-10-07)
+ * that wallet does stake, and is paid on the verdict: only a World-verified
+ * player reads the World ID line. Null while the mode is still being read or
+ * its read failed: copy waits rather than guessing.
  */
 export function payoutPathOf(i: {
   approvalMode: ApprovalModeView;
   humanProof: HumanProof | null;
+  /** openBeta() (lib/open-beta.ts); absent reads false. */
+  openBeta?: boolean;
 }): PayoutPath | null {
   if (i.approvalMode === "loading" || i.approvalMode === "error") return null;
   if (i.approvalMode === "off") return "verdict";
   if (i.humanProof === "list" || i.humanProof === "admin") return "verdict";
+  if (i.openBeta === true && i.humanProof !== "world") return "verdict";
   return "world";
 }
 

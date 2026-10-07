@@ -158,18 +158,22 @@ function Checklist({ step, rows }: { step: CoachStep; rows: ChecklistRow[] }) {
 function CoachTab({
   step,
   humanMode,
+  openBeta,
   onPrimary,
   onSecondary,
   onRetry,
 }: {
   step: CoachStep;
   humanMode: HumanMode;
+  /** openBeta() (lib/open-beta.ts): World ID is optional, so the human step
+   *  reads as optional and carries a skip. */
+  openBeta: boolean;
   onPrimary: () => void;
   onSecondary: () => void;
   onRetry: () => void;
 }) {
-  const copy = coachCopy(step.id, humanMode);
-  const rows = coachChecklist(humanMode);
+  const copy = coachCopy(step.id, humanMode, openBeta);
+  const rows = coachChecklist(humanMode, openBeta);
 
   // A failed read or an allowlist wait replaces the step's pitch with what is
   // actually going on, and the one action that can move it.
@@ -499,14 +503,18 @@ function HelperWidgetPanel() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("coach");
 
+  // The same flag character creation reads (useCharacter), so a human step
+  // the player skipped there is passed here too, never re-asked.
+  const openBeta = view.openBeta === true;
   const step = useMemo(
     () =>
       resolveCoachStep({
         steps: view.steps,
         humanMode: view.humanMode,
         skipped: onboarding.skipped,
+        openBeta,
       }),
-    [view.steps, view.humanMode, onboarding.skipped],
+    [view.steps, view.humanMode, onboarding.skipped, openBeta],
   );
 
   // Every character step is owned by /character; send the player there and
@@ -538,6 +546,11 @@ function HelperWidgetPanel() {
   const { skip } = onboarding;
   const onSecondary = useCallback(() => {
     switch (step.id) {
+      case "proveHuman":
+        // Only offered in open beta (coachCopy), where character creation
+        // records the same skip; the closed beta has no secondary here.
+        if (openBeta) skip("human");
+        break;
       case "pickName":
         // The same skip character creation records, so the two agree.
         skip("name");
@@ -553,7 +566,7 @@ function HelperWidgetPanel() {
       default:
         break;
     }
-  }, [step.id, skip, router]);
+  }, [step.id, skip, router, openBeta]);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -632,6 +645,7 @@ function HelperWidgetPanel() {
           <CoachTab
             step={step}
             humanMode={view.humanMode}
+            openBeta={openBeta}
             onPrimary={onPrimary}
             onSecondary={onSecondary}
             onRetry={view.refresh}

@@ -66,12 +66,13 @@ describe("characterStampOf", () => {
   });
 });
 
-function view(c: Character, mode: HumanMode, source: AccessSource): CharacterView {
+function view(c: Character, mode: HumanMode, source: AccessSource, openBeta?: boolean): CharacterView {
   return {
     character: c,
     humanMode: mode,
     sensor: { kind: "paired", device: { provider: "junction", label: "Oura", metrics: ["steps"] } },
     access: { source },
+    ...(openBeta === undefined ? {} : { openBeta }),
   } as unknown as CharacterView;
 }
 
@@ -90,5 +91,41 @@ describe("CharacterCard strip", () => {
     );
     expect(html).toContain("On the list");
     expect(html).not.toContain("One human");
+  });
+});
+
+// Open beta (Andre and Nikki, 2026-10-07): World ID is optional, so an
+// unproven player is offered it with a link to step 2 instead of being told
+// "Human not proven". A World binding keeps its stamp. Flag off: as before.
+describe("CharacterCard in open beta", () => {
+  const unproven = character({ human: "unverified", humanProof: null });
+
+  it("offers World ID as optional to an unproven player, linked to step 2", () => {
+    for (const variant of ["strip", "card"] as const) {
+      const html = renderToStaticMarkup(
+        createElement(CharacterCard, { view: view(unproven, "world", "none", true), variant }),
+      );
+      expect(html, variant).toContain("World ID optional");
+      expect(html, variant).toContain('href="/character?step=human"');
+      expect(html, variant).not.toContain("Human not proven");
+    }
+  });
+
+  it("keeps the One human stamp for a World-bound player", () => {
+    const html = renderToStaticMarkup(
+      createElement(CharacterCard, { view: view(character({ humanProof: "world" }), "world", "world", true), variant: "strip" }),
+    );
+    expect(html).toContain("One human");
+    expect(html).not.toContain("World ID optional");
+  });
+
+  it("still says Human not proven with the flag off or absent", () => {
+    for (const flag of [undefined, false]) {
+      const html = renderToStaticMarkup(
+        createElement(CharacterCard, { view: view(unproven, "world", "none", flag), variant: "strip" }),
+      );
+      expect(html).toContain("Human not proven");
+      expect(html).not.toContain("World ID optional");
+    }
   });
 });

@@ -711,6 +711,7 @@ export default function PoolDetail({ id }: { id: string }) {
     joinBlock,
     worldLane: checks.worldLane,
     humanVerified: checks.humanVerified,
+    openBeta: checks.openBeta,
     gate: checks.gate,
     needsDocumentVerifier: needsDocumentVerifier(pool.goalSpec),
     verifier: checks.verifier,

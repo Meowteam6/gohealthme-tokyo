@@ -30,10 +30,23 @@ function VaultIcon({ className = "" }: { className?: string }) {
   );
 }
 
+/** Who confirms before the contract pays. In open beta (lib/open-beta.ts) a
+ *  player who skipped World ID is paid on the verdict alone
+ *  (lib/server/agent/approval.ts), so the confirmation is named only for a
+ *  verified player; flag off, every player confirms. */
+function settleLine(confirm: boolean, openBeta: boolean): string {
+  if (!confirm) return "He reads your wearable's result. The contract pays.";
+  if (openBeta) {
+    return "He reads your wearable's result and the contract pays. Verified with World ID, you confirm it's you first.";
+  }
+  return "He reads your wearable's result, you confirm it's you with World ID, and the contract pays.";
+}
+
 export default function HowItPays({
   terms,
   confirm,
   missRule,
+  openBeta = false,
   initial = "hit",
 }: {
   /** The featured run's live terms, or null when none was read. */
@@ -42,6 +55,9 @@ export default function HowItPays({
   confirm: boolean;
   /** Whether any run on this build can record a miss (lib/miss-rule.ts). */
   missRule: boolean;
+  /** The open-beta switch (lib/open-beta.ts): World ID, and so the
+   *  confirmation, is optional. Absent means the closed beta. */
+  openBeta?: boolean;
   initial?: OutcomeKey;
 }) {
   const [active, setActive] = useState<OutcomeKey>(initial);
@@ -146,9 +162,7 @@ export default function HowItPays({
             <b className="font-semibold text-foreground min-[900px]:font-medium">
               Your stake sits in the challenge&apos;s contract, not with SPOTTER.
             </b>{" "}
-            {confirm
-              ? "He reads your wearable's result, you confirm it's you with World ID, and the contract pays."
-              : "He reads your wearable's result. The contract pays."}
+            {settleLine(confirm, openBeta)}
           </span>
         </p>
         {fee !== null ? (
