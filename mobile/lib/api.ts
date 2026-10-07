@@ -29,6 +29,20 @@ export class NotPairedError extends Error {
   }
 }
 
+/**
+ * Raised when the server refused a pairing code. `status` tells a code that
+ * did not work (4xx: expired, used, mistyped) from an outage (5xx), which
+ * need different lines on the screen and different retries.
+ */
+export class RedeemFailedError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "RedeemFailedError";
+    this.status = status;
+  }
+}
+
 export interface Pairing {
   deviceToken: string;
   address: string;
@@ -47,7 +61,7 @@ export async function redeemCode(code: string): Promise<Pairing> {
     body: JSON.stringify({ code }),
   });
   if (!res.ok) {
-    throw new Error(await readError(res, `pairing failed (${res.status})`));
+    throw new RedeemFailedError(await readError(res, `pairing failed (${res.status})`), res.status);
   }
   const json = (await res.json()) as { deviceToken?: unknown; address?: unknown };
   if (typeof json.deviceToken !== "string" || typeof json.address !== "string") {
