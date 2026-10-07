@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Landing from "@/components/landing/Landing";
 import { missRuleFromPoolId } from "@/lib/miss-rule";
+import { openBeta } from "@/lib/open-beta";
 import { approvalMode } from "@/lib/server/agent/approval-provider";
 import { providerConfigured } from "@/lib/server/wearable";
 import { worldSetup } from "@/lib/server/world/config";
@@ -13,9 +14,10 @@ export const metadata: Metadata = {
 
 // The landing describes THIS deployment, not the roadmap: whether the human
 // step is World ID, whether SPOTTER asks a player to confirm before it pays,
-// and which wearables can pair. A misconfigured approval mode fails closed on
-// the server (every payout holds), so the copy treats it as "confirmation on".
-// The runs themselves are read from chain in the browser (components/landing).
+// whether the beta is open (lib/open-beta.ts), and which wearables can pair.
+// A misconfigured approval mode fails closed on the server (every payout
+// holds), so the copy treats it as "confirmation on". The runs themselves are
+// read from chain in the browser (components/landing).
 function deploymentFlags() {
   const human = worldSetup().mode !== "off";
   let confirm = true;
@@ -27,6 +29,7 @@ function deploymentFlags() {
   return {
     human,
     confirm,
+    openBeta: openBeta(),
     // No cutoff, no run records a miss: the landing then promises none.
     missRule: missRuleFromPoolId() !== null,
     availability: {

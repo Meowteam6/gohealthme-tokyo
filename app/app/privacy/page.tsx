@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui";
+import { openBeta } from "@/lib/open-beta";
 
 export const metadata: Metadata = {
   title: "Privacy",
@@ -17,7 +18,9 @@ const CONTACT_EMAIL = "andre102599@gmail.com";
  * written to match what the app does today. Sources, by section:
  *   Sign-in        lib/server/access.ts (the sign-in email never reaches the
  *                  server; the access request stores name, email, reason and
- *                  US state), lib/geo-blocklist.ts
+ *                  US state), lib/geo-blocklist.ts. The request form and the
+ *                  list are off the player's path when the open-beta switch
+ *                  is on (lib/open-beta.ts), and the page says so
  *   World ID       lib/server/world/human.ts, nullifier.ts, verify.ts (the
  *                  proof is bound to the wallet address as its signal),
  *                  config.ts (action "prove-human"),
@@ -44,6 +47,9 @@ const CONTACT_EMAIL = "andre102599@gmail.com";
  * Do not add claims the app cannot keep.
  */
 export default function PrivacyPage() {
+  // Read at render on the server, the same as app/terms/page.tsx, so the two
+  // legal pages never disagree about whether World ID is optional.
+  const open = openBeta();
   return (
     <div className="mx-auto w-full max-w-[46rem]">
       {/* REVIEW: Nikki and counsel to confirm this notice before any
@@ -123,31 +129,49 @@ export default function PrivacyPage() {
             email; our server never receives it. What we see is your wallet
             address, and every record we keep about you is keyed to it.
           </p>
-          <p>
-            If you ask to join the closed beta instead of proving you are
-            human with World ID, the request form stores what you type: a
-            name, an email, a reason, and your US state. We use it only to
-            decide the request. Some US states are not admitted to the beta,
-            and the form tells you so before you send it.
-          </p>
+          {open ? null : (
+            <p>
+              If you ask to join the closed beta instead of proving you are
+              human with World ID, the request form stores what you type: a
+              name, an email, a reason, and your US state. We use it only to
+              decide the request. Some US states are not admitted to the beta,
+              and the form tells you so before you send it.
+            </p>
+          )}
         </section>
 
         <section className="[&>*+*]:mt-3">
           <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             Proving you are one human (World ID)
           </h2>
-          <p>
-            To play, you prove you are one human by scanning with the World
-            App. The proof is tied to your wallet address, and we check it with
-            World. World gives us a nullifier: a number that is unique to you
-            inside GoHealthMe and means nothing anywhere else. We store that
-            nullifier bound to your wallet address, the time you verified, and
-            the kind of World credential that verified you (for example Orb or
-            passport). We never get your name, your face, your iris data, or
-            your email from World, and no biometric data reaches us. The
-            binding is how we keep one human to one wallet and one entry per
-            challenge, and one human to one GoHealthMe name.
-          </p>
+          {open ? (
+            <p>
+              If you verify with World ID, you scan with the World App. The
+              proof is tied to your wallet address, and we check it with
+              World. World gives us a nullifier: a number that is unique to you
+              inside GoHealthMe and means nothing anywhere else. We store that
+              nullifier bound to your wallet address, the time you verified, and
+              the kind of World credential that verified you (for example Orb or
+              passport). We never get your name, your face, your iris data, or
+              your email from World, and no biometric data reaches us. The
+              binding is how we keep one human to one wallet and one entry per
+              challenge. If you skip World ID, nothing is sent to World and we
+              hold no binding for you.
+            </p>
+          ) : (
+            <p>
+              To play, you prove you are one human by scanning with the World
+              App. The proof is tied to your wallet address, and we check it with
+              World. World gives us a nullifier: a number that is unique to you
+              inside GoHealthMe and means nothing anywhere else. We store that
+              nullifier bound to your wallet address, the time you verified, and
+              the kind of World credential that verified you (for example Orb or
+              passport). We never get your name, your face, your iris data, or
+              your email from World, and no biometric data reaches us. The
+              binding is how we keep one human to one wallet and one entry per
+              challenge, and one human to one GoHealthMe name.
+            </p>
+          )}
           <p>
             Before the settle pays a win, SPOTTER can ask you to confirm the
             payout with World ID. That proof is made for that one payout. We store
@@ -155,12 +179,20 @@ export default function PrivacyPage() {
             the nullifier, and the credential kind. The public History page
             shows only the state and the credential kind, never your identity.
           </p>
-          <p>
-            On a test build the World step can be simulated. Then nothing is
-            sent to World and no human is actually proven. On a build where
-            World ID is off, the closed-beta list decides who can play, and we
-            hold your wallet address on that list.
-          </p>
+          {open ? (
+            <p>
+              On a test build the World step can be simulated. Then nothing is
+              sent to World and no human is actually proven. During the beta
+              World ID is optional; nobody is held on a list.
+            </p>
+          ) : (
+            <p>
+              On a test build the World step can be simulated. Then nothing is
+              sent to World and no human is actually proven. On a build where
+              World ID is off, the closed-beta list decides who can play, and we
+              hold your wallet address on that list.
+            </p>
+          )}
         </section>
 
         <section className="[&>*+*]:mt-3">

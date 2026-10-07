@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui";
+import { openBeta } from "@/lib/open-beta";
 
 export const metadata: Metadata = {
   title: "Terms",
   description:
-    "The rules of the GoHealthMe V4 beta on testnet: test money, one human per entry, how a challenge pays out, no guarantees. A plain-language, pre-launch notice.",
+    "The rules of the GoHealthMe V4 beta on testnet: test money, who can play, how a challenge pays out, no guarantees. A plain-language, pre-launch notice.",
   alternates: { canonical: "/terms" },
 };
 
@@ -32,10 +33,15 @@ const CONTACT_EMAIL = "andre102599@gmail.com";
  *   One human         lib/server/world/require-human.ts, world/human.ts
  *   Confirmation      lib/server/agent/approval.ts (a run that settles
  *                     before the player confirms refunds the stake)
- *   Closed beta       lib/server/access.ts, lib/geo-blocklist.ts
+ *   Closed beta       lib/server/access.ts, lib/geo-blocklist.ts; off the
+ *                     player's path when the open-beta switch is on
+ *                     (lib/open-beta.ts), and the page says so
  * Voice: docs/DESIGN.md. Never bet, wager, odds or gamble in visible copy.
  */
 export default function TermsPage() {
+  // Read at render on the server; NEXT_PUBLIC_ is also inlined into the
+  // browser bundle, so both agree after a redeploy.
+  const open = openBeta();
   return (
     <div className="mx-auto w-full max-w-[46rem]">
       {/* REVIEW: counsel to add governing law, dispute resolution and a
@@ -78,10 +84,17 @@ export default function TermsPage() {
             <strong>Nobody hits:</strong> everyone gets their stake back. V4
             takes no fee.
           </li>
-          <li>
-            <strong>One human, one entry.</strong> You prove you are one human
-            with World ID, and you must be 18 or older.
-          </li>
+          {open ? (
+            <li>
+              <strong>One human, one entry, if you choose it.</strong> World ID
+              is optional during the beta, and you must be 18 or older.
+            </li>
+          ) : (
+            <li>
+              <strong>One human, one entry.</strong> You prove you are one human
+              with World ID, and you must be 18 or older.
+            </li>
+          )}
           <li>
             <strong>Not advice, no guarantees.</strong> The app can be wrong or
             down, and we can reset the testnet at any time.
@@ -140,23 +153,42 @@ export default function TermsPage() {
           <h2 className="type-heading text-[1.5rem] leading-tight text-foreground">
             One human, one entry
           </h2>
-          <p>
-            To play, you sign in (which creates a wallet) and prove you are one
-            human with World ID. One human is bound to one wallet, and one
-            wallet gets one entry per challenge. SPOTTER will not check a wallet, or
-            settle a payout to it, until it has proven it is one human. On a build where World
-            ID is off, the closed-beta list decides who can play instead.
-          </p>
+          {open ? (
+            <p>
+              To play, you sign in (which creates a wallet). If you verify with
+              World ID, one human is bound to one wallet and one wallet gets one
+              entry per challenge. During the beta World ID is optional: a
+              player who skips it still plays and is paid on the verdict alone.
+            </p>
+          ) : (
+            <p>
+              To play, you sign in (which creates a wallet) and prove you are one
+              human with World ID. One human is bound to one wallet, and one
+              wallet gets one entry per challenge. SPOTTER will not check a wallet, or
+              settle a payout to it, until it has proven it is one human. On a build where World
+              ID is off, the closed-beta list decides who can play instead.
+            </p>
+          )}
           {/* REVIEW: the closed-beta request form refuses residents of 14 US
               states (lib/geo-blocklist.ts), but a wallet approved through
               World ID never passes that check. Nikki and counsel to decide
               whether the World path needs the same geo gate. */}
-          <p>
-            Some US states are not admitted to the closed beta, and the
-            request form says so before you send it. Do not use another
-            person&apos;s wallet or World ID, and do not try to enter a
-            challenge twice.
-          </p>
+          {/* REVIEW (2026-10-07): open-beta wording and the dropped US-state
+              line are Nikki's to approve; the geo gate in lib/geo-blocklist.ts
+              is no longer on any player path. */}
+          {open ? (
+            <p>
+              Do not use another person&apos;s wallet or World ID, and do not
+              try to enter a challenge twice.
+            </p>
+          ) : (
+            <p>
+              Some US states are not admitted to the closed beta, and the
+              request form says so before you send it. Do not use another
+              person&apos;s wallet or World ID, and do not try to enter a
+              challenge twice.
+            </p>
+          )}
         </section>
 
         <section className="[&>*+*]:mt-3">
@@ -209,16 +241,27 @@ export default function TermsPage() {
             result decides where each stake goes when the challenge settles:
           </p>
           <ul className="list-disc pl-5 marker:text-haze [&>*+*]:mt-1.5">
-            <li>
-              Hit the goal: you get your stake back plus an equal share of the
-              missed stakes and anything else in the pot, once your hit is
-              recorded. If you joined with World ID, SPOTTER records a hit
-              only after you open the challenge and confirm it with World ID,
-              and only before the challenge settles; a hit that is not
-              confirmed by then gets its stake back without a share. If you
-              were approved through the closed-beta list, SPOTTER records your
-              hit on your wearable&apos;s verdict, with no confirmation step.
-            </li>
+            {open ? (
+              <li>
+                Hit the goal: you get your stake back plus an equal share of the
+                missed stakes and anything else in the pot, once your hit is
+                recorded. If you verified with World ID, SPOTTER records a hit
+                only after you confirm it with World ID, and only before the
+                challenge settles. If you did not, SPOTTER records your hit on
+                your wearable&apos;s verdict, with no confirmation step.
+              </li>
+            ) : (
+              <li>
+                Hit the goal: you get your stake back plus an equal share of the
+                missed stakes and anything else in the pot, once your hit is
+                recorded. If you joined with World ID, SPOTTER records a hit
+                only after you open the challenge and confirm it with World ID,
+                and only before the challenge settles; a hit that is not
+                confirmed by then gets its stake back without a share. If you
+                were approved through the closed-beta list, SPOTTER records your
+                hit on your wearable&apos;s verdict, with no confirmation step.
+              </li>
+            )}
             <li>
               Miss it, with your wearable showing the miss: your stake goes to
               the players who hit. This applies only on challenges that can
@@ -259,12 +302,22 @@ export default function TermsPage() {
             or the verifier did not answer in time), your stake is refunded
             when the challenge settles. A missing result never counts as a miss.
           </p>
-          <p>
-            Before a win is paid, SPOTTER may ask you to confirm the payout
-            with World ID. If you decline or let the window close, the win is
-            not paid until you confirm. If the challenge settles before you confirm,
-            your stake comes back to you as a refund, not as a win.
-          </p>
+          {open ? (
+            <p>
+              If you verified with World ID, SPOTTER may ask you to confirm the
+              payout with World ID before a win is paid. If you decline or let
+              the window close, the win is not paid until you confirm. If the
+              challenge settles before you confirm, your stake comes back to you
+              as a refund, not as a win.
+            </p>
+          ) : (
+            <p>
+              Before a win is paid, SPOTTER may ask you to confirm the payout
+              with World ID. If you decline or let the window close, the win is
+              not paid until you confirm. If the challenge settles before you confirm,
+              your stake comes back to you as a refund, not as a win.
+            </p>
+          )}
           <p>
             A cancelled challenge refunds every stake, and each player claims
             their refund from the challenge page.

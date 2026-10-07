@@ -12,7 +12,9 @@ import { SECTIONS } from "./_sections";
 //   /dev/states?only=run         one section
 //   /dev/states?only=run#run-zero-balance   one state
 //
-// Run locally with the gate off so the page is not behind character creation:
+// Run locally with the open-beta switch on (lib/open-beta.ts; it is the
+// product's switch, not a gate bypass) so the page is not behind character
+// creation:
 //   NEXT_PUBLIC_ACCESS_GATE_DISABLED=1 npx next dev -p <port>
 
 export const metadata: Metadata = {

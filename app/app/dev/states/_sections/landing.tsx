@@ -82,6 +82,9 @@ const FLAGS: LandingFlags = {
   confirm: true,
   missRule: true,
   availability: { junction: true, whoop: true, apple: false },
+  // Closed beta, whatever the gallery's own env says: the frames below carry
+  // the flag themselves (lib/open-beta.ts).
+  openBeta: false,
 };
 
 function ready(runs: OpenRun[], feeBps: number | null = 0): LandingData {
@@ -138,9 +141,9 @@ const noCheck = async (): Promise<boolean> => {
   return false;
 };
 
-function Landing() {
+function Landing({ flags = FLAGS }: { flags?: LandingFlags }) {
   const [picked, setPicked] = useState<WearableBrand | null>(null);
-  return <LandingView flags={FLAGS} data={ready(QUIET)} picked={picked} onPick={setPicked} />;
+  return <LandingView flags={flags} data={ready(QUIET)} picked={picked} onPick={setPicked} />;
 }
 
 /** How it pays for the featured run. `recordsMisses` picks the miss-rule
@@ -162,6 +165,9 @@ export default function LandingStates({ meta }: SectionProps) {
     <GallerySection meta={meta}>
       <StateFrame name="landing-default" note="signed out, nobody in anywhere, so the sleep run leads; the whole page">
         <Landing />
+      </StateFrame>
+      <StateFrame name="landing-open-beta" note="the open-beta switch on: the hero's second trust line reads Open beta, test USDC, whatever World does, and the how-it-pays line names the World ID confirmation only for a verified player">
+        <Landing flags={{ ...FLAGS, openBeta: true }} />
       </StateFrame>
 
       <StateFrame name="landing-featured-players" note="one player in the workout run: most players leads, the range reads 2.00 to 4.00" phone>

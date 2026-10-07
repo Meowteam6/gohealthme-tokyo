@@ -130,6 +130,9 @@ function view(over: {
   /** How step 2 was proven, when the fixture needs the stamp to say so. */
   humanProof?: HumanProof | null;
   worldLane?: CharacterView["worldLane"];
+  /** The open-beta switch (lib/open-beta.ts): World ID optional. Frames carry
+   *  it themselves so the gallery's own env never changes what they show. */
+  openBeta?: boolean;
 }): CharacterView {
   const signedIn = over.signedIn ?? true;
   const steps: Record<StepId, StepState> = {
@@ -174,7 +177,10 @@ function view(over: {
     checkSensor: async () => false,
     checkingSensor: false,
     refresh: noop,
-  };
+    openBeta: over.openBeta ?? false,
+    // The cast holds until CharacterView carries `openBeta?: boolean` (the
+    // client lane); drop it at the fix stage.
+  } as CharacterView;
 }
 
 function onboarding(skipped: StepId[] = [], done = false): Onboarding {
@@ -336,6 +342,25 @@ export default function OnboardingStates({ meta }: SectionProps) {
       <StateFrame name="character-world-id" note="step 2, World on: one scan, the hard gate">
         <CharacterCreation view={view({})} onboarding={onboarding()} mode="gate" />
       </StateFrame>
+      <StateFrame name="character-world-id-optional" note="step 2 in the open beta: World on, the optional line and Skip for now, the gate already open">
+        <CharacterCreation view={view({ openBeta: true, gate: true })} onboarding={onboarding()} mode="gate" />
+      </StateFrame>
+      <StateFrame name="character-world-id-optional-done" note="step 2 in the open beta, verified anyway: the stamp and the payout confirmation it keeps">
+        <CharacterCreation
+          view={view({ openBeta: true, gate: true, steps: { human: HUMAN_DONE } })}
+          onboarding={onboarding()}
+          focus="human"
+          mode="page"
+        />
+      </StateFrame>
+      <StateFrame name="character-world-off-open-beta" note="step 2 in the open beta with World off: the one-line off copy, nothing to skip">
+        <CharacterCreation
+          view={view({ openBeta: true, gate: true, worldLane: "off" })}
+          onboarding={onboarding()}
+          focus="human"
+          mode="page"
+        />
+      </StateFrame>
       <StateFrame name="character-allowlist-pending" note="step 2, World off: the request is waiting on Andre">
         <CharacterCreation
           view={view({ humanMode: "allowlist", accessStatus: "pending", steps: { human: { status: "waiting", note: "Waiting on approval" } } })}
@@ -384,6 +409,24 @@ export default function OnboardingStates({ meta }: SectionProps) {
             steps: {
               human: { status: "done", summary: "On the list" },
               name: { status: "locked", note: NAME_NEEDS_WORLD_NOTE },
+              sensor: { status: "done", summary: "WHOOP" },
+            },
+            sensor: { kind: "paired", device: WHOOP },
+            providers: WHOOP_PAIRED,
+          })}
+          variant="strip"
+        />
+      </StateFrame>
+      <StateFrame name="player-card-world-id-optional" note="open beta, step 2 skipped: no stamp, the World ID optional link beside the name, WHOOP paired, every challenge open">
+        <CharacterCard
+          view={view({
+            openBeta: true,
+            gate: true,
+            humanProof: null,
+            name: "mika.gohealthme.eth",
+            steps: {
+              human: { status: "todo" },
+              name: NAME_DONE,
               sensor: { status: "done", summary: "WHOOP" },
             },
             sensor: { kind: "paired", device: WHOOP },

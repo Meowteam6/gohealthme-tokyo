@@ -74,6 +74,8 @@ Mock mode (event): steps 2 and 3 are replaced by a text field. The card builds a
 
 Mode unset: `GET /api/world/rp-context` answers `{ mode: "off" }`, the card says "Prove-human is not enabled on this deployment", `requireHuman` is a no-op, and `access.ts` keeps the closed-beta allowlist. Nobody hits a new dead end.
 
+Open beta (2026-10-07, Andre and Nikki): World ID is optional at every gate it used to hold. The switch is `NEXT_PUBLIC_ACCESS_GATE_DISABLED=1`, read only through `openBeta()` in `app/lib/open-beta.ts`, set on production on purpose. With it on, the server stands down and the client agrees: the closed-beta list is gone (signing in is the whole way in), `requireHuman` is a no-op, `isAllowed` passes everyone, names are capped per wallet instead of per human, and a wallet with no World binding is paid on the verdict alone. A player who verifies keeps the "one human, one entry" badge and SPOTTER's World ID payout confirmation; a player who skips step 2 still creates a character, claims a name, joins and creates challenges, and is paid on the verdict. `WORLD_VERIFY_MODE=live` stays set so verification keeps working for those who want it. With the switch off, everything behaves as the closed beta above.
+
 ## Server-side teeth
 
 `joinPool` is an on-chain call the browser makes directly, so the server cannot refuse a stake at the contract. What it refuses is everything that turns a stake into money. `requireHuman(address)` (`lib/server/world/require-human.ts`) is called, fenced, in:
@@ -100,6 +102,13 @@ Checked against both staking surfaces:
 - **V3 pilot participants and every deployment without the mode**: unchanged. `WORLD_VERIFY_MODE` unset is byte-for-byte the V3 gate. V4 is a separate Vercel project with its own KV, so nothing here touches the pilot.
 - **A wallet that staked by hand before verifying**: its stake is in the pool and SPOTTER will not pay it until it verifies from the character card, which the 403 reason says.
 - **Operator misconfiguration** (`live` with a variable missing): the card says which variable, the mode falls back to off, the allowlist still works.
+
+Open beta (2026-10-07), the same question asked again:
+
+- **World-verified players** still confirm each payout with World ID while unverified players are paid on the verdict alone. Said at step 2, before the scan, so nobody learns it at the claim.
+- **Former list players** lose the "On the list" stamp; the list is off the player's path and nothing replaces the stamp.
+- **One person can play from many email wallets** on test USDC. Sybil, accepted for the testnet beta; `KILL_BASE_MONEY_IN` is the brake if it is abused.
+- **The US-state geo gate** (`lib/geo-blocklist.ts`) is no longer reached by anyone; the terms say so and Nikki owns the call.
 
 ## What is mocked, and what is not
 
