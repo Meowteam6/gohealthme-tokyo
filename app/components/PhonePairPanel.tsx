@@ -26,7 +26,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, TEXT_LINK, buttonClasses } from "@/components/ui";
 import { Notice, QUIET_ACTION } from "@/components/night/kit";
 import { cachedOnlyRequester } from "@/lib/client-auth";
-import { isShell, onShellEvent, shellPost, useShellStatus, type ShellPairStatus } from "@/lib/shell";
+import { isShell, onShellEvent, shellPost, type ShellPairStatus } from "@/lib/shell";
+import { useShellStatus } from "@/lib/shell-hooks";
 import {
   SHELL_ALLOW_HEALTH,
   SHELL_NO_HEALTH,

@@ -27,7 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { displayGoalSpec, fetchGoalId, fetchPool } from "@/lib/contract";
-import { useShellBrowserClosed } from "@/lib/shell";
+import { useShellBrowserClosed } from "@/lib/shell-hooks";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import {
   PhoneLinkRequiredError,

@@ -13,7 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button, buttonClasses } from "@/components/ui";
 import { Notice, QUIET_ACTION } from "@/components/night/kit";
 import WhoopReturnNote from "@/components/WhoopReturnNote";
-import { useShell, useShellBrowserClosed, useShellStatus } from "@/lib/shell";
+import { useShell, useShellBrowserClosed, useShellStatus } from "@/lib/shell-hooks";
 import { SHELL_ALLOW_HEALTH, SHELL_NO_HEALTH } from "@/lib/shell-pairing";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import {

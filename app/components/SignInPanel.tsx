@@ -37,7 +37,7 @@
 import { useId, useState } from "react";
 import { useConnectWithOtp } from "@dynamic-labs/sdk-react-core";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
-import { useShell } from "@/lib/shell";
+import { useShell } from "@/lib/shell-hooks";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useBaseAccountConnect } from "@/lib/useBaseAccountConnect";
 import { markExternalConnectIntent } from "@/lib/wallet-connect-intent";

@@ -25,7 +25,7 @@ import { SignInLoadingCard } from "@/components/night/SlowSignInNotice";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useShell, useShellBrowserClosed } from "@/lib/shell";
+import { useShell, useShellBrowserClosed } from "@/lib/shell-hooks";
 import { SHELL_ALLOW_HEALTH } from "@/lib/shell-pairing";
 import BalanceCard from "@/components/BalanceCard";
 import ClaimPayout from "@/components/ClaimPayout";
