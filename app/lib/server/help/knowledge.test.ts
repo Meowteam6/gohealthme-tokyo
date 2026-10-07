@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   ASK_GLOBAL_CAP,
   ASK_PER_SESSION_CAP,
@@ -6,6 +6,8 @@ import {
   HELP_SYSTEM_PROMPT,
   MAX_QUESTION_CHARS,
   buildAskPrompt,
+  helpKb,
+  helpSystemPrompt,
   validateQuestion,
 } from "@/lib/server/help/knowledge";
 
@@ -116,6 +118,67 @@ describe("challenge facts", () => {
       expect(line, line).not.toMatch(
         /\b(a|an|the|this|your|every|other|each|own|open|new)\s+(runs?|pools?)\b|\bruns\b|\bpools?\b|\bdar(e|es|ing)\b|\bbets?\b|\bwager\w*|\bodds\b/i,
       );
+    }
+  });
+});
+
+// Open beta (lib/open-beta.ts, Andre and Nikki, 2026-10-07): World ID is
+// optional, so the helper must not tell a player that the human step cannot
+// wait, or that every hit needs a World ID confirm. A player who skipped it is
+// paid on the verdict (lib/server/agent/approval.ts, payoutConfirmFor); a
+// verified player confirms as before. Flag off, the closed-beta facts hold
+// word for word.
+describe("knowledge in open beta", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("says World ID is optional and that a skipped World ID is paid on the verdict", () => {
+    const kb = helpKb(true).toLowerCase();
+    expect(kb).toContain("world id is optional");
+    expect(kb).toContain("paid on spotter's verdict alone");
+    expect(kb).not.toContain("the human step cannot");
+    expect(kb).not.toContain("ask for a spot in the closed beta");
+    // A verified player still confirms before settle.
+    expect(kb).toContain("a hit only counts once you open the challenge and confirm it");
+  });
+
+  it("flag off: the human step cannot wait and every hit needs the confirm", () => {
+    const kb = helpKb(false).toLowerCase();
+    expect(kb).toContain("the human step cannot");
+    expect(kb).not.toContain("world id is optional");
+    expect(kb).not.toContain("paid on spotter's verdict alone");
+    expect(helpKb(false)).toBe(HELP_KB);
+    expect(helpSystemPrompt(false)).toBe(HELP_SYSTEM_PROMPT);
+  });
+
+  it("follows the switch: the facts and the prompt the model gets", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ACCESS_GATE_DISABLED", "1");
+    vi.resetModules();
+    const open = await import("@/lib/server/help/knowledge");
+    expect(open.HELP_KB).toContain("World ID is optional");
+    const prompt = open.buildAskPrompt("do I need World ID");
+    expect(prompt).toContain("World ID is optional");
+    expect(prompt.startsWith(open.helpSystemPrompt(true))).toBe(true);
+    expect(prompt).toContain("User question: do I need World ID");
+
+    vi.stubEnv("NEXT_PUBLIC_ACCESS_GATE_DISABLED", "");
+    vi.resetModules();
+    const closed = await import("@/lib/server/help/knowledge");
+    expect(closed.HELP_KB).not.toContain("World ID is optional");
+    expect(closed.buildAskPrompt("do I need World ID")).not.toContain("World ID is optional");
+  });
+
+  it("keeps the voice and the vocabulary in both branches", () => {
+    for (const open of [true, false]) {
+      const prompt = helpSystemPrompt(open);
+      expect(prompt).not.toContain("!");
+      const lines = prompt.split("\n").filter((line) => !line.startsWith("WORDING:"));
+      for (const line of lines) {
+        expect(line, line).not.toMatch(
+          /\b(a|an|the|this|your|every|other|each|own|open|new)\s+(runs?|pools?)\b|\bruns\b|\bpools?\b|\bdar(e|es|ing)\b|\bbets?\b|\bwager\w*|\bodds\b/i,
+        );
+      }
     }
   });
 });

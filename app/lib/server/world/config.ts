@@ -118,7 +118,7 @@ export const PLAYER_WORLD_PROBLEM =
 
 /** What a player sees when prove-human is simply not switched on. */
 export const PLAYER_WORLD_OFF =
-  "Proving you're one human is not switched on for this build, so the closed-beta list decides who plays.";
+  "Proving you're one human is not switched on for this build, so this step is skipped.";
 
 /** What a player sees while World ID is switched off by the operator. */
 export const PLAYER_WORLD_PAUSED =

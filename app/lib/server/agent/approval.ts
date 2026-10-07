@@ -20,6 +20,10 @@
 // confirm (fail closed); requireHuman already refuses it before any verdict is
 // read. Either way the payout goes to the staker's own wallet: run.ts records
 // the result for the claim's participant, and nothing here picks a recipient.
+// OPEN BETA (NEXT_PUBLIC_ACCESS_GATE_DISABLED=1, Andre and Nikki, 2026-10-07):
+// World ID is optional, so a wallet with no World binding is paid on the
+// verdict too, record or no record; a World-bound wallet still confirms with
+// World ID. With the flag off, "neither" fails closed as above.
 //
 // QUEUED ON REQUEST (117bb64 review, 2026-09-30). The claim joins the sweep's
 // pending queue (lock.ts) the moment SPOTTER asks, not only once approved. A
@@ -88,6 +92,7 @@ import {
   type ApprovalProvider,
   type ApprovalProviderName,
 } from "@/lib/server/agent/approval-provider";
+import { openBeta } from "@/lib/open-beta";
 import { getAccessRecord, isAdmin } from "@/lib/server/access";
 import { boundWorldNamespace } from "@/lib/server/world/config";
 import { isVerifiedHuman } from "@/lib/server/world/human";
@@ -552,8 +557,9 @@ export type PayoutConfirm = "world" | "verdict";
 /**
  * Who confirms a payout with World ID (header, WHO CONFIRMS). "world" for a
  * World-bound wallet, checked first so a list player who later adds World ID
- * confirms like any World player; "verdict" for an admin or an approved list
- * entry with no World binding; "world" for everyone else, so an unknown wallet
+ * confirms like any World player; "verdict" for an admin, an approved list
+ * entry, or in the open beta (lib/open-beta.ts) any wallet with no World
+ * binding; "world" for everyone else, so with the flag off an unknown wallet
  * is never paid on the verdict alone. The binding is read in the namespace
  * World's bindings live in even while KILL_WORLD_ID pauses new proofs
  * (boundWorldNamespace), the same read access.ts makes.
@@ -562,6 +568,7 @@ export async function payoutConfirmFor(address: string): Promise<PayoutConfirm> 
   if (!isAddress(address)) return "world";
   const namespace = boundWorldNamespace();
   if (namespace !== null && (await isVerifiedHuman(address, namespace))) return "world";
+  if (openBeta()) return "verdict";
   if (isAdmin(address)) return "verdict";
   if ((await getAccessRecord(address))?.status === "approved") return "verdict";
   return "world";

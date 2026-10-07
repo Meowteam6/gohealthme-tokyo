@@ -181,3 +181,57 @@ describe("approvalGate, per wallet", () => {
     });
   });
 });
+
+// Open beta (Andre and Nikki, 2026-10-07). World ID is optional, so a wallet
+// with no World binding is paid on the verdict like a list player: no
+// request, no ledger row, nothing queued. A World-bound wallet still confirms
+// with World ID (World ID for Agents runs for everyone who verified), and
+// garbage still fails closed to world.
+describe("open beta (NEXT_PUBLIC_ACCESS_GATE_DISABLED=1)", () => {
+  const open = () => load({ NEXT_PUBLIC_ACCESS_GATE_DISABLED: "1" });
+
+  it("pays a wallet with no World binding on the verdict: no record, pending, or denied", async () => {
+    const mod = await open();
+    expect(await mod.payoutConfirmFor(NOBODY)).toBe("verdict");
+    await mod.access.requestAccess({ address: NOBODY });
+    expect(await mod.payoutConfirmFor(NOBODY)).toBe("verdict");
+    await mod.access.decideAccess({ address: NOBODY, decision: "deny", adminAddress: ADMIN });
+    expect(await mod.payoutConfirmFor(NOBODY)).toBe("verdict");
+  });
+
+  it("keeps the World ID confirm for every World-bound wallet, and fails closed on garbage", async () => {
+    const mod = await open();
+    await worldBound(mod, WORLD);
+    await onTheList(mod, BOTH);
+    await worldBound(mod, BOTH);
+    expect(await mod.payoutConfirmFor(WORLD)).toBe("world");
+    expect(await mod.payoutConfirmFor(BOTH)).toBe("world");
+    expect(await mod.payoutConfirmFor("garbage")).toBe("world");
+  });
+
+  it("approvalGate pays an unbound wallet on the verdict and still asks a World-bound one", async () => {
+    const mod = await open();
+    const gate = await mod.approvalGate({ goalId: GOAL, poolId: 7n, address: NOBODY, poolSettled: settledNo, nowMs: T0 });
+    expect(gate).toEqual({ status: "verdict" });
+    expect(await mod.readApproval(GOAL)).toBeNull();
+    expect(await mod.readLedger(GOAL)).toEqual([]);
+    expect(await mod.lock.listDuePendingSettlements(Math.floor(T0 / 1000) + 10, 10)).toEqual([]);
+
+    await worldBound(mod, WORLD);
+    const asked = await mod.approvalGate({ goalId: GOAL, poolId: 7n, address: WORLD, poolSettled: settledNo, nowMs: T0 });
+    expect(asked.status).toBe("awaiting");
+    expect(await mod.readLedger(GOAL)).toHaveLength(1);
+  });
+
+  it("pays an unbound wallet on the verdict even where the World ID confirm is misconfigured", async () => {
+    const mod = await load({ NEXT_PUBLIC_ACCESS_GATE_DISABLED: "1", WORLD_APPROVAL_MODE: "world" });
+    expect(await mod.approvalGate({ goalId: GOAL, poolId: 7n, address: NOBODY, poolSettled: settledNo, nowMs: T0 })).toEqual({
+      status: "verdict",
+    });
+  });
+
+  it("requireHuman stands down for the same wallet", async () => {
+    const mod = await open();
+    expect(await mod.req.requireHuman(NOBODY)).toEqual({ ok: true, enforced: false });
+  });
+});

@@ -331,6 +331,38 @@ describe("isAllowed fails closed", () => {
   });
 });
 
+// Open beta (Andre and Nikki, 2026-10-07). NEXT_PUBLIC_ACCESS_GATE_DISABLED=1
+// is the open-beta switch (lib/open-beta.ts), read through openBeta(): signing
+// in is the whole way in, so isAllowed passes every real address whatever its
+// record says. The status view is untouched (the client still reads source
+// world for the badge). With the flag off this is the closed beta above.
+describe("open beta (NEXT_PUBLIC_ACCESS_GATE_DISABLED=1)", () => {
+  it("lets every real address in: no record, pending, and denied alike", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ACCESS_GATE_DISABLED", "1");
+    const access = await load(ADMIN);
+    expect(await access.isAllowed(OTHER)).toBe(true);
+    await access.requestAccess({ address: USER });
+    expect(await access.isAllowed(USER)).toBe(true);
+    await access.decideAccess({ address: USER, decision: "deny", adminAddress: ADMIN });
+    expect(await access.isAllowed(USER)).toBe(true);
+    // The address check still comes first: garbage and null never pass.
+    expect(await access.isAllowed("nope")).toBe(false);
+    expect(await access.isAllowed(null)).toBe(false);
+    // The status view does not change with the flag.
+    expect(await access.getAccessStatus(OTHER)).toEqual({
+      status: "none",
+      isAdmin: false,
+      source: "none",
+    });
+  });
+
+  it("is the closed beta again with the flag off", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ACCESS_GATE_DISABLED", "");
+    const access = await load(ADMIN);
+    expect(await access.isAllowed(OTHER)).toBe(false);
+  });
+});
+
 describe("listAccessRequests", () => {
   it("returns every request", async () => {
     const access = await load("");
@@ -374,5 +406,24 @@ describe("geo compliance fail-closed", () => {
       expect(result.record.state).toBe("CA");
     }
     expect((await access.getAccessStatus(USER)).status).toBe("pending");
+  });
+});
+
+// Open beta (2026-10-07): no player path reaches requestAccess, so the state
+// check is enforced on nobody. Whether the testnet open beta needs a state
+// gate at all is Nikki's call (compliance), logged as an open question in MI6
+// Org/Decisions.md that day, not decided here. This pins that the flag does
+// not delete the gate from the owner's tool: switching the list back on
+// re-enforces it unchanged, and the real-money pilot's module is intact.
+describe("geo gate under the open beta", () => {
+  it("still refuses a blocked state at requestAccess while isAllowed lets the address in", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ACCESS_GATE_DISABLED", "1");
+    const access = await load("");
+    const result = await access.requestAccess({ address: USER, state: "CO" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(403);
+    expect(await access.listAccessRequests()).toHaveLength(0);
+    // The open beta does not wait on the list: the same address plays.
+    expect(await access.isAllowed(USER)).toBe(true);
   });
 });

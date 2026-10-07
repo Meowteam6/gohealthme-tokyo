@@ -22,8 +22,17 @@
 // approved list player used to get in and then find every challenge locked,
 // with SPOTTER refusing their claims here: a way in that led nowhere. The
 // client decides the same way (lib/game/character.ts characterOf).
+//
+// OPEN BETA (NEXT_PUBLIC_ACCESS_GATE_DISABLED=1, Andre and Nikki, 2026-10-07).
+// World ID is optional, so this stands down first, before the World setup is
+// read: SPOTTER verifies and pays any wallet that joined, and the World
+// binding only decides who confirms the payout (approval.ts payoutConfirmFor:
+// World ID for a bound wallet, the verdict for everyone else).
+// HUMAN_REQUIRED_REASON stays for the flag-off path, where everything below
+// holds in full, the paused-not-off rule included.
 
 import { isAddress } from "viem";
+import { openBeta } from "@/lib/open-beta";
 import { getAccessRecord, isAdmin } from "@/lib/server/access";
 import { boundWorldNamespace, worldSetup } from "@/lib/server/world/config";
 import { isVerifiedHuman } from "@/lib/server/world/human";
@@ -44,6 +53,8 @@ export type RequireHumanResult =
 export async function requireHuman(
   address: string,
 ): Promise<RequireHumanResult> {
+  // Open beta (header): nothing is enforced here, whatever World is doing.
+  if (openBeta()) return { ok: true, enforced: false };
   const setup = worldSetup();
   if (setup.mode === "off" && setup.paused !== true) {
     return { ok: true, enforced: false };

@@ -44,8 +44,27 @@
 // bindings already made keep answering "approved" here, so nobody who got in
 // through World is locked out by the pause. The list and the admins work as
 // always.
+//
+// OPEN BETA (NEXT_PUBLIC_ACCESS_GATE_DISABLED=1, Andre and Nikki, 2026-10-07).
+// The flag is the open-beta switch (lib/open-beta.ts, openBeta()), set on
+// production on purpose: signing in is the whole way in, isAllowed passes
+// every real address, and the money routes agree because they all call it
+// (withdraw, evidence, challenges, invite-token). World ID stays optional,
+// for the badge and SPOTTER's payout confirm. The closed-beta list and /admin
+// stay as the owner's tools: getAccessStatus and requestAccess are untouched
+// (the client still reads `source: "world"` from getAccessStatus for the
+// badge). The US-state geo check in requestAccess is reached by no player
+// path in the open beta, so it is enforced on nobody. That is NOT a decision
+// made here: the check was written for the real-money pilot
+// (lib/geo-blocklist.ts) and whether a play-money testnet open beta needs a
+// state gate is Nikki's call (compliance), logged as an open question in MI6
+// Org/Decisions.md on 2026-10-07. Until she answers, the check stays intact
+// in requestAccess (pinned in access.test.ts) so switching the list back on,
+// or re-enforcing it at character creation or the join, needs no rewrite.
+// With the flag off this file is the closed beta above.
 
 import { getAddress, isAddress } from "viem";
+import { openBeta } from "@/lib/open-beta";
 import { optionalEnv } from "@/lib/server/env";
 import { readJson, writeJson, zaddNx, zrevrange } from "@/lib/server/store";
 import { stateBlockReason } from "@/lib/geo-blocklist";
@@ -291,18 +310,19 @@ export async function listAccessRequests(limit = 250): Promise<AccessRecord[]> {
 }
 
 /**
- * The real gate. True when the address may use gated features. Admins always
- * pass; a proven human passes when prove-human is on; everyone else must be
- * explicitly approved. Fails closed on anything else.
+ * The real gate. True when the address may use gated features. In the open
+ * beta every real address passes. Otherwise admins always pass; a proven
+ * human passes when prove-human is on; everyone else must be explicitly
+ * approved. Fails closed on anything else.
  */
 export async function isAllowed(address: string | null | undefined): Promise<boolean> {
   if (typeof address !== "string" || !isAddress(address)) return false;
-  // When the closed-beta gate is disabled (open demo), the SERVER enforcement is
-  // off too. Otherwise the client gate opens but money-out routes (withdraw,
-  // evidence, challenges) still reject every wallet, so the faucet can credit
-  // the ledger but never deliver USDC on-chain. Same flag AccessGate reads, so
-  // client and server agree.
-  if (process.env.NEXT_PUBLIC_ACCESS_GATE_DISABLED === "1") return true;
+  // Open beta (header): the flag is the open-beta switch, set on production
+  // on purpose since 2026-10-07. With it on, signing in is the whole way in,
+  // and the money routes agree because they all call this (withdraw,
+  // evidence, challenges, invite-token). Same reader AccessGate and the join
+  // checks use (lib/open-beta.ts), so client and server never disagree.
+  if (openBeta()) return true;
   if (isAdmin(address)) return true;
   if (await approvedByWorld(address)) return true;
   const record = await getAccessRecord(address);

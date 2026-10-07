@@ -150,7 +150,8 @@ export async function POST(request: Request) {
     // --- world-idkit ---
     // One human, one entry. When WORLD_VERIFY_MODE is set, no TEE inference is
     // bought for a wallet that has not proven it is one human. Same body
-    // address the membership gate just checked. A no-op when the mode is unset.
+    // address the membership gate just checked. A no-op when the mode is unset
+    // or the beta is open (lib/open-beta.ts).
     const human = await requireHuman(address);
     if (!human.ok) {
       return jsonError(human.status, human.reason);
@@ -161,7 +162,8 @@ export async function POST(request: Request) {
     // route has no signature proof (membership above is its identity gate), so
     // the check is on the same body address the pool credits and pays. Fails
     // closed, and runs before the enclave is touched so nothing is spent for a
-    // wallet that is not in the beta.
+    // wallet that is not in the beta. isAllowed answers true in the open beta,
+    // so the 403 below is the closed-beta path.
     if (!(await isAllowed(address))) {
       return jsonError(
         403,

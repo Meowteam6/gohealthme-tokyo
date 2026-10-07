@@ -115,4 +115,47 @@ describe("requireHuman", () => {
     await access.decideAccess({ address: B, decision: "approve", adminAddress: ADMIN });
     expect(await req.requireHuman(B)).toEqual({ ok: true, enforced: true });
   });
+
+  // Open beta (Andre and Nikki, 2026-10-07): World ID is optional. SPOTTER
+  // verifies and pays any wallet that joined, and the World binding only
+  // decides who confirms the payout (approval.ts payoutConfirmFor). So this
+  // stands down in every World state, as it does when the mode is unset.
+  it("passes everyone, unenforced, in open beta whatever the mode", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ACCESS_GATE_DISABLED", "1");
+    {
+      const { req } = await load("mock");
+      expect(await req.requireHuman(B)).toEqual({ ok: true, enforced: false });
+      expect(await req.requireHuman("garbage")).toEqual({ ok: true, enforced: false });
+    }
+    {
+      vi.stubEnv("KILL_WORLD_ID", "1");
+      const { req } = await load("mock");
+      expect(await req.requireHuman(B)).toEqual({ ok: true, enforced: false });
+      expect(await req.requireHuman("garbage")).toEqual({ ok: true, enforced: false });
+      vi.stubEnv("KILL_WORLD_ID", "");
+    }
+    {
+      vi.stubEnv("WORLD_APP_ID", "app_test");
+      vi.stubEnv("WORLD_RP_ID", "rp_test");
+      vi.stubEnv("WORLD_RP_SIGNING_KEY", "0x11");
+      const { human, req } = await load("live");
+      await human.bindHuman({
+        address: A,
+        nullifierHash: `0x${"3".padStart(64, "0")}`,
+        mode: "live",
+        protocolVersion: "4.0",
+      });
+      expect(await req.requireHuman(A)).toEqual({ ok: true, enforced: false });
+    }
+  });
+
+  it("keeps refusing with the flag off", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ACCESS_GATE_DISABLED", "");
+    const { req } = await load("mock");
+    expect(await req.requireHuman(B)).toEqual({
+      ok: false,
+      status: 403,
+      reason: req.HUMAN_REQUIRED_REASON,
+    });
+  });
 });

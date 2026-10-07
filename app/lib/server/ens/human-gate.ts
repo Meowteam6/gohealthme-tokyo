@@ -37,8 +37,22 @@
 //     list wallets is bounded per wallet only, as on a build without World.
 // A build without World configured is unchanged by the switch: no gate, no
 // cap, exactly as before.
+//
+// OPEN BETA (NEXT_PUBLIC_ACCESS_GATE_DISABLED=1, Andre and Nikki, 2026-10-07).
+// World ID is optional, so NAME_HUMAN_REQUIRED is never returned. Whatever
+// World's state on the build:
+//   - a wallet with a World binding keeps its human's key, so one name per
+//     human and the pick cap hold on the same record as before.
+//   - every other wallet gets ENS_NAMES_PER_HUMAN names counted on that
+//     wallet (key wallet-<address>), so the open beta is not an endless
+//     re-pick window either, and namesLeft answers a number for the claim
+//     form. One person with several wallets is bounded per wallet only.
+//   - a build without World configured is gated and capped per wallet too
+//     (with the flag off it has no cap, as above).
+// With the flag off, the three World states behave as described above.
 
 import { getAddress } from "viem";
+import { openBeta } from "@/lib/open-beta";
 import { NAME_CAP_REACHED } from "@/lib/ens/names";
 import { readJson, writeJson } from "@/lib/server/store";
 import { boundWorldNamespace, worldNamespace, worldSetup } from "@/lib/server/world/config";
@@ -61,14 +75,16 @@ export function namesPerHuman(): number {
 
 export interface NameHumanDeps {
   /** True when names are gated and capped on this deployment: prove-human is
-   *  on, or World is configured and paused (see the header). */
+   *  on, World is configured and paused, or the beta is open (the header). */
   enforced: () => boolean;
   /** A stable key for the wallet's human, or null when it has none. While
-   *  World is paused a wallet with no binding answers its wallet key. */
+   *  World is paused, or in the open beta, a wallet with no binding answers
+   *  its wallet key. */
   humanOf: (address: string) => Promise<{ key: string } | null>;
 }
 
-/** The cap key for a wallet with no World binding while World is paused. */
+/** The cap key for a wallet with no World binding while World is paused, or
+ *  in the open beta. */
 function walletKey(address: string): string {
   return `wallet-${address.toLowerCase()}`;
 }
@@ -77,16 +93,17 @@ export function liveNameHumanDeps(): NameHumanDeps {
   return {
     enforced: () => {
       const setup = worldSetup();
-      return setup.mode !== "off" || setup.paused === true;
+      return openBeta() || setup.mode !== "off" || setup.paused === true;
     },
     humanOf: async (address) => {
       const setup = worldSetup();
       if (setup.mode !== "off") {
         const record = await getHumanRecord(address);
-        if (record === null) return null;
+        // Open beta: a wallet with no binding is counted on itself.
+        if (record === null) return openBeta() ? { key: walletKey(address) } : null;
         return { key: `${worldNamespace(setup) ?? "off"}-${record.nullifierHash}` };
       }
-      if (setup.paused !== true) return null;
+      if (setup.paused !== true) return openBeta() ? { key: walletKey(address) } : null;
       // Paused: World's bindings still name their human; everyone else is
       // counted on their own wallet.
       const bound = boundWorldNamespace();

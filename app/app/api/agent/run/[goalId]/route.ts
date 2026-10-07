@@ -310,7 +310,8 @@ export async function POST(request: Request, ctx: Ctx) {
     // verify or pay a wallet that has not proven it is one human. Checked
     // before the plan entry, so nothing is spent for an unproven wallet; the
     // join surfaces withhold the stake until this passes, so only a caller
-    // who staked by hand ever sees it. A no-op when the mode is unset.
+    // who staked by hand ever sees it. A no-op when the mode is unset or the
+    // beta is open (lib/open-beta.ts).
     const human = await requireHuman(address);
     if (!human.ok) {
       return jsonError(human.status, human.reason);
