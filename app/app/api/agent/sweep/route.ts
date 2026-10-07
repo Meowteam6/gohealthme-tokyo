@@ -566,6 +566,14 @@ async function runSweep(): Promise<SweepCounts> {
     console.error(`[agent/sweep] ens receipt reconciliation failed: ${errorMessage(err)}`);
   }
   // --- end ens ---
+  // One line per tick on the claims, so a claim that errors every pass is
+  // visible in the logs without reading its ledger.
+  if (counts.swept.length > 0 || counts.errors > 0) {
+    console.log(
+      `[agent/sweep] claims: swept ${counts.swept.length}, settled ${counts.settled}, deferred ${counts.deferred}, errors ${counts.errors}, pools settled ${counts.poolsSettled}` +
+        (counts.poolErrors.length > 0 ? `, pool errors: ${counts.poolErrors.join("; ")}` : ""),
+    );
+  }
 
   return counts;
 }

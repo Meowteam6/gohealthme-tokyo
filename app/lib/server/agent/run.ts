@@ -862,6 +862,10 @@ async function settleClaimUnlocked(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     ledger = await appendErrorOnce(input.goalId, ledger, "settle", message);
+    // The ledger keeps one row per distinct message, so a settle that fails
+    // the same way every sweep tick is silent there; say it in the logs too,
+    // or an operator reads a two-week-old row and a stalled payout looks idle.
+    console.error(`[agent/run] settle of pool ${input.poolId} (goal ${input.goalId}) failed: ${message}`);
     // Due but unsettled: keep it in the sweep queue so the retry is driven by
     // the cron rather than by whether a browser tab happens to still be open.
     await addPendingSettlement(input.goalId, Math.floor(Date.now() / 1000));
