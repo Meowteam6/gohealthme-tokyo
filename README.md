@@ -4,6 +4,8 @@ Put money on yourself. Stake test USDC on your own sleep or workout goal, your w
 
 **Beta on Base Sepolia, test USDC only: https://gohealthme-tokyo.vercel.app**
 
+**Open beta since 2026-10-07.** World ID is optional: a player who verifies carries the one human, one entry badge and confirms payouts with World ID for Agents; everyone else signs in with email, skips step 2 and is paid on the verdict. The closed-beta list is gone from the player's path. The World sections below describe what the event built and still runs for players who opt in (`docs/WORLD.md`). The iPhone app (`mobile/`) is the whole product in a native shell with Apple Watch pairing native.
+
 This repository is the **ETHGlobal Tokyo 2026** build (Sep 25-27, 2026), entered on the **Continuity track**. Partners this weekend: World (IDKit, World ID for Agents), ENS (ENSv2 on Sepolia), Intercepta (payout screening).
 
 ## Continuity (ETHGlobal Tokyo 2026)
@@ -17,7 +19,7 @@ This repository is the **ETHGlobal Tokyo 2026** build (Sep 25-27, 2026), entered
 - **IDKit, prove you are one human, at the join.** Character creation step 2. `@worldcoin/idkit` 4.3.0 with the World ID 4.0 RP-signed request flow: the server mints a signed `rp_context` on tap, the proof's signal is bound to the wallet, and the nullifier is bound one human to one wallet, so one human is one entry. `app/components/world/ProveHuman.tsx`, `app/lib/server/world/verify.ts`, `human.ts`, `require-human.ts` (the run and evidence routes refuse an unproven wallet before any spend). Merge `e253125`.
 - **Any World App credential, no Orb gate.** Orb, NFC passport or My Number Card through 4.0, Device level as the 3.0 fallback; Selfie Check dropped after it failed in a live test. `app/lib/world/credentials.ts`, commits `b0cc6d2`, `db65e9e`.
 - **World ID for Agents, at the payout.** SPOTTER's run loop stops at an AUTHORIZE gate: it asks the achiever to confirm, the human completes IDKit against the registered `settle` action with signal `<goalId>:<attempt>`, the server validates the proof and consumes the nullifier once per payout, and only then is the pass recorded and settled. Declined, expired and cancelled each write nothing on chain and show as real states with a retry. `app/lib/server/agent/run.ts` (fenced `world-agents` block), `approval.ts`, `approval-provider.ts`, `app/app/api/agent/approval/{request,complete,status}`, `app/components/world/HumanApprovalCard.tsx`. Merge `6d1954c`, signal binding `446671f`.
-- **Live in production, not mocked.** The production deployment runs `WORLD_VERIFY_MODE=live` and `WORLD_APPROVAL_MODE=world` against a Production app and registered RP in the World Developer Portal. Both mock modes are refused when `VERCEL_ENV=production` (`app/lib/server/world/config.ts`, `app/lib/server/agent/approval-provider.ts`, commit `ccc6e40`, merge `cb1955b`); mock exists for tests, local runs and previews only. Prove-human was driven on a phone with a real World App credential on 2026-09-26. The payout confirmation runs the same provider and is covered end to end by `app/app/api/agent/approval/routes.test.ts`; as of 2026-09-27 06:00 JST no V4 run had settled yet, so it had not been exercised on a live payout.
+- **Real verification on the deployed beta, not mocked.** The deployed beta runs `WORLD_VERIFY_MODE=live` and `WORLD_APPROVAL_MODE=world` against a Production app and registered RP in the World Developer Portal. Both mock modes are refused when `VERCEL_ENV=production` (`app/lib/server/world/config.ts`, `app/lib/server/agent/approval-provider.ts`, commit `ccc6e40`, merge `cb1955b`); mock exists for tests, local runs and previews only. Prove-human was driven on a phone with a real World App credential on 2026-09-26. The payout confirmation runs the same provider and is covered end to end by `app/app/api/agent/approval/routes.test.ts`; as of 2026-09-27 06:00 JST no V4 run had settled yet, so it had not been exercised on a live payout.
 
 ### ENS (ENSv2 on Ethereum Sepolia)
 
@@ -69,23 +71,23 @@ Per-lane detail: `docs/LANES.md`, `docs/WORLD.md`, `docs/ENS.md`, `docs/INTERCEP
 
 ## How a run works
 
-1. **Character creation, once.** Sign in (email or a Base wallet through Dynamic), prove you are one human (World IDKit), pick your name (`<name>.gohealthme.eth` on ENSv2 Sepolia, or link a `.eth` you own), pair your wearable (WHOOP direct or Junction).
+1. **Character creation, once.** Sign in (email or a Base wallet through Dynamic), prove you are one human (World IDKit, optional since the open beta), pick your name (`<name>.gohealthme.eth` on ENSv2 Sepolia, or link a `.eth` you own), pair your wearable (WHOOP direct or Junction).
 2. **Lobby.** Each run is playable or locked for your wearable, with the reason and the fix, before any stake. Hold the coin to stake; email wallets get test ETH for gas first.
 3. **The Run.** Night-by-night tally, who is in, time left. The wearable syncs; nothing is uploaded by hand.
-4. **The Verdict.** SPOTTER reads the wearable summary off chain, decides, asks you to confirm with World ID for Agents, screens the payee through Intercepta, then records the result and settles from its Circle wallet. Hit: your stake back plus a share of recorded misses and the pot. Miss shown by your wearable, on a run that can record one: your stake goes to the players who hit. No data, or nobody hits: stake back. The receipt is written to `pool-<id>.gohealthme.eth`.
+4. **The Verdict.** SPOTTER reads the wearable summary off chain, decides, asks you to confirm with World ID for Agents if you verified, screens the payee through Intercepta, then records the result and settles from its Circle wallet. Hit: your stake back plus a share of recorded misses and the pot. Miss shown by your wearable, on a run that can record one: your stake goes to the players who hit. No data, or nobody hits: stake back. The receipt is written to `pool-<id>.gohealthme.eth`.
 5. A cron sweep (`/api/agent/sweep`, every 2 minutes) judges misses after the grace window, records approved claims whose tab closed, and settles pools whose period ended, so a payout never waits on an open browser tab.
 
 ## Architecture
 
 ```
 Next.js app on Vercel (project gohealthme-tokyo)        Dynamic wallets (email or Base)
-   |  character creation: World IDKit -> ENSv2 name -> wearable pairing
+   |  character creation: World IDKit (optional) -> ENSv2 name -> wearable pairing
    |  Lobby -> The Run -> The Verdict
    |
    +-- wearable summaries, off chain: WHOOP direct (OAuth) or Junction
    |
    +-- SPOTTER (app/lib/server/agent/): reads the summary, decides,
-   |     asks the human to confirm (World ID for Agents),
+   |     asks a verified human to confirm (World ID for Agents),
    |     screens the payee (Intercepta, live),
    |     recordResult + settle from its Circle wallet,
    |     writes the receipt to pool-<id>.gohealthme.eth (ENSv2 Sepolia)
