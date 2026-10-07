@@ -24,6 +24,7 @@ import {
   authBlockReason,
   type WalletAuthRequester,
 } from "@/lib/client-auth";
+import { isShell, shellPost } from "@/lib/shell";
 import { isProviderId, type ProviderId } from "@/lib/wearable-providers";
 import type { WearableMetric } from "@/lib/wearable-goal";
 import type { SensorHold } from "@/lib/wearable-join-gate";
@@ -201,14 +202,18 @@ export function pairPanelPhase(
  *
  * A re-pair (`repair`) never polls: the wallet reads paired before the new
  * phone redeems the code and paired after, so there is nothing to notice.
+ * Inside the iPhone app (`shell`) nothing polls either: the shell reports
+ * the sync and the card re-reads on that word, which also keeps
+ * /api/wearable/* under its per-address minute.
  */
 export function pairPanelPolls(
   phase: PairPanelPhase,
   pairing: PhonePairing | null,
   now: number,
   repair = false,
+  shell = false,
 ): boolean {
-  if (repair) return false;
+  if (repair || shell) return false;
   if (phase !== "live" && phase !== "awaiting-sync") return false;
   return pairing !== null && now < pairing.expiresAt;
 }
@@ -317,6 +322,10 @@ export async function fetchLinkTarget(
  * hand before the cross-origin navigation instead. If the browser blocked even
  * the synchronous open, `popup` is null and PopupBlockedError hands the URL
  * back so the UI can offer a link the user activates directly.
+ *
+ * Inside the iPhone app (lib/shell.ts) a WebView has no popup to give, so
+ * Junction's page is handed to the shell, which opens it in the Safari sheet
+ * and reports when that closes. WHOOP still takes the current page there.
  */
 export async function startWearableLink(
   address: `0x${string}`,
@@ -329,7 +338,8 @@ export async function startWearableLink(
   // opened for it. The wallet's stored choice still goes through the popup
   // dance below: which shape it is comes back with the route's answer.
   const phoneOnly = provider !== undefined && PHONE_PROVIDERS.has(provider);
-  const popup = phoneOnly ? null : window.open("about:blank", "_blank");
+  const inShell = isShell();
+  const popup = phoneOnly || inShell ? null : window.open("about:blank", "_blank");
   if (popup !== null) {
     try {
       // Static placeholder, built with DOM APIs (no markup parsing, so no
@@ -375,6 +385,13 @@ export async function startWearableLink(
   if (target.provider === "whoop") {
     if (popup !== null && !popup.closed) popup.close();
     window.location.href = linkUrl;
+    return;
+  }
+
+  // The shell opens it in the Safari sheet; the surface that asked re-reads
+  // the device when the sheet closes (useShellBrowserClosed).
+  if (inShell) {
+    shellPost({ type: "open-browser", url: linkUrl });
     return;
   }
 

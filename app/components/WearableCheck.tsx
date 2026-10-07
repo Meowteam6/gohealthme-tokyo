@@ -27,6 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
 import { displayGoalSpec, fetchGoalId, fetchPool } from "@/lib/contract";
+import { useShellBrowserClosed } from "@/lib/shell";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import {
   PhoneLinkRequiredError,
@@ -622,6 +623,11 @@ function WearableCheckInner({
     },
     enabled: address !== null && poolWindow !== undefined,
     retry: false,
+  });
+  // Inside the iPhone app Junction's page opens in the Safari sheet; the
+  // card re-reads the device the moment that sheet closes.
+  useShellBrowserClosed(() => {
+    void providerQuery.refetch();
   });
   const periodEndMs =
     status.kind === "agent" && status.runStatus === "recorded"

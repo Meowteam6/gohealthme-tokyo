@@ -27,10 +27,17 @@
 // email, then your own wallet as a quiet link), and both this panel and
 // character creation's step 1 (components/game/SignInStep.tsx) render it, so a
 // player meets the same choices in the same order wherever sign-in caught them.
+//
+// Inside the iPhone app (lib/shell.ts) the stack is email only. Sign in with
+// Base needs a popup to keys.coinbase.com and a passkey for that domain, and
+// an external wallet needs an app hop per action; neither completes in a
+// WebView. Hiding them is honest only with the line that says where those
+// accounts still work, shown before anything is typed.
 
 import { useId, useState } from "react";
 import { useConnectWithOtp } from "@dynamic-labs/sdk-react-core";
 import { DYNAMIC_CONFIGURED } from "@/lib/config";
+import { useShell } from "@/lib/shell";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { useBaseAccountConnect } from "@/lib/useBaseAccountConnect";
 import { markExternalConnectIntent } from "@/lib/wallet-connect-intent";
@@ -53,14 +60,25 @@ type Step =
   | { kind: "otp" }
   | { kind: "verifying" };
 
+/** The one line for accounts the iPhone app cannot sign in. */
+const SHELL_OTHER_ACCOUNTS =
+  "Signed in with Base or your own wallet before? Open gohealthme-tokyo.vercel.app in Safari for that account.";
+
 /**
  * The sign-in options, with no card or heading of their own: the host gives
  * them one. Calls Dynamic hooks, so mount it only when DYNAMIC_CONFIGURED.
  */
-export function SignInOptions() {
+export function SignInOptions({
+  shell,
+}: {
+  /** Forces the iPhone-app layout (the state gallery). Detected otherwise. */
+  shell?: boolean;
+}) {
   const ids = useId();
   const emailId = `${ids}-email`;
   const codeId = `${ids}-code`;
+  const detected = useShell();
+  const inShell = shell ?? detected;
   const { login } = useEmbeddedWallet();
   const { connectWithEmail, verifyOneTimePassword, retryOneTimePassword } =
     useConnectWithOtp();
@@ -202,51 +220,55 @@ export function SignInOptions() {
         </div>
       ) : (
         <div className="[&>*+*]:mt-3">
-          <p className="m-0 text-[0.9375rem] text-muted">
-            The fastest way in is your fingerprint or face. No password to
-            remember.
-          </p>
+          {inShell ? null : (
+            <>
+              <p className="m-0 text-[0.9375rem] text-muted">
+                The fastest way in is your fingerprint or face. No password to
+                remember.
+              </p>
 
-          {/* Preferred placement (gas-credit Req 3): the Base Account button
-              leads. Brand-correct light treatment per Base's own guidelines - a
-              white surface, near-black label, and the #0000FF Base Square with
-              8px of separation from the text (gap-2). The white button carries a
-              hairline border and a soft shadow only so it reads against the
-              white card; the Base colors and mark are untouched. On the night
-              field the moon face is that light surface with an ink label, so
-              the Base button is the primary here. The SAME button
-              creates the account for a first-time visitor and signs in a
-              returning one - the connect handler below is unchanged. */}
-          <button
-            type="button"
-            disabled={baseBusy}
-            aria-busy={baseBusy}
-            onClick={() => {
-              // Clear any stale email/OTP error before the Base flow opens; the
-              // shared hook owns the connect itself.
-              setError(null);
-              void connectBase();
-            }}
-            className={buttonClasses({ block: true })}
-          >
-            {/* Base's own mark: its brand blue, not a UI colour. */}
-            <span
-              aria-hidden="true"
-              className="h-4 w-4 shrink-0 rounded-[2px] bg-[#0000FF]"
-            />
-            {baseBusy ? "Opening Base" : "Sign in with Base"}
-          </button>
-          <p className={FIELD_HINT}>
-            New here? This sets up your account. Already have one? The same
-            button signs you in. Then one free signature proves it is yours,
-            once per session.
-          </p>
+              {/* Preferred placement (gas-credit Req 3): the Base Account button
+                  leads. Brand-correct light treatment per Base's own guidelines - a
+                  white surface, near-black label, and the #0000FF Base Square with
+                  8px of separation from the text (gap-2). The white button carries a
+                  hairline border and a soft shadow only so it reads against the
+                  white card; the Base colors and mark are untouched. On the night
+                  field the moon face is that light surface with an ink label, so
+                  the Base button is the primary here. The SAME button
+                  creates the account for a first-time visitor and signs in a
+                  returning one - the connect handler below is unchanged. */}
+              <button
+                type="button"
+                disabled={baseBusy}
+                aria-busy={baseBusy}
+                onClick={() => {
+                  // Clear any stale email/OTP error before the Base flow opens; the
+                  // shared hook owns the connect itself.
+                  setError(null);
+                  void connectBase();
+                }}
+                className={buttonClasses({ block: true })}
+              >
+                {/* Base's own mark: its brand blue, not a UI colour. */}
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0 rounded-[2px] bg-[#0000FF]"
+                />
+                {baseBusy ? "Opening Base" : "Sign in with Base"}
+              </button>
+              <p className={FIELD_HINT}>
+                New here? This sets up your account. Already have one? The same
+                button signs you in. Then one free signature proves it is yours,
+                once per session.
+              </p>
 
-          <div className="flex items-center gap-3 py-1" aria-hidden="true">
-            <span className="h-px flex-1 bg-edge" />
-            <span className="text-sm text-haze">or use email</span>
-            <span className="h-px flex-1 bg-edge" />
-          </div>
+              <div className="flex items-center gap-3 py-1" aria-hidden="true">
+                <span className="h-px flex-1 bg-edge" />
+                <span className="text-sm text-haze">or use email</span>
+                <span className="h-px flex-1 bg-edge" />
+              </div>
+            </>
+          )}
 
           <label htmlFor={emailId} className="sr-only">
             Email address
@@ -270,7 +292,7 @@ export function SignInOptions() {
             onClick={() => {
               void sendCode();
             }}
-            className={buttonClasses({ variant: "secondary", block: true })}
+            className={buttonClasses({ variant: inShell ? "primary" : "secondary", block: true })}
           >
             {busy ? "Sending your code" : "Email me a sign-in code"}
           </button>
@@ -286,7 +308,11 @@ export function SignInOptions() {
         </Notice>
       ) : null}
 
-      {step.kind === "email" ? (
+      {step.kind !== "email" ? null : inShell ? (
+        <div className="mt-4 border-t border-edge pt-3">
+          <p className="m-0 text-[0.8125rem] leading-[1.45] text-haze">{SHELL_OTHER_ACCOUNTS}</p>
+        </div>
+      ) : (
         <div className="mt-4 border-t border-edge pt-2">
           <button type="button" onClick={connectExternal} className={QUIET_ACTION}>
             I already have a wallet
@@ -297,7 +323,7 @@ export function SignInOptions() {
             simpler way in.
           </p>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -307,7 +333,14 @@ export function SignInOptions() {
  * The options call Dynamic hooks, so they mount only when Dynamic is
  * configured; unconfigured builds get an honest note instead of a thrown hook.
  */
-export default function SignInPanel({ surface = "well" }: { surface?: SignInSurface } = {}) {
+export default function SignInPanel({
+  surface = "well",
+  shell,
+}: {
+  surface?: SignInSurface;
+  /** Forces the iPhone-app layout (the state gallery). Detected otherwise. */
+  shell?: boolean;
+}) {
   if (!DYNAMIC_CONFIGURED) {
     return (
       <Notice tone="limit" title="Sign-in is off on this build">
@@ -319,7 +352,7 @@ export default function SignInPanel({ surface = "well" }: { surface?: SignInSurf
     <div className={PANEL[surface]}>
       <h2 className="m-0 text-lg font-semibold leading-tight text-foreground">Sign in</h2>
       <div className="mt-4">
-        <SignInOptions />
+        <SignInOptions shell={shell} />
       </div>
     </div>
   );

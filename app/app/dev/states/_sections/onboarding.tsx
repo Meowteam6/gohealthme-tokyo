@@ -517,6 +517,45 @@ export default function OnboardingStates({ meta }: SectionProps) {
           <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="iphone" poll={false} repair={false} />
         </WithProviders>
       </StateFrame>
+      <StateFrame name="pair-apple-shell-pairing" note="inside the iPhone app: the code went to the shell, no code or link shown, one line while it redeems" phone>
+        <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="shell" poll={false} />
+      </StateFrame>
+      <StateFrame name="pair-apple-shell-health-sheet" note="the system Health sheet is up over the page" phone>
+        <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="shell" poll={false} shellPair={{ status: "health-sheet" }} />
+      </StateFrame>
+      <StateFrame name="pair-apple-shell-syncing" note="Health allowed, the app reads the last 30 days" phone>
+        <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="shell" poll={false} shellPair={{ status: "syncing" }} />
+      </StateFrame>
+      <StateFrame name="pair-apple-shell-synced" note="the phone synced; the provider read is on its way back" phone>
+        <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="shell" poll={false} shellPair={{ status: "synced", stored: 75, covered: 31, daysWithData: 31, unread: [] }} />
+      </StateFrame>
+      <StateFrame name="pair-apple-shell-repair" note="re-pair inside the app: the card keeps its own line until the shell has synced" phone>
+        <WithProviders options={APPLE_PAIRED}>
+          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="shell" poll={false} repair shellPair={{ status: "syncing" }} />
+        </WithProviders>
+      </StateFrame>
+      <StateFrame name="pair-apple-shell-nothing-synced" note="Health denied or an idle Watch: nothing stored, not paired, Try again and Open Settings" phone>
+        <WithProviders options={APPLE_AWAITING}>
+          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="shell" poll={false} repair={false} shellPair={{ status: "synced", stored: 0, covered: 0, daysWithData: 0, unread: [] }} />
+        </WithProviders>
+      </StateFrame>
+      <StateFrame name="pair-apple-shell-code-failed" note="the shell could not redeem or save the code: one line, a new code" phone>
+        <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="shell" poll={false} shellPair={{ status: "failed", reason: "invalid-code", message: "That code did not work. Codes last ten minutes and work once." }} />
+      </StateFrame>
+      <StateFrame name="pair-apple-shell-health-unreadable" note="no Health query answered: the app's own line, Try again" phone>
+        <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="shell" poll={false} shellPair={{ status: "failed", reason: "health-unreadable", message: "Health could not be read. Check Health access in Settings and try again." }} />
+      </StateFrame>
+      <StateFrame name="pair-apple-shell-revoked" note="another phone took the pairing meanwhile: Pair again" phone>
+        <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="shell" poll={false} shellPair={{ status: "failed", reason: "revoked", message: "This iPhone is no longer paired. Get a new code on the GoHealthMe website and pair again." }} />
+      </StateFrame>
+      <StateFrame name="pair-apple-shell-awaiting-sync" note="the read says redeemed and nothing stored, no word from the shell yet: allow Health, never open an app you are in" phone>
+        <WithProviders options={APPLE_AWAITING}>
+          <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="shell" poll={false} repair={false} />
+        </WithProviders>
+      </StateFrame>
+      <StateFrame name="pair-apple-shell-no-health" note="iPad or simulator: Apple Health cannot be read, said before any code is handed over" phone>
+        <PhonePairPanel steps={PAIR_STEPS} address={ADDRESS} platform="shell" poll={false} healthAvailable={false} />
+      </StateFrame>
       <StateFrame name="my-runs-signed-out" note="/dashboard signed out: SPOTTER on the sign-in card">
         <div className={PAGE_COLUMN}>
           <MyRunsFrame pose="wave" lead="Sign in to see your challenges, your nights and your payouts. Base Sepolia test USDC.">

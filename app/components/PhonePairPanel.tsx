@@ -14,12 +14,28 @@
 // the code on screen, says what the code does, and leaves the confirmation
 // to the app on the phone. Hiding the code behind "already paired" was a dead
 // end: a code minted that nobody could see.
+//
+// INSIDE THE IPHONE APP (lib/shell.ts) the page is already on the phone, so
+// no code is shown at all: the card hands it to the shell once, the shell
+// redeems it and asks iOS for Health, and each step comes back as one line
+// here (lib/shell-pairing.ts). The shell's own "synced" is the confirmation,
+// re-pair included, so the card flips there too. Nothing polls in the shell.
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, TEXT_LINK, buttonClasses } from "@/components/ui";
 import { Notice, QUIET_ACTION } from "@/components/night/kit";
 import { cachedOnlyRequester } from "@/lib/client-auth";
+import { isShell, onShellEvent, shellPost, useShellStatus, type ShellPairStatus } from "@/lib/shell";
+import {
+  SHELL_ALLOW_HEALTH,
+  SHELL_NO_HEALTH,
+  marksRedeemed,
+  pairPostFor,
+  shellPairView,
+  syncedWithData,
+  type ShellPairAction,
+} from "@/lib/shell-pairing";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import { useEmbeddedWallet } from "@/lib/wallet";
 import { countsLineFor, pairedDeviceName, reportsSleep } from "@/lib/game/sensor-copy";
@@ -40,7 +56,7 @@ import {
 export type { PhoneSteps };
 
 /** Which device the page is on, for which action leads. */
-export type PairPlatform = "iphone" | "other";
+export type PairPlatform = "shell" | "iphone" | "other";
 
 // Same shell as the option cards on the pairing step, so the handoff reads as
 // the next card in the flow and not as a warning box.
@@ -49,6 +65,9 @@ const CARD =
 
 const WHAT_HAPPENS =
   "The GoHealthMe app reads Health on your iPhone. Only daily totals leave the phone, never the raw samples.";
+
+const REPLACES =
+  "Already paired. The iPhone that uses this code replaces the one paired now. Your stored days stay.";
 
 const OPEN_THE_APP = "Open the GoHealthMe app on your iPhone";
 
@@ -59,11 +78,19 @@ const UNPAIRED: PhonePairState = { kind: "unpaired" };
 
 // The platform is read once from the user agent, through an external-store
 // read so the server render (no navigator) and the first client render agree
-// and nothing flashes from one layout to the other.
+// and nothing flashes from one layout to the other. The shell is checked
+// first: it is an iPhone too, and its deep link would be a dead button.
 const noSubscribe = () => () => {};
 const clientPlatform = (): PairPlatform =>
-  isIphoneUserAgent(navigator.userAgent) ? "iphone" : "other";
+  isShell() ? "shell" : isIphoneUserAgent(navigator.userAgent) ? "iphone" : "other";
 const serverPlatform = (): PairPlatform => "other";
+
+/** The shell's reports on one code, so a report never speaks for another code. */
+interface ShellPair {
+  code: string;
+  status: ShellPairStatus | null;
+  redeemed: boolean;
+}
 
 function expiryTime(at: number): string {
   return new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -88,6 +115,8 @@ export default function PhonePairPanel({
   platform,
   poll = true,
   repair,
+  shellPair,
+  healthAvailable,
 }: {
   steps: PhoneSteps;
   /** The wallet being paired. The signed-in wallet when omitted. */
@@ -101,12 +130,19 @@ export default function PhonePairPanel({
    * the code replaces it. Read off the provider list at mount when omitted.
    */
   repair?: boolean;
+  /** The shell's latest report on the code (the state gallery). Off the bridge otherwise. */
+  shellPair?: ShellPairStatus;
+  /** Whether this phone can read Apple Health (the state gallery). Off the shell otherwise. */
+  healthAvailable?: boolean;
 }) {
   const wallet = useEmbeddedWallet();
   const walletAddress: `0x${string}` | null =
     address === undefined ? wallet.address : address;
   const detected = useSyncExternalStore(noSubscribe, clientPlatform, serverPlatform);
   const on = platform ?? detected;
+  const inShell = on === "shell";
+  const shellInfo = useShellStatus();
+  const noHealth = inShell && !(healthAvailable ?? shellInfo?.healthAvailable ?? true);
 
   // "Get a new code" replaces the steps the parent handed over. A new object
   // from the parent (a second tap on the card) wins again, with no effect to
@@ -131,6 +167,47 @@ export default function PhonePairPanel({
   );
   const repairing = repair ?? pairedAtMount;
 
+  // THE SHELL HANDOFF. The code goes to the shell exactly once (the redeem is
+  // single-use; a StrictMode double effect must not spend it), and only the
+  // reports that arrive after that post speak for it.
+  const posted = useRef<string | null>(null);
+  const [shell, setShell] = useState<ShellPair | null>(() =>
+    shellPair !== undefined && pairing !== null
+      ? { code: pairing.code, status: shellPair, redeemed: marksRedeemed(shellPair) }
+      : null,
+  );
+  const shellForCode = shell !== null && pairing !== null && shell.code === pairing.code ? shell : null;
+  const shellStatus = shellForCode?.status ?? null;
+  const shellRedeemed = shellForCode?.redeemed ?? false;
+
+  useEffect(() => {
+    if (!inShell || noHealth) return;
+    const message = pairPostFor(posted.current, pairing, Date.now());
+    if (message === null || message.type !== "pair") return;
+    posted.current = message.code;
+    shellPost(message);
+  }, [inShell, noHealth, pairing]);
+
+  useEffect(() => {
+    if (!inShell) return;
+    return onShellEvent((event) => {
+      if (event.type !== "pair-status") return;
+      const code = posted.current;
+      if (code === null) return;
+      setShell((prev) => ({
+        code,
+        status: event.pair,
+        redeemed: (prev !== null && prev.code === code && prev.redeemed) || marksRedeemed(event.pair),
+      }));
+      if (syncedWithData(event.pair)) {
+        // The phone stored its first days: re-read what the lobby and the
+        // character card read, so every surface flips on the same answer.
+        void queryClient.invalidateQueries({ queryKey: providerOptionsQueryKey(walletAddress) });
+        void queryClient.invalidateQueries({ queryKey: ["wearable-progress"] });
+      }
+    });
+  }, [inShell, queryClient, walletAddress]);
+
   // The same read, under the same key, that character creation and the join
   // gate use, so this card and the lobby can never disagree about the phone.
   // The interval is evaluated on the query's own data after every fetch: it
@@ -152,12 +229,16 @@ export default function PhonePairPanel({
         pairing,
         Date.now(),
         repairing,
+        inShell,
       )
         ? PAIR_POLL_INTERVAL_MS
         : false,
   });
 
-  const pair = repairing ? UNPAIRED : phonePairingOf(providers.data);
+  // A re-pair reads paired throughout, so the read is ignored until the shell
+  // confirms the sync. In a browser the app on the phone is the confirmation.
+  const shellConfirmed = inShell && syncedWithData(shellStatus);
+  const pair = repairing && !shellConfirmed ? UNPAIRED : phonePairingOf(providers.data);
 
   const [now, setNow] = useState(() => Date.now());
   const phase = pairPanelPhase(pairing, pair, now);
@@ -182,6 +263,29 @@ export default function PhonePairPanel({
       .finally(() => setMinting(false));
   };
 
+  /** A shell-card tap. The same code again is the one case the once-rule yields to. */
+  const onShellAction = (action: ShellPairAction) => {
+    switch (action.kind) {
+      case "new-code":
+        newCode();
+        return;
+      case "sync":
+        // The shell reports syncing at once; saying so here spares a flash.
+        if (shellForCode !== null) setShell({ ...shellForCode, status: { status: "syncing" } });
+        shellPost({ type: "sync" });
+        return;
+      case "repost":
+        if (pairing === null) return;
+        posted.current = pairing.code;
+        setShell({ code: pairing.code, status: null, redeemed: false });
+        shellPost({ type: "pair", code: pairing.code });
+        return;
+      case "open-settings":
+        shellPost({ type: "open-settings" });
+        return;
+    }
+  };
+
   if (pair.kind === "paired") {
     const sleeps = reportsSleep(pair.metrics);
     return (
@@ -195,11 +299,46 @@ export default function PhonePairPanel({
     );
   }
 
+  if (noHealth) {
+    // An iPad or a simulator: said before any code is handed over.
+    return <Notice tone="limit">{SHELL_NO_HEALTH}</Notice>;
+  }
+
+  const newCodeLabel = minting ? "Getting a new code" : "Get a new code";
+  const mintFailedNote = mintFailed ? (
+    <Notice tone="error">
+      I could not get a new code just now. Nothing changed. Try again in a moment.
+    </Notice>
+  ) : null;
+
+  // Inside the shell the card is the shell's own line on the code. Its word
+  // beats a stale provider read (a sync with nothing in it, or a failure,
+  // keeps its taps on screen while the server still says awaiting-sync), and
+  // once it has redeemed the code the ten minutes no longer matter: the
+  // Health sheet may sit open for longer than that.
+  if (inShell && pairing !== null) {
+    const expired = phase === "expired" && !shellRedeemed;
+    const heard = shellStatus !== null && !syncedWithData(shellStatus);
+    if (heard || (!expired && pair.kind === "unpaired")) {
+      const view = shellPairView(shellStatus, shellRedeemed);
+      return (
+        <div className={CARD} role="status" aria-live="polite">
+          <p className="m-0 font-semibold text-foreground">
+            {repairing ? "Pair your iPhone again" : "Pair your Apple Watch"}
+          </p>
+          <p className="m-0 text-sm leading-[1.45] text-haze">{repairing ? REPLACES : WHAT_HAPPENS}</p>
+          <ShellLine view={view} minting={minting} newCodeLabel={newCodeLabel} onAction={onShellAction} />
+          {mintFailedNote}
+        </div>
+      );
+    }
+  }
+
   if (pair.kind === "awaiting-sync") {
     return (
       <Notice tone="limit" title="Your iPhone is paired. Waiting on its first sync" live>
-        {OPEN_THE_APP} and allow Health when it asks. This flips the moment the
-        first day arrives.
+        {inShell ? SHELL_ALLOW_HEALTH : `${OPEN_THE_APP} and allow Health when it asks`}. This
+        flips the moment the first day arrives.
       </Notice>
     );
   }
@@ -212,8 +351,9 @@ export default function PhonePairPanel({
     );
   }
 
+  // Inside the shell the app is already here, so there is nothing to install.
   const install =
-    live.installUrl !== null ? (
+    !inShell && live.installUrl !== null ? (
       <a
         href={live.installUrl}
         target="_blank"
@@ -223,13 +363,6 @@ export default function PhonePairPanel({
         Get the app
       </a>
     ) : null;
-
-  const newCodeLabel = minting ? "Getting a new code" : "Get a new code";
-  const mintFailedNote = mintFailed ? (
-    <Notice tone="error">
-      I could not get a new code just now. Nothing changed. Try again in a moment.
-    </Notice>
-  ) : null;
 
   if (pairing === null) {
     // The route answered without a code. The server's own sentence talks
@@ -259,14 +392,9 @@ export default function PhonePairPanel({
       <p className="m-0 font-semibold text-foreground">
         {expired ? "That code expired" : repairing ? "Pair your iPhone again" : "Pair your Apple Watch"}
       </p>
-      {repairing && !expired ? (
-        <p className="m-0 text-sm leading-[1.45] text-haze">
-          Already paired. The iPhone that uses this code replaces the one paired
-          now. Your stored days stay.
-        </p>
-      ) : (
-        <p className="m-0 text-sm leading-[1.45] text-haze">{WHAT_HAPPENS}</p>
-      )}
+      <p className="m-0 text-sm leading-[1.45] text-haze">
+        {repairing && !expired ? REPLACES : WHAT_HAPPENS}
+      </p>
 
       {expired ? (
         <>
@@ -326,5 +454,69 @@ export default function PhonePairPanel({
 
       {mintFailedNote}
     </div>
+  );
+}
+
+/**
+ * The shell card's status line and its taps. A failure's first tap is the
+ * one that fixes it, drawn as a button; anything after it is quiet. While the
+ * shell works the only tap is the quiet new code, for the case it never
+ * answers.
+ */
+function ShellLine({
+  view,
+  minting,
+  newCodeLabel,
+  onAction,
+}: {
+  view: ReturnType<typeof shellPairView>;
+  minting: boolean;
+  newCodeLabel: string;
+  onAction: (action: ShellPairAction) => void;
+}) {
+  const label = (action: ShellPairAction) => (action.kind === "new-code" && action.label === "Get a new code" ? newCodeLabel : action.label);
+  if (!view.failed) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <p className="m-0 text-sm text-haze" aria-live="polite">
+          {view.line}
+        </p>
+        {view.actions.map((action) => (
+          <button
+            key={action.kind}
+            type="button"
+            className={QUIET_ACTION}
+            disabled={minting}
+            onClick={() => onAction(action)}
+          >
+            {label(action)}
+          </button>
+        ))}
+      </div>
+    );
+  }
+  const [first, ...rest] = view.actions;
+  return (
+    <>
+      <p className="m-0 text-[0.9375rem] text-foreground" aria-live="polite">
+        {view.line}
+      </p>
+      {first !== undefined ? (
+        <Button type="button" size="sm" block disabled={minting} onClick={() => onAction(first)}>
+          {label(first)}
+        </Button>
+      ) : null}
+      {rest.map((action) => (
+        <button
+          key={action.kind}
+          type="button"
+          className={QUIET_ACTION}
+          disabled={minting}
+          onClick={() => onAction(action)}
+        >
+          {label(action)}
+        </button>
+      ))}
+    </>
   );
 }

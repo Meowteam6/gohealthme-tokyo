@@ -24,7 +24,9 @@
 import { SignInLoadingCard } from "@/components/night/SlowSignInNotice";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useShell, useShellBrowserClosed } from "@/lib/shell";
+import { SHELL_ALLOW_HEALTH } from "@/lib/shell-pairing";
 import BalanceCard from "@/components/BalanceCard";
 import ClaimPayout from "@/components/ClaimPayout";
 import RefundClaim from "@/components/RefundClaim";
@@ -270,6 +272,13 @@ function ConnectButton({
   const [phoneSteps, setPhoneSteps] = useState<PhoneSteps | null>(null);
   const [opening, setOpening] = useState(false);
   const requestAuth = useWalletAuth();
+  // Inside the iPhone app Junction's page opens in the Safari sheet; when it
+  // closes, re-read the device so the cards flip without a tap.
+  const queryClient = useQueryClient();
+  useShellBrowserClosed(() => {
+    void queryClient.invalidateQueries({ queryKey: ["wearable-providers"] });
+    void queryClient.invalidateQueries({ queryKey: ["wearable-progress"] });
+  });
 
   return (
     <>
@@ -453,6 +462,7 @@ function StreakCard({
   verifyAction?: boolean;
 }) {
   const requestAuth = cachedOnlyRequester(useWalletAuth());
+  const inShell = useShell();
   const healthQuery = useQuery({
     queryKey: providerQueryKey(address, pool?.id),
     queryFn: () => fetchProviderState(address, requestAuth, pool),
@@ -538,7 +548,9 @@ function StreakCard({
         <>
           <Notice tone="info" className="mt-3">
             {progress?.provider === "apple"
-              ? "Your iPhone is paired and has not sent anything yet. Open the GoHealthMe app on your iPhone, or wait for its next background sync. "
+              ? inShell
+                ? `Your iPhone is paired and has not sent anything yet. ${SHELL_ALLOW_HEALTH}, or wait for its next background sync. `
+                : "Your iPhone is paired and has not sent anything yet. Open the GoHealthMe app on your iPhone, or wait for its next background sync. "
               : "Your device is connected and has not sent anything yet. The first sync usually lands within a few minutes. "}
             SPOTTER will not check this goal until the data is here, so nothing
             is charged while you wait.

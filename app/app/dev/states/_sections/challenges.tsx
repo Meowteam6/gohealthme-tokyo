@@ -121,6 +121,10 @@ export default function ChallengeStates({ meta }: SectionProps) {
         />
       </StateFrame>
 
+      <StateFrame name="challenges-signed-out-shell" note="signed out inside the iPhone app: email only, one line for Base and own-wallet accounts" phone>
+        <SignInPanel surface="card" shell />
+      </StateFrame>
+
       <StateFrame name="challenges-loading" note="reading the chain">
         <Frame pose="detective" first={<LoadingCard />} />
       </StateFrame>

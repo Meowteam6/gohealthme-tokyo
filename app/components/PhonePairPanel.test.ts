@@ -8,6 +8,7 @@ import { describe, it, expect, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ShellPairStatus } from "@/lib/shell";
 import { parseOptions, providerOptionsQueryKey, type ProviderOptions } from "@/lib/wearable-connect";
 
 vi.mock("@/lib/wallet", () => ({
@@ -205,6 +206,15 @@ describe("PhonePairPanel", () => {
       render({ steps, address: ADDRESS, platform: "iphone", repair: true }, apple({ observedMetrics: ["sleep_hours"] })),
       render({ steps, address: ADDRESS, platform: "other", repair: true }, apple({ observedMetrics: ["sleep_hours"] })),
       render({ steps, address: ADDRESS, platform: "iphone", repair: false }, apple({ observedMetrics: ["steps"] })),
+      render({ steps, address: ADDRESS, platform: "shell" }),
+      render({ steps, address: ADDRESS, platform: "shell", shellPair: { status: "health-sheet" } }),
+      render({ steps, address: ADDRESS, platform: "shell", shellPair: { status: "syncing" } }),
+      render({ steps, address: ADDRESS, platform: "shell", shellPair: SYNCED_EMPTY }),
+      render({ steps, address: ADDRESS, platform: "shell", shellPair: FAILED_CODE }),
+      render({ steps, address: ADDRESS, platform: "shell", shellPair: FAILED_REVOKED }),
+      render({ steps, address: ADDRESS, platform: "shell", repair: false }, apple({ capability: "awaiting-sync" })),
+      render({ steps, address: ADDRESS, platform: "shell", healthAvailable: false }),
+      render({ steps: { ...steps, pairing: null }, address: ADDRESS, platform: "shell" }),
     ];
     for (const html of states) {
       const t = text(html);
@@ -212,5 +222,125 @@ describe("PhonePairPanel", () => {
       expect(t).not.toMatch(/\b(runs?|pools?|dares?|bets?|wagers?|odds|winners?)\b/i);
       expect(t).not.toMatch(/env|undefined|null|capability|[A-Z_]{6,}/);
     }
+  });
+});
+
+// Inside the iPhone app (lib/shell.ts) the card hands the code to the shell
+// and the shell pairs the phone it is running on. Pinned: no code, deep link
+// or install link ever renders there; each report from the shell has its one
+// line and its taps; the shell's word beats a stale provider read; and the
+// paired flip still comes from the provider list.
+const SYNCED_EMPTY: ShellPairStatus = { status: "synced", stored: 0, covered: 0, daysWithData: 0, unread: [] };
+const SYNCED_DATA: ShellPairStatus = { status: "synced", stored: 75, covered: 31, daysWithData: 31, unread: [] };
+const FAILED_CODE: ShellPairStatus = { status: "failed", reason: "invalid-code", message: "That code did not work. Codes last ten minutes and work once." };
+const FAILED_REVOKED: ShellPairStatus = { status: "failed", reason: "revoked", message: "This iPhone is no longer paired." };
+const FAILED_HEALTH: ShellPairStatus = { status: "failed", reason: "health-unreadable", message: "Health could not be read. Check Health access in Settings and try again." };
+
+describe("PhonePairPanel inside the iPhone app", () => {
+  it("shows no code, no deep link and no install link, only what the shell is doing", () => {
+    const html = render({ steps, address: ADDRESS, platform: "shell" });
+    expect(html).not.toContain("7KQ4MN9P");
+    expect(html).not.toContain("gohealthme://");
+    expect(html).not.toContain(INSTALL);
+    const t = text(html);
+    expect(t).toContain("Pair your Apple Watch");
+    expect(t).toContain("reads Health on your iPhone");
+    expect(t).toContain("Pairing this iPhone");
+    expect(t).not.toContain("Get the app");
+    expect(t).not.toContain("Type this code");
+    expect(t).toContain("Get a new code");
+  });
+
+  it("walks the shell's reports: the Health sheet, the read, the sync", () => {
+    expect(text(render({ steps, address: ADDRESS, platform: "shell", shellPair: { status: "health-sheet" } }))).toContain(
+      "Allow Apple Health when iOS asks",
+    );
+    expect(text(render({ steps, address: ADDRESS, platform: "shell", shellPair: { status: "syncing" } }))).toContain(
+      "Reading the last 30 days of Apple Health",
+    );
+    // Synced with data and the provider read not back yet: one line, no code.
+    const synced = render({ steps, address: ADDRESS, platform: "shell", shellPair: SYNCED_DATA });
+    expect(text(synced)).toContain("Synced");
+    expect(synced).not.toContain("7KQ4MN9P");
+  });
+
+  it("flips to paired off the provider read once the shell has synced, re-pair included", () => {
+    const t = text(
+      render(
+        { steps, address: ADDRESS, platform: "shell", repair: true, shellPair: SYNCED_DATA },
+        apple({ observedMetrics: ["sleep_hours", "workouts"] }),
+      ),
+    );
+    expect(t).toContain("Apple Watch is paired");
+    expect(t).not.toContain("Pair your iPhone again");
+  });
+
+  it("keeps a re-pair on its own line until the shell has synced", () => {
+    const t = text(
+      render(
+        { steps, address: ADDRESS, platform: "shell", repair: true, shellPair: { status: "syncing" } },
+        apple({ observedMetrics: ["sleep_hours", "workouts"] }),
+      ),
+    );
+    expect(t).toContain("Pair your iPhone again");
+    expect(t).toMatch(/replaces/);
+    expect(t).toContain("Reading the last 30 days of Apple Health");
+    expect(t).not.toContain("Apple Watch is paired");
+  });
+
+  it("says a sync with nothing in it is not a pairing, with Try again and Open Settings", () => {
+    const t = text(
+      render(
+        { steps, address: ADDRESS, platform: "shell", repair: false, shellPair: SYNCED_EMPTY },
+        // The server kept the phone at awaiting-sync; the shell's word wins.
+        apple({ capability: "awaiting-sync" }),
+      ),
+    );
+    expect(t).toContain("Nothing synced");
+    expect(t).toContain("Try again");
+    expect(t).toContain("Open Settings");
+    expect(t).not.toContain("Waiting on its first sync");
+    expect(t).not.toContain("is paired");
+  });
+
+  it("names a code that did not work and offers a new one, never the server's sentence", () => {
+    const t = text(render({ steps, address: ADDRESS, platform: "shell", shellPair: FAILED_CODE }));
+    expect(t).toContain("That code did not work");
+    expect(t).not.toContain("work once");
+    expect(t).toContain("Get a new code");
+  });
+
+  it("carries the app's own words for Health it could not read, and for a revoked phone", () => {
+    const health = text(render({ steps, address: ADDRESS, platform: "shell", shellPair: FAILED_HEALTH }));
+    expect(health).toContain("Health could not be read");
+    expect(health).toContain("Try again");
+    const revoked = text(render({ steps, address: ADDRESS, platform: "shell", shellPair: FAILED_REVOKED }));
+    expect(revoked).toContain("This iPhone is no longer paired");
+    expect(revoked).toContain("Pair again");
+  });
+
+  it("tells a redeemed phone to allow Health, never to open an app it is already in", () => {
+    const t = text(
+      render(
+        { steps, address: ADDRESS, platform: "shell", repair: false },
+        apple({ capability: "awaiting-sync" }),
+      ),
+    );
+    expect(t).toContain("Waiting on its first sync");
+    expect(t).toContain("Allow Apple Health when iOS asks");
+    expect(t).not.toContain("Open the GoHealthMe app");
+  });
+
+  it("says Apple Health is not available before anything is handed over", () => {
+    const html = render({ steps, address: ADDRESS, platform: "shell", healthAvailable: false });
+    expect(text(html)).toContain("Apple Health is not available on this device");
+    expect(html).not.toContain("7KQ4MN9P");
+    expect(text(html)).not.toContain("Pairing this iPhone");
+  });
+
+  it("offers a new code without an install link when no code was minted", () => {
+    const html = render({ steps: { ...steps, pairing: null }, address: ADDRESS, platform: "shell" });
+    expect(text(html)).toContain("Get a new code");
+    expect(html).not.toContain(INSTALL);
   });
 });

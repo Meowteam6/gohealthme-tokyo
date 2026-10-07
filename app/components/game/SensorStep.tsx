@@ -13,6 +13,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button, buttonClasses } from "@/components/ui";
 import { Notice, QUIET_ACTION } from "@/components/night/kit";
 import WhoopReturnNote from "@/components/WhoopReturnNote";
+import { useShell, useShellBrowserClosed, useShellStatus } from "@/lib/shell";
+import { SHELL_ALLOW_HEALTH, SHELL_NO_HEALTH } from "@/lib/shell-pairing";
 import { useWalletAuth } from "@/lib/useWalletAuth";
 import {
   PhoneLinkRequiredError,
@@ -147,13 +149,21 @@ function SensorStepBody({
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [declined, setDeclined] = useState(false);
-  const address = view.address;
-  if (address === null) return null;
+  // Inside the iPhone app: Junction's page opens in the Safari sheet and the
+  // card re-reads when it closes; Apple pairs on this phone, so a phone that
+  // cannot read Health says so where Pair would be.
+  const inShell = useShell();
+  const shellInfo = useShellStatus();
+  const noHealth = inShell && shellInfo?.healthAvailable === false;
 
   const recheck = () => {
     void queryClient.invalidateQueries({ queryKey: ["wearable-providers"] });
     void queryClient.invalidateQueries({ queryKey: ["wearable-progress"] });
   };
+  useShellBrowserClosed(recheck);
+
+  const address = view.address;
+  if (address === null) return null;
 
   const sensor = view.sensor;
 
@@ -248,7 +258,9 @@ function SensorStepBody({
           Nothing has come through from your device yet, so I cannot tell what
           it measures.{" "}
           {selected === "apple"
-            ? "Open the GoHealthMe app on your iPhone so it syncs, or wait for its next background sync, then check again."
+            ? inShell
+              ? `${SHELL_ALLOW_HEALTH}, then check again.`
+              : "Open the GoHealthMe app on your iPhone so it syncs, or wait for its next background sync, then check again."
             : "Open your wearable's own app so it syncs, then check again."}{" "}
           Wearable challenges stay locked until I can see it, so you never
           stake on one your device cannot prove.
@@ -286,13 +298,17 @@ function SensorStepBody({
               </p>
               <p className="m-0 mt-1 text-sm text-haze">{BLURB[option.id]}</p>
               <p className="m-0 mt-2 flex-1 text-sm text-muted">{measuresLine(option)}</p>
-              <PairButton
-                address={address}
-                option={option}
-                onPhoneSteps={(steps) => setPhoneSteps({ steps, repair: applePaired })}
-                onBlocked={setBlockedUrl}
-                onError={() => setFailed(true)}
-              />
+              {option.id === "apple" && noHealth ? (
+                <p className="m-0 mt-3 text-sm text-haze">{SHELL_NO_HEALTH}</p>
+              ) : (
+                <PairButton
+                  address={address}
+                  option={option}
+                  onPhoneSteps={(steps) => setPhoneSteps({ steps, repair: applePaired })}
+                  onBlocked={setBlockedUrl}
+                  onError={() => setFailed(true)}
+                />
+              )}
             </li>
           ))}
         </ul>

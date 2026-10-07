@@ -163,6 +163,71 @@ describe("startWearableLink", () => {
     });
   });
 
+  // Inside the iPhone app (lib/shell.ts) window.open returns null, so the
+  // popup dance would end in PopupBlockedError and a second tap. The connect
+  // page goes to the shell's Safari sheet instead, in one message.
+  describe("inside the iPhone app", () => {
+    let postMessage: ReturnType<typeof vi.fn<(message: string) => void>>;
+
+    beforeEach(() => {
+      postMessage = vi.fn<(message: string) => void>();
+      vi.stubGlobal("navigator", {
+        userAgent:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 GoHealthMeShell/1.0.0",
+      });
+      vi.stubGlobal("window", {
+        ReactNativeWebView: { postMessage },
+        open: (url: string) => {
+          opened.push(url);
+          return null;
+        },
+        get location() {
+          return {
+            get href() {
+              return "https://app.test/dashboard";
+            },
+            set href(value: string) {
+              assignedHref.push(value);
+            },
+          };
+        },
+      });
+    });
+
+    it("hands Junction's page to the shell once, opens no window and throws nothing", async () => {
+      respond({ provider: "junction", kind: "oauth", linkUrl: "https://link.tryvital.io/x" });
+
+      await startWearableLink(ADDRESS, auth);
+
+      expect(opened).toEqual([]);
+      expect(postMessage).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(postMessage.mock.calls[0]?.[0] ?? "")).toEqual({
+        v: 1,
+        type: "open-browser",
+        url: "https://link.tryvital.io/x",
+      });
+      expect(assignedHref).toEqual([]);
+    });
+
+    it("still takes the current page for WHOOP", async () => {
+      respond({ provider: "whoop", kind: "oauth", linkUrl: "/api/whoop/login?ticket=abc" });
+
+      await startWearableLink(ADDRESS, auth);
+
+      expect(assignedHref).toEqual(["/api/whoop/login?ticket=abc"]);
+      expect(postMessage).not.toHaveBeenCalled();
+      expect(opened).toEqual([]);
+    });
+
+    it("raises the phone-link guidance for Apple there too, with nothing posted", async () => {
+      respond({ provider: "apple", kind: "app", linkUrl: null, instructions: "Open the app." });
+      await expect(startWearableLink(ADDRESS, auth, "apple")).rejects.toBeInstanceOf(
+        PhoneLinkRequiredError,
+      );
+      expect(postMessage).not.toHaveBeenCalled();
+    });
+  });
+
   it("raises phone-link guidance, not an error, for a phone-only provider", async () => {
     const instructions = "Open the GoHealthMe app on your iPhone.";
     respond({ provider: "apple", kind: "app", linkUrl: null, instructions });
@@ -631,6 +696,10 @@ describe("phone pairing", () => {
     // A re-pair reads paired before and after the new phone redeems the code,
     // so there is nothing a poll could notice; the timer never starts.
     expect(pairPanelPolls("live", PAIRING, fresh, true)).toBe(false);
+    // Inside the iPhone app the shell says when the phone synced and the
+    // card re-reads on that word, so the timer never starts there either.
+    expect(pairPanelPolls("live", PAIRING, fresh, false, true)).toBe(false);
+    expect(pairPanelPolls("awaiting-sync", PAIRING, fresh, false, true)).toBe(false);
     expect(PAIR_POLL_INTERVAL_MS).toBe(3_000);
   });
 });
